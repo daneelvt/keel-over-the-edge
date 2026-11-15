@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -66,6 +67,11 @@ type ServiceConfig struct {
 	// Zone is the zone a log's days are kept in: the world's schedule's.
 	Zone *time.Location
 	Now  func() time.Time
+	// Standing, if not nil, is where a sailor stands on the certificates'
+	// ladder; Trials, if not nil, the codes of the Harbourmaster's courses
+	// a sailor would sail now, by their courses (store.CourseShort …).
+	Standing func(ctx context.Context, id store.AccountID) (certs.Standing, error)
+	Trials   func(ctx context.Context, id store.AccountID) (map[string]string, error)
 }
 
 // Service reads logs.
@@ -162,6 +168,11 @@ type Log struct {
 	// Cockade: the sailor wears the winner's cockade, for a race won in
 	// the world sailed now (of three boats or more), while it lasts.
 	Cockade bool `json:"cockade,omitempty"`
+	// Certificate is the certificate the sailor holds, nil for none; and
+	// Toward, in one's own log only, where it stands toward the next, nil
+	// after the last.
+	Certificate *Certificate `json:"certificate,omitempty"`
+	Toward      *Toward      `json:"toward,omitempty"`
 }
 
 // A Figure of the abstract: Kind is distance (m), voyages, charted,
@@ -551,6 +562,9 @@ func (s *Service) read(ctx context.Context, r Reader, l *store.LogSailor, world 
 			return Log{}, err
 		}
 		out.Cockade = len(won[l.ID].Wins) > 0
+	}
+	if err := s.certificates(ctx, &out, l.ID); err != nil {
+		return Log{}, err
 	}
 	return out, nil
 }

@@ -220,6 +220,15 @@ func logWords(ctx context.Context, s *Sea, account store.AccountID) (string, *re
 	} else {
 		b.WriteString("Nothing yet this world.\n")
 	}
+	if st, ok := standingOf(ctx, s, account); ok {
+		var trials []race.Summary
+		if s.Races != nil && st.Next >= 0 {
+			if bd, err := s.Races.Board(ctx, race.Sailor{ID: account, Machine: true}); err == nil {
+				trials = bd.Trials
+			}
+		}
+		b.WriteString(certificateWords(&st, trials) + "\n")
+	}
 	if s.RaceRecords != nil {
 		if recs, err := s.RaceRecords(ctx, account); err == nil && len(recs) > 0 {
 			b.WriteString(raceRecordWords(recs, s.boatNamed) + "\n")
@@ -248,6 +257,11 @@ func entryWords(e *logbook.Entry) string {
 		return "first " + strings.ReplaceAll(e.Find, "-", " ") + " for the collection"
 	case store.LogBump:
 		return "a bump"
+	case store.LogCertificate:
+		if e.What != "" {
+			return "earned " + e.Title + ", " + e.What
+		}
+		return "earned " + e.Title
 	}
 	return ""
 }

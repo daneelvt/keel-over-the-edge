@@ -13,6 +13,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -23,6 +24,8 @@ type Store interface {
 	RaceSettings(ctx context.Context) (store.RaceSettings, error)
 	MakeRace(ctx context.Context, r *store.NewRace, since, from, until time.Time, decide func(store.RaceMaking, *store.NewRace) error) (string, error)
 	MakeHarbourRaces(ctx context.Context, lease int64, races []store.NewRace) (int, error)
+	MakeStandingTrials(ctx context.Context, lease int64, trials []store.NewRace) (int, error)
+	StandingTrials(ctx context.Context, world [16]byte, number int, boat string) ([]store.Race, error)
 	RaceByCode(ctx context.Context, code string) (store.Race, error)
 	HarbourRaces(ctx context.Context, world [16]byte, number int, after time.Time, most int) ([]store.Race, error)
 	RacesOf(ctx context.Context, world [16]byte, number int, id store.AccountID) ([]store.Race, error)
@@ -106,6 +109,13 @@ type Config struct {
 	// BoatOf, if not nil, is the kind of boat, by the catalog's id, a
 	// sailor sails now, "" for none: a race's boat by default.
 	BoatOf func(id store.AccountID) string
+	// MaySail, if not nil, is the certificate a sailor needs to sail a
+	// kind of boat, by the catalog's id: "" if it may. A race is entered
+	// and made only in a kind its sailor may sail.
+	MaySail func(ctx context.Context, id store.AccountID, boat string) (string, error)
+	// Standing, if not nil, is where a sailor stands toward its next
+	// certificate: what a trial's run would count toward.
+	Standing func(ctx context.Context, id store.AccountID) (certs.Standing, error)
 	// Origin is the play origin a race's link is made at.
 	Origin string
 	// Zone is the world's schedule's zone: the harbour races' hours and
@@ -274,6 +284,9 @@ func (s *Service) Make(ctx context.Context, by Sailor, m Making) (Card, error) {
 	if err != nil {
 		return Card{}, err
 	}
+	if err := s.mayMake(ctx, by, r.Boat); err != nil {
+		return Card{}, err
+	}
 	code, err := s.make(ctx, r, limits, now)
 	if err != nil {
 		return Card{}, err
@@ -347,6 +360,19 @@ func (s *Service) making(by Sailor, m Making, now time.Time, limits store.RaceSe
 	}
 	r.Name = checked.Display
 	return r, nil
+}
+
+// mayMake is why the sailor by may not make a race in a kind of boat, by
+// the catalog's id: one it may not sail itself; nil if it may.
+func (s *Service) mayMake(ctx context.Context, by Sailor, boat string) error {
+	needs, err := s.needs(ctx, by.ID, boat)
+	if err != nil {
+		return err
+	}
+	if needs != "" {
+		return &Refusal{Reason: RefuseCertificate, Needs: needs}
+	}
+	return nil
 }
 
 // suggest is a name for a race, one that passes the word filter's rules.
@@ -477,7 +503,19 @@ func (s *Service) entering(ctx context.Context, r *store.Race, by Sailor) (*ente
 	if r.HasOwner && s.cfg.Blocks != nil && r.Owner != by.ID {
 		in.blocked = s.cfg.Blocks(by.ID, r.Owner) || by.Machine && s.cfg.Blocks(by.Owner, r.Owner)
 	}
+	if in.needs, err = s.needs(ctx, by.ID, r.Boat); err != nil {
+		return nil, err
+	}
 	return in, nil
+}
+
+// needs is the certificate a sailor needs to sail a kind of boat, by the
+// catalog's id: "" if it may.
+func (s *Service) needs(ctx context.Context, id store.AccountID, boat string) (string, error) {
+	if s.cfg.MaySail == nil {
+		return "", nil
+	}
+	return s.cfg.MaySail(ctx, id, boat)
 }
 
 // canEnter is whether the sailor by may enter race r now, as its rows
@@ -645,6 +683,9 @@ func (s *Service) Again(ctx context.Context, by Sailor, code string) (Card, erro
 		At: now.Add(Lead), Who: r.Who, Name: r.Name}
 	nr, err := s.making(by, m, now, limits)
 	if err != nil {
+		return Card{}, err
+	}
+	if err := s.mayMake(ctx, by, nr.Boat); err != nil {
 		return Card{}, err
 	}
 	nr.AgainOf, nr.HasAgainOf = r.ID, true

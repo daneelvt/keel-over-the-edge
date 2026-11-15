@@ -15,12 +15,15 @@
 // Every boat's in one draw each, placed on the CPU from each boat's pose
 // as the fleet places it, and nothing is allocated a frame. A boat's
 // skipper wears the winner's cockade while it flies a pennant (the
-// sailors' material draws it).
+// sailors' material draws it). With them comes the pendant its skipper
+// wears at the neck, of the highest certificate they hold (pendant.ts
+// draws it): not flown, so nothing here.
 //
 // What a boat flies comes as a prize code (the protocol's BoatPrize), from
 // the low bits: how many pennants (3 bits), each one's colour, the newest
 // win's first (five of 3 bits), the burgee (2 bits: none, racing, gilded),
-// the spoons (2 bits) and the committee's flag (1 bit).
+// the spoons (2 bits), the committee's flag (1 bit) and the pendant (3
+// bits: 0 none, else the certificate's place in the catalog's list and one).
 
 import {
   BufferGeometry,
@@ -44,6 +47,9 @@ const COLOUR_BITS = 3;
 const BURGEE_SHIFT = PENNANT_BITS + COLOUR_BITS * MOST_PENNANTS;
 const SPOON_SHIFT = BURGEE_SHIFT + 2;
 const COMMITTEE_BIT = 1 << (SPOON_SHIFT + 2);
+const PENDANT_SHIFT = SPOON_SHIFT + 3;
+/** The bits of a code that something flies or hangs for. */
+const FLOWN = (1 << PENDANT_SHIFT) - 1;
 
 /** The burgees. */
 export const BURGEE = { none: 0, racing: 1, gilded: 2 } as const;
@@ -78,12 +84,18 @@ export function cockadeOf(code: number): boolean {
   return pennantsOf(code) > 0;
 }
 
+/** The pendant a code's skipper wears: 0 for none, else their highest certificate's place in the catalog's list and one. */
+export function pendantOf(code: number): number {
+  return (code >>> PENDANT_SHIFT) & 7;
+}
+
 /** A prize code, for the tests and the developer's own boats. */
 export function prizeCode(p: {
   pennants?: readonly number[];
   burgee?: number;
   spoons?: number;
   committee?: boolean;
+  pendant?: number;
 }): number {
   const pennants = (p.pennants ?? []).slice(0, MOST_PENNANTS);
   let code = pennants.length;
@@ -95,6 +107,7 @@ export function prizeCode(p: {
   if (p.committee === true) {
     code |= COMMITTEE_BIT;
   }
+  code |= (Math.min(p.pendant ?? 0, 7) & 7) << PENDANT_SHIFT;
   return code >>> 0;
 }
 
@@ -380,7 +393,7 @@ export class PrizesAfloat {
     time: number,
     origin: { x: number; y: number },
   ): void {
-    if (code === 0) {
+    if ((code & FLOWN) === 0) {
       return;
     }
     this.stats.boats++;

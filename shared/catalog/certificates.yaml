@@ -1,0 +1,193 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Certificates: Deckhand, Helm, Skipper, Captain and Master, earned in that
+# order, each opening bigger boats to the sailor who holds it or a later
+# one. A boat no certificate opens is open to everyone.
+#
+# Each certificate needs some of its tasks, any of them, in any order, on
+# any day: nothing is ever lost or failed, and a rare task (a storm, a
+# whale) is never the only way. Only the next certificate counts, from the
+# moment the last was earned, and only what the sailor sails alone, as
+# skipper of its own boat with nobody else aboard: crewing, holding a
+# friend's helm and races against others count nothing.
+#
+# A course task is a time trial sailed on one of its courses: the
+# Harbourmaster's standing trials off Port Royal, or any other. Its medal
+# is the boat's own par's, so any boat may sail it. Sailed with the
+# autopilot off throughout, a run counts by hand; with the autopilot on at
+# any moment, it counts toward the task's venture, more runs. A
+# certificate is earned by hand when every course task it counted was.
+#
+# A log task is a measure of the sailor's log reaching a mark: distance in
+# nautical miles, the lip's closest approach in metres, the rest a count.
+#
+# Whoever holds a certificate wears its pendant on a cord at the neck, the
+# highest held, and the log's inked portrait shows it: each names its node
+# in the pendants' model (art/pendants/build.ts) as pendantNode.
+pendants:
+  art: { model: pendants/pendants.glb }
+
+certificates:
+  - id: deckhand-cert
+    name: Deckhand
+    pendant: a copper anchor
+    pendantNode: anchor
+    opens: [skiff, keelboat]
+    needs: 3
+    tasks:
+      - id: short-course
+        name: The Short Course
+        courses: [short]
+        hand: { medal: finish }
+        venture: { medal: finish, runs: 2 }
+      - id: one-mile
+        name: Sail 1 NM alone
+        measure: distance
+        at: 1
+      - id: three-places
+        name: See three places
+        measure: places-seen
+        at: 3
+      - id: a-creature
+        name: Meet a creature of the sea
+        measure: life-kinds
+        at: 1
+
+  - id: helm-cert
+    name: Helm
+    pendant: a bronze ship's wheel
+    pendantNode: wheel
+    opens: [beach-cat]
+    needs: 4
+    tasks:
+      - id: the-triangle
+        name: The Triangle, bronze
+        courses: [triangle]
+        hand: { medal: bronze }
+        venture: { medal: bronze, runs: 2 }
+      - id: the-long-course
+        name: The Long Course, bronze
+        courses: [long]
+        hand: { medal: bronze }
+        venture: { medal: bronze, runs: 2 }
+      - id: three-miles
+        name: Sail 3 NM alone
+        measure: distance
+        at: 3
+      - id: a-night
+        name: A night at sea
+        measure: nights
+        at: 1
+      - id: lip-500
+        name: Come within 500 m of the edge, and back
+        measure: lip
+        at: 500
+      - id: two-kinds
+        name: Meet two kinds of the sea's life
+        measure: life-kinds
+        at: 2
+
+  - id: skipper-cert
+    name: Skipper
+    pendant: a silver compass rose
+    pendantNode: compass-rose
+    opens: [yacht]
+    needs: 4
+    tasks:
+      - id: buoys-silver
+        name: Any buoy course, silver
+        courses: [short, long, triangle, long-triangle]
+        hand: { medal: silver }
+        venture: { medal: bronze, runs: 3 }
+      - id: an-island
+        name: An island course
+        courses: [island]
+        hand: { medal: finish }
+        venture: { medal: finish, runs: 2, apart: true }
+      - id: eight-miles
+        name: Sail 8 NM alone
+        measure: distance
+        at: 8
+      - id: a-gale
+        name: Ride out a gale
+        measure: gales
+        at: 1
+      - id: lip-100
+        name: Come within 100 m of the edge, and back
+        measure: lip
+        at: 100
+      - id: ten-places
+        name: See ten places
+        measure: places-seen
+        at: 10
+
+  - id: captain-cert
+    name: Captain
+    pendant: a silver spyglass
+    pendantNode: spyglass
+    opens: [catamaran]
+    needs: 4
+    tasks:
+      - id: island-bronze
+        name: An island course, bronze
+        courses: [island]
+        hand: { medal: bronze }
+        venture: { medal: bronze, runs: 2, apart: true }
+      - id: triangle-and-long
+        name: The Triangle and the Long Course, silver
+        courses: [triangle, long]
+        hand: { medal: silver, each: true }
+        venture: { medal: silver, runs: 4 }
+      - id: twenty-miles
+        name: Sail 20 NM alone
+        measure: distance
+        at: 20
+      - id: chart-a-place
+        name: "Chart a place: be the first to see it"
+        measure: places-charted
+        at: 1
+      - id: storm-or-fog
+        name: Ride out a storm, or make a landfall in fog
+        measure: storms-or-fogs
+        at: 1
+      - id: lip-20
+        name: Come within 20 m of the edge, and back
+        measure: lip
+        at: 20
+
+  - id: master-cert
+    name: Master
+    pendant: a gold sunburst
+    pendantNode: sunburst
+    opens: [tall-ship]
+    needs: 5
+    tasks:
+      - id: buoys-gold
+        name: Any buoy course, gold
+        courses: [short, long, triangle, long-triangle]
+        hand: { medal: gold }
+        venture: { medal: silver, runs: 3 }
+      - id: island-silver
+        name: An island course, silver
+        courses: [island]
+        hand: { medal: silver }
+        venture: { medal: silver, runs: 3, apart: true }
+      - id: forty-miles
+        name: Sail 40 NM alone
+        measure: distance
+        at: 40
+      - id: two-worlds
+        name: Sail in two worlds
+        measure: worlds
+        at: 2
+      - id: lip-10
+        name: Come within 10 m of the edge, and back
+        measure: lip
+        at: 10
+      - id: over-the-edge
+        name: Go over the edge
+        measure: falls
+        at: 1
+      - id: every-weather
+        name: "Every weather: a gale, a storm, fog and a night"
+        measure: every-weather
+        at: 1

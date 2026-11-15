@@ -39,6 +39,8 @@ export interface EnterTold {
   reason?: string;
   /** When the refusal lifts, ms of UTC, where it does. */
   until?: number;
+  /** For a boat the player may not sail yet, the certificate that opens her. */
+  needs?: string;
 }
 
 /** An entrant on a card: a name, or null where the reader is not told it. */
@@ -88,6 +90,10 @@ export interface Summary {
   most: number;
   mine: { owner: boolean; entered: boolean };
   enter: EnterTold;
+  /** One of the Harbourmaster's standing trials. */
+  standing?: boolean;
+  /** The certificate a run sailed alone counts toward, by name; none for none. */
+  toward?: string;
 }
 
 /** A boat a race may be made for. */
@@ -115,6 +121,8 @@ export interface MakeChoices {
 export interface RacesBoard {
   harbour: Summary[];
   greenhorn: number[];
+  /** The Harbourmaster's standing trials in the player's boat; none from an older server. */
+  trials?: Summary[];
   mine: Summary[];
   make: MakeChoices;
 }
@@ -125,6 +133,7 @@ export interface Refusal {
   reason: string;
   until?: number;
   name?: string;
+  needs?: string;
 }
 
 /** An answer: what was asked for, or why not. */
@@ -168,7 +177,7 @@ async function told<T>(res: Response, ok: number[]): Promise<Told<T>> {
   if (ok.includes(res.status) && body !== null && typeof body === 'object') {
     return { ok: true, value: body as T };
   }
-  const b = (body ?? {}) as { error?: unknown; until?: unknown; name?: unknown };
+  const b = (body ?? {}) as { error?: unknown; until?: unknown; name?: unknown; needs?: unknown };
   const refusal: Refusal = {
     status: res.status,
     reason: typeof b.error === 'string' ? b.error : 'unread',
@@ -178,6 +187,9 @@ async function told<T>(res: Response, ok: number[]): Promise<Told<T>> {
   }
   if (typeof b.name === 'string') {
     refusal.name = b.name;
+  }
+  if (typeof b.needs === 'string') {
+    refusal.needs = b.needs;
   }
   return { ok: false, refusal };
 }

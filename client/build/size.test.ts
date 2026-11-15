@@ -103,10 +103,13 @@ test('every look and version’s colour portrait together keep to their budget',
 test('the first download carries no sailor: the player’s own look loads once it is known', () => {
   // What the boat module loads as it starts: its eager globs.
   const boat = readFileSync(new URL('../src/render/boat.ts', import.meta.url), 'utf8');
-  const eager = [...boat.matchAll(/glob<string>\((\[[^\]]*\]),\s*\{[^}]*eager: true/g)].map(
+  const eager = [...boat.matchAll(/glob<string>\(\s*(\[[^\]]*\]),\s*\{[^}]*eager: true/g)].map(
     (m) => m[1],
   );
-  expect(eager).toEqual([`['../../../art/**/*.glb', '!../../../art/sailors/**']`]);
+  // Nor the certificates' pendants, which load when one is first worn.
+  expect(eager).toEqual([
+    `['../../../art/**/*.glb', '!../../../art/sailors/**', '!../../../art/pendants/**']`,
+  ]);
 });
 
 test('any person’s look, the player’s own, keeps to the first download’s share', () => {

@@ -166,6 +166,13 @@ export type LifeBody =
   | "booby"
   | "booby-asleep";
 /**
+ * A course a task is sailed on: the short windward-leeward, the long one, the short triangle, the long one, or an island course.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateCourse".
+ */
+export type CertificateCourse = "short" | "long" | "triangle" | "long-triangle" | "island";
+/**
  * A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
  *
  * @minItems 3
@@ -235,6 +242,138 @@ export interface Catalog {
   polars?: Polars;
   news: News;
   life: Life;
+  /**
+   * The certificates, in the order they are earned: each opens boats to the sailor who holds it or a later one.
+   *
+   * @maxItems 16
+   */
+  certificates?:
+    | []
+    | [Certificate]
+    | [Certificate, Certificate]
+    | [Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ];
+  pendants?: Pendants;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -1978,6 +2117,7 @@ export interface SailorArt {
    */
   ink: string;
   cockade: Cockade;
+  pendant: PendantPlace;
 }
 /**
  * Where a race's winner wears the cockade: on the hat's left side, or on the coat's left breast for a look with no hat.
@@ -1999,6 +2139,32 @@ export interface Cockade {
   facing: [number, number, number];
   /**
    * Its middle on the inked portrait, as shares of its width from the left and of its height from the top.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  inked: [number, number];
+}
+/**
+ * Where the certificate's pendant hangs: where its cord runs through its bail, on the figure as it is bound, clear of the clothes in front of the breastbone.
+ */
+export interface PendantPlace {
+  /**
+   * Where its cord runs through its bail, on the figure as it is bound, m: across to its left, up and forward.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  at: [number, number, number];
+  /**
+   * The way its face looks out from the clothes under it, the same axes.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  facing: [number, number, number];
+  /**
+   * Where its cord runs through its bail on the inked portrait, as shares of its width from the left and of its height from the top.
    *
    * @minItems 2
    * @maxItems 2
@@ -8968,7 +9134,7 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, or a race the player entered about to start.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, or a certificate earned.
    */
   on:
     | "charted-own"
@@ -8979,7 +9145,9 @@ export interface NoticeKind {
     | "gale-warned"
     | "followed-sailed"
     | "harbour-race"
-    | "race-soon";
+    | "race-soon"
+    | "task-done"
+    | "certificate-earned";
   /**
    * For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.
    *
@@ -9000,7 +9168,7 @@ export interface NoticeKind {
    */
   stays: number;
   /**
-   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), and for a gale warning {wind}, {when} and {where} are filled in.
+   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), for a gale warning {wind}, {when} and {where}, and for a certificate {cert} (its name), {task} (the task's), {done} and {of} (the tasks done of those it needs) and {boats} (the boats it opens, as a sentence opens) are filled in.
    */
   text: string;
   /**
@@ -9167,13 +9335,42 @@ export interface NewsMilestones {
 export interface NewsStory {
   id: Id;
   /**
-   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better.
+   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better; a certificate earned.
    */
-  of: "great" | "record" | "life" | "crew" | "first" | "run" | "milestone" | "charting" | "course" | "race" | "trial";
+  of:
+    | "great"
+    | "record"
+    | "life"
+    | "crew"
+    | "first"
+    | "run"
+    | "milestone"
+    | "charting"
+    | "course"
+    | "race"
+    | "trial"
+    | "certificate";
   /**
    * How interesting it is: the edition shows the highest first.
    */
   score: number;
+  /**
+   * For a certificate earned: its score by the certificate, one for each in the certificates' order; score is for any it has no score for.
+   *
+   * @minItems 1
+   * @maxItems 10
+   */
+  scores?:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number];
 }
 /**
  * The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.
@@ -9628,6 +9825,339 @@ export interface LifeGlow {
   colour: Colour3;
   moon: number;
 }
+/**
+ * A certificate: its name, its pendant, the boats it opens, and its tasks, of which it needs some. Every task counts only what the sailor sails alone, since the certificate before it was earned.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Certificate".
+ */
+export interface Certificate {
+  id: Id;
+  /**
+   * Its name: "You're a Deckhand!"
+   */
+  name: string;
+  /**
+   * The pendant worn by those who hold it, in words.
+   */
+  pendant: string;
+  /**
+   * The pendant's node in the pendants' model.
+   */
+  pendantNode: string;
+  /**
+   * The boats it opens, by their ids: each boat is opened by one certificate at most, and one opened by none is open to every sailor.
+   */
+  opens: Id[];
+  /**
+   * How many of its tasks earn it.
+   */
+  needs: number;
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  tasks:
+    | [CertificateTask]
+    | [CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ];
+}
+/**
+ * A task toward a certificate: a course, sailed as a time trial (courses, with what sailing it by hand asks and what the autopilot's longer way asks), or a measure of the sailor's log reaching a mark (measure and at).
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateTask".
+ */
+export interface CertificateTask {
+  id: Id;
+  /**
+   * Its words, as the log and the tools list it.
+   */
+  name: string;
+  /**
+   * A course task's courses: a buoy course by its shape and length, or any island course.
+   *
+   * @minItems 1
+   * @maxItems 5
+   */
+  courses?:
+    | [CertificateCourse]
+    | [CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse];
+  hand?: CertificateWay;
+  venture?: CertificateWay;
+  /**
+   * A log task's measure: the distance sailed alone (NM), places seen, places charted first, kinds of the sea's life met, nights at sea, gales ridden out, storms ridden out or landfalls in fog, the closest approach to the lip survived (m, at most at), worlds sailed in, falls over the edge, and every weather met (a gale, a storm, fog and a night).
+   */
+  measure?:
+    | "distance"
+    | "places-seen"
+    | "places-charted"
+    | "life-kinds"
+    | "nights"
+    | "gales"
+    | "storms-or-fogs"
+    | "lip"
+    | "worlds"
+    | "falls"
+    | "every-weather";
+  /**
+   * The mark a log task's measure reaches: at least this, or for the lip at most this.
+   */
+  at?: number;
+}
+/**
+ * What a course task asks of runs sailed one way: the least medal (finish for any finish), how many runs, whether each on a different course of the world, and whether one on each of its courses.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateWay".
+ */
+export interface CertificateWay {
+  medal: "finish" | "bronze" | "silver" | "gold";
+  runs?: number;
+  apart?: boolean;
+  each?: boolean;
+}
+/**
+ * The certificates' pendants, worn on a cord at the neck by those who hold one: the highest held.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Pendants".
+ */
+export interface Pendants {
+  art: PendantsArt;
+}
+/**
+ * The pendants' art.
+ */
+export interface PendantsArt {
+  /**
+   * Path of an art file, relative to the repository's art/ folder.
+   */
+  model: string;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'f101d9dd4536388c';
+export const CATALOG_VERSION = '4658d9e109ce49fe';

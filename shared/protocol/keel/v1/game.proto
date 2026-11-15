@@ -365,6 +365,7 @@ message ServerMessage {
     RaceResults race_results = 39;
     RaceCheered race_cheered = 40;
     BoatPrizes boat_prizes = 41;
+    Certified certified = 42;
   }
 }
 
@@ -699,6 +700,9 @@ message Person {
   bool shipmate = 8;
   // They wear the winner's cockade, for a race won in the world.
   bool cockade = 9;
+  // The pendant they wear at the neck: 0 none, else their highest
+  // certificate's place in the catalog's list and one.
+  uint32 pendant = 10;
 }
 
 // Chat is a line said aboard the boat the connection sails, is aboard,
@@ -905,15 +909,50 @@ message BoatPrizes {
 // how many winner's pennants it flies (3 bits, 0 … 5), each one's colour,
 // a place in the races' colours, the newest win's first (five fields of 3
 // bits), its burgee (2 bits: 0 none, 1 the racing burgee, 2 the gilded
-// one), how many wooden spoons hang from its stern (2 bits, 0 … 3) and the
-// committee's flag (1 bit); its skipper wears the winner's cockade while
-// it flies a pennant. number is its race number while it races, from its
-// placing on the line until its race is over; 0 for none.
+// one), how many wooden spoons hang from its stern (2 bits, 0 … 3), the
+// committee's flag (1 bit) and its skipper's pendant (3 bits, 0 none, else
+// their highest certificate's place in the catalog's list and one); its
+// skipper wears the winner's cockade while it flies a pennant. number is
+// its race number while it races, from its placing on the line until its
+// race is over; 0 for none.
 message BoatPrize {
   uint32 slot = 1;
   bool own = 2;
   uint32 prizes = 3;
   uint32 number = 4;
+}
+
+// Certified is what the sailor's certificates came to, told to the
+// sailor's own connection alone as the race or the log that counted is
+// written: a task of its next certificate done, a course's venture a run
+// nearer, or the certificate earned. certificate is the certificate's
+// place in the catalog's list; task the task's place among its tasks,
+// -1 for none (an earning with no task newly done); done of of the tasks
+// done of those it needs; way how the task counted. runs of runs_of are a
+// course task's venture's runs so far of those it asks, told while it is
+// not yet done (runs_of 0 otherwise). earned: the certificate is earned,
+// by hand if by_hand.
+message Certified {
+  uint32 certificate = 1;
+  sint32 task = 2;
+  uint32 done = 3;
+  uint32 of = 4;
+  CertWay way = 5;
+  uint32 runs = 6;
+  uint32 runs_of = 7;
+  bool earned = 8;
+  bool by_hand = 9;
+}
+
+// CertWay is how a certificate's task counted.
+enum CertWay {
+  CERT_WAY_UNSPECIFIED = 0;
+  // A task of the log, however it was sailed.
+  CERT_WAY_LOG = 1;
+  // A course sailed with the autopilot off throughout.
+  CERT_WAY_HAND = 2;
+  // A course's longer venture: the autopilot on at some moment.
+  CERT_WAY_PILOT = 3;
 }
 
 // AgentLamp says whether the AI agent of the machine sailor a connection

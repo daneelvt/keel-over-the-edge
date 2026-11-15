@@ -35,6 +35,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
@@ -103,6 +104,14 @@ type Config struct {
 	// Logbook makes the rows of the sailors' log a frame tells of,
 	// written with the frame's events; nil writes none.
 	Logbook Logbook
+	// Examiner, if not nil, judges the certificates of the sailors whose
+	// log's rows sailed alone, in the batch's transaction; what it told
+	// goes into the world (bus.Certify) once the batch has committed, by
+	// Hold's sender. Earned, if not nil, is told of each sailor who
+	// earned a certificate in it, then too, on the writer's goroutine; it
+	// must not block.
+	Examiner store.Examiner
+	Earned   func(store.AccountID)
 	// Zero values are the defaults above; tests shorten them.
 	Every                             int64
 	BatchEvery, FirstRetry, LastRetry time.Duration
@@ -513,6 +522,9 @@ func (p *Persist) write(ctx context.Context) error {
 		p.charts[i].Written = false
 	}
 	b := store.Batch{World: p.cfg.World, Epoch: p.cfg.Epoch, Events: p.batch, Charting: p.charts, News: p.cfg.News, Log: p.log}
+	if p.cfg.Examiner != nil {
+		b.Examiner, b.Told = p.cfg.Examiner, p.certified
+	}
 	if p.haveCP {
 		p.cp.Format = sim.SnapshotVersion
 		p.cp.Build, p.cp.Catalog, p.cp.Layout, p.cp.Epoch = p.cfg.Build, p.cfg.Catalog, p.cfg.Layout, p.cfg.Epoch
@@ -604,6 +616,20 @@ func (p *Persist) wrote() {
 	p.charts = p.charts[:0]
 	if len(p.wroteCharts) > 0 && p.cfg.Written != nil {
 		p.cfg.Written(append([]store.Charting(nil), p.wroteCharts...))
+	}
+}
+
+// certified tells the world what a batch's judging of certificates told,
+// on the writer's goroutine: a full queue drops it, and the log says so.
+// Each certificate earned is told to Earned as well.
+func (p *Persist) certified(told []store.Certified) {
+	for _, c := range told {
+		if err := p.cfg.Hold.TrySend(certs.Command(&c)); err != nil && p.cfg.Log != nil {
+			p.cfg.Log.Warn("telling a sailor of a certificate", "account", c.Account.String(), "err", err)
+		}
+		if c.Earned && p.cfg.Earned != nil {
+			p.cfg.Earned(c.Account)
+		}
 	}
 }
 

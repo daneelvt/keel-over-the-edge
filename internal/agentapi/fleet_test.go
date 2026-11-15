@@ -10,6 +10,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet/fleettest"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -140,5 +141,40 @@ func TestGennakerWords(t *testing.T) {
 		if got := gennakerWords(&st); got != c.want {
 			t.Errorf("hoisted %v, aimed %v: %q, not %q", c.hoist, c.target, got, c.want)
 		}
+	}
+}
+
+// TestBoatNeedsACertificate: a machine sailor's boat list says which
+// certificate a boat it may not take needs, and taking her is refused in
+// words that say where to see what is left.
+func TestBoatNeedsACertificate(t *testing.T) {
+	h := newHarness(t, 8, 12, 90)
+	mary := sailor(1, "Iron Mary")
+	ann := store.AccountID{0x02}
+	ladder := certs.New(h.sea.Catalog)
+	keel := -1
+	for i := range h.sea.Boats {
+		if ladder.Opener(string(h.sea.Boats[i].ID)) == 0 {
+			keel = i
+			break
+		}
+	}
+	ms := &fleettest.Store{
+		Owners: map[store.AccountID]store.AccountID{ann: ann, store.AccountID(mary.Account): ann},
+		Names:  map[store.AccountID]string{ann: "Ann Bonny", store.AccountID(mary.Account): "Iron Mary"},
+		Fleet: []store.Boat{
+			{ID: store.BoatID{1}, Kind: string(h.sea.Boats[0].ID), BoatLook: store.BoatLook{Number: 1}},
+			{ID: store.BoatID{3}, Kind: string(h.sea.Boats[keel].ID), BoatLook: store.BoatLook{Number: 7, Name: "Saltpeter"}},
+		},
+	}
+	h.sea.Fleet = fleet.New(fleet.Config{Store: ms, Catalog: h.sea.Catalog, World: h.w.Bus, Ladder: ladder, Log: slog.New(slog.DiscardHandler)})
+	needs := ladder.Name(0)
+	text, refused := h.call(t, mary, toolBoat, map[string]any{})
+	if refused || !strings.Contains(text, "«Saltpeter» 7, needs "+needs) || !strings.Contains(text, "handbook certificates") {
+		t.Fatalf("the list: %s", text)
+	}
+	text, refused = h.call(t, mary, toolBoat, map[string]any{"action": "take", "boat": "saltpeter"})
+	if !refused || !strings.Contains(text, "needs "+needs) || !strings.Contains(text, "news with log") {
+		t.Fatalf("taking her: %v %s", refused, text)
 	}
 }

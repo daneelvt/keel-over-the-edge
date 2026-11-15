@@ -208,3 +208,34 @@ func TestViewKinds(t *testing.T) {
 		t.Fatalf("admission %+v, want %+v", w.Admission, want)
 	}
 }
+
+// TestEveryBoat: every boat is opened to an account, human or AI, and
+// closed again, in the database; an id that is no account's is refused
+// with 404, a body that is not an id with 400; each is counted.
+func TestEveryBoat(t *testing.T) {
+	r := newRig(t, 0)
+	r.join(t, 1, "Ann", store.Human, false)
+	r.joinMachine(t, 2, "Robot")
+	ann, robot := store.AccountID(account(1)), store.AccountID(account(2))
+	for _, id := range []store.AccountID{ann, robot} {
+		if code, body := r.do(t, "POST", "/owner/api/every-boat", EveryBoatRequest{Account: id.String(), On: true}); code != 200 {
+			t.Fatalf("every boat: %d %s", code, body)
+		}
+	}
+	if !r.accounts.every[ann] || !r.accounts.every[robot] {
+		t.Fatalf("not set: %v", r.accounts.every)
+	}
+	if code, _ := r.do(t, "POST", "/owner/api/every-boat", EveryBoatRequest{Account: ann.String(), On: false}); code != 200 || r.accounts.every[ann] {
+		t.Fatalf("every boat closed again: %d %v", code, r.accounts.every)
+	}
+	if code, _ := r.do(t, "POST", "/owner/api/every-boat", EveryBoatRequest{Account: store.AccountID(account(9)).String(), On: true}); code != 404 {
+		t.Fatalf("no such account: %d", code)
+	}
+	if code, _ := r.do(t, "POST", "/owner/api/every-boat", EveryBoatRequest{Account: "nobody", On: true}); code != 400 {
+		t.Fatalf("not an account: %d", code)
+	}
+	if testutil.ToFloat64(r.metrics.OwnerActions.WithLabelValues(store.ActionEveryBoat)) != 3 ||
+		testutil.ToFloat64(r.metrics.OwnerRefused.WithLabelValues(store.ActionEveryBoat)) != 2 {
+		t.Fatal("every boat's actions are not counted")
+	}
+}

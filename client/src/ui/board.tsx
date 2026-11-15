@@ -29,6 +29,7 @@ import {
   enterRefusalText,
   forNewcomers,
   greenhornText,
+  trialText,
   whenLine,
 } from './racewords';
 
@@ -92,12 +93,17 @@ export function HarbourRaces({ races }: { races: RacesView }) {
       setSaid(
         a.ok
           ? `You’re entered in ${name}.`
-          : enterRefusalText(a.refusal.reason, { until: a.refusal.until, now: races.now() }),
+          : enterRefusalText(a.refusal.reason, {
+              until: a.refusal.until,
+              needs: a.refusal.needs,
+              now: races.now(),
+            }),
       );
       void races.refresh();
     });
   };
   const greenhorn = greenhornText(board.greenhorn, now);
+  const trials = board.trials ?? [];
   return (
     <section class="board-races" aria-label="Harbour races">
       <h3>Harbour races</h3>
@@ -140,6 +146,45 @@ export function HarbourRaces({ races }: { races: RacesView }) {
           ))}
         </ul>
       )}
+      {trials.length > 0 ? (
+        <>
+          <h3>The Harbourmaster’s courses</h3>
+          <ul class="race-rows" data-readout="harbour-trials">
+            {trials.map((s) => (
+              <li class="race-row" key={s.code} data-race={s.code}>
+                <button
+                  type="button"
+                  class="race-row-words"
+                  onClick={() => {
+                    races.card.value = s.code;
+                  }}
+                >
+                  <span class="race-row-name">{s.name}</span>
+                  <span class="race-row-when">
+                    {trialText(s.boat.name)}
+                    {s.toward !== undefined && s.toward !== '' ? (
+                      <span class="race-row-ribbon"> · toward {s.toward}</span>
+                    ) : null}
+                  </span>
+                </button>
+                {s.mine.entered ? (
+                  <span class="race-row-when">Entered</span>
+                ) : s.enter.ok ? (
+                  <button
+                    type="button"
+                    class="key-main"
+                    disabled={busy !== ''}
+                    aria-label={`${ENTER} ${s.name}`}
+                    onClick={() => enter(s.code, s.name)}
+                  >
+                    {ENTER}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
       {said !== '' ? (
         <p class="board-office" role="status" data-readout="harbour-said">
           {said}

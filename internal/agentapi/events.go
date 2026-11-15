@@ -58,7 +58,9 @@ const (
 	evAboard    // it came aboard another's boat, or went ashore
 	evRace      // something happened in its race: a signal, a rounding, a call, a finish, the end
 	evRacePlaced
-	evRaceAsked // the race's committee asks whether it still races
+	evRaceAsked   // the race's committee asks whether it still races
+	evCertificate // a task of its next certificate done
+	evCertified   // a certificate earned
 )
 
 // always are the events that end any wait: a sailor would notice them
@@ -66,7 +68,7 @@ const (
 func (k evKind) always() bool {
 	switch k {
 	case evCapsized, evAground, evBump, evLip, evOver, evTaken, evRestart, evAdmitted, evLeft, evNewWorld, evWorldEnded, evFalls, evGale,
-		evOffered, evAboard, evRacePlaced, evRaceAsked:
+		evOffered, evAboard, evRacePlaced, evRaceAsked, evCertified:
 		return true
 	}
 	return false
@@ -171,6 +173,8 @@ func (k evKind) word() string {
 		return "race: placed on the line"
 	case evRaceAsked:
 		return "race: the committee asks"
+	case evCertificate, evCertified:
+		return "certificate"
 	}
 	return "event"
 }

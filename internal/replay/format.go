@@ -69,13 +69,17 @@ import (
 //	            each one's account, number, a byte of flags, 1 for a machine sailor's
 //	            and 2 with its crew, and its boat's look code and name); a RaceRetire
 //	            its account; a RaceWritten its race's ID and run; a RaceCheer
-//	            its account and its cheers
+//	            its account and its cheers; a Certify its account, the
+//	            certificate's and the task's places as varints, then the
+//	            tasks done, needed and the way, the venture's runs and
+//	            those it asks, a byte each, and a byte of flags (1: earned,
+//	            2: by hand)
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 20
+	formatVersion = 22
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -304,6 +308,12 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	case bus.RaceCheer:
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, uint64(e.Cheers))
+	case bus.Certify:
+		c := &e.Certified
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendVarint(dst, int64(c.Certificate))
+		dst = binary.AppendVarint(dst, int64(c.Task))
+		dst = append(dst, c.Done, c.Of, c.Way, c.Runs, c.RunsOf, certFlags(c))
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -311,6 +321,24 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	dst = binary.AppendUvarint(dst, uint64(e.Reply.Gen))
 	dst = binary.AppendUvarint(dst, uint64(e.Reply.Position))
 	return binary.AppendVarint(dst, e.Reply.Since)
+}
+
+// The flags of a Certify.
+const (
+	certEarned = 1
+	certByHand = 2
+)
+
+// certFlags are a Certify's flags.
+func certFlags(c *bus.Certified) byte {
+	var f byte
+	if c.Earned {
+		f |= certEarned
+	}
+	if c.ByHand {
+		f |= certByHand
+	}
+	return f
 }
 
 // The flags of a race handed to the committee.
@@ -774,6 +802,17 @@ func (p *payload) event(e *bus.Event) {
 	case bus.RaceCheer:
 		p.bytes(e.Account[:])
 		e.Cheers = uint32(p.count(math.MaxUint32))
+	case bus.Certify:
+		p.bytes(e.Account[:])
+		c := &e.Certified
+		c.Certificate, c.Task = int16(p.varint()), int16(p.varint())
+		c.Done, c.Of, c.Way = p.byte(), p.byte(), p.byte()
+		c.Runs, c.RunsOf = p.byte(), p.byte()
+		if f := p.byte(); f&^(certEarned|certByHand) != 0 {
+			p.err = fmt.Errorf("a certify of flags %d", f)
+		} else {
+			c.Earned, c.ByHand = f&certEarned != 0, f&certByHand != 0
+		}
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)

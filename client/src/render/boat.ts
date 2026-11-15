@@ -133,20 +133,24 @@ import { FLOW_LUFFING, Telltales } from './telltales';
  * Every model under art/ the game loads as it starts, by its path there, as
  * Vite serves it: the boats', the towns' and the plants'. No sailor's: the
  * player's own look is loaded once it is known, and every other when it is
- * wanted.
+ * wanted; nor the certificates' pendants, loaded when one is first worn.
  */
-const MODELS = import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/**'], {
-  query: '?url',
-  import: 'default',
-  eager: true,
-});
+const MODELS = import.meta.glob<string>(
+  ['../../../art/**/*.glb', '!../../../art/sailors/**', '!../../../art/pendants/**'],
+  { query: '?url', import: 'default', eager: true },
+);
 /**
  * The sailors' files the game loads only when wanted: the player's own
  * look's once it is known, the other looks' as a boat with one comes into
- * view, and every close level, as the camera comes near.
+ * view, and every close level, as the camera comes near; and the pendants,
+ * when someone first wears one.
  */
 const LATER = import.meta.glob<string>(
-  ['../../../art/sailors/*/*.glb', '!../../../art/sailors/{test,vendor}/**'],
+  [
+    '../../../art/sailors/*/*.glb',
+    '!../../../art/sailors/{test,vendor}/**',
+    '../../../art/pendants/*.glb',
+  ],
   {
     query: '?url',
     import: 'default',
@@ -579,6 +583,21 @@ export class Boat {
     }
   }
 
+  /** The pendant its sailor wears at the neck, whatever look it is drawn in: 0 none, else the certificate's place and one. */
+  #pendant = 0;
+
+  wearPendant(n: number): void {
+    this.#pendant = n;
+    for (const s of this.#sailors.values()) {
+      s.wearPendant(n);
+    }
+  }
+
+  /** The pendant its sailor drawn wears, and whether it is drawn (its model loaded). */
+  get pendantWorn(): { worn: number; drawn: boolean } {
+    return this.#shown?.pendant ?? { worn: 0, drawn: false };
+  }
+
   setRaceNumber(n: number): void {
     this.#raceNumber = Math.max(Math.floor(n), 0);
     this.#look.number.value = this.#raceNumber > 0 ? this.#raceNumber : (this.#lookValues[2] ?? 0);
@@ -643,6 +662,7 @@ export class Boat {
     }
     sailor.colour(wanted.colours);
     sailor.wearCockade(this.#cockade);
+    sailor.wearPendant(this.#pendant);
     this.#shown = sailor;
     this.#shownMachine = wanted.machine;
     for (const s of this.#sailors.values()) {
@@ -665,6 +685,7 @@ export class Boat {
         bridgedeck: () => lazyArtUrl(bridgeClips(a.clips)),
         colours: look.colours,
         cockade: cockadeOf(a),
+        pendant: a.pendant,
       },
       renderer,
       this.model,

@@ -267,6 +267,9 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 				if len(boats) > 1 && n%11 == 6 {
 					// A racer cheered by its spectators.
 					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RaceCheer, Account: boats[1].account, Cheers: 3})
+					// And told of a certificate earned by hand.
+					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.Certify, Account: boats[1].account,
+						Certified: bus.Certified{Certificate: 1, Task: 2, Done: 4, Of: 4, Way: bus.CertHand, Earned: true, ByHand: true}})
 				}
 				if len(boats) > 0 && n%11 == 7 {
 					players.TrySend(bus.Command{Op: bus.RaceRetire, Account: boats[0].account})

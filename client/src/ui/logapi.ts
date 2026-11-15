@@ -50,7 +50,7 @@ export interface LogVoyage {
 /** A notable thing of a log's day. */
 export interface LogEntry {
   at: number;
-  kind: 'charted' | 'sighted' | 'found' | 'met' | 'bump';
+  kind: 'charted' | 'sighted' | 'found' | 'met' | 'bump' | 'certificate';
   times?: number;
   title?: string;
   what?: string;
@@ -193,6 +193,41 @@ export interface Log {
   ribbons?: LogRibbons | null;
   /** The sailor wears the winner's cockade, for a race won in the world sailed now. */
   cockade?: boolean;
+  /** The certificate the sailor holds; none for none. */
+  certificate?: LogCertificate;
+  /** In one's own log alone: where the sailor stands toward the next certificate; none after the last. */
+  toward?: LogToward;
+}
+
+/** The certificate a log's sailor holds: its name, whether earned by hand, whether the last there is, and the pendant worn at the neck (its place in the catalog's list and one). */
+export interface LogCertificate {
+  name: string;
+  byHand?: boolean;
+  last?: boolean;
+  pendant?: number;
+}
+
+/** Where a sailor stands toward its next certificate: its name, the tasks it needs and those done, and its tasks. */
+export interface LogToward {
+  name: string;
+  needs: number;
+  done: number;
+  tasks: LogTowardTask[];
+}
+
+/**
+ * A task of the next certificate: its name; whether done, and the way
+ * (hand, pilot, log); a course's task's venture's runs so far of those it
+ * asks, and the code of the Harbourmaster's course that counts for it.
+ */
+export interface LogTowardTask {
+  name: string;
+  done?: boolean;
+  way?: 'hand' | 'pilot' | 'log';
+  course?: boolean;
+  runs?: number;
+  of?: number;
+  code?: string;
 }
 
 /** What asking for a log came to: the log; not there to be read (unknown and refused alike); or not had. */

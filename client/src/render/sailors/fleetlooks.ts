@@ -48,7 +48,7 @@ import {
   Vector4,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { int, select, uniformArray, varying, vec3 } from 'three/tsl';
+import { int, select, uniform, uniformArray, varying, vec3 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { SailorArt } from '../../catalog';
 import { catalog } from '../../catalog';
@@ -60,13 +60,14 @@ import { cockadeCoords } from './cockade';
 import { LayeredTexture } from './layers2d';
 import { cockadeOf, gltfLoader, placesOf } from './model';
 
-/** The looks whose cockades the fleet keeps places for, by layer; and the cockade's radius, m. */
+/** The looks whose cockades and pendants the fleet keeps places for, by layer; and the cockade's radius, m. */
 const COCKADE_LOOKS = 32;
 const COCKADE_RADIUS = catalog.world.committee.prizes.cockade.across / 2;
 /** A place far off any cockade's disc, in its radii. */
 const OFF_DISC = 99;
 
 import { boneNames } from './onboat';
+import { PENDANT_BONE } from './pendant';
 import { RAIL_CLIPS, railClips } from './rail';
 import { Rig } from './rig';
 import { aloftClips, shipClips } from './ship';
@@ -173,6 +174,14 @@ export class FleetLooks {
     at: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4())),
     facing: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
   };
+
+  /** Where each look's certificate's pendant hangs on its figure as bound, by its layer: its bail and the way its face looks. */
+  readonly pendants = {
+    at: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4())),
+    facing: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+  };
+  /** The pendant's bone's place in the skeleton's order (the first loaded look's): the rows' bones are in that order. */
+  readonly pendantBone = uniform(0);
 
   /**
    * A vertex's place on its look's cockade's disc (cockade.ts), a varying,
@@ -433,6 +442,14 @@ export class FleetLooks {
       c.facing.z,
       0,
     );
+    // Where its pendant hangs, by its layer.
+    const [px, py, pz] = look.art.pendant.at as [number, number, number];
+    const [fx, fy, fz] = look.art.pendant.facing as [number, number, number];
+    (this.pendants.at.array[layer] as Vector4 | undefined)?.set(px, py, pz, 0);
+    (this.pendants.facing.array[layer] as Vector4 | undefined)?.set(fx, fy, fz, 0);
+    if (rig.names.length === this.bones) {
+      this.pendantBone.value = Math.max(0, rig.bone(PENDANT_BONE));
+    }
     look.layer = layer;
     this.#pools();
   }

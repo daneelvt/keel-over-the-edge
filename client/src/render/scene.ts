@@ -65,7 +65,7 @@ import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
 import { domeCentre, domeDrop } from './materials';
 import { Overlays } from './overlays';
-import { cockadeOf, PrizesAfloat } from './prizes';
+import { cockadeOf, PrizesAfloat, pendantOf } from './prizes';
 import {
   Adaptive,
   type FrameWindow,
@@ -89,6 +89,7 @@ import { CrewDeck, type CrewShown, helmLook, modelDeck, STEPPED, tillerOf } from
 import { type CrewPlan, crewPlan, type SailorNow } from './sailors/crewrules';
 import { FleetCrews, kindCrew } from './sailors/fleetcrews';
 import { catOf } from './sailors/onboat';
+import { pendantFiles } from './sailors/pendant';
 import { company } from './sailors/ship';
 import { shipPlan } from './sailors/shiprules';
 import { hullSolid } from './sailors/solid';
@@ -679,6 +680,15 @@ export class SeaScene {
     }
     await this.#lookAsked;
     const look = sailorLookOf(catalog, this.#ownLook ?? PERSON_DEFAULT);
+    // The certificates' pendants, loaded the first time someone wears one.
+    const pendants = catalog.pendants?.art.model;
+    if (pendants !== undefined) {
+      pendantFiles(
+        () => lazyArtUrl(pendants),
+        renderer,
+        (catalog.certificates ?? []).map((c) => c.pendantNode),
+      );
+    }
     await Promise.all([
       // At the helm, whoever holds the controls, if others are aboard.
       boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1),
@@ -743,17 +753,19 @@ export class SeaScene {
   }
 
   /**
-   * The winner's cockade on the sailor drawn at the helm, if they wear it:
-   * the skipper's by the boat's prizes; whoever of the crew holds the
-   * controls (or the wheel), by their own.
+   * The winner's cockade and the certificate's pendant on the sailor drawn
+   * at the helm, if they wear them: the skipper's by the boat's prizes;
+   * whoever of the crew holds the controls (or the wheel), by their own.
    */
   #wearHelm(): void {
     const crew = this.#crewShown;
     const seat = crew === null ? 0 : (this.crew.wheelSeat ?? crew.holder);
     const at = crew?.people.find((p) => p.seat === seat);
     const on = at?.cockade ?? (seat === 0 && cockadeOf(this.#prizes.code));
+    const pendant = at?.pendant ?? (seat === 0 ? pendantOf(this.#prizes.code) : 0);
     for (const b of this.#boats.values()) {
       b.wearCockade(on);
+      b.wearPendant(pendant);
     }
   }
 

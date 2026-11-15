@@ -11,12 +11,30 @@ import (
 )
 
 // Store is fleets in memory, as internal/fleet keeps them: the sailors'
-// fleets' owners, their names, and one fleet's boats.
+// fleets' owners, their names, one fleet's boats, and what opens kinds of
+// boat to each sailor.
 type Store struct {
 	mu     sync.Mutex
 	Owners map[store.AccountID]store.AccountID
 	Names  map[store.AccountID]string
 	Fleet  []store.Boat
+	Rights map[store.AccountID]store.SailRights
+}
+
+func (m *Store) SailRights(_ context.Context, id store.AccountID) (store.SailRights, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.Rights[id], nil
+}
+
+// SetRights sets what opens kinds of boat to a sailor.
+func (m *Store) SetRights(id store.AccountID, r store.SailRights) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.Rights == nil {
+		m.Rights = map[store.AccountID]store.SailRights{}
+	}
+	m.Rights[id] = r
 }
 
 func (m *Store) Boats(_ context.Context, owner store.AccountID) ([]store.Boat, error) {

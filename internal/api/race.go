@@ -73,12 +73,13 @@ func racer(w http.ResponseWriter, r *http.Request) (race.Sailor, bool) {
 	return race.Sailor{ID: acc.ID}, ok
 }
 
-// raceRefusal is a refusal's answer: why, until when, and a name's
-// reason.
+// raceRefusal is a refusal's answer: why, until when, a name's reason,
+// and for a boat the sailor may not sail the certificate that opens her.
 type raceRefusal struct {
 	Error string `json:"error"`
 	Until int64  `json:"until,omitempty"`
 	Name  string `json:"name,omitempty"`
+	Needs string `json:"needs,omitempty"`
 }
 
 // answerRace answers what asking of a race came to: its card with
@@ -95,7 +96,7 @@ func (a *api) answerRace(w http.ResponseWriter, r *http.Request, status int, c r
 // refusedRace answers an error of asking of a race.
 func (a *api) refusedRace(w http.ResponseWriter, r *http.Request, err error) {
 	if ref, ok := race.RefusalOf(err); ok {
-		out := raceRefusal{Error: ref.Reason, Name: ref.Name}
+		out := raceRefusal{Error: ref.Reason, Name: ref.Name, Needs: ref.Needs}
 		if !ref.Until.IsZero() {
 			out.Until = ref.Until.UnixMilli()
 		}

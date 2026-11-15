@@ -338,7 +338,11 @@ function MakeForm({
   const said =
     refusal === null
       ? ''
-      : makeRefusalText(refusal.reason, { until: refusal.until, now: view.now() }, refusal.name);
+      : makeRefusalText(
+          refusal.reason,
+          { until: refusal.until, needs: refusal.needs, now: view.now() },
+          refusal.name,
+        );
   return (
     <form
       class="race-form"
@@ -748,7 +752,7 @@ export function RaceCardPanel({
         void view.refresh();
         return;
       }
-      const t = { until: a.refusal.until, now: view.now() };
+      const t = { until: a.refusal.until, needs: a.refusal.needs, now: view.now() };
       setSaid(
         verb === 'enter'
           ? enterRefusalText(a.refusal.reason, t)
@@ -792,7 +796,7 @@ export function RaceCardPanel({
   const crew = view.crew();
   const refused =
     before && !mine.entered && !enter.ok
-      ? enterRefusalText(enter.reason ?? '', { until: enter.until, now })
+      ? enterRefusalText(enter.reason ?? '', { until: enter.until, needs: enter.needs, now })
       : '';
   return (
     <section

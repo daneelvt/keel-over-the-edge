@@ -198,9 +198,9 @@ export interface DrawnBoat {
   helmNet: number | null;
 }
 
-/** Who is aboard a boat in view: each person's seat and look and whether they wear the winner's cockade, the skipper (seat 0) first, and the seat of whoever holds the controls. */
+/** Who is aboard a boat in view: each person's seat and look, whether they wear the winner's cockade and the pendant they wear (0 none), the skipper (seat 0) first, and the seat of whoever holds the controls. */
 export interface BoatCrew {
-  people: readonly { seat: number; look: number; cockade?: boolean }[];
+  people: readonly { seat: number; look: number; cockade?: boolean; pendant?: number }[];
   holder: number;
 }
 
@@ -599,7 +599,13 @@ export class Fleet {
   crews(
     list: readonly {
       slot: number;
-      people: readonly { seat: number; look: number; machine?: boolean; cockade?: boolean }[];
+      people: readonly {
+        seat: number;
+        look: number;
+        machine?: boolean;
+        cockade?: boolean;
+        pendant?: number;
+      }[];
       holder: number;
     }[],
   ): void {
@@ -608,11 +614,12 @@ export class Fleet {
         this.#crews[c.slot] =
           c.people.length > 1
             ? {
-                people: c.people.map((p) =>
-                  p.cockade === true
-                    ? { seat: p.seat, look: p.look, cockade: true }
-                    : { seat: p.seat, look: p.look },
-                ),
+                people: c.people.map((p) => ({
+                  seat: p.seat,
+                  look: p.look,
+                  ...(p.cockade === true ? { cockade: true } : {}),
+                  ...((p.pendant ?? 0) > 0 ? { pendant: p.pendant } : {}),
+                })),
                 holder: c.holder,
               }
             : null;

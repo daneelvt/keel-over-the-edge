@@ -68,6 +68,9 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkCommittee(doc); err != nil {
 		return err
 	}
+	if err := checkCertificates(doc); err != nil {
+		return err
+	}
 	if err := checkIDsNotInCode(root, ids(doc)); err != nil {
 		return err
 	}

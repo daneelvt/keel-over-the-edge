@@ -129,7 +129,7 @@ func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (A
 
 const accountCard = `-- name: AccountCard :one
 SELECT a.id, a.kind, a.owner_id, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
-  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap, a.every_boat,
   coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at, coalesce(a.stop_reason, '')::text AS stop_reason,
   coalesce(a.recovery_made_at, 'epoch')::timestamptz AS recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery,
   coalesce(osl.name, '')::text AS owner_name, coalesce(o.tools, false)::boolean AS owner_tools,
@@ -158,6 +158,7 @@ type AccountCardRow struct {
 	Tools          bool
 	Priority       bool
 	MachineCap     int16
+	EveryBoat      bool
 	StoppedAt      time.Time
 	StopReason     string
 	RecoveryMadeAt time.Time
@@ -188,6 +189,7 @@ func (q *Queries) AccountCard(ctx context.Context, id pgtype.UUID) (AccountCardR
 		&i.Tools,
 		&i.Priority,
 		&i.MachineCap,
+		&i.EveryBoat,
 		&i.StoppedAt,
 		&i.StopReason,
 		&i.RecoveryMadeAt,

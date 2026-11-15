@@ -14,6 +14,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
@@ -129,6 +130,9 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	}
 	if h.races != nil {
 		s.Races, s.OwnerOf = h.races, p.db.FleetOwner
+	}
+	s.Certificates = func(ctx context.Context, id store.AccountID) (certs.Standing, error) {
+		return p.ladder.Of(ctx, p.db.Exam(), id)
 	}
 	s.RaceRecords = func(ctx context.Context, id store.AccountID) ([]store.RaceRecord, error) {
 		return p.db.RaceRecordsOf(ctx, id, agentapi.MostRaceRecords)

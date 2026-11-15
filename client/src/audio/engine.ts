@@ -49,6 +49,7 @@ import {
   type HarbourRecipes,
   harbourEvents,
   lappingNow,
+  strokeTimes,
 } from './harbour';
 import type { Knock } from './knock';
 import {
@@ -1118,6 +1119,27 @@ export class SoundEngine {
         n.disconnect();
       }
     };
+  }
+
+  /** How many times the bell was rung near (tests). */
+  bells = 0;
+
+  /**
+   * Rings the harbour's bell near the listener, strokes times, a pair's
+   * spacing apart: as near as it is ever heard, in the middle. A
+   * certificate earned rings it twice.
+   */
+  bell(strokes: number): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || strokes < 1) {
+      return;
+    }
+    this.bells++;
+    const r = this.#harbour.bell;
+    const at = g.ctx.currentTime;
+    strokeTimes(strokes, r).forEach((t, i) => {
+      this.#play(g, { kind: 'bell', at: at + t, level: r.level, pan: 0, seed: i }, at + t);
+    });
   }
 
   /** How many of the signal gun's reports were played (tests). */

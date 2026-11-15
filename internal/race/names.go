@@ -34,6 +34,27 @@ var hourNames = map[int]string{
 // Greenhorn is the newcomers' harbour race's name.
 const Greenhorn = "the Greenhorn Cup"
 
+// standingNames are the Harbourmaster's standing trials' names on the
+// buoy courses, by shape and length.
+var standingNames = map[string][2]string{
+	ShapeWindwardLeeward: {"the Harbourmaster's Short Course", "the Harbourmaster's Long Course"},
+	ShapeTriangle:        {"the Harbourmaster's Triangle", "the Harbourmaster's Long Triangle"},
+}
+
+// StandingName is the name of the Harbourmaster's standing trial on a
+// buoy course of a shape and length, or on an island course of a name
+// ("the Harbourmaster's Round Gannet Holm").
+func StandingName(courseKind, shape string, long bool, courseName string) string {
+	if courseKind == CourseIsland {
+		return "the Harbourmaster's " + strings.TrimPrefix(strings.TrimPrefix(courseName, "The "), "the ")
+	}
+	n := standingNames[shape]
+	if long {
+		return n[1]
+	}
+	return n[0]
+}
+
 // HourName is the name of the harbour race at an hour of the day; plural,
 // if not "", the boats of a race not of the usual boat ("skiffs"), added
 // to it.

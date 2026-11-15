@@ -25,8 +25,9 @@ type Op uint8
 // scripted sailors, scenes and replays; Hold is the server's own, from what writes the world to the
 // database, Chart, which marks what the world's chart holds from its
 // start, End, which ends the world at its end, RacePlace and
-// RaceWritten, from the races' clerk, and RaceCheer, from the game
-// connection's crowds; Teleport, Stay and
+// RaceWritten, from the races' clerk, RaceCheer, from the game
+// connection's crowds, and Certify, from the certificates' judge;
+// Teleport, Stay and
 // Unseen are the owner's tools', and Chart too, which charts the whole
 // world from the world page.
 const (
@@ -52,6 +53,7 @@ const (
 	RaceRetire                // Account's boat retires from the race it sails in
 	RaceWritten               // Race's run Race.Run, ended, has its results written: the committee lets it go
 	RaceCheer                 // Account's boat, racing, is cheered Cheers times by its spectators
+	Certify                   // what Account's certificates came to, Certified, is told through the frame's events
 	opEnd
 )
 
@@ -61,10 +63,10 @@ const LifeAboard uint16 = 1 << 15
 
 // Ops lists every op, in order, for tables keyed by op.
 var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook, RaiseLife,
-	Board, Ashore, SetHolder, RacePlace, RaceRetire, RaceWritten, RaceCheer}
+	Board, Ashore, SetHolder, RacePlace, RaceRetire, RaceWritten, RaceCheer, Certify}
 
 var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end", "set_look",
-	"set_boat", "set_boat_look", "raise_life", "board", "ashore", "set_holder", "race_place", "race_retire", "race_written", "race_cheer"}
+	"set_boat", "set_boat_look", "raise_life", "board", "ashore", "set_holder", "race_place", "race_retire", "race_written", "race_cheer", "certify"}
 
 // Why someone goes ashore, in an Ashore's Why.
 const (
@@ -87,7 +89,7 @@ func (o Op) Developer() bool { return o == SetWeather || o == Place || o == Rais
 // Server reports whether only the server's own parts may send o: a
 // developer's sender may too, a player's never.
 func (o Op) Server() bool {
-	return o == Hold || o == Chart || o == End || o == RacePlace || o == RaceWritten || o == RaceCheer
+	return o == Hold || o == Chart || o == End || o == RacePlace || o == RaceWritten || o == RaceCheer || o == Certify
 }
 
 // Owner reports whether the owner's tools may send o: a developer's sender
@@ -213,6 +215,8 @@ type Command struct {
 	Race *RaceCall
 	// Cheers is a RaceCheer's count.
 	Cheers uint32
+	// Certified is a Certify's news of Account's certificates.
+	Certified Certified
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply
@@ -303,10 +307,11 @@ func (q *Queue) Players() Sender { return Sender{q: q, from: fromPlayers} }
 func (q *Queue) Developer() Sender { return Sender{q: q, from: fromDeveloper} }
 
 // Server returns a sender for the server's own commands, Hold, Chart,
-// End, RacePlace, RaceWritten and RaceCheer: what writes the world to the
-// database holds admission while it is behind, the world's chart is marked
-// from its start, the world is ended at its end, its races are handed to
-// the committee and let go once written, and its racers' cheers counted.
+// End, RacePlace, RaceWritten, RaceCheer and Certify: what writes the
+// world to the database holds admission while it is behind, the world's
+// chart is marked from its start, the world is ended at its end, its
+// races are handed to the committee and let go once written, its racers'
+// cheers counted, and its sailors told what their certificates came to.
 func (q *Queue) Server() Sender { return Sender{q: q, from: fromServer} }
 
 // Owner returns a sender for the owner's tools' commands alone: Teleport,

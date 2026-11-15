@@ -167,6 +167,11 @@ type RaceEnd struct {
 	Records []RaceRecord
 	Stories []Story
 	Laid    *RaceLaid
+	// Examiner, if not nil, judges the certificates of the skippers whose
+	// runs alone it records, in the same transaction; Certified is what it
+	// told, set once the transaction has committed.
+	Examiner  Examiner
+	Certified []Certified
 }
 
 // RaceLaid is a race's run as its committee laid it, for its replay: its
@@ -259,14 +264,42 @@ type RaceRecord struct {
 	Elapsed float64
 	Added   float64
 	Run     int
+	// Piloted: its boat's autopilot steered in a tick of the run; Alone:
+	// nobody else was aboard from the line to the finish; Course the
+	// course's kind of shape and length (CourseShort …), "" for none.
+	Piloted bool
+	Alone   bool
+	Course  string
 }
+
+// The courses a race record keeps, RaceRecord.Course: a buoy course's
+// shape and length, or an island course.
+const (
+	CourseShort        = "short"         // the short windward–leeward
+	CourseLong         = "long"          // the long windward–leeward
+	CourseTriangle     = "triangle"      // the short triangle
+	CourseLongTriangle = "long-triangle" // the long triangle
+	CourseIsland       = "island"        // an island course
+)
 
 // EndRace writes a race, or a trial's run, ended, fenced: each boat's
 // result and track, the records and the stories, once each; a race
 // finished, and a trial's sailor's entry no longer asking for a run.
 func (s *Store) EndRace(ctx context.Context, lease int64, rules NewsRules, e *RaceEnd) error {
 	world, race := pgtype.UUID{Bytes: e.World, Valid: true}, pgtype.UUID{Bytes: e.Race, Valid: true}
-	return s.fenced(ctx, lease, func(q *db.Queries) error {
+	e.Certified = nil
+	var told []Certified
+	err := s.fenced(ctx, lease, func(q *db.Queries) error {
+		told = nil
+		nw := &newsWrite{world: world, rules: &rules}
+		j := newJudging(e.Examiner, q, nw)
+		for i := range e.Records {
+			if r := &e.Records[i]; r.Kind == "trial" && r.Role == RoleSkipper && r.Alone {
+				if err := j.look(ctx, r.Account, r.World, r.At); err != nil {
+					return err
+				}
+			}
+		}
 		for i := range e.Results {
 			r := &e.Results[i]
 			crew := r.Crew
@@ -311,6 +344,13 @@ func (s *Store) EndRace(ctx context.Context, lease int64, rules NewsRules, e *Ra
 			if err := putRecord(ctx, q, &e.Records[i]); err != nil {
 				return fmt.Errorf("a race's record: %w", err)
 			}
+			j.wrote(e.Records[i].Account)
+		}
+		if err := j.judge(ctx); err != nil {
+			return fmt.Errorf("judging certificates: %w", err)
+		}
+		if j != nil {
+			told = j.told
 		}
 		if l := e.Laid; l != nil {
 			course, err := json.Marshal(l.Course)
@@ -322,7 +362,6 @@ func (s *Store) EndRace(ctx context.Context, lease int64, rules NewsRules, e *Ra
 				return fmt.Errorf("a race's run: %w", err)
 			}
 		}
-		nw := &newsWrite{world: world, rules: &rules}
 		for i := range e.Stories {
 			if _, err := insertStory(ctx, q, nw, &e.Stories[i]); err != nil {
 				return err
@@ -333,6 +372,10 @@ func (s *Store) EndRace(ctx context.Context, lease int64, rules NewsRules, e *Ra
 		}
 		return q.FinishRace(ctx, db.FinishRaceParams{WorldID: world, ID: race, At: stamp(e.At)})
 	})
+	if err == nil {
+		e.Certified = told
+	}
+	return err
 }
 
 // putRecord writes a race record, once.
@@ -358,6 +401,7 @@ func putRecord(ctx context.Context, q *db.Queries, r *RaceRecord) error {
 		p.Elapsed = pgtype.Float4{Float32: float32(r.Elapsed), Valid: true}
 	}
 	p.Added = float32(max(r.Added, 0))
+	p.Piloted, p.Alone, p.Course = r.Piloted, r.Alone, text(r.Course)
 	return q.PutRaceRecord(ctx, p)
 }
 
@@ -423,7 +467,8 @@ func (s *Store) RaceRecordsByCode(ctx context.Context, code string) ([]RaceRecor
 			RaceName: r.RaceName, Kind: r.Kind, CourseName: r.CourseName, Boat: r.Boat, BoatName: r.BoatName, Fleet: int(r.Fleet),
 			Harbour: r.Harbour, Newcomers: r.Newcomers, Role: r.Role, Place: int(r.Place), How: r.How, Medal: r.Medal, Awards: r.Awards,
 			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine, Number: int(r.Number),
-			Elapsed: max(float64(r.Elapsed), 0), Added: float64(r.Added), Run: runOfSource(r.Source)}
+			Elapsed: max(float64(r.Elapsed), 0), Added: float64(r.Added), Run: runOfSource(r.Source), Piloted: r.Piloted, Alone: r.Alone,
+			Course: r.Course}
 	}
 	return out, nil
 }
@@ -472,7 +517,8 @@ func raceRecordsOf(id AccountID, rows []db.RaceRecordsOfRow) []RaceRecord {
 		out[i] = RaceRecord{Account: id, Source: r.Source, World: int(r.World), At: r.At.UTC(), Code: r.Code, RaceName: r.RaceName,
 			Kind: r.Kind, CourseName: r.CourseName, Boat: r.Boat, BoatName: r.BoatName, Fleet: int(r.Fleet), Harbour: r.Harbour,
 			Newcomers: r.Newcomers, Role: r.Role, Place: int(r.Place), How: r.How, Medal: r.Medal, Awards: r.Awards,
-			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine, Hung: r.Hung}
+			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine, Hung: r.Hung, Piloted: r.Piloted,
+			Alone: r.Alone, Course: r.Course}
 	}
 	return out
 }
@@ -523,16 +569,20 @@ func (s *Store) SpoonsHung(ctx context.Context, id AccountID, world int) (int, e
 // RacePrizes are what a sailor's races in a world show on the water while
 // it lasts: the races they sailed, skipper or crew, the links' codes of
 // those they won, the newest first, the wooden spoons they hang, and the
-// races they ran. Only races of three boats or more count.
+// races they ran. Only races of three boats or more count. Held are the
+// certificates they hold, by the catalog's ids, the first earned first:
+// kept for good, not by the world, and worn at the neck.
 type RacePrizes struct {
 	Sailed int
 	Wins   []string
 	Spoons int
 	Ran    int
+	Held   []string
 }
 
 // PrizesOf are the prizes of the sailors of ids in world, each with at
-// most wins of their wins; a sailor with none is left out.
+// most wins of their wins; a sailor with neither races nor certificates
+// is left out.
 func (s *Store) PrizesOf(ctx context.Context, world int, ids []AccountID, wins int) (map[AccountID]RacePrizes, error) {
 	out := make(map[AccountID]RacePrizes, len(ids))
 	if len(ids) == 0 {
@@ -548,6 +598,16 @@ func (s *Store) PrizesOf(ctx context.Context, world int, ids []AccountID, wins i
 	}
 	for _, r := range rows {
 		out[AccountID(r.AccountID.Bytes)] = RacePrizes{Sailed: int(r.Sailed), Wins: r.Wins, Spoons: int(r.Hung), Ran: int(r.Ran)}
+	}
+	held, err := s.q.CertificatesHeld(ctx, us)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range held {
+		id := AccountID(r.AccountID.Bytes)
+		p := out[id]
+		p.Held = r.Held
+		out[id] = p
 	}
 	return out, nil
 }

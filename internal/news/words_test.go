@@ -41,6 +41,9 @@ func TestWords(t *testing.T) {
 		{Story: store.StoryMilestone, Subject: store.SubjectSailor, Facts: store.StoryFacts{Milestone: store.MilestonePlaces, Value: 100}},
 		{Story: store.StoryArrival, Subject: store.SubjectWorld, Facts: store.StoryFacts{Islands: 64}},
 		{Story: store.StoryCourse, Subject: store.SubjectCourse, Title: "Round Gannet Holm from Port Fortune", What: "a new course of 12.4 NM"},
+		{Story: store.StoryCertificate, Subject: store.SubjectSailor, Title: "Deckhand", What: "by hand",
+			Facts: store.StoryFacts{Boats: []string{"skiff", "keelboat"}}},
+		{Story: store.StoryCertificate, Subject: store.SubjectSailor, Title: "Master", Facts: store.StoryFacts{Boats: []string{"tall-ship"}}},
 	}
 	for _, c := range cases {
 		for seed := range 12 {
@@ -87,6 +90,19 @@ func TestWords(t *testing.T) {
 	life := store.Story{Story: store.StoryLife, Subject: store.SubjectSailor, Facts: store.StoryFacts{Life: "humpback-whale"}}
 	if _, text := w.written(&life, 1, 0); !strings.Contains(text, "with {1} aboard") || !strings.Contains(text, "a humpback whale") {
 		t.Errorf("a whale met with one aboard: %q", text)
+	}
+	// A certificate earned by hand, from the logs, the boats it opens named.
+	cert := store.Story{Story: store.StoryCertificate, Subject: store.SubjectSailor, Title: "Helm", What: "by hand",
+		Facts: store.StoryFacts{Boats: []string{"beach-cat"}}}
+	for seed := range 6 {
+		cert.ID[8] = byte(seed)
+		head, text := w.written(&cert, 0, 0)
+		if head != "FROM THE LOGS" || !strings.Contains(text, "Helm") || !strings.Contains(text, ", by hand") || !strings.Contains(text, "{0}") {
+			t.Errorf("a certificate's story: %s %q", head, text)
+		}
+		if strings.Contains(text, "may take") && !strings.Contains(text, "the beach cat") {
+			t.Errorf("a certificate's story without its boat: %q", text)
+		}
 	}
 	// The last world in review: its finders' slots, then the nearest's.
 	review := store.Story{Story: store.StoryReview, Subject: store.SubjectWorld, Facts: store.StoryFacts{

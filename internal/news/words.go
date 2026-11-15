@@ -187,7 +187,7 @@ func head(s *store.Story) string {
 		return headCompany
 	case store.StoryRun:
 		return headRun
-	case store.StoryMilestone:
+	case store.StoryMilestone, store.StoryCertificate:
 		return headLog
 	}
 	return headSea
@@ -195,7 +195,8 @@ func head(s *store.Story) string {
 
 // The phrasings of each kind. {what} is what a place is ("a sea arch on
 // Gull Island"), {What} the same opening a sentence; {m} a distance from
-// the lip; {nm} a run; {life} a kind of life met; {n} a count.
+// the lip; {nm} a run; {life} a kind of life met; {n} a count; {cert} a
+// certificate, {hand} ", by hand" if it was, {boats} the boats it opens.
 var (
 	greatWords = []string{
 		"{What}, first sighted by {0}.",
@@ -266,6 +267,11 @@ var (
 		"{0} beats the harbourmaster's time on {what}.",
 		"{What}, sailed by {0} inside the harbourmaster's time.",
 	}
+	certificateWords = []string{
+		"{0} earns the {cert} certificate{hand}.",
+		"{0} is a {cert} now{hand}, and may take {boats}.",
+		"The {cert} certificate goes to {0}{hand}, and {boats} with it.",
+	}
 	arrivalWords = []string{
 		"The chart is blank: {n} islands wait to be found.",
 		"The falls have turned the world over: {n} islands wait to be found.",
@@ -325,6 +331,14 @@ func (w *words) written(s *store.Story, named, counted int) (string, string) {
 		} else {
 			text = one(s.ID, goldWords, fill)
 		}
+	case store.StoryCertificate:
+		fill["cert"] = s.Title
+		fill["hand"] = ""
+		if s.What != "" {
+			fill["hand"] = ", " + s.What
+		}
+		fill["boats"] = w.boatsWords(s.Facts.Boats)
+		text = one(s.ID, certificateWords, fill)
 	case store.StoryArrival:
 		fill["n"] = Count(s.Facts.Islands)
 		text = one(s.ID, arrivalWords, fill)
@@ -334,6 +348,24 @@ func (w *words) written(s *store.Story, named, counted int) (string, string) {
 		text = capital(s.What)
 	}
 	return head(s), text
+}
+
+// boatsWords are kinds of boat by their IDs as words: "the skiff and the
+// keelboat"; "a bigger boat" for none known.
+func (w *words) boatsWords(ids []string) string {
+	var names []string
+	for _, id := range ids {
+		if n := w.boats[id]; n != "" {
+			names = append(names, "the "+lower(n))
+		}
+	}
+	switch len(names) {
+	case 0:
+		return "a bigger boat"
+	case 1:
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // lifeWords are a kind of life met, as a phrase: "a humpback whale", "a

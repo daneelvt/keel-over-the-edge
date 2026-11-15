@@ -74,6 +74,9 @@ func (noAccounts) SetBoatLook(context.Context, store.AccountID, store.BoatID, st
 func (noAccounts) BoatNumberFree(context.Context, string, int, store.BoatID) (bool, error) {
 	return true, nil
 }
+func (noAccounts) SailRights(context.Context, store.AccountID) (store.SailRights, error) {
+	return store.SailRights{EveryBoat: true}, nil
+}
 func (noAccounts) RevokeOwnedGrant(context.Context, store.AccountID, [16]byte) (store.AccountID, error) {
 	return store.AccountID{}, store.ErrNotFound
 }

@@ -116,6 +116,9 @@ func (w *World) apply(c *bus.Command) {
 		if committee.Cheer(f, c.Account, c.Cheers) {
 			r.Result = bus.Done
 		}
+	case bus.Certify:
+		// Nothing changes: the frame's event carries the news out.
+		r = bus.Reply{Result: bus.Done, Slot: -1}
 	default:
 		return
 	}

@@ -3995,6 +3995,79 @@ go test ./internal/api -run 'News|OpenRoutes|LogCarries' -v
 go test ./internal/agentapi -run NewsWords -v
 ```
 
+## Certificates
+
+Deckhand, Helm, Skipper, Captain and Master (`shared/catalog/certificates.yaml`),
+earned in that order, each open bigger boats to the sailor who holds it or a
+later one (`internal/certs`). Each needs some of its tasks: course tasks,
+time trials' runs on its courses to a medal, by hand (the autopilot off
+throughout) or the longer venture's runs; and log tasks, a measure of the log
+reaching a mark. Only what the sailor sails alone counts, since its last
+certificate.
+
+### The judge
+
+Nothing of a sailor's progress is stored: `certs.Judge` counts it from the
+rows in the transactions that write them, as a `store.Examiner`. `EndRace`
+judges the skippers of trial runs recorded alone (`race_record.alone`,
+`piloted` and `course`, from the racer's `Piloted` and `Company`, set by the
+committee in any tick of the run); the log writer's batch judges the sailors
+of voyages sailed alone and of entries made alone (`log_entry.alone`). The
+standing before the rows are written is read first, so only what is new is
+told; enough tasks done earns the certificate (`certificate`, once by its
+source) with a `log_entry` of kind `certificate`. After the commit each told
+item is a `bus.Certify` command, whose event carries `bus.Certified` through
+the frame to the machine sailors' events (`certificate`). A course task not
+yet done whose venture has a run more than before is told too (`Runs` of
+`RunsOf`). An earning writes the news's candidate story, kind `certificate`,
+scored by the certificate (`scores` of the story in `notices.yaml`).
+
+### On the phone
+
+The edge reads every frame's `Certify` events as the frame is published
+(`Edge.Record`) and sends the sailor's own connection a `Certified` message,
+wherever it is; a sailor with none is told nothing (the log keeps it). The
+page (`ui/certwords.ts`) puts a course's task on the finish's card and a
+trial's results (`Racing.certified`), raises `task-done` (passive) for a task
+of the log, or for a course's while no card shows it, and
+`certificate-earned` (active, See opening the log's Ribbons) with the
+harbour's bell rung twice. The log's answer carries the certificate held
+(`certificate`, read by whoever may read the log) and, in one's own,
+`toward`: the next certificate's tasks, each course task with the code of
+the Harbourmaster's course that counts in the sailor's boat
+(`race.Service.CourseTrials`). In the sandbox `keel.certified({...})` tells
+the page as the server would.
+
+### Gating
+
+`fleet.MaySail` is the one question: a kind no certificate opens, one the
+sailor's certificates open, one in `boat_kept` (filled once by the migration
+from skippered voyages and held boats), or any with `account.every_boat`.
+`fleet.Take` refuses with `ErrCertificate`; `ForJoin` passes over a closed
+kind for the boat each sailor brings; race entry and making refuse with
+`certificate`; the clerk withdraws a run, or leaves out an entrant, before
+placing. Crew and the helm stay open. `GET /api/fleet` gives each boat's
+`needs`.
+
+### The Harbourmaster's courses
+
+The harbour job makes the standing trials, owner none, once each: the short
+windward–leeward, the short triangle and the long windward–leeward for every
+kind that races buoy courses, and each island course open for every kind it
+is offered to. The board lists those in the sailor's boat, each with the
+certificate a run counts toward (`toward`).
+
+### Trying it
+
+```sh
+go test ./internal/store -run 'BoatsKept|TheJudge|ThreeTasks|ByHand' -v
+go test ./internal/race -run 'RacesAskTheCertificates|ATrialsRun|HarbourJob' -v
+go test ./internal/fleet ./internal/owner -run 'Certificates|EveryBoat' -v
+go test ./internal/agentapi -run 'CertificateWords|BoatNeedsACertificate' -v
+go test ./internal/edge/edgetest -run CertifiedToTheSailor -v
+go test ./internal/logbook -run LogCertificates -v
+```
+
 ## The weekly world
 
 A world lasts a week. Every world ends on a published schedule, **Sunday
@@ -4194,6 +4267,12 @@ carry the flag is refused, and no other player's boat is ever moved.
   sessions' cache and the MCP door's cache of tokens' accounts forget the
   account. A priority account never waits for a boat; the change applies
   from its next join, and a boat at sea keeps the place it was given.
+- **Every boat** (`POST /owner/api/every-boat {"account", "on"}`, a box on
+  an account's card, human or AI): the account's `every_boat` column opens
+  every kind of boat to its sailor whatever its certificates, for testing;
+  read as it takes a boat, so nothing is pushed, and a boat it sails that
+  closes again is kept until it changes boat or next goes to sea. The card
+  shows the certificate held and the next one's count.
 - **Teleport** (`POST /owner/api/place`): to the point picked, to the start
   (where a new boat would appear, clear of other hulls), to an island's
   approach (the first water 3 m deep on the line from its highest point

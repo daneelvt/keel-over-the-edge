@@ -10,6 +10,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
@@ -110,6 +111,9 @@ type Sea struct {
 	// RaceRecords are a machine sailor's lasting race records, the newest
 	// first, at most MostRaceRecords, for its log; nil for none.
 	RaceRecords func(ctx context.Context, id store.AccountID) ([]store.RaceRecord, error)
+	// Certificates, if not nil, is where a machine sailor stands toward
+	// its next certificate.
+	Certificates func(ctx context.Context, id store.AccountID) (certs.Standing, error)
 
 	overlays overlays
 

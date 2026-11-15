@@ -59,6 +59,10 @@ type Accounts interface {
 	// SetPriority marks an account, human or AI, as a priority account or
 	// not, or returns store.ErrNotFound for no such account.
 	SetPriority(ctx context.Context, id store.AccountID, on bool) error
+	// SetEveryBoat opens every kind of boat to an account's sailor, human
+	// or AI, whatever its certificates, or closes them again; or returns
+	// store.ErrNotFound for no such account.
+	SetEveryBoat(ctx context.Context, id store.AccountID, on bool) error
 	// AccountCounts counts the human accounts: all, made in the last week,
 	// seen in the last day.
 	AccountCounts(ctx context.Context) (store.AccountCounts, error)
@@ -320,7 +324,7 @@ var Paths = []string{
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/busy.json", "/owner/api/gales.json", "/owner/api/place.json",
-	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority",
+	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority", "/owner/api/every-boat",
 	"/owner/api/accounts/search", "/owner/api/account.json", "/owner/api/accounts/stop", "/owner/api/accounts/start",
 	"/owner/api/accounts/revoke", "/owner/api/accounts/delete", "/owner/api/actions.json",
 }
@@ -408,6 +412,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/place.json", o.placeWeather)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/priority", o.priority)
+	mux.HandleFunc("POST /owner/api/every-boat", o.everyBoat)
 	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
 	mux.HandleFunc("GET /owner/api/settings.json", o.settings)

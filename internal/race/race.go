@@ -139,6 +139,9 @@ const (
 	RefuseEntered   = "entered"
 	RefuseClash     = "clash"
 	RefuseLate      = "late"
+	// RefuseCertificate is a race in a kind of boat the sailor may not
+	// sail: Refusal.Needs names the certificate that opens it.
+	RefuseCertificate = "certificate"
 	// Making.
 	RefuseMade   = "made"
 	RefuseOwned  = "owned"
@@ -157,11 +160,13 @@ const (
 
 // Refusal is a race refused, and why: Until, if not zero, is when it
 // would not be (the next race may start then, the latest start allowed);
-// Name, for a name refused, the moderation's reason.
+// Name, for a name refused, the moderation's reason; Needs, for a boat
+// the sailor may not sail, the certificate that opens her.
 type Refusal struct {
 	Reason string
 	Until  time.Time
 	Name   string
+	Needs  string
 }
 
 func (r *Refusal) Error() string {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet/fleettest"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -219,5 +220,72 @@ func ask(t *testing.T, w *sim.World, c bus.Command) bus.Reply {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("no answer to %s", c.Op)
 		return bus.Reply{}
+	}
+}
+
+// TestFleetCertificates: a boat of a kind no certificate of the sailor's
+// opens says which it needs and is not taken; the certificate, a kind
+// kept or every boat opened by the owner opens it; a sailor whose own
+// boat closes to it (the owner's box unticked) sails the boat each sailor
+// brings at its next join instead.
+func TestFleetCertificates(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ladder := certs.New(cat)
+	kindOf := func(boat string) int {
+		for i := range cat.Boats {
+			if string(cat.Boats[i].ID) == boat {
+				return i
+			}
+		}
+		t.Fatalf("no boat %s", boat)
+		return -1
+	}
+	var keel string
+	for i := range cat.Boats {
+		if ladder.Opener(string(cat.Boats[i].ID)) == 0 {
+			keel = string(cat.Boats[i].ID)
+		}
+	}
+	ann := id(1)
+	ms := &fleettest.Store{
+		Owners: map[store.AccountID]store.AccountID{ann: ann},
+		Fleet: []store.Boat{
+			{ID: store.BoatID{1}, Kind: string(cat.Boats[0].ID), BoatLook: store.BoatLook{Number: 1}},
+			{ID: store.BoatID{2}, Kind: keel, BoatLook: store.BoatLook{Number: 7}},
+		},
+	}
+	f := New(Config{Store: ms, Catalog: cat, Ladder: ladder, Log: slog.New(slog.DiscardHandler)})
+	ctx := context.Background()
+	first := ladder.Name(0)
+	v, err := f.Of(ctx, ann)
+	if err != nil || v.Boats[0].Needs != "" || v.Boats[1].Needs != first {
+		t.Fatalf("a new sailor's fleet: %+v %v", v.Boats, err)
+	}
+	if _, err := f.Take(ctx, ann, store.BoatID{2}); !errors.Is(err, ErrCertificate) {
+		t.Fatalf("a new sailor takes the %s: %v", keel, err)
+	}
+	if needs, err := f.MaySail(ctx, ann, kindOf(keel)); err != nil || needs != first {
+		t.Errorf("may a new sailor sail the %s: %q %v", keel, needs, err)
+	}
+	for _, r := range []store.SailRights{{Held: []string{string(ladder.Certificate(0).ID)}}, {Kept: []string{keel}}, {EveryBoat: true}} {
+		ms.SetRights(ann, r)
+		if needs, err := f.MaySail(ctx, ann, kindOf(keel)); err != nil || needs != "" {
+			t.Errorf("rights %+v: the %s needs %q %v", r, keel, needs, err)
+		}
+	}
+	// Every boat: she takes the keelboat; unticked, her next join is in
+	// the Jolly boat.
+	if v, err := f.Take(ctx, ann, store.BoatID{2}); err != nil || v.Boats[v.Yours].ID != (store.BoatID{2}) {
+		t.Fatalf("taking the %s with every boat: %+v %v", keel, v, err)
+	}
+	if j := f.ForJoin(ctx, ann); j.Kind != uint16(kindOf(keel)) {
+		t.Fatalf("her join with every boat: %+v", j)
+	}
+	ms.SetRights(ann, store.SailRights{})
+	if j := f.ForJoin(ctx, ann); j.Kind != 0 {
+		t.Fatalf("her join, unticked: %+v", j)
 	}
 }

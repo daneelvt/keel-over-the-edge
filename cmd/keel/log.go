@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
@@ -46,6 +47,19 @@ func (p *process) logsOf(number int) *logbook.Service {
 	}
 	if t := p.ties; t != nil {
 		cfg.Blocks = func(a, b store.AccountID) bool { return t.Blocks(a, b) }
+	}
+	if p.ladder != nil {
+		cfg.Standing = func(ctx context.Context, id store.AccountID) (certs.Standing, error) {
+			return p.ladder.Of(ctx, p.db.Exam(), id)
+		}
+	}
+	// The Harbourmaster's courses of the world sailed, once its races run.
+	cfg.Trials = func(ctx context.Context, id store.AccountID) (map[string]string, error) {
+		h := p.current.Load()
+		if h == nil || h.races == nil || h.row.Number != number {
+			return nil, nil
+		}
+		return h.races.CourseTrials(ctx, id)
 	}
 	return logbook.NewService(cfg)
 }

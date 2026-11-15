@@ -137,12 +137,13 @@ import { startWakeScene, wakeSceneFromQuery, wakeSceneHost } from '../sandbox/wa
 import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
+import { certifiedTold } from '../ui/certwords';
 import { ClearView, type Needed, needed } from '../ui/clearview';
 import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { deckOf } from '../ui/decklazy';
 import { mountScreen, type ScreenProps } from '../ui/hud';
-import { setLogHost } from '../ui/loglazy';
+import { setLogHost, setRaceHost } from '../ui/loglazy';
 import { AGROUND } from '../ui/model';
 import { openNews, setNewsHost } from '../ui/newslazy';
 import { serverNews } from '../ui/newsread';
@@ -652,6 +653,10 @@ async function start(): Promise<void> {
       races.replay = (code) => parts.replay.open(code);
       pollRaces(races, parts.notices, catalog.notices.kinds);
       screen.races = races;
+      setRaceHost((code) => {
+        parts.chart.show(null);
+        races.card.value = code;
+      });
       if (screen.racing != null) {
         screen.racing.races = races;
       }
@@ -1041,6 +1046,22 @@ async function start(): Promise<void> {
   };
   online.onRaceResults = (r) => racing.results(r);
   online.onRaceCheered = (c) => raceWatch.cheered(c);
+  const certBook = { certificates: catalog.certificates ?? [], boats: catalog.boats };
+  // What the sailor's certificates came to: a course's on the finish's
+  // card, the log's tasks and an earning as notices, the earning with the
+  // bell and See, the log's Ribbons.
+  online.onCertified = (c) =>
+    certifiedTold(
+      {
+        book: certBook,
+        line: racing.certified,
+        shown: () => racing.finishOpen.peek() || racing.resultsOpen.peek(),
+        raise: (on, fill, action) => parts.notices.raise(on, fill, performance.now(), action),
+        see: () => parts.chart.showLog({ kind: 'own', tab: 'ribbons' }),
+        bell: (n) => game.bell(n),
+      },
+      c,
+    );
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   online.onLife = (l, drop) => world.life.set(l, drop);
   online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
@@ -1407,6 +1428,12 @@ async function start(): Promise<void> {
   // before, they open on their own over the screen.
   setLogHost((who) => parts.chart.showLog(who));
   setNewsHost((day) => parts.chart.showNews(day));
+  // A Harbourmaster's course in the log's Ribbons opens its card over the
+  // sea, the chart put away.
+  setRaceHost((code) => {
+    parts.chart.show(null);
+    races.card.value = code;
+  });
   game.listen(document, container);
   if (view !== undefined) {
     world.placeCamera(view);

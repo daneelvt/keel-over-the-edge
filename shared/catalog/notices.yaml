@@ -17,7 +17,12 @@
 # A harbour race about to start fills in {name}, the race's, and {boat},
 # its boats ("Jolly boats"); a race the player entered, {name}; both
 # {left}, the time to its start, at each time before it given. The
-# harbour board and the race's card say the same, so neither is lost.
+# harbour board and the race's card say the same, so neither is lost. A
+# task of the player's next certificate done fills in {cert}, the
+# certificate's name, {task}, the task's, and {done} and {of}, the tasks
+# done of those it needs; a certificate earned, {cert} and {boats}, the
+# boats it opens as a sentence opens them ("The beach cat is"). Both are in
+# the log's Ribbons too; a course's task is said on the finish's card.
 # Whatever a notice tells is in the news, on the chart, in the countdown or
 # on the list of sailors to watch too, so one missed is never lost (WCAG 2.2, 2.2.1). The world's end is worked out on the phone from the end the
 # Welcome gives and the world clock: each of its notices is shown once a
@@ -100,6 +105,22 @@ notices:
       stays: 8
       text: "{name} starts in {left}"
       folded: "{name} starts in {left}"
+    - id: tasks-done
+      name: Toward your next certificate
+      on: task-done
+      level: passive
+      switchable: true
+      stays: 6
+      text: "Toward {cert}: {task} ✓ · {done} of {of}"
+      folded: "Toward {cert}: {count} tasks done · {done} of {of}"
+    - id: certificates-earned
+      name: Certificates earned
+      on: certificate-earned
+      level: active
+      switchable: false
+      stays: 30
+      text: "You're a {cert}! {boats} yours to take"
+      folded: "You're a {cert}! {boats} yours to take"
 
 # The news, a daily edition in the manner of the old shipping lists. What
 # could be news is written as a candidate story with its kind's score; each
@@ -139,3 +160,6 @@ news:
     - { id: new-course, of: course, score: 5 }
     - { id: race-won, of: race, score: 6 }
     - { id: trial-gold, of: trial, score: 3 }
+    # By the certificate: Deckhand, Helm and Skipper low, Captain
+    # middling, Master high.
+    - { id: earned-certificate, of: certificate, score: 2, scores: [2, 2, 2, 5, 8] }

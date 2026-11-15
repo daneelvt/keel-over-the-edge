@@ -26,6 +26,9 @@ const (
 	LogFound   = "found"   // the first of a kind for the collection
 	LogMet     = "met"     // a kind of the sea's life met
 	LogBump    = "bump"    // a bump with another boat
+	// LogCertificate is a certificate earned: its title the certificate's
+	// name, its what "by hand" when it was.
+	LogCertificate = "certificate"
 )
 
 // How a voyage, or a time aboard, ended.
@@ -121,10 +124,13 @@ type LogVoyage struct {
 }
 
 // LogEntry is a notable thing in a sailor's log: LogCharted, LogSighted,
-// LogFound, LogMet or LogBump. Other is the other sailor it names, zero
-// for none (or a former sailor), with their boat's name. Charting, if not
-// nil, is the charting it tells of: it is written only if that charting
-// was written in the same batch. Finds are the kinds it adds.
+// LogFound, LogMet, LogBump or LogCertificate. Other is the other sailor
+// it names, zero for none (or a former sailor), with their boat's name.
+// Crewed is whether the sailor was not alone in its own boat as it
+// happened (aboard another's, or with others aboard): it then counts
+// toward no certificate. Charting, if not nil, is the charting it tells
+// of: it is written only if that charting was written in the same batch.
+// Finds are the kinds it adds.
 type LogEntry struct {
 	ID           [16]byte
 	Account      AccountID
@@ -143,6 +149,7 @@ type LogEntry struct {
 	OtherBoat    string
 	Article      string
 	Fault        string
+	Crewed       bool
 	Charting     *ChartKey
 	Finds        []LogFind
 }
@@ -177,7 +184,7 @@ func (r *LogRows) Reset() {
 // WriteLog writes rows of the log, fenced by the lease's epoch: what the
 // backfill writes.
 func (s *Store) WriteLog(ctx context.Context, lease int64, rows LogRows) error {
-	return s.fenced(ctx, lease, func(q *db.Queries) error { return writeLog(ctx, q, &rows, nil, nil) })
+	return s.fenced(ctx, lease, func(q *db.Queries) error { return writeLog(ctx, q, &rows, nil, nil, nil) })
 }
 
 // writeLog writes rows of the log in a transaction: each row once by its
@@ -186,10 +193,28 @@ func (s *Store) WriteLog(ctx context.Context, lease int64, rows LogRows) error {
 // are now, where not given; and each row written the first time adds its
 // finds to its sailor's collection, a find made for the first time an
 // entry of its own. With nw, the world's news, its stories are written
-// too, and the milestones its rows reach; without, none.
-func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[ChartKey]bool, nw *newsWrite) error {
+// too, and the milestones its rows reach; without, none. With j, the
+// certificates of the sailors whose rows sailed alone are judged once
+// they are written.
+func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[ChartKey]bool, nw *newsWrite, j *judging) error {
 	if rows.Empty() {
 		return nil
+	}
+	if j != nil {
+		for i := range rows.Voyages {
+			if v := &rows.Voyages[i]; !v.Aboard && len(v.Crew) == 0 {
+				if err := j.look(ctx, v.Account, v.World, v.Ended); err != nil {
+					return err
+				}
+			}
+		}
+		for i := range rows.Entries {
+			if e := &rows.Entries[i]; !e.Crewed && (e.Kind == LogCharted || e.Kind == LogMet) {
+				if err := j.look(ctx, e.Account, e.World, e.At); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	names, err := logNames(ctx, q, rows)
 	if err != nil {
@@ -232,6 +257,7 @@ func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[Cha
 		if n == 0 {
 			continue
 		}
+		j.wrote(v.Account)
 		for _, fd := range v.Finds {
 			if err := writeFind(ctx, q, v.Account, v.World, v.Ended, v.Place, fd); err != nil {
 				return err
@@ -255,6 +281,7 @@ func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[Cha
 		if n == 0 {
 			continue
 		}
+		j.wrote(e.Account)
 		for _, fd := range e.Finds {
 			if err := writeFind(ctx, q, e.Account, e.World, e.At, e.Place, fd); err != nil {
 				return err
@@ -265,6 +292,9 @@ func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[Cha
 				return err
 			}
 		}
+	}
+	if err := j.judge(ctx); err != nil {
+		return fmt.Errorf("judging certificates: %w", err)
 	}
 	if nw != nil {
 		for i := range rows.Stories {
@@ -283,7 +313,7 @@ func insertEntry(ctx context.Context, q *db.Queries, e *LogEntry, other pgtype.T
 		AccountID: uuidOf(e.Account), Source: e.Source, World: int32(e.World), At: e.At, Kind: e.Kind,
 		Title: e.Title, What: e.What, Worth: float32(e.Worth), Grp: text(e.Group), Find: text(e.Find),
 		Place: text(e.Place), OtherMachine: e.OtherMachine, OtherBoat: text(e.OtherBoat),
-		Article: text(e.Article), Fault: text(e.Fault),
+		Article: text(e.Article), Fault: text(e.Fault), Alone: !e.Crewed,
 	}
 	if e.X != 0 || e.Y != 0 {
 		p.X, p.Y = pgtype.Float4{Float32: float32(e.X), Valid: true}, pgtype.Float4{Float32: float32(e.Y), Valid: true}
