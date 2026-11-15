@@ -8,10 +8,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The tools. Twelve, fixed, the same for every machine sailor and every
-// app, in this order, named for what a sailor does: apps cache a server's
-// tool list or freeze it, so the list never changes as the game grows; a
-// tool whose feature is still to come answers "not yet". Their
+// The tools. Thirteen, the same for every machine sailor and every app, in
+// this order, named for what a sailor does: apps cache a server's tool
+// list or freeze it, so the list changes seldom as the game grows, and a
+// tool whose feature is still to come answers "not yet"; course came
+// after the first twelve, and an app sees it once it lists the tools
+// again. Their
 // definitions, descriptions included, are here alone, and
 // testdata/tools.golden.json holds the exact tools/list answer, so that
 // any change to what agents are told shows in review and in the release
@@ -27,6 +29,7 @@ const (
 	toolSteer    = "steer"
 	toolTrim     = "trim"
 	toolChart    = "chart"
+	toolCourse   = "course"
 	toolPencil   = "pencil"
 	toolForecast = "forecast"
 	toolNews     = "news"
@@ -66,7 +69,7 @@ func hints(_ string, readOnly, idempotent, destructive bool) *mcp.ToolAnnotation
 // alwaysLoad is the _meta of a core tool.
 func alwaysLoad() mcp.Meta { return mcp.Meta{metaAlwaysLoad: true} }
 
-// tools are the twelve, in their order.
+// tools are the thirteen, in their order.
 func tools() []toolDef {
 	return []toolDef{
 		{budget: looks, joins: true, tool: &mcp.Tool{
@@ -77,7 +80,7 @@ func tools() []toolDef {
 			Annotations: hints("Observe", true, false, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"wait":{"type":"integer","minimum":0,"maximum":50,"description":"Seconds to rest until something happens; 0 answers now. 25 is safe in every app."},` +
-				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","chat","race","pilot","sky","weather","life"]},"description":"What ends the wait. Default all but life and heel, wind_shift, bearing, near (need values)."},` +
+				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","course","chat","race","pilot","sky","weather","life"]},"description":"What ends the wait. Default all but life and heel, wind_shift, bearing, near (need values)."},` +
 				`"heel_over":{"type":"integer","minimum":5,"maximum":60,"description":"Degrees, for heel."},` +
 				`"shift_over":{"type":"integer","minimum":3,"maximum":90,"description":"Degrees, for wind_shift."},` +
 				`"place":{"type":"string","description":"A charted place, for bearing and near."},` +
@@ -128,6 +131,16 @@ func tools() []toolDef {
 				`"group":{"type":"string","enum":["all","islands","places","features","courses"],"description":"Default all."},` +
 				`"limit":{"type":"integer","minimum":1,"maximum":30,"description":"Default 10."},` +
 				`"place":{"type":"string","description":"One place by name."}` +
+				`}}`),
+		}},
+		{budget: looks, tool: &mcp.Tool{
+			Name: toolCourse, Title: "Course",
+			Description: "Set a course: observe then tells its bearing and distance and wakes you on arrival. It never steers.",
+			Annotations: hints("Course", false, true, false),
+			InputSchema: schema(`{"type":"object","properties":{` +
+				`"place":{"type":"string","description":"Charted, or a course's name for its start."},` +
+				`"position":{"type":"string","description":"A pin: 67°24′N 045°12′."},` +
+				`"clear":{"type":"boolean"}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{

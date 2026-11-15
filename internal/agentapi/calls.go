@@ -27,7 +27,7 @@ const (
 	resultError   = "error"
 )
 
-// addTools adds the twelve tools to s, answered by c.
+// addTools adds the tools to s, answered by c.
 func (c *Core) addTools(s *mcp.Server) {
 	for _, d := range tools() {
 		s.AddTool(d.tool, c.handler(d))
@@ -256,6 +256,13 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 			return "", nil, r
 		}
 		return c.race(ctx, h, &o)
+	case toolCourse:
+		var o courseArgs
+		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		text, r := c.setCourseOf(h, &o)
+		return text, nil, r
 	case toolHandbook:
 		var o handbookArgs
 		if r := args(req, &o); r != nil {

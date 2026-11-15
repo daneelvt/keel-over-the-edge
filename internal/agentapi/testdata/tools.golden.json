@@ -77,6 +77,7 @@
               "wind_shift",
               "bearing",
               "near",
+              "course",
               "chat",
               "race",
               "pilot",
@@ -230,6 +231,33 @@
     },
     "name": "chart",
     "title": "Chart"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Set a course: observe then tells its bearing and distance and wakes you on arrival. It never steers.",
+    "inputSchema": {
+      "properties": {
+        "clear": {
+          "type": "boolean"
+        },
+        "place": {
+          "description": "Charted, or a course's name for its start.",
+          "type": "string"
+        },
+        "position": {
+          "description": "A pin: 67°24′N 045°12′.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "course",
+    "title": "Course"
   },
   {
     "annotations": {

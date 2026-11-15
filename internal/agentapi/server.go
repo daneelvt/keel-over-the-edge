@@ -20,7 +20,7 @@ import (
 
 // The MCP server, on the official Go SDK: stateless, each request on its
 // own, so a restart loses nothing an app holds; every protocol era the SDK
-// serves, on the one address. Its twelve tools sail a machine sailor's
+// serves, on the one address. Its thirteen tools sail a machine sailor's
 // boat (Core).
 
 // MaxBody is the most an MCP request's body may be.
