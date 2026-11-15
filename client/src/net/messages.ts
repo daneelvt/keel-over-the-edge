@@ -476,6 +476,8 @@ export interface PersonTold {
   shipmate: boolean;
   /** They wear the winner's cockade, for a race won in the world. */
   cockade?: boolean;
+  /** The pendant they wear at the neck: 0 none, else their highest certificate's place in the catalog's list and one. */
+  pendant?: number;
 }
 
 /**
@@ -492,7 +494,7 @@ export interface CrewTold {
 /** Who is aboard a boat in view, by its view slot: each person's seat, look and machine mark, and the holder's seat; never a name. */
 export interface ViewCrewTold {
   slot: number;
-  people: { seat: number; look: number; machine: boolean; cockade?: boolean }[];
+  people: { seat: number; look: number; machine: boolean; cockade?: boolean; pendant?: number }[];
   holder: number;
 }
 

@@ -120,6 +120,19 @@
   position: relative;
   flex: none;
   display: block;
+  /* A pendant hung low on the chest is cut by the portrait's edge, as the figure is. */
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.log-pendant {
+  position: absolute;
+  width: 12%;
+  height: auto;
+  aspect-ratio: 24 / 36;
+  /* Hung by its bail, a third of the way down its box. */
+  transform: translate(-50%, -27.8%);
+  pointer-events: none;
 }
 
 .log-cockade {

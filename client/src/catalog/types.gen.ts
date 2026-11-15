@@ -373,6 +373,7 @@ export interface Catalog {
         Certificate,
         Certificate
       ];
+  pendants?: Pendants;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -2116,6 +2117,7 @@ export interface SailorArt {
    */
   ink: string;
   cockade: Cockade;
+  pendant: PendantPlace;
 }
 /**
  * Where a race's winner wears the cockade: on the hat's left side, or on the coat's left breast for a look with no hat.
@@ -2137,6 +2139,32 @@ export interface Cockade {
   facing: [number, number, number];
   /**
    * Its middle on the inked portrait, as shares of its width from the left and of its height from the top.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  inked: [number, number];
+}
+/**
+ * Where the certificate's pendant hangs: where its cord runs through its bail, on the figure as it is bound, clear of the clothes in front of the breastbone.
+ */
+export interface PendantPlace {
+  /**
+   * Where its cord runs through its bail, on the figure as it is bound, m: across to its left, up and forward.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  at: [number, number, number];
+  /**
+   * The way its face looks out from the clothes under it, the same axes.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  facing: [number, number, number];
+  /**
+   * Where its cord runs through its bail on the inked portrait, as shares of its width from the left and of its height from the top.
    *
    * @minItems 2
    * @maxItems 2
@@ -9814,6 +9842,10 @@ export interface Certificate {
    */
   pendant: string;
   /**
+   * The pendant's node in the pendants' model.
+   */
+  pendantNode: string;
+  /**
    * The boats it opens, by their ids: each boat is opened by one certificate at most, and one opened by none is open to every sailor.
    */
   opens: Id[];
@@ -10108,6 +10140,24 @@ export interface CertificateWay {
   apart?: boolean;
   each?: boolean;
 }
+/**
+ * The certificates' pendants, worn on a cord at the neck by those who hold one: the highest held.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Pendants".
+ */
+export interface Pendants {
+  art: PendantsArt;
+}
+/**
+ * The pendants' art.
+ */
+export interface PendantsArt {
+  /**
+   * Path of an art file, relative to the repository's art/ folder.
+   */
+  model: string;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '7853049583744877';
+export const CATALOG_VERSION = '4658d9e109ce49fe';

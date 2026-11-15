@@ -54,6 +54,7 @@ import {
   NOT_YET,
   OLDER_RACES,
   ONLY_YOU,
+  pendantWords,
   READING,
   RIBBONS,
   recordLines,
@@ -77,12 +78,13 @@ import {
   worldHeading,
   YOUR_LOG,
 } from './logwords';
+import { PendantInk } from './pendantink';
 import { PlayerText } from './player';
 import { Prize, raceColour } from './prize';
 import { hangSpoon } from './raceapi';
 
-/** The log's inked portrait, the look's drawing on the log's paper; nothing for a look the build has not. With the winner's cockade pinned where the look wears it, for a race won in the world sailed now. */
-function Ink({ look, cockade }: { look: Look; cockade: boolean }) {
+/** The log's inked portrait, the look's drawing on the log's paper; nothing for a look the build has not. With the winner's cockade pinned where the look wears it, for a race won in the world sailed now; and the pendant of the highest certificate held (pendant, 0 none) at the neck. */
+function Ink({ look, cockade, pendant }: { look: Look; cockade: boolean; pendant: number }) {
   const version = partsOf(catalog, look).version;
   const src = version === undefined ? null : inkFile(version.art);
   if (src === null) {
@@ -98,14 +100,19 @@ function Ink({ look, cockade }: { look: Look; cockade: boolean }) {
       decoding="async"
     />
   );
-  if (!cockade || version === undefined) {
+  const held = catalog.certificates?.[pendant - 1];
+  if ((!cockade && held === undefined) || version === undefined) {
     return img;
   }
   const [u, v] = version.art.cockade.inked;
+  const [pu, pv] = version.art.pendant.inked;
   return (
     <span class="log-ink-frame">
       {img}
-      <Cockade at={[u ?? 0.7, v ?? 0.3]} />
+      {held === undefined ? null : (
+        <PendantInk n={pendant} at={[pu ?? 0.5, pv ?? 0.85]} label={pendantWords(held)} />
+      )}
+      {cockade ? <Cockade at={[u ?? 0.7, v ?? 0.3]} /> : null}
     </span>
   );
 }
@@ -212,7 +219,11 @@ function Head({
         </div>
       ) : null}
       <div class="log-id">
-        <Ink look={log.look} cockade={log.cockade === true} />
+        <Ink
+          look={log.look}
+          cockade={log.cockade === true}
+          pendant={log.certificate?.pendant ?? 0}
+        />
         <div class="log-name">
           <h2>
             <PlayerText text={log.name} />

@@ -24,8 +24,10 @@
 //   5 hair colour, 1 if the row is drawn as a rigid figure (2 out on a
 //     trapeze's wire to starboard, 3 to port)
 //   6 the sway: the apparent wind's push in the model's frame (x, z,
-//     metres at full sway), the seat's side (±1 seated, 0 not), 1 if the
-//     row is drawn skinned (2 wearing the winner's cockade)
+//     metres at full sway), the seat's side (±1 seated, 0 not), and if the
+//     row is drawn skinned 1, and 1 more wearing the winner's cockade, and
+//     twice the pendant worn (0 none, else the certificate's place and one);
+//     0 if not
 //   7 seat: the rigid figure's place in the model (x, y, z) and facing
 //   8 on: three texels a bone, the rows of its matrix.
 //
@@ -58,14 +60,17 @@ import {
   dot,
   Fn,
   float,
+  floor,
   If,
   int,
   ivec2,
   max,
+  mod,
   normalGeometry,
   normalize,
   normalLocal,
   positionGeometry,
+  select,
   sin,
   texture,
   varying,
@@ -77,7 +82,8 @@ import type { DrawnBoat } from '../../game/fleet';
 import { figureNode, type Instances, placeNormal, placePoint } from '../fleetparts';
 import { SAILING } from '../sailor';
 import type { BridgePlaces } from './bridgedeck';
-import type { FleetLook } from './fleetlooks';
+import type { FleetLook, FleetLooks } from './fleetlooks';
+import { pendantVertex } from './pendant';
 import { type Hike, STRAPPED } from './restage';
 import { Rig } from './rig';
 import {
@@ -471,8 +477,40 @@ export function nearSailorNodes(
     });
     return out;
   })() as unknown as Node<'vec3'>;
-  const cockade = sway.w.greaterThan(1.5) as unknown as Node<'bool'>;
+  const cockade = mod(sway.w.sub(1), 2).greaterThan(0.5) as unknown as Node<'bool'>;
   return { vertex, ...colours(i), cockade };
+}
+
+/**
+ * The pendant its skipper wears on a near boat's skinned figure (pendant.ts),
+ * from the row's sway texel, on its look's place (by the row's layer), by
+ * the pendant bone (bone) in the row, placed as the figure is.
+ */
+export function nearPendantNode(
+  rows: Texture,
+  row: Node<'int'>,
+  cog: number,
+  looks: Pick<FleetLooks, 'pendants' | 'pendantBone'>,
+): Node<'vec3'> {
+  const t = texture(rows);
+  const i = rowInstances(t, row);
+  const sway = t.load(ivec2(6, row)) as unknown as Node<'vec4'>;
+  const layer = int(i.main.w.add(0.5));
+  const bone = vec4(looks.pendantBone, 0, 0, 0) as unknown as Node<'vec4'>;
+  return pendantVertex({
+    worn: select(
+      sway.w.greaterThan(0.5),
+      floor(sway.w.sub(1).div(2)),
+      float(0),
+    ) as unknown as Node<'float'>,
+    at: (looks.pendants.at.element(layer) as unknown as Node<'vec4'>)
+      .xyz as unknown as Node<'vec3'>,
+    facing: (looks.pendants.facing.element(layer) as unknown as Node<'vec4'>)
+      .xyz as unknown as Node<'vec3'>,
+    skin: (p, n) => skinRow(t, row, bone, vec4(1, 0, 0, 0) as unknown as Node<'vec4'>, p, n),
+    place: (p) => placePoint(p, i, cog),
+    turn: (n) => placeNormal(n, i),
+  });
 }
 
 /**

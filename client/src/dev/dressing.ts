@@ -56,6 +56,7 @@ import {
   type Object3D,
   PlaneGeometry,
   Raycaster,
+  SkinnedMesh,
   TorusGeometry,
   Vector2,
   Vector3,
@@ -108,6 +109,7 @@ import {
   wireColour,
   wireMesh,
 } from '../render/sailors/onboat';
+import { pendantFiles, pendantsReady, WornPendant } from '../render/sailors/pendant';
 import {
   CROUCH_CLIPS,
   CROUCH_SPEED,
@@ -160,6 +162,13 @@ import { Stage } from '../render/stage';
 const MACHINE_LOOK = 'machine';
 /** A machine's lamps' light. */
 const LAMP = '#ffb347';
+
+/** The pendants' model, by its path under art/. */
+const PENDANTS = import.meta.glob<string>('../../../art/pendants/*.glb', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+});
 
 /** The built looks' files, by their path under art/sailors/. */
 const FILES = import.meta.glob<string>(
@@ -254,6 +263,8 @@ export interface Room {
   phone: boolean;
   /** The winner's cockade worn, where each look's art pins it. */
   cockade: boolean;
+  /** The certificate's pendant worn at the neck: 0 none, else the certificate's place and one. */
+  pendant: number;
   /** The clips held at this time, in seconds; null to play. */
   t: number | null;
   who: number;
@@ -280,6 +291,7 @@ const DEFAULTS: Room = {
   mask: false,
   phone: false,
   cockade: false,
+  pendant: 0,
   t: null,
   who: 0,
   near: false,
@@ -336,6 +348,10 @@ export function readRoom(hash: string): Room {
     mask: q.get('mask') === '1',
     phone: q.get('phone') === '1',
     cockade: q.get('cockade') === '1',
+    pendant: Math.min(
+      catalog.certificates?.length ?? 0,
+      Math.max(0, Math.floor(Number(q.get('pendant')) || 0)),
+    ),
     t: q.has('t') && Number.isFinite(t) ? t : null,
     who: Math.max(0, Math.floor(Number(q.get('who')) || 0)),
     near: q.get('near') === '1',
@@ -359,6 +375,7 @@ export function writeRoom(r: Room): string {
   if (r.mask) q.set('mask', '1');
   if (r.phone) q.set('phone', '1');
   if (r.cockade) q.set('cockade', '1');
+  if (r.pendant !== 0) q.set('pendant', String(r.pendant));
   if (r.t !== null) q.set('t', String(r.t));
   if (r.who !== 0) q.set('who', String(r.who));
   if (r.near) q.set('near', '1');
@@ -423,6 +440,8 @@ interface Figure {
   wire: { mesh: Mesh; side: number; hounds: Vector3; hook: Vector3 } | null;
   /** Walking at a crouch along a side deck: where it starts, and how far it goes before it starts again. */
   walk: { from: Vector3; length: number; speed: number; way?: Vector3 } | null;
+  /** The certificate's pendant at its neck; null at the far level, which wears none. */
+  pendant: WornPendant | null;
 }
 
 /** The wheel stood at on the quay: its hub ahead of and above the helmsman's place, its rim, spokes and their handles beyond it, as the ships' models are built. */
@@ -547,6 +566,10 @@ export interface DressingHooks {
   }[];
   /** Where a figure's bone is drawn, dropped by the dome, in CSS pixels from the stage's top left. */
   project(figure: number, bone: string): { x: number; y: number };
+  /** Where a figure's bone is in the room, m (x, y, z), as last drawn; null for none. */
+  bone(figure: number, bone: string): [number, number, number] | null;
+  /** The pendants worn on the figures, as drawn: each figure's (0 none, or at the far level). */
+  pendants(): number[];
   /** Moves the dome's centre (scene x and z, m): the room drops away from it. */
   dome(x: number, z: number): void;
   /** The scene against the material factory: an empty list is a pass. */
@@ -686,6 +709,16 @@ export class DressingRoom {
           inBoat: f.boat !== null,
         })),
       project: (figure, bone) => this.#project(figure, bone),
+      bone: (figure, bone) => {
+        const f = this.#figures[figure];
+        const b = f?.root.getObjectByName(bone);
+        if (f === undefined || b === undefined) {
+          return null;
+        }
+        f.root.updateWorldMatrix(true, true);
+        return b.getWorldPosition(new Vector3()).toArray();
+      },
+      pendants: () => this.#figures.map((f) => (f.pendant?.drawn === true ? f.pendant.worn : 0)),
       dome: (x, z) => {
         this.#dome.set(x, z);
       },
@@ -872,6 +905,14 @@ export class DressingRoom {
       throw new Error(`no ${level} level of ${look} ${version}`);
     }
     const machine = look === MACHINE_LOOK;
+    const pendants = PENDANTS[`../../../art/${catalog.pendants?.art.model ?? ''}`];
+    if (pendants !== undefined) {
+      pendantFiles(
+        () => Promise.resolve(pendants),
+        renderer,
+        (catalog.certificates ?? []).map((c) => c.pendantNode),
+      );
+    }
     if (machine) {
       colours = sailorColours(`#${colours.main.getHexString()}`, `#${this.room.finish}`, LAMP);
     }
@@ -946,7 +987,20 @@ export class DressingRoom {
       harness: null,
       wire: null,
       walk: null,
+      pendant: null,
     };
+    const skinned = meshes.find((m): m is SkinnedMesh => m instanceof SkinnedMesh);
+    const art = (
+      machine ? catalog.machine.versions : catalog.sailors.find((l) => l.id === look)?.versions
+    )?.find((v) => v.id === version)?.art;
+    if (f.level !== 'far' && skinned !== undefined && art !== undefined) {
+      f.pendant = new WornPendant(skinned.skeleton, art.pendant);
+      f.pendant.shadows = true;
+      if (this.room.pendant > 0) {
+        await pendantsReady();
+        f.pendant.wear(this.room.pendant);
+      }
+    }
     const clip = c?.clips.find((k) => k.name === this.room.clip);
     if (model.skeleton !== null && clip !== undefined) {
       f.mixer = new AnimationMixer(root);
@@ -2101,6 +2155,13 @@ export class DressingRoom {
       ['front', r.side === 'front', () => this.#side('front')],
       ['back', r.side === 'back', () => this.#side('back')],
     ]);
+    group('Pendant', [
+      ['none', r.pendant === 0, () => this.#wear(0)],
+      ...(catalog.certificates ?? []).map(
+        (c, i) =>
+          [c.name, r.pendant === i + 1, () => this.#wear(i + 1)] as [string, boolean, () => void],
+      ),
+    ]);
     group('Show', [
       ['black', r.black, () => this.#toggle('black')],
       ['mask', r.mask, () => this.#toggle('mask')],
@@ -2118,6 +2179,18 @@ export class DressingRoom {
     history.replaceState(null, '', writeRoom(this.room));
     this.#aim(true);
     this.#panelFor();
+  }
+
+  /** Wears the pendant of the certificate in place n−1 on every figure (0 none). */
+  #wear(n: number): void {
+    this.room = { ...this.room, pendant: n };
+    history.replaceState(null, '', writeRoom(this.room));
+    void pendantsReady().then(() => {
+      for (const f of this.#figures) {
+        f.pendant?.wear(n);
+      }
+      this.#panelFor();
+    });
   }
 
   #toggle(what: 'black' | 'mask' | 'phone' | 'cockade'): void {

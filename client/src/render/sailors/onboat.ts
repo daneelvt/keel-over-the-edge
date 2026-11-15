@@ -39,6 +39,7 @@ import {
 import { dot, float, mix, saturate, uniform, uv, vec3, vec4 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind } from '../../catalog';
+import type { PendantPlace } from '../../catalog/types.gen';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
@@ -56,6 +57,7 @@ import {
   type SailorModel,
   wearCockade,
 } from './model';
+import { WornPendant } from './pendant';
 import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
 import { type CatBoat, type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
@@ -93,6 +95,8 @@ export interface SailorUrls {
   colours: { main: string; skin: string; hair: string };
   /** Where the look wears the winner's cockade; none drawn without. */
   cockade?: CockadePlace;
+  /** Where the look's certificate's pendant hangs; none drawn without. */
+  pendant?: PendantPlace;
 }
 
 const v = new Vector3();
@@ -172,6 +176,8 @@ export class BoatSailor {
       turnIn(this.#wheelNode, model, this.#wheelRest);
     }
     this.#deckBones = bonesFor(rig, deck.root);
+    this.#deckPendant =
+      urls.pendant === undefined ? null : new WornPendant(deck.skeleton, urls.pendant);
     deck.root.name = 'sailor figure';
     deck.root.matrixAutoUpdate = false;
     model.add(deck.root);
@@ -350,6 +356,22 @@ export class BoatSailor {
   /** Takes new colours, #RRGGBB: its main colour, skin or metal, and hair or lamps' light. */
   /** Whether the sailor wears the winner's cockade. */
   #cockade = false;
+  /** The pendant the sailor wears, on each level: 0 none, else the certificate's place and one. */
+  #pendant = 0;
+  readonly #deckPendant: WornPendant | null;
+  #closePendant: WornPendant | null = null;
+
+  /** Puts on the pendant of the certificate in place n−1, or takes it off (0): on every level. */
+  wearPendant(n: number): void {
+    this.#pendant = n;
+    this.#deckPendant?.wear(n);
+    this.#closePendant?.wear(n);
+  }
+
+  /** The pendant worn and whether it is drawn on the deck level (its model loaded). */
+  get pendant(): { worn: number; drawn: boolean } {
+    return { worn: this.#pendant, drawn: this.#deckPendant?.drawn === true };
+  }
 
   /** Puts the winner's cockade on, or takes it off: on every level. */
   wearCockade(on: boolean): void {
@@ -451,6 +473,11 @@ export class BoatSailor {
       this.#urls.cockade ?? null,
     );
     wearCockade(close, this.#cockade);
+    if (this.#urls.pendant !== undefined) {
+      this.#closePendant = new WornPendant(close.skeleton, this.#urls.pendant);
+      this.#closePendant.shadows = deckMesh?.castShadow ?? false;
+      this.#closePendant.wear(this.#pendant);
+    }
     close.root.matrixAutoUpdate = false;
     for (const mesh of close.meshes) {
       mesh.castShadow = deckMesh?.castShadow ?? false;

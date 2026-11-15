@@ -19,10 +19,18 @@
 #
 # A log task is a measure of the sailor's log reaching a mark: distance in
 # nautical miles, the lip's closest approach in metres, the rest a count.
+#
+# Whoever holds a certificate wears its pendant on a cord at the neck, the
+# highest held, and the log's inked portrait shows it: each names its node
+# in the pendants' model (art/pendants/build.ts) as pendantNode.
+pendants:
+  art: { model: pendants/pendants.glb }
+
 certificates:
   - id: deckhand-cert
     name: Deckhand
     pendant: a copper anchor
+    pendantNode: anchor
     opens: [skiff, keelboat]
     needs: 3
     tasks:
@@ -47,6 +55,7 @@ certificates:
   - id: helm-cert
     name: Helm
     pendant: a bronze ship's wheel
+    pendantNode: wheel
     opens: [beach-cat]
     needs: 4
     tasks:
@@ -80,6 +89,7 @@ certificates:
   - id: skipper-cert
     name: Skipper
     pendant: a silver compass rose
+    pendantNode: compass-rose
     opens: [yacht]
     needs: 4
     tasks:
@@ -113,6 +123,7 @@ certificates:
   - id: captain-cert
     name: Captain
     pendant: a silver spyglass
+    pendantNode: spyglass
     opens: [catamaran]
     needs: 4
     tasks:
@@ -146,6 +157,7 @@ certificates:
   - id: master-cert
     name: Master
     pendant: a gold sunburst
+    pendantNode: sunburst
     opens: [tall-ship]
     needs: 5
     tasks:

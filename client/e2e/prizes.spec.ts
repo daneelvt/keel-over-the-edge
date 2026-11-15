@@ -7,7 +7,10 @@
 // a boat of the fleet near enough flies its own and shows its number,
 // one beyond the prizes' reach none; every boat's prizes cost two draws
 // (their flags, their spoons), and none when nobody flies any. In the
-// dressing room the cockade is pinned to a look's hat.
+// dressing room the cockade is pinned to a look's hat. A certificate's
+// pendant hangs at the neck of the own boat's sailor, of a friend's boat's
+// skipper near by and of her crew, and is taken off with the certificate's
+// prize code; the dressing room hangs each of the five.
 
 import { expect, type Page, test } from '@playwright/test';
 import type { DressingHooks } from '../src/dev/dressing';
@@ -140,4 +143,77 @@ test('the dressing room pins the cockade to a look’s hat', async ({ page }) =>
   const worn = gold(await picture(true));
   // A rosette a few centimetres across on each figure's scarf.
   expect(worn - without).toBeGreaterThan(40);
+});
+
+test('a certificate’s pendant at the sailor’s neck, and on a friend’s boat near by, her skipper’s and her crew’s', async ({
+  page,
+}) => {
+  test.slow();
+  await openScene(page);
+  const worn = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    const b = k.boat().state;
+    k.setPrizes(k.prizeCode({ pendant: 3 }), 0);
+    // A friend's keelboat near by: her skipper a Master, her crew Deckhands and a Helm.
+    const kind = 1;
+    const { crew } = k.fleetCrew(4, 0, 7);
+    const pendants = [0, 1, 2, 1];
+    k.setFleet([
+      {
+        kind,
+        east: b.x + 14,
+        north: b.y + 9,
+        heading: 1.2,
+        sail: 15,
+        prizes: k.prizeCode({ pendant: 5 }),
+        crew: { ...crew, people: crew.people.map((p, i) => ({ ...p, pendant: pendants[i] ?? 0 })) },
+      },
+    ]);
+    await k.fleetLoaded();
+    await k.fleetCrewsReady();
+    for (let i = 0; i < 200 && !k.pendantsDrawn().own.drawn; i++) {
+      k.render();
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    k.render();
+    await k.show();
+    return k.pendantsDrawn();
+  });
+  expect(worn.loaded).toBe(true);
+  expect(worn.own).toEqual({ worn: 3, drawn: true });
+  // The skipper's and those of her crew who wear one.
+  expect(worn.fleet).toBe(1);
+  expect(worn.crews).toBe(3);
+  const off = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    k.setPrizes(0, 0);
+    k.setFleet(null);
+    k.render();
+    await k.show();
+    return k.pendantsDrawn();
+  });
+  expect(off.own).toEqual({ worn: 0, drawn: false });
+  expect(off.fleet).toBe(0);
+});
+
+test('the dressing room hangs each certificate’s pendant at a look’s neck', async ({ page }) => {
+  test.slow();
+  const project = test.info().project.name;
+  const query = project === 'webgl2' ? '?backend=webgl2' : '';
+  await page.goto(`/dev.html${query}#sailors&view=lineup&look=bosun&clip=rest&t=1`);
+  await page.waitForURL(/\/sailors\.html/);
+  await page.waitForFunction(
+    () => globalThis.dressing?.ready === true || (globalThis.dressing?.error ?? '') !== '',
+    null,
+    { timeout: 120_000 },
+  );
+  expect(await page.evaluate(() => globalThis.dressing.error)).toBe('');
+  for (const n of [1, 2, 3, 4, 5, 0]) {
+    const worn = await page.evaluate(async (n) => {
+      await globalThis.dressing.set({ pendant: n });
+      return globalThis.dressing.pendants();
+    }, n);
+    // Her and him alike.
+    expect(worn).toEqual([n, n]);
+  }
 });

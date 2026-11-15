@@ -36,6 +36,11 @@ export const NO_SAILOR = 'A log is kept by a sailor: make yours and set sail.';
 export const YOUR_LOG = 'Your log';
 /** Said of the winner's cockade on a log's portrait. */
 export const COCKADE = 'Wears the winner’s cockade, for a race won in this world';
+
+/** What the pendant on the log's portrait says to those who cannot see it: what it is, and whose. */
+export function pendantWords(c: { name: string; pendant: string }): string {
+  return `Wears ${c.pendant}, the ${c.name}’s pendant`;
+}
 export const DAYS = 'Days';
 export const COLLECTION = 'Collection';
 export const WHOLE_RECORD = 'The whole record';

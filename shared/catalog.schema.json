@@ -36,7 +36,8 @@
       "type": "array",
       "maxItems": 16,
       "items": { "$ref": "#/$defs/Certificate" }
-    }
+    },
+    "pendants": { "$ref": "#/$defs/Pendants" }
   },
   "$defs": {
     "Certificate": {
@@ -44,11 +45,12 @@
       "description": "A certificate: its name, its pendant, the boats it opens, and its tasks, of which it needs some. Every task counts only what the sailor sails alone, since the certificate before it was earned.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "pendant", "opens", "needs", "tasks"],
+      "required": ["id", "name", "pendant", "pendantNode", "opens", "needs", "tasks"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Its name: \"You're a Deckhand!\"", "type": "string", "minLength": 1, "maxLength": 40 },
         "pendant": { "description": "The pendant worn by those who hold it, in words.", "type": "string", "minLength": 1, "maxLength": 60 },
+        "pendantNode": { "description": "The pendant's node in the pendants' model.", "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "maxLength": 40 },
         "opens": {
           "description": "The boats it opens, by their ids: each boat is opened by one certificate at most, and one opened by none is open to every sailor.",
           "type": "array",
@@ -56,6 +58,25 @@
         },
         "needs": { "description": "How many of its tasks earn it.", "type": "integer", "minimum": 1, "maximum": 20 },
         "tasks": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/CertificateTask" } }
+      }
+    },
+    "Pendants": {
+      "title": "Pendants",
+      "description": "The certificates' pendants, worn on a cord at the neck by those who hold one: the highest held.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["art"],
+      "properties": {
+        "art": {
+          "title": "PendantsArt",
+          "description": "The pendants' art.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": {
+            "model": { "description": "The pendants' model: a glTF binary of a node for each pendant, its origin where the cord runs through its bail, x across, y up and z out from the chest, its back on z = 0; its parts' colours in its vertices, their metalness and roughness in its second texture coordinate.", "$ref": "#/$defs/ArtPath" }
+          }
+        }
       }
     },
     "CertificateTask": {
@@ -830,7 +851,7 @@
       "description": "A sailor's art.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["model", "far", "close", "clips", "portrait", "portraitFallback", "portraitMask", "ink", "cockade"],
+      "required": ["model", "far", "close", "clips", "portrait", "portraitFallback", "portraitMask", "ink", "cockade", "pendant"],
       "properties": {
         "model": { "description": "The sailor's deck level: a glTF binary of skinned meshes on the shared skeleton, with its atlas and mask, drawn on the boat in view and on the boats near the camera.", "$ref": "#/$defs/ArtPath" },
         "far": { "description": "The sailor's far level: one rigid figure posed seated at the helm, with the place node that seats it in the boat model; drawn in the fleet.", "$ref": "#/$defs/ArtPath" },
@@ -850,6 +871,18 @@
             "at": { "description": "Its middle on the figure as it is bound, m: across to its left, up and forward.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -2, "maximum": 2 } },
             "facing": { "description": "The way it faces out from the cloth, the same axes.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -1, "maximum": 1 } },
             "inked": { "description": "Its middle on the inked portrait, as shares of its width from the left and of its height from the top.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+          }
+        },
+        "pendant": {
+          "title": "PendantPlace",
+          "description": "Where the certificate's pendant hangs: where its cord runs through its bail, on the figure as it is bound, clear of the clothes in front of the breastbone.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at", "facing", "inked"],
+          "properties": {
+            "at": { "description": "Where its cord runs through its bail, on the figure as it is bound, m: across to its left, up and forward.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -2, "maximum": 2 } },
+            "facing": { "description": "The way its face looks out from the clothes under it, the same axes.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -1, "maximum": 1 } },
+            "inked": { "description": "Where its cord runs through its bail on the inked portrait, as shares of its width from the left and of its height from the top.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
           }
         }
       }

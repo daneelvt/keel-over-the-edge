@@ -490,6 +490,9 @@ type Catalog struct {
 	// Notices corresponds to the JSON schema field "notices".
 	Notices Notices `json:"notices"`
 
+	// Pendants corresponds to the JSON schema field "pendants".
+	Pendants *Pendants `json:"pendants,omitempty,omitzero"`
+
 	// Polars corresponds to the JSON schema field "polars".
 	Polars *Polars `json:"polars,omitempty,omitzero"`
 
@@ -529,6 +532,9 @@ type Certificate struct {
 
 	// The pendant worn by those who hold it, in words.
 	Pendant string `json:"pendant"`
+
+	// The pendant's node in the pendants' model.
+	PendantNode string `json:"pendantNode"`
 
 	// Tasks corresponds to the JSON schema field "tasks".
 	Tasks []CertificateTask `json:"tasks"`
@@ -2435,6 +2441,37 @@ const OnNewWorld On = "new-world"
 const OnRaceSoon On = "race-soon"
 const OnTaskDone On = "task-done"
 
+// Where the certificate's pendant hangs: where its cord runs through its bail, on
+// the figure as it is bound, clear of the clothes in front of the breastbone.
+type PendantPlace struct {
+	// Where its cord runs through its bail, on the figure as it is bound, m: across
+	// to its left, up and forward.
+	At []float64 `json:"at"`
+
+	// The way its face looks out from the clothes under it, the same axes.
+	Facing []float64 `json:"facing"`
+
+	// Where its cord runs through its bail on the inked portrait, as shares of its
+	// width from the left and of its height from the top.
+	Inked []float64 `json:"inked"`
+}
+
+// The certificates' pendants, worn on a cord at the neck by those who hold one:
+// the highest held.
+type Pendants struct {
+	// The pendants' art.
+	Art PendantsArt `json:"art"`
+}
+
+// The pendants' art.
+type PendantsArt struct {
+	// The pendants' model: a glTF binary of a node for each pendant, its origin where
+	// the cord runs through its bail, x across, y up and z out from the chest, its
+	// back on z = 0; its parts' colours in its vertices, their metalness and
+	// roughness in its second texture coordinate.
+	Model ArtPath `json:"model"`
+}
+
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
 // helm only, at the sailor's rate.
@@ -3667,6 +3704,10 @@ type SailorArt struct {
 	// skeleton, with its atlas and mask, drawn on the boat in view and on the boats
 	// near the camera.
 	Model ArtPath `json:"model"`
+
+	// Where the certificate's pendant hangs: where its cord runs through its bail, on
+	// the figure as it is bound, clear of the clothes in front of the breastbone.
+	Pendant PendantPlace `json:"pendant"`
 
 	// The colour portrait's base, AVIF: head and shoulders, shaded, its option
 	// regions in neutral grey.
@@ -6134,4 +6175,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "7853049583744877"
+const Version = "4658d9e109ce49fe"

@@ -264,8 +264,12 @@ export function longLog() {
     ribbons: { counts: raceCounts() },
     // A race won this world: the cockade on the portrait.
     cockade: true,
-    // A Captain by hand, toward Master.
-    certificate: { name: data.certificates?.at(-2)?.name ?? 'Captain', byHand: true },
+    // A Captain by hand, toward Master: the Captain's pendant on the portrait.
+    certificate: {
+      name: data.certificates?.at(-2)?.name ?? 'Captain',
+      byHand: true,
+      pendant: (data.certificates?.length ?? 5) - 1,
+    },
     toward: toward(),
   };
 }
@@ -273,7 +277,14 @@ export function longLog() {
 /** The long log after the last certificate: its name alone in the Ribbons. */
 export function masterLog() {
   const { toward: _, ...log } = longLog();
-  return { ...log, certificate: { name: data.certificates?.at(-1)?.name ?? 'Master', last: true } };
+  return {
+    ...log,
+    certificate: {
+      name: data.certificates?.at(-1)?.name ?? 'Master',
+      last: true,
+      pendant: data.certificates?.length ?? 5,
+    },
+  };
 }
 
 /** A log with nothing in it yet. */

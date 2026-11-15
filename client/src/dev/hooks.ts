@@ -123,6 +123,7 @@ import { prizeCode } from '../render/prizes';
 import { rungName, TIERS } from '../render/quality';
 import { type CrewMove, moveAt } from '../render/sailors/crewrules';
 import { CREW_MOST } from '../render/sailors/fleetcrews';
+import { pendantsLoaded } from '../render/sailors/pendant';
 import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
@@ -2355,14 +2356,34 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     setPrizes(code: number, number = 0): void {
       world.setPrizes(code, number);
     },
-    /** A prize code: the pennants' colours (newest first), the burgee (0 none, 1 racing, 2 gilded), the spoons, the committee's flag. */
+    /** A prize code: the pennants' colours (newest first), the burgee (0 none, 1 racing, 2 gilded), the spoons, the committee's flag, the pendant worn (0 none, else the certificate's place and one). */
     prizeCode(p: {
       pennants?: number[];
       burgee?: number;
       spoons?: number;
       committee?: boolean;
+      pendant?: number;
     }): number {
       return prizeCode(p);
+    },
+    /**
+     * The certificates' pendants drawn: the own boat's sailor's (the one
+     * worn, and whether it is drawn: the pendants' model loaded), and how
+     * many of the boat's crew, of the near boats' skippers and of their
+     * crews wear one, as last drawn.
+     */
+    pendantsDrawn() {
+      let fleet = 0;
+      for (const v of world.fleet.views) {
+        fleet += v?.pendants !== null && (v?.pendants.count ?? 0) > 0 ? (v?.wearing ?? 0) : 0;
+      }
+      return {
+        own: world.boat?.pendantWorn ?? { worn: 0, drawn: false },
+        crew: world.crew.drawn.pendants,
+        fleet,
+        crews: world.crews.drawn.pendants,
+        loaded: pendantsLoaded() !== null,
+      };
     },
     /**
      * The prizes drawn this frame: how many boats, flags, pennants,
@@ -2955,13 +2976,18 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * Puts n people aboard the boat in view as the sandbox's ?crew does (the
      * second at the helm, or the seat holder holds the controls), or none
-     * but its sailor for 0.
+     * but its sailor for 0; each wearing the pendant given in seat order, if
+     * given (0 none).
      */
-    showCrew(n: number, holder?: number): Promise<void> {
+    showCrew(n: number, holder?: number, pendants: readonly number[] = []): Promise<void> {
       if (n <= 0) {
         return world.showCrew(null);
       }
-      const crew = sandboxCrew(Math.min(n, world.kind.capacity), catalog);
+      const made = sandboxCrew(Math.min(n, world.kind.capacity), catalog);
+      const crew = {
+        ...made,
+        people: made.people.map((p, i) => ({ ...p, pendant: pendants[i] ?? 0 })),
+      };
       return world.showCrew(holder === undefined ? crew : { ...crew, holder });
     },
 

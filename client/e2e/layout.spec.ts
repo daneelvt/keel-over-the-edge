@@ -3183,6 +3183,11 @@ test('the chart screen’s Log tab holds a long log, its collection, who may rea
     await check(`${s.name}, a log not there`);
     await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
     await expect(page.locator('.log-day').nth(1)).toBeVisible();
+    // The Captain's pendant at the portrait's neck, beside the cockade.
+    await expect(page.locator('.log-ink-frame .log-pendant')).toHaveAttribute(
+      'aria-label',
+      /spyglass/,
+    );
     await check(`${s.name}, a long log`);
     await page.locator('.log-day:not(.log-day-heads)').first().click();
     await check(`${s.name}, a day opened`);
