@@ -1565,6 +1565,10 @@ function gameURL(): string {
 function connect(online: Online): void {
   const versions = { catalog: CATALOG_VERSION, physicsLayout: LAYOUT_VERSION, build: 'web' };
   online.start(gameURL(), versions);
+  if (document.visibilityState === 'hidden') {
+    // Opened behind another tab: one snapshot kept until it is shown.
+    online.shown(false);
+  }
   window.addEventListener('online', () => online.wake());
   document.addEventListener('visibilitychange', () => {
     const visible = document.visibilityState === 'visible';
