@@ -983,6 +983,17 @@ export class SeaScene {
     }
   }
 
+  /**
+   * The world starts again where it is now, as on a page shown again after
+   * a while hidden: no wake or wake wave left from where the boats were,
+   * and the next frame's time step from now, not from the last frame.
+   */
+  afresh(): void {
+    this.ocean.wakes.clear();
+    this.ocean.wakeWaves.clear();
+    this.stage.restartFrames();
+  }
+
   /** Whether the frame loop is to draw once the world is ready: not on a page under test, nor one without a renderer. */
   get drawsWhenReady(): boolean {
     return !this.underTest && this.stage.wanted !== 'none';

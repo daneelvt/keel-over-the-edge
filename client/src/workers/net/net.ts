@@ -9,6 +9,12 @@
 // queue, or is idle, a watch ended; it may wait for a boat while it
 // watches. The controls go to the server only while it sails: watching or
 // idle, only the acknowledgements and the Pings do.
+//
+// While the page is hidden it draws no frames and reads no records, so the
+// worker keeps only the newest snapshot's, every enter and leave since the
+// page last had one folded into it, and hands it over once the page is
+// shown. Every other message is passed on as it comes: none of them rides
+// in a snapshot.
 
 import type {
   FromWorker,
@@ -18,7 +24,7 @@ import type {
   ToWorker,
   Traffic,
 } from '../../net/messages';
-import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
+import { FLEET_RECORD_BYTES, fleetOf, foldHeld, VIEW_SLOTS, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
 import { harbourOf, lightSeen, Session } from './session';
 
@@ -135,6 +141,13 @@ export class NetWorker {
   readonly #pool: ArrayBuffer[] = [];
   /** Records made: a few at first, then none while the page hands them back. */
   made = 0;
+  /** The page is hidden: snapshots are held, the newest only. */
+  #hidden = false;
+  /** The newest snapshot's record while the page is hidden, or null. */
+  #held: ArrayBuffer | null = null;
+  /** What the snapshots held did to each view slot, and which enters were of the same boat. */
+  readonly #heldChange = new Uint8Array(VIEW_SLOTS);
+  readonly #heldRelook = new Uint8Array(VIEW_SLOTS);
 
   constructor(deps: NetDeps) {
     this.#d = deps;
@@ -247,6 +260,16 @@ export class NetWorker {
         if (this.#session !== null) {
           this.#session.tier = this.#tier;
           this.#session.renderScale = this.#scale;
+        }
+        break;
+      case 'hidden':
+        this.#hidden = m.on;
+        if (!m.on) {
+          if (m.settle === true && this.#session !== null) {
+            this.#session.clock.settle(this.#d.now());
+            this.#d.post({ type: 'clock', clock: { ...this.#session.clock.state } });
+          }
+          this.#handHeld();
         }
         break;
       case 'wake':
@@ -383,10 +406,13 @@ export class NetWorker {
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
+          // A snapshot held is the last boat's or the last connection's.
+          this.#dropHeld();
           break;
         }
         case 'snapshot': {
-          const record = this.#pool.pop() ?? this.#record();
+          const held = this.#hidden ? this.#held : null;
+          const record = held ?? this.#pool.pop() ?? this.#record();
           const views = s.views;
           writeRecord(
             record,
@@ -397,7 +423,12 @@ export class NetWorker {
             r.flags,
             this.#d.now(),
           );
-          this.#d.post({ type: 'snapshot', data: record }, [record]);
+          if (this.#hidden) {
+            foldHeld(fleetOf(record), this.#heldChange, this.#heldRelook, held === null);
+            this.#held = record;
+          } else {
+            this.#d.post({ type: 'snapshot', data: record }, [record]);
+          }
           break;
         }
         case 'dropped':
@@ -499,7 +530,7 @@ export class NetWorker {
           break;
         case 'pong':
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
-          this.#d.post({ type: 'traffic', ...this.#traffic });
+          this.#d.post({ type: 'traffic', ...this.#traffic, made: this.made });
           break;
         case 'restart':
           this.#d.post({ type: 'restart', inMs: r.inMs });
@@ -617,6 +648,26 @@ export class NetWorker {
     const ms = plan.kind === 'wait' ? plan.ms : 0;
     this.#setStatus('waiting', ms);
     this.#wait = this.#d.setTimeout(() => this.#connect(), ms);
+  }
+
+  /** Hands the page the snapshot held while it was hidden, if one came. */
+  #handHeld(): void {
+    const held = this.#held;
+    if (held !== null) {
+      this.#held = null;
+      this.#d.post({ type: 'snapshot', data: held }, [held]);
+    }
+  }
+
+  /** Lets the snapshot held go, to be filled again. */
+  #dropHeld(): void {
+    const held = this.#held;
+    if (held !== null) {
+      this.#held = null;
+      if (this.#pool.length < POOL) {
+        this.#pool.push(held);
+      }
+    }
   }
 
   #record(): ArrayBuffer {

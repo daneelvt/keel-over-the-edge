@@ -583,3 +583,43 @@ export function writeRecord(
   }
   f[FLEET_META.boats] = boats;
 }
+
+/**
+ * Folds what each snapshot did to each slot into the record a hidden page
+ * is handed in place of them all: f the newest's fleet, change and relook
+ * what the ones before it did (CHANGE's, and 1 for an enter of the same
+ * boat), which are made this record's. An enter or a leave the page never
+ * saw is kept: a slot whose boat changed is entered, one a boat left and
+ * none entered is left. Every boat in the view is sampled: its fields are
+ * the newest the page can have. first: no snapshot before this one.
+ */
+export function foldHeld(
+  f: Float64Array,
+  change: Uint8Array,
+  relook: Uint8Array,
+  first: boolean,
+): void {
+  for (let i = 0; i < VIEW_SLOTS; i++) {
+    const o = slotAt(i);
+    const c = f[o + SLOT.change] ?? CHANGE.none;
+    const r = c === CHANGE.entered ? (f[o + SLOT.relook] ?? 0) : 0;
+    const was = first ? CHANGE.none : (change[i] ?? CHANGE.none);
+    let now = c;
+    let same = r;
+    if (c === CHANGE.entered) {
+      // After a leave the slot holds another boat; after an enter, the
+      // same boat only if both enters said so.
+      same = was === CHANGE.left ? 0 : was === CHANGE.entered ? (relook[i] ?? 0) & r : r;
+    } else if (c !== CHANGE.left && (was === CHANGE.entered || was === CHANGE.left)) {
+      now = was;
+      same = relook[i] ?? 0;
+    } else if (c === CHANGE.none && was === CHANGE.updated) {
+      now = CHANGE.updated;
+    }
+    change[i] = now;
+    relook[i] = same;
+    f[o + SLOT.change] = now;
+    f[o + SLOT.relook] = same;
+    f[o + SLOT.sampled] = f[o + SLOT.present] ?? 0;
+  }
+}

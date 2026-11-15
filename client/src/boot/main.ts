@@ -161,92 +161,18 @@ import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
 import { FLEET_PARAM, linkFromQuery, SAILOR_PARAM } from '../ui/watchwords';
-import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover';
+import { takeCover } from './cover';
 import { browserEnv, fullScreen } from './fullscreen';
-import { Gate, type Revealed, WAITING_WORDS, type Waiting } from './gate';
+import { Gate, type Revealed } from './gate';
 import { harbourWater, watchHarbour } from './harbour';
 import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
 import { lookStage } from './lookstage';
 import { raceSea } from './racesea';
+import { DESCENT, frames, reveal, UnderCover, untilReady, whenPast } from './undercover';
 
 /** How far a boat tapped in the sea may be from a race's boat's place in its picture, m: two seconds' sailing. */
 const RACER_TAP = 30;
-
-/** How long the camera comes down into the first view, s: at the start, and after a change of boat. */
-const DESCENT = 2.5;
-const DESCENT_CHANGE = 1.5;
-
-/** Whether the reader asks for less motion. */
-function reducedMotion(): boolean {
-  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-}
-
-/** Resolves after n animation frames: the scene's update has run since. */
-function frames(n: number): Promise<void> {
-  return new Promise((resolve) => {
-    const next = (left: number) =>
-      left <= 0 ? resolve() : requestAnimationFrame(() => next(left - 1));
-    next(n);
-  });
-}
-
-/**
- * Waits on the gate, from start (ms), the cover saying what it waits for
- * once the wait passes a second; the frame loop draws once the frames are
- * waited for. Resolves with what it waited for, and when.
- */
-async function untilReady(
-  gate: Gate,
-  world: SeaScene,
-  cover: Cover,
-  start: number,
-): Promise<Pick<Revealed, 'waits' | 'at' | 'timedOut' | 'drawn'>> {
-  const waits: { waiting: Waiting; at: number }[] = [];
-  let drawn = 0;
-  world.onDrawn = (work) => {
-    drawn++;
-    gate.drawn(work);
-  };
-  for (;;) {
-    const now = performance.now();
-    const w = gate.step(now);
-    if (waits[waits.length - 1]?.waiting !== w) {
-      waits.push({ waiting: w, at: Math.round(now - start) });
-    }
-    if (w === 'ready') {
-      break;
-    }
-    if (w === 'sail' && world.drawsWhenReady) {
-      world.stage.loopDraws = true;
-    }
-    if (now - start >= QUIET) {
-      cover.say(WAITING_WORDS[w]);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  world.onDrawn = null;
-  if (world.drawsWhenReady) {
-    world.stage.loopDraws = true;
-  }
-  return { waits, at: Math.round(performance.now() - start), timedOut: gate.timedOut, drawn };
-}
-
-/**
- * The world revealed: the cover fades out as the camera comes down into
- * the first view over descent seconds, the screen at sea coming in after
- * it. With less motion asked for, a short fade and no descent; on a page
- * under test, at once.
- */
-function reveal(world: SeaScene, cover: Cover, descent: number): void {
-  if (world.underTest) {
-    void cover.lift(0);
-    return;
-  }
-  const reduced = reducedMotion();
-  world.camera.descend(reduced ? 0 : descent);
-  void cover.lift(reduced ? LIFT_REDUCED : LIFT);
-}
 
 /** The clear view, the scene's overlays hidden with the screen. */
 function clearView(world: SeaScene): ClearView {
@@ -1190,62 +1116,19 @@ async function start(): Promise<void> {
     countdown.tick();
     endNotices.tick(performance.now());
   }, 250);
-  // A change of boat at sea: the cover down over the screen, the boat
-  // asked for under it, and the cover up again once the new boat's world
-  // is ready; at once if none comes (a watch refused, a queue). One at a
-  // time: the cover takes the taps meanwhile.
-  let atSea = false;
-  let changing = false;
-  const changeBoat = async (act: () => void): Promise<void> => {
-    if (!atSea) {
-      act();
-      return;
-    }
-    if (changing) {
-      return;
-    }
-    changing = true;
-    const n = online.arrived.value;
-    const ended = online.ended.value;
-    clear.show();
-    const start = performance.now();
-    await cover.drop(world.underTest || reducedMotion() ? 0 : DROP);
-    if (world.drawsWhenReady) {
-      world.stage.loopDraws = false;
-    }
-    act();
-    let placed = false;
-    const arrived = () => online.arrived.value > n;
-    const gate = new Gate(
-      {
-        epoch: () => true,
-        boat: arrived,
-        view: () => placed,
-        land: () => landNear() && world.sailorReady,
-        abandoned: () =>
-          !arrived() &&
-          (online.ended.value !== ended ||
-            online.watchPlace.value !== null ||
-            online.place.value !== null),
-      },
-      { start, draws: world.drawsWhenReady },
-    );
-    const ready = untilReady(gate, world, cover, start);
-    // A boat that comes after the wait was given up is not this change's.
-    let waiting = true;
-    void whenArrived(online, n).then(async () => {
-      if (!waiting) {
-        return;
-      }
-      await frames(2);
-      world.placeFirstView();
-      placed = true;
-    });
-    await ready;
-    waiting = false;
-    reveal(world, cover, arrived() ? DESCENT_CHANGE : 0);
-    changing = false;
-  };
+  // A change of boat at sea, and a snap to where the boat is now after a
+  // while hidden or a connection made again: the cover down over the
+  // screen, and up once the world under it is ready. One at a time: the
+  // cover takes the taps meanwhile.
+  const underCover = new UnderCover({
+    world,
+    cover,
+    online,
+    landNear,
+    showScreen: () => clear.show(),
+  });
+  const changeBoat = (act: () => void): Promise<void> => underCover.change(act);
+  online.onSnap = () => void underCover.snap();
   // Watching, as the screens see it.
   const watchView: WatchView = {
     watching: online.watching,
@@ -1480,7 +1363,7 @@ async function start(): Promise<void> {
     arrived: online.arrived.value,
     view: placed,
   };
-  atSea = true;
+  underCover.atSea = true;
   reveal(world, cover, view === undefined ? DESCENT : 0);
   // A race's link opened after the race: its replay on the chart.
   if (me.replayRace !== undefined) {
@@ -1547,14 +1430,7 @@ function overboard(line: string): boolean {
 
 /** Resolves once a boat has arrived after the n-th. */
 function whenArrived(online: Online, n: number): Promise<void> {
-  let stop = (): void => {};
-  return new Promise<void>((resolve) => {
-    stop = effect(() => {
-      if (online.arrived.value > n) {
-        resolve();
-      }
-    });
-  }).finally(() => stop());
+  return whenPast(online.arrived, n);
 }
 
 /**
@@ -1691,7 +1567,11 @@ function connect(online: Online): void {
   online.start(gameURL(), versions);
   window.addEventListener('online', () => online.wake());
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
+    const visible = document.visibilityState === 'visible';
+    // Hidden, the worker keeps only the newest snapshot; shown after a
+    // while, the page snaps to it under the cover.
+    online.shown(visible);
+    if (visible) {
       online.wake();
     }
   });

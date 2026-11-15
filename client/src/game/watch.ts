@@ -92,6 +92,15 @@ export class WatchDriver implements BoatDriver {
     return this.#count === 0 ? Number.NaN : (this.#ticks[this.#at(0)] ?? 0);
   }
 
+  /** The newest header's state, or null before the first. */
+  newestState(): Float64Array | null {
+    if (this.#count === 0) {
+      return null;
+    }
+    const i = this.#at(0);
+    return this.#states.subarray(i * N, i * N + N);
+  }
+
   /** Nothing steers a boat watched. */
   step(): void {}
 

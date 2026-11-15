@@ -676,6 +676,13 @@ export type ToWorker =
   | { type: 'quality'; tier: number; scale: number }
   /** Stop waiting: the network is back, or the page is shown again. */
   | { type: 'wake' }
+  /**
+   * The page hidden, or shown again. While it is hidden the worker keeps
+   * only the newest snapshot, and hands it over once it is shown; with
+   * settle, the page starts again from it, and the clock is set at once to
+   * its estimate.
+   */
+  | { type: 'hidden'; on: boolean; settle?: boolean }
   /** The player chose to take the boat back from another device. */
   | { type: 'takeover' }
   /**
@@ -906,4 +913,6 @@ export interface Traffic {
   resyncs: number;
   /** Inputs sent that carried the controls, not only an acknowledgement. */
   controls: number;
+  /** Snapshot records the worker has made, as NetWorker.made. */
+  made?: number;
 }

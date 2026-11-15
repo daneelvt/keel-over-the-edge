@@ -951,7 +951,7 @@ export class WakeWaves {
     ) as unknown as Node<'float'>;
   }
 
-  /** Forgets every wave: the next step starts from still water. */
+  /** Forgets every wave: the next step starts from still water, as after a while hidden. */
   clear(): void {
     this.#placed = false;
   }
@@ -1011,10 +1011,6 @@ export class WakeWaves {
     }
     const k = w.kind;
     const texel = k.span / k.size;
-    if (f.dt > WAKE_WAVES.longest) {
-      // A page hidden and shown again: what was there is long gone.
-      this.#placed = false;
-    }
     const fresh = !this.#placed;
     const place = this.#placeFor(f, k);
     let driftEast = 0;
