@@ -248,7 +248,7 @@ func (o *Owner) everyBoat(w http.ResponseWriter, r *http.Request) {
 	}
 	o.count(store.ActionEveryBoat)
 	o.record(r, store.ActionEveryBoat, &id, detail)
-	o.cfg.Log.Info("owner: every boat set", "account", id.String(), "on", req.On, "from", r.RemoteAddr)
+	o.cfg.Log.Info("owner: every boat set", "account", id.String(), "every_boat", detail, "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"account": id.String(), "on": req.On})
 }
 
