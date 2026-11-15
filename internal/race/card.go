@@ -357,7 +357,13 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 		}
 		out.Harbour = append(out.Harbour, sm)
 	}
-	if out.Trials, err = s.trials(ctx, by, now, latest, mine); err != nil {
+	var st certs.Standing
+	if s.cfg.Standing != nil {
+		if st, err = s.cfg.Standing(ctx, by.ID); err != nil {
+			return Board{}, err
+		}
+	}
+	if out.Trials, err = s.trials(ctx, by, now, latest, mine, &st); err != nil {
 		return Board{}, err
 	}
 	days, err := s.cfg.Store.HarbourDays(ctx, w.ID)
@@ -376,6 +382,9 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 		if err != nil {
 			return Board{}, err
 		}
+		if own[i].Kind == KindTrial {
+			sm.Toward = st.Toward(recordCourse(&own[i]))
+		}
 		out.Mine = append(out.Mine, sm)
 	}
 	out.Make, err = s.choices(ctx, by, now, limits, latest)
@@ -386,7 +395,7 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 // the boat they sail now (or the one each sailor brings), each with the
 // certificate it would count toward: the buoy courses, short then long,
 // and the island courses by number.
-func (s *Service) trials(ctx context.Context, by Sailor, now, latest time.Time, mine []store.EntryStart) ([]Summary, error) {
+func (s *Service) trials(ctx context.Context, by Sailor, now, latest time.Time, mine []store.EntryStart, st *certs.Standing) ([]Summary, error) {
 	boat := ""
 	if s.cfg.BoatOf != nil {
 		boat = s.cfg.BoatOf(by.ID)
@@ -400,12 +409,6 @@ func (s *Service) trials(ctx context.Context, by Sailor, now, latest time.Time, 
 		return []Summary{}, err
 	}
 	slices.SortStableFunc(rows, func(a, b store.Race) int { return standingOrder(&a) - standingOrder(&b) })
-	var st certs.Standing
-	if s.cfg.Standing != nil {
-		if st, err = s.cfg.Standing(ctx, by.ID); err != nil {
-			return nil, err
-		}
-	}
 	out := make([]Summary, 0, len(rows))
 	for i := range rows {
 		sm, err := s.summary(ctx, &rows[i], by, now, latest, mine)
