@@ -2105,6 +2105,13 @@ test('on the chart the arrow shrinks as it zooms out, the notices stand clear of
         if (b.left < r.left - 0.5 || b.right > r.right + 0.5) {
           out.push(`“${k.textContent}” sticks out of the box`);
         }
+        // Its words on one line.
+        const words = document.createRange();
+        words.selectNodeContents(k);
+        const lines = new Set([...words.getClientRects()].map((l) => Math.round(l.top)));
+        if (lines.size > 1 || k.scrollWidth > k.clientWidth + 0.5) {
+          out.push(`“${k.textContent}” does not fit its key on one line`);
+        }
       }
       return out;
     });

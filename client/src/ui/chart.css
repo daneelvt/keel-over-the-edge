@@ -365,8 +365,12 @@
   margin-top: 8px;
 }
 
+/* Each key on one line, as wide as its words and sharing what is left:
+   three fit a box on a phone 360 px across. */
 .chart-buttons button {
-  flex: 1;
+  flex: 1 1 auto;
+  padding: 0 8px;
+  white-space: nowrap;
   border: 1px solid rgb(59 46 34 / 40%);
   border-radius: 8px;
   background: rgb(255 255 255 / 30%);
@@ -597,15 +601,6 @@
   display: none;
 }
 
-/* Under the case, a notice is no wider than the column beside the pocket
-   chart, its words wrapping: a long one ran under the pocket chart on a
-   phone held upright, and hid its ×. The column is sailing together's
-   (--deck-width), here before its parts are loaded. */
-.hud-top .notice {
-  box-sizing: border-box;
-  max-width: min(320px, calc(100vw - var(--edge-left) - var(--edge-right) - 114px));
-}
-
 .notice {
   display: flex;
   align-items: center;
@@ -616,6 +611,15 @@
 
 .notice-active {
   color: var(--gold);
+}
+
+/* Under the case, a notice is no wider than the column beside the pocket
+   chart, its words wrapping: a long one ran under the pocket chart on a
+   phone held upright, and hid its ×. The column is sailing together's
+   (--deck-width), here before its parts are loaded. */
+.hud-top .notice {
+  box-sizing: border-box;
+  max-width: min(320px, calc(100vw - var(--edge-left) - var(--edge-right) - 114px));
 }
 
 .hud .notice-dismiss {
