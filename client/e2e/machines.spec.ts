@@ -17,7 +17,16 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { answerBorn, GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
+import {
+  answerBorn,
+  everyBoat,
+  GAME,
+  holdPasskeys,
+  type Made,
+  sailor,
+  setSail,
+  stamp,
+} from './helpers';
 import { assertPasskey } from './passkey';
 
 /**
@@ -249,6 +258,9 @@ test('the account page: an app revoked, a connection token made once and revoked
   const made = await sailor(context, 'Wavecrestmar');
   const name = `Cog ${stamp()}`;
   const id = await machine(context, name);
+  // A new machine sailor holds no certificate: the boats the account shares
+  // opened to it by the owner's box.
+  await everyBoat(context.request, id);
   await approveApp(context, made, id);
   await holdPasskeys(context, made.passkey);
 

@@ -16,7 +16,7 @@
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { alone, GAME, heldRegime, sailor, setSail } from './helpers';
+import { alone, everyBoat, GAME, heldRegime, sailor, setSail } from './helpers';
 
 type FleetBoat = {
   id: string;
@@ -87,7 +87,9 @@ test('a boat chosen and its look set from the player’s own panel, then sailed'
   page,
 }) => {
   test.skip(keelboat === undefined, 'the catalog has no boat of the account’s');
-  await sailor(context, 'Fleet');
+  const made = await sailor(context, 'Fleet');
+  // A new sailor holds no certificate: the keelboat opened by the owner's box.
+  await everyBoat(context.request, made.name);
   await page.goto(GAME);
   const readout = page.locator('.your-sailor [data-readout=boat]');
   await expect(readout).toBeVisible({ timeout: 90_000 });
@@ -148,7 +150,15 @@ test('the tall ship chosen from the fleet and sailed, her yards braced', async (
   page,
 }) => {
   test.skip(ship === undefined, 'the catalog has no ship of square sails');
-  await sailor(context, 'Ship');
+  const made = await sailor(context, 'Ship');
+  // A new sailor holds no certificate: the tall ship needs Master until the
+  // owner's box opens every boat to it.
+  const before = await (await context.request.get('/api/fleet')).json();
+  expect(
+    (before as { boats: { kind: string; needs: string }[] }).boats.find((b) => b.kind === ship?.id)
+      ?.needs,
+  ).toBe('Master');
+  await everyBoat(context.request, made.name);
   await page.goto(GAME);
   const readout = page.locator('.your-sailor [data-readout=boat]');
   await expect(readout).toBeVisible({ timeout: 90_000 });
