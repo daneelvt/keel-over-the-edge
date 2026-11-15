@@ -248,7 +248,12 @@ function anchor(m: Part): void {
       tip[0] + along[0] * s + outward[0] * o,
       tip[1] + along[1] * s + outward[1] * o,
     ];
-    const outline = [p(0.0042, 0.0012), p(-0.0018, 0.0026), p(-0.0024, -0.0008), p(0.0004, -0.0012)];
+    const outline = [
+      p(0.0042, 0.0012),
+      p(-0.0018, 0.0026),
+      p(-0.0024, -0.0008),
+      p(0.0004, -0.0012),
+    ];
     // Counter-clockwise on the face.
     const area = outline.reduce((s, [x, y], i) => {
       const [nx, ny] = outline[(i + 1) % outline.length] as [number, number];
@@ -389,7 +394,12 @@ function node(p: (typeof PENDANTS)[number]): NodeDef {
   if (triangles > BUDGET) {
     fail(`${triangles} triangles, over its ${BUDGET}`);
   }
-  if (-lo[1] > MOST_HIGH || size[0] > MOST_ACROSS || size[0] < LEAST_ACROSS || size[2] > MOST_THICK) {
+  if (
+    -lo[1] > MOST_HIGH ||
+    size[0] > MOST_ACROSS ||
+    size[0] < LEAST_ACROSS ||
+    size[2] > MOST_THICK
+  ) {
     fail(`it measures ${size.map((x) => (x * 1000).toFixed(1)).join(' × ')} mm`);
   }
   const r = (x: number): number => Math.round(x * 10000) / 10000;
@@ -404,7 +414,9 @@ function node(p: (typeof PENDANTS)[number]): NodeDef {
 
 const roots = PENDANTS.map(node);
 mkdirSync('.dev/art', { recursive: true });
-const raw = writeGlb(roots, [{ name: 'pendant', color: [1, 1, 1], roughness: 0.4, metalness: 0.8 }]);
+const raw = writeGlb(roots, [
+  { name: 'pendant', color: [1, 1, 1], roughness: 0.4, metalness: 0.8 },
+]);
 writeFileSync('.dev/art/pendants.raw.glb', raw);
 mkdirSync('art/pendants', { recursive: true });
 execFileSync(
