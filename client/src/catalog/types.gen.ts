@@ -8968,7 +8968,7 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, the course the player set reached, or a shipmate sailing to the player.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, the course the player set reached, a shipmate sailing to the player, the player alongside a boat they sailed to, or a course to a boat ended.
    */
   on:
     | "charted-own"
@@ -8981,7 +8981,9 @@ export interface NoticeKind {
     | "harbour-race"
     | "race-soon"
     | "course-reached"
-    | "shipmate-course";
+    | "shipmate-course"
+    | "course-alongside"
+    | "course-ended";
   /**
    * For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.
    *
@@ -9632,4 +9634,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'a63f0ab566765938';
+export const CATALOG_VERSION = 'bb3b7865e3081f1d';

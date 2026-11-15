@@ -74,6 +74,11 @@ type viewer struct {
 	reported  *pb.Reported
 	// shipmates counts the Shipmates told: the list changed.
 	shipmates int
+	// at are where a course's boat was told, in order; courseEnded the
+	// latest end told; sailedTo the names of those told to sail to it.
+	at          []*pb.ShipmateAt
+	courseEnded *pb.CourseEnded
+	sailedTo    []string
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -172,6 +177,12 @@ func (v *viewer) take(r client.Received) {
 		v.reported = m.Reported
 	case *pb.ServerMessage_Shipmates:
 		v.shipmates++
+	case *pb.ServerMessage_ShipmateAt:
+		v.at = append(v.at, m.ShipmateAt)
+	case *pb.ServerMessage_CourseEnded:
+		v.courseEnded = m.CourseEnded
+	case *pb.ServerMessage_ShipmateCourse:
+		v.sailedTo = append(v.sailedTo, m.ShipmateCourse.GetName())
 	case *pb.ServerMessage_Crews:
 		if v.crews == nil {
 			v.crews = map[uint32]*pb.Crew{}

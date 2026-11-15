@@ -2278,8 +2278,9 @@ type NoticeKind struct {
 	// What raises it: a place the player charts, a great discovery by anyone, the
 	// world closing, its end near, a new world begun, a new gale warning, a sailor
 	// the player follows setting sail, a harbour race about to start, a race the
-	// player entered about to start, the course the player set reached, or a shipmate
-	// sailing to the player.
+	// player entered about to start, the course the player set reached, a shipmate
+	// sailing to the player, the player alongside a boat they sailed to, or a course
+	// to a boat ended.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -2312,6 +2313,8 @@ type On string
 
 const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
+const OnCourseAlongside On = "course-alongside"
+const OnCourseEnded On = "course-ended"
 const OnCourseReached On = "course-reached"
 const OnFallsComing On = "falls-coming"
 const OnFallsSoon On = "falls-soon"
@@ -6021,4 +6024,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "a63f0ab566765938"
+const Version = "bb3b7865e3081f1d"
