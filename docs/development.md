@@ -3787,7 +3787,11 @@ Each kind says where its point is now from what the phone holds, so a
 kind whose point moves can join them; an island's is the nearest point of
 its land's bounds, so a large island is reached at its shore. The course
 is a bearing and a distance from the boat, flat-disk `atan2` and `hypot`
-as the chart's list has them; **it never steers**.
+as the chart's list has them; **it never steers**. Its aim and arrival
+have a Go twin, `internal/chart/course.go` (`CourseAim`, `Arrive`,
+`Reached`), which a machine sailor's course uses; both are held to
+`internal/chart/testdata/courses.json` (`go test ./internal/chart -run
+CoursesFile -update` writes it, `chart/coursefile.test.ts` reads it).
 
 It is set on the chart. A charted thing's box has **Set course** first,
 in brass, and for the course set **Clear course**. A tap on the paper that
@@ -5852,15 +5856,19 @@ deletes them.
 
 ### Machine sailors at sea
 
-A machine sailor's agent sails through twelve tools at the MCP address
+A machine sailor's agent sails through thirteen tools at the MCP address
 (`internal/agentapi/tools.go`, the whole `tools/list` answer held to
 `testdata/tools.golden.json`): `observe`, `steer`, `trim`, `chart`,
-`pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`, `handbook`.
-`pencil` and `bottle` answer "not yet", as do `say`'s `hail` and
-`spectators`: the list never changes as the game grows, since apps cache
-it. A change to a description or a
-schema is a deliberate change: run `go test ./internal/agentapi -run
-ToolsList -update` and name it in the release notes.
+`course`, `pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`,
+`handbook`. `pencil` and `bottle` answer "not yet", as do `say`'s `hail`
+and `spectators`: the list changes seldom as the game grows, since apps
+cache it (`course` came after the first twelve; an app sees it when it
+lists the tools again). A change to a description or a schema is a
+deliberate change: run `go test ./internal/agentapi -run ToolsList
+-update` and name it in the release notes. The list is held under
+`mostToolBytes` compact (9,359 bytes, 2,315 o200k tokens, with `course`),
+and each handbook page under an estimate of its tokens
+(`TestHandbookPages`).
 
 **The helm** (`helm.go`). Each machine sailor whose agent has called since
 keel started has one, in memory, shared by every app approved for it: its
@@ -5912,7 +5920,7 @@ restarts, as a count kept in memory would not. `observe` tells the events
 after its last answer; `since` tells them again.
 
 **Waits.** `observe` with `wait` (0–50 s) holds the call until something in
-`wake_on` happens, or capsizes, groundings, bumps, the falls, a restart,
+`wake_on` happens (the course reached among them, by default), or capsizes, groundings, bumps, the falls, a restart,
 an admission or the world's end; a second wait ends the first
 ("superseded"); a closed stream ends it (counted in
 `keel_agent_wait_cut_seconds` by app), and the next report says so, once.
@@ -5971,6 +5979,29 @@ rest wake `race`. `news` with `log` adds the lasting race records
 (`RaceRecordsOf`). Tests: `races_test.go` races a machine sailor round a
 spar in the sea harness against races kept in memory, and holds the race
 block to `testdata/race_block.golden.txt`.
+
+**A course** (`course.go`). `course` sets the machine sailor's one
+course, as a person sets one on the chart: `place`, a charted place by its
+name or title (folded, as `chart` matches names), or an open course's name
+(or "Start of" it) for its start; `position` for a pin, read by
+`chart.ParsePosition`; `clear`; with nothing, it tells the course. Never a
+boat. A name not charted is refused with the nearest charted names, a
+malformed position with `ParsePosition`'s words, one past the lip with the
+lip's distance; one within 0.1 NM of the boat is not set. The next replaces
+it. It is kept on the core by account (`Core.courses`, a lock of its own),
+with the `Sea` it was set in, so a helm forgotten while idle keeps it, and
+`Open` lets every course go: a restart or a new world loses it, and the
+handbook's charting page tells the agent to set it again when `observe`
+shows none. `observe` tells it in brief and full on a `Course:` line after
+the race's, "Course: Gull Rock 045° 1.2 NM" (a pin's with " · at" its
+position), and `course {name, bearing, nm, position}` in JSON, its aim
+`chart.CourseAim` (an island at its nearest bounds). The hub, at each look,
+reaches it within `chart.Arrive`: the event "you've reached Gull Rock: the
+course is cleared" (`evCourse`), which ends a wait on `wake_on` `course`
+(in the default), and the course clears. While the boat races, on the line
+or under way, it is neither told nor reached, as on the phone. Tests:
+`course_test.go` (pins in the sea harness, short; places, an island's shore
+and a course's start in seed 1), and `races_test.go`'s race hides it.
 
 **The helmsman** (`internal/helmsman`, `go run ./tools/helmsman`) sails a
 machine sailor to a charted place with no model, by the chart's bearings:
