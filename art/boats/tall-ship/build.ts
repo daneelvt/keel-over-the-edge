@@ -63,6 +63,8 @@ interface Detail {
   upperStrakes: number;
   /** Whether each strake shows its seam, a dark line along its lower edge. */
   seams: boolean;
+  /** Rows across a strake below the gold wale without seams, so the run keeps the tuck's square. */
+  tuckRows: number;
   /** The decks in planks, or plain. */
   plankedDeck: boolean;
   /** Around masts, yards and the other round spars. */
@@ -90,6 +92,7 @@ const NEAR: Detail = {
   strakes: 6,
   upperStrakes: 7,
   seams: true,
+  tuckRows: 1,
   plankedDeck: true,
   round: 10,
   squareCols: 10,
@@ -111,6 +114,7 @@ const FAR: Detail = {
   strakes: 1,
   upperStrakes: 1,
   seams: false,
+  tuckRows: 3,
   plankedDeck: false,
   round: 5,
   squareCols: 3,
@@ -570,6 +574,8 @@ function band(
   to: (u: number) => number,
   rows: number[],
   colour: (row: number, i: number) => Vec3,
+  /** Collects the girths of its edge at the transom, for the transom to meet. */
+  atTransom?: number[],
 ): void {
   const grid: number[][] = rows.map(() => []);
   stations().forEach((u, i) => {
@@ -577,6 +583,9 @@ function band(
     const g1 = Math.max(g0, to(u));
     rows.forEach((s, r) => {
       const g = g0 + (g1 - g0) * s;
+      if (i === 0) {
+        atTransom?.push(g);
+      }
       const k = m.vertex(section(u, g), colour(r, i), [s, u]);
       m.normal(k, surfaceNormal(u, g));
       (grid[r] as number[]).push(k);
@@ -594,8 +603,10 @@ function strakes(
   to: (u: number) => number,
   n: number,
   seed: number,
+  atTransom: number[],
+  rows = 1,
 ): void {
-  const seam = D.seams ? [0, 0.1, 1] : [0, 1];
+  const seam = D.seams ? [0, 0.1, 1] : Array.from({ length: rows + 1 }, (_, i) => i / rows);
   for (let k = 0; k < n; k++) {
     const tone = 0.94 + 0.12 * jitter(k + seed);
     band(
@@ -604,6 +615,7 @@ function strakes(
       (u) => lerp(from(u), to(u), (k + 1) / n),
       seam,
       (r) => shade(TOPSIDES, D.seams && r === 0 ? tone * 0.55 : tone),
+      atTransom,
     );
   }
 }
@@ -625,6 +637,9 @@ function planking(): {
   const gold0 = g(goldFrom);
   const gold1 = g(goldTo);
   const cream = g((u) => railAt(u) - CREAM_STRAKE);
+  // Every girth the shell's edge has at the transom, so the transom's edge
+  // runs through the same points and no slit opens between them.
+  const girths: number[] = [];
 
   const side = new MeshBuilder('copper');
   const rows = Array.from({ length: D.copperRows + 1 }, (_, i) => i / D.copperRows);
@@ -638,21 +653,23 @@ function planking(): {
       const tone = 0.88 + 0.2 * jitter(sheet + 300);
       return shade(mix(COPPER, VERDIGRIS, jitter(sheet + 700) > 0.85 ? 0.35 : 0), tone);
     },
+    girths,
   );
   const paintSide = new MeshBuilder('paint');
-  band(paintSide, water, boot, [0, 1], () => BOOT);
+  band(paintSide, water, boot, [0, 1], () => BOOT, girths);
   band(
     paintSide,
     cream,
     () => 1,
     [0, 1],
     () => CREAM,
+    girths,
   );
   const giltSide = new MeshBuilder('gilt');
-  band(giltSide, gold0, gold1, [0, 0.5, 1], (r) => (r === 1 ? [1, 1, 1] : [0.8, 0.8, 0.8]));
+  band(giltSide, gold0, gold1, [0, 0.5, 1], (r) => (r === 1 ? [1, 1, 1] : [0.8, 0.8, 0.8]), girths);
   const sides = new MeshBuilder('topsides');
-  strakes(sides, boot, gold0, D.strakes, 40);
-  strakes(sides, gold1, cream, D.upperStrakes, 60);
+  strakes(sides, boot, gold0, D.strakes, 40, girths, D.tuckRows);
+  strakes(sides, gold1, cream, D.upperStrakes, 60, girths);
 
   const copper = new MeshBuilder('copper');
   const paint = new MeshBuilder('paint');
@@ -668,7 +685,7 @@ function planking(): {
     to.append(from);
     to.append(from, true);
   }
-  topsides.append(transom());
+  topsides.append(transom(girths));
   return { copper, paint, topsides, gilt };
 }
 
@@ -681,12 +698,20 @@ const transomTop = (x: number): number => {
   return railAt(0) + TAFFRAIL_CROWN * (1 - t * t);
 };
 
-/** The transom's outline, from the tuck up the starboard side, over the crowned top, and down the port side. */
-function transomOutline(inset: number): Vec3[] {
+/**
+ * The transom's outline, from the tuck up the starboard side, over the
+ * crowned top, and down the port side: up the side through the girths
+ * given (the planking's own at the transom), or evenly round.
+ */
+function transomOutline(inset: number, girths?: number[]): Vec3[] {
   const n = 2 * D.round;
+  const sorted = [...(girths ?? Array.from({ length: n + 1 }, (_, i) => i / n))].sort(
+    (a, b) => a - b,
+  );
+  const gs = sorted.filter((g, i) => i === 0 || g - (sorted[i - 1] as number) > 1e-9);
   const right: Vec3[] = [];
-  for (let i = 0; i <= n; i++) {
-    const p = section(0, i / n);
+  for (const g of gs) {
+    const p = section(0, g);
     right.push([Math.max(0, p[0] - inset), p[1], p[2]]);
   }
   const top = right[right.length - 1] as Vec3;
@@ -699,10 +724,13 @@ function transomOutline(inset: number): Vec3[] {
   return [...right, ...crown, ...left];
 }
 
-/** The transom: flat across the hull's after end, from the tuck to the taffrail, in the boat's paint. */
-function transom(): MeshBuilder {
+/**
+ * The transom: flat across the hull's after end, from the tuck to the
+ * taffrail, in the boat's paint; its edge through the planking's girths there.
+ */
+function transom(girths: number[]): MeshBuilder {
   const m = new MeshBuilder('topsides');
-  const ring = transomOutline(0).map((p) => m.vertex(p, TOPSIDES));
+  const ring = transomOutline(0, girths).map((p) => m.vertex(p, TOPSIDES));
   const mid = m.vertex([0, (TUCK_Y + railAt(0)) / 2, TRANSOM_Z], TOPSIDES);
   for (const k of [...ring, mid]) {
     m.normal(k, [0, 0, 1]);
@@ -910,8 +938,8 @@ function bulwarks(): { inner: MeshBuilder; rail: MeshBuilder } {
       inner.strip(rows[r] as number[], rows[r + 1] as number[], true);
     }
   }
-  // The cap rail: its top, and its outer and inner edges.
-  const us = stations().filter((u) => u > 0);
+  // The cap rail: its top, and its outer and inner edges, aft into the taffrail's.
+  const us = stations();
   const out: number[][] = [[], [], [], []];
   for (const u of us) {
     const y = railAt(u);
@@ -936,29 +964,56 @@ function bulwarks(): { inner: MeshBuilder; rail: MeshBuilder } {
   const rails = new MeshBuilder('rail');
   rails.append(rail);
   rails.append(rail, true);
-  // The taffrail's cap, across the transom's crowned top.
+  // The taffrail's cap, across the transom's crowned top: its after face,
+  // its top, its fore face and its underside, and its ends over the cap rail's.
   const n = 2 * D.round;
   const half = breadth(0, railAt(0) - 0.001) + 0.05;
-  const top: number[] = [];
-  const back: number[] = [];
-  const fore: number[] = [];
-  for (let i = 0; i <= n; i++) {
-    const x = -half + (2 * half * i) / n;
+  const aft = TRANSOM_Z + 0.06;
+  const forward = TRANSOM_Z - BULWARK_T - 0.04;
+  const corners = (x: number): Vec3[] => {
     const y = transomTop(x);
-    top.push(rails.vertex([x, y + 0.06, TRANSOM_Z + 0.06]));
-    fore.push(rails.vertex([x, y + 0.06, TRANSOM_Z - BULWARK_T - 0.04]));
-    back.push(rails.vertex([x, y - CAP, TRANSOM_Z + 0.06]));
+    return [
+      [x, y - CAP, aft],
+      [x, y + 0.06, aft],
+      [x, y + 0.06, forward],
+      [x, y - CAP, forward],
+    ];
+  };
+  for (let f = 0; f < 4; f++) {
+    const lower: number[] = [];
+    const upper: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const c = corners(-half + (2 * half * i) / n);
+      lower.push(rails.vertex(c[f] as Vec3));
+      upper.push(rails.vertex(c[(f + 1) % 4] as Vec3));
+    }
+    rails.strip(lower, upper);
   }
-  rails.strip(back, top, true);
-  rails.strip(top, fore, true);
-  // The transom's inner face over the quarterdeck.
-  const face = transomOutline(BULWARK_T)
-    .filter((p) => p[1] >= levelAt(0, QUARTERDECK) - 0.05)
-    .map((p): Vec3 => [p[0], p[1], TRANSOM_Z - BULWARK_T]);
+  for (const s of [-1, 1]) {
+    const [a, b, c, d] = corners(s * half).map((p) => rails.vertex(p));
+    rails.triFacing(a as number, b as number, c as number, [s, 0, 0]);
+    rails.triFacing(a as number, c as number, d as number, [s, 0, 0]);
+  }
+  // The transom's inner face over the quarterdeck, from under the deck's
+  // edge up to the taffrail, its sides behind the bulwarks' inner faces.
+  const foot = levelAt(0, QUARTERDECK) - 0.05;
+  const outline = transomOutline(BULWARK_T - 0.1);
+  const cut = (p: Vec3, q: Vec3): Vec3 => {
+    const t = (foot - p[1]) / (q[1] - p[1]);
+    return [lerp(p[0], q[0], t), foot, TRANSOM_Z];
+  };
+  const first = outline.findIndex((p) => p[1] >= foot);
+  const last = outline.length - 1 - first;
+  const face = [
+    cut(outline[first - 1] as Vec3, outline[first] as Vec3),
+    ...outline.slice(first, last + 1),
+    cut(outline[last + 1] as Vec3, outline[last] as Vec3),
+  ].map((p): Vec3 => [p[0], p[1], TRANSOM_Z - BULWARK_T]);
   const mid = all.vertex([0, (levelAt(0, QUARTERDECK) + railAt(0)) / 2, TRANSOM_Z - BULWARK_T]);
   const ring = face.map((p) => all.vertex(p, INNER));
-  for (let i = 0; i + 1 < ring.length; i++) {
-    all.triFacing(mid, ring[i] as number, ring[i + 1] as number, [0, 0, -1]);
+  for (let i = 0; i < ring.length; i++) {
+    const next = ring[(i + 1) % ring.length] as number;
+    all.triFacing(mid, ring[i] as number, next, [0, 0, -1]);
   }
   return { inner: all, rail: rails };
 }
@@ -1071,18 +1126,29 @@ function breaks(): { paint: MeshBuilder; rail: MeshBuilder } {
     const z = zAt(u);
     const w = deckHalf(u, level);
     const ww = deckHalf(u, WAIST);
+    // The bulkhead from the waist's deck up to the raised deck's, out to
+    // her sides behind the bulwarks' inner faces.
     const n = 8;
-    const lower: number[] = [];
-    const upper: number[] = [];
-    for (let i = 0; i <= n; i++) {
-      const x = -w + (2 * w * i) / n;
-      lower.push(paint.vertex([x, deckSurface(x, u, WAIST, ww), z], INNER));
-      upper.push(paint.vertex([x, deckSurface(x, u, level, w), z], INNER));
+    const heights = 2;
+    const rows: number[][] = [];
+    for (let r = 0; r <= heights; r++) {
+      const f = r / heights;
+      const half = breadth(u, lerp(levelAt(u, WAIST), levelAt(u, level), f)) - 0.05;
+      const row: number[] = [];
+      for (let i = 0; i <= n; i++) {
+        const x = -half + (2 * half * i) / n;
+        const y = lerp(deckSurface(x, u, WAIST, ww), deckSurface(x, u, level, w), f);
+        row.push(paint.vertex([x, y, z], INNER));
+      }
+      rows.push(row);
     }
-    for (let i = 0; i < n; i++) {
-      const [a, b, c, d] = [lower[i], lower[i + 1], upper[i + 1], upper[i]] as number[];
-      paint.triFacing(a as number, b as number, c as number, [0, 0, facing]);
-      paint.triFacing(a as number, c as number, d as number, [0, 0, facing]);
+    for (let r = 0; r < heights; r++) {
+      for (let i = 0; i < n; i++) {
+        const [lo, up] = [rows[r] as number[], rows[r + 1] as number[]];
+        const [a, b, c, d] = [lo[i], lo[i + 1], up[i + 1], up[i]] as number[];
+        paint.triFacing(a as number, b as number, c as number, [0, 0, facing]);
+        paint.triFacing(a as number, c as number, d as number, [0, 0, facing]);
+      }
     }
     if (!D.small) {
       continue;
@@ -2259,12 +2325,14 @@ function stays(): MeshBuilder {
 /**
  * A plate on the centreline: columns, each [z, top, bottom, half-thickness
  * at the top, at the bottom], in order along it; its two sides, its bottom
- * and its ends, coloured by height.
+ * and its ends, coloured by height; and its top, where it stands clear of
+ * the hull.
  */
 function plate(
   m: MeshBuilder,
   cols: [number, number, number, number, number][],
   colour: (y: number) => Vec3,
+  capped = false,
 ): void {
   const rows = 3;
   for (const s of [1, -1]) {
@@ -2304,6 +2372,17 @@ function plate(
     }
     m.triFacing(a, b, c, [0, -1, 0]);
     m.triFacing(a, c, d, [0, -1, 0]);
+  }
+  for (let i = 0; capped && i + 1 < cols.length; i++) {
+    const [a, b, c, d] = [edge(i, -1, 0), edge(i + 1, -1, 0), edge(i + 1, 1, 0), edge(i, 1, 0)];
+    const along = (cols[i + 1]?.[0] ?? 0) - (cols[i]?.[0] ?? 0);
+    const rise = (cols[i + 1]?.[1] ?? 0) - (cols[i]?.[1] ?? 0);
+    const up = normalize([0, along * along, -rise * along]);
+    for (const k of [a, b, c, d]) {
+      m.normal(k, up);
+    }
+    m.triFacing(a, b, c, up);
+    m.triFacing(a, c, d, up);
   }
   for (const [i, dir] of [
     [0, Math.sign((cols[0]?.[0] ?? 0) - (cols[1]?.[0] ?? 0))],
@@ -2383,7 +2462,7 @@ function deadwood(): MeshBuilder {
       lerp(KEEL_FOOT_T, 0.2, i / n),
     ]);
   }
-  plate(m, aft, sheathed);
+  plate(m, aft, sheathed, true);
   const fore: [number, number, number, number, number][] = [];
   const reach = Math.max(1.6, 0.45 * (1 - U_FORE) * L);
   for (let i = 0; i <= n; i++) {
@@ -2437,7 +2516,7 @@ function rudder(): { copper: MeshBuilder; paint: MeshBuilder; iron: MeshBuilder 
   const water = Math.min(0, RUDDER_TOP);
   plate(copper, columns(RUDDER_FOOT, water), sheathed);
   if (RUDDER_TOP > water) {
-    plate(paint, columns(water, RUDDER_TOP), () => srgb(0.16, 0.14, 0.12));
+    plate(paint, columns(water, RUDDER_TOP), () => srgb(0.16, 0.14, 0.12), true);
   }
   // The stock, up to the tiller's head.
   paint.tube(
@@ -2750,6 +2829,42 @@ function longboat(): { paint: MeshBuilder; wood: MeshBuilder } {
       paint.triFacing(a[r] as number, b[r + 1] as number, a[r + 1] as number, outward);
       wood.triFacing(c[r] as number, d[r] as number, d[r + 1] as number, scale(outward, -1));
       wood.triFacing(c[r] as number, d[r + 1] as number, c[r + 1] as number, scale(outward, -1));
+    }
+  }
+  const at = (m: MeshBuilder, k: number): Vec3 => [
+    m.positions[k * 3] ?? 0,
+    m.positions[k * 3 + 1] ?? 0,
+    m.positions[k * 3 + 2] ?? 0,
+  ];
+  // Its gunwales, from the shell's edge over to the inside's.
+  for (const r of [0, rows]) {
+    for (let i = 0; i < n; i++) {
+      const [a, b, c, d] = [
+        at(paint, (outer[i] as number[])[r] as number),
+        at(paint, (outer[i + 1] as number[])[r] as number),
+        at(wood, (inner[i + 1] as number[])[r] as number),
+        at(wood, (inner[i] as number[])[r] as number),
+      ].map((p) => wood.vertex(p, WOOD));
+      wood.triFacing(a as number, b as number, c as number, [0, 1, 0]);
+      wood.triFacing(a as number, c as number, d as number, [0, 1, 0]);
+    }
+  }
+  // Its ends: the transom and the stem's breadth, painted outside, wood inside.
+  for (const [i, dir] of [
+    [0, -1],
+    [n, 1],
+  ] as [number, number][]) {
+    const o = outer[i] as number[];
+    const w = inner[i] as number[];
+    const top = (p: number[], m: MeshBuilder): Vec3 => {
+      const [l, r] = [at(m, p[0] as number), at(m, p[rows] as number)];
+      return [(l[0] + r[0]) / 2, (l[1] + r[1]) / 2, l[2]];
+    };
+    const om = paint.vertex(top(o, paint), srgb(0.9, 0.88, 0.82));
+    const wm = wood.vertex(top(w, wood), WOOD);
+    for (let r = 0; r < rows; r++) {
+      paint.triFacing(om, o[r] as number, o[r + 1] as number, [0, 0, dir]);
+      wood.triFacing(wm, w[r] as number, w[r + 1] as number, [0, 0, -dir]);
     }
   }
   // The skids it rests on, across the waist on their posts.

@@ -581,15 +581,42 @@ function band(
   }
 }
 
+/** The boot top's lower and upper edges' girths at station u. */
+const bootFrom = (u: number): number => girthAt(u, BOOT_FROM);
+const bootTo = (u: number): number => girthAt(u, BOOT_TO);
+/** How far up the topsides, from the boot top to the sheer, the sheer strake begins. */
+const SHEER_FROM = 0.9;
+/** Strake k's lower edge, as a fraction of the topsides' girth from the boot top. */
+const strakeEdge = (k: number): number => (k >= D.strakes ? 1 : (SHEER_FROM * k) / (D.strakes - 1));
+/** The rows across a strake: its lower edge, its seam's shadow, its upper edge. */
+const strakeRows = (): number[] => (D.seams ? [0, 0.08, 1] : [0, 1]);
+/** The copper's rows, as fractions of its girth. */
+const copperRows = (): number[] =>
+  Array.from({ length: D.copperRows + 1 }, (_, i) => i / D.copperRows);
+
+/** Every girth the planking has a row of points at, at station u, from the keel to the sheer. */
+function girthRows(u: number): number[] {
+  const b0 = bootFrom(u);
+  const b1 = bootTo(u);
+  const out = copperRows().map((f) => b0 * f);
+  out.push(b1);
+  for (let k = 0; k < D.strakes; k++) {
+    const g0 = lerp(b1, 1, strakeEdge(k));
+    const g1 = lerp(b1, 1, strakeEdge(k + 1));
+    for (const f of strakeRows()) {
+      out.push(g0 + (g1 - g0) * f);
+    }
+  }
+  out.sort((a, b) => a - b);
+  return out.filter((g, i) => i === 0 || g - (out[i - 1] as number) > 1e-9);
+}
+
 /** The starboard hull's shell, both its sides: the copper bottom, the boot top and the sheer strake in paint, the topsides between. */
 function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBuilder } {
   const copper = new MeshBuilder('copper');
   const paint = new MeshBuilder('paint');
   const topsides = new MeshBuilder('topsides');
-  const bootFrom = (u: number): number => girthAt(u, BOOT_FROM);
-  const bootTo = (u: number): number => girthAt(u, BOOT_TO);
-  const rows = Array.from({ length: D.copperRows + 1 }, (_, i) => i / D.copperRows);
-  const SHEER_FROM = 0.9;
+  const rows = copperRows();
   for (const s of [1, -1]) {
     band(
       copper,
@@ -604,11 +631,10 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBu
       },
     );
     band(paint, s, bootFrom, bootTo, [0, 1], () => BOOT);
-    const seam = D.seams ? [0, 0.08, 1] : [0, 1];
-    const edge = (k: number): number => (k >= D.strakes ? 1 : (SHEER_FROM * k) / (D.strakes - 1));
+    const seam = strakeRows();
     for (let k = 0; k < D.strakes; k++) {
-      const f0 = edge(k);
-      const f1 = edge(k + 1);
+      const f0 = strakeEdge(k);
+      const f1 = strakeEdge(k + 1);
       const sheerStrake = k === D.strakes - 1;
       const base: Vec3 = sheerStrake ? SHEER_STRAKE : [1, 1, 1];
       const tone = 0.94 + 0.12 * jitter(k + 40 + (s > 0 ? 0 : 20));
@@ -628,13 +654,21 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBu
 
 /** The transom: varnished mahogany across the hull's after end, keel to sheer. */
 function transom(m: MeshBuilder): void {
-  const n = 2 * D.round;
+  // Its edge runs through the planking's own rows at the transom, and its
+  // top along the deck's crown through the deck's own points, from the outer
+  // sheer to the inner.
+  const rows = girthRows(0);
   const ring: number[] = [];
-  for (let i = 0; i <= n; i++) {
-    ring.push(m.vertex(section(0, i / n, 1), MAHOGANY));
+  for (const g of rows) {
+    ring.push(m.vertex(section(0, g, 1), MAHOGANY));
   }
-  for (let i = n - 1; i >= 1; i--) {
-    ring.push(m.vertex(section(0, i / n, -1), MAHOGANY));
+  const n = deckCols();
+  for (let j = n - 1; j >= 1; j--) {
+    const x = C - deckHalf(0) + (j / n) * 2 * deckHalf(0);
+    ring.push(m.vertex([x, deckY(x, 0), TRANSOM_Z], MAHOGANY));
+  }
+  for (const g of [...rows].reverse().filter((g) => g > 0)) {
+    ring.push(m.vertex(section(0, g, -1), MAHOGANY));
   }
   const mid = m.vertex([C, (sheer(0) - keelDepth(0)) / 2, TRANSOM_Z], MAHOGANY);
   for (const k of [...ring, mid]) {
@@ -675,10 +709,13 @@ function portlights(): { bronze: MeshBuilder; glass: MeshBuilder } {
 
 // --- The decks -------------------------------------------------------------------
 
+/** Points across each hull's deck: its planks' edges, or the plain deck's edges and crown. */
+const deckCols = (): number => (D.plankedDeck ? 14 : 2);
+
 /** The starboard hull's deck: laid planks fore and aft, their seams payed dark, crowned from its inner edge to its outer. */
 function deck(): MeshBuilder {
   const m = new MeshBuilder('deck');
-  const n = D.plankedDeck ? 14 : 2;
+  const n = deckCols();
   const cols: number[][] = Array.from({ length: n + 1 }, () => []);
   for (const u of stations()) {
     for (let j = 0; j <= n; j++) {
@@ -743,6 +780,22 @@ function bridgedeck(): { paint: MeshBuilder; deck: MeshBuilder; oak: MeshBuilder
     paint.triFacing(r0[0] as number, r0[1] as number, r1[1] as number, [0, -0.5, -1]);
     paint.triFacing(r0[0] as number, r1[1] as number, r1[0] as number, [0, -0.5, -1]);
   }
+  // The nacelle's top behind the locker deck's fore edge, under the boards'
+  // seams.
+  if (D.plankedDeck) {
+    const w = innerAt(LOCKERS_FORE, LOCKERS_Y);
+    quad(
+      paint,
+      [
+        [-w, LOCKERS_Y - 0.004, LOCKERS_FORE],
+        [w, LOCKERS_Y - 0.004, LOCKERS_FORE],
+        [w, LOCKERS_Y, LOCKERS_FORE],
+        [-w, LOCKERS_Y, LOCKERS_FORE],
+      ],
+      [0, 0, 1],
+      WHITE_LEAD,
+    );
+  }
   // The aft crossbeam's after face, oak, from the underside to the sole.
   const w = innerAt(BRIDGE_AFT, SOLE);
   quad(
@@ -784,7 +837,8 @@ function bridgedeck(): { paint: MeshBuilder; deck: MeshBuilder; oak: MeshBuilder
       }
     }
   };
-  laid(LOCKERS_FORE, HOUSE_FORE, LOCKERS_Y);
+  // The locker deck runs on a little under the round-house's raked front.
+  laid(LOCKERS_FORE, HOUSE_FORE + 0.02, LOCKERS_Y);
   laid(NOTCH_FORE, BRIDGE_AFT, SOLE);
   return { paint, deck: sole, oak };
 }
@@ -830,37 +884,103 @@ function roundHouse(): {
   const brass = new MeshBuilder('brass');
   /** The wall's top at a point of the plan: the roof's underside there. */
   const top = (x: number, z: number): number => roofY(x, z) - ROOF_THICK;
-  /** A wall from a to b along the plan, leaning in by lean at its top, facing out. */
+  const seg = D.small ? 10 : 2;
+  // The roof's plan: its planks, its stations fore and aft, its opening
+  // over the helm. The walls' tops run through the same points.
+  const rx = HOUSE_SIDE + ROOF_OVER;
+  const planks = D.small ? 22 : 2;
+  const nz = D.small ? 24 : 4;
+  const OPEN = {
+    x0: PLAT_OUT - ROOF_OVER - 0.01,
+    x1: LADDER_IN + 0.05,
+    z0: NOTCH_FORE - 0.1,
+    z1: PLAT_AFT + 0.05,
+  };
+  /** The opening's after part, over the ladder: from its port side, aft to here. */
+  const LADDER_OPEN = { x0: PLAT_IN - 0.02, z1: LADDER_FOOT - 0.15 };
+  const ox = OPEN.x1;
+  const lx = LADDER_OPEN.x0;
+  const lz = LADDER_OPEN.z1;
+  /** The roof's opening across at z: from x0 to x1, or none. */
+  const openAt = (z: number): [number, number] | null =>
+    z > OPEN.z0 && z < OPEN.z1 ? [-rx - 1, ox] : z >= OPEN.z1 && z < lz ? [lx, ox] : null;
+  const zs = Array.from({ length: nz + 1 }, (_, i) => lerp(ROOF_FRONT, ROOF_AFT, i / nz));
+  zs.push(OPEN.z0, OPEN.z1, lz);
+  zs.sort((a, b) => a - b);
+  /** The planks' edges across. */
+  const plankXs = Array.from({ length: planks + 1 }, (_, j) => lerp(-rx, rx, j / planks));
+  /**
+   * The roof's height at x across, z along, as its planks lie: each plank
+   * flat across, between its edges on the crown, so that a plank cut short
+   * by the opening meets its neighbours fore and aft.
+   */
+  const roofAt = (x: number, z: number): number => {
+    const w = (2 * rx) / planks;
+    const j = Math.min(planks - 1, Math.max(0, Math.floor((x + rx) / w)));
+    const x0 = -rx + j * w;
+    return lerp(roofY(x0, z), roofY(x0 + w, z), (x - x0) / w);
+  };
+  /** Points from a to b, through those of all between them. */
+  const through = (a: number, b: number, all: number[]): number[] => [
+    a,
+    ...all.filter((v) => v > Math.min(a, b) + 1e-6 && v < Math.max(a, b) - 1e-6),
+    b,
+  ];
+  /** The roof's stations from z0 to z1 at x, but those where its edge runs on straight. */
+  const bends = (x: number, z0: number, z1: number): number[] => {
+    const all = through(z0, z1, zs);
+    return all.filter((z, i) => {
+      const a = all[i - 1];
+      const b = all[i + 1];
+      if (a === undefined || b === undefined) {
+        return true;
+      }
+      const y = lerp(roofY(x, a), roofY(x, b), (z - a) / (b - a));
+      return Math.abs(roofY(x, z) - y) > 1e-9;
+    });
+  };
+  /**
+   * Stations from 0 to 1 along a wall from a to b: evenly spaced, so that
+   * its foot follows the deck, and where it passes the roof's points, so
+   * that its top follows the roof.
+   */
+  const wallTs = (a: { x: number; z: number }, b: { x: number; z: number }): number[] => {
+    const roofTs =
+      a.z === b.z
+        ? through(a.x, b.x, plankXs).map((x) => (x - a.x) / (b.x - a.x))
+        : bends(a.x, a.z, b.z).map((z) => (z - a.z) / (b.z - a.z));
+    const even = Array.from({ length: seg + 1 }, (_, i) => i / seg);
+    const ts = [...roofTs, ...even].sort((p, q) => p - q);
+    return ts.filter((t, i) => i === 0 || t - (ts[i - 1] as number) > 1e-6);
+  };
+  /** A wall from a to b along the plan, leaning in by lean at its top, facing out, through stations ts. */
   const wall = (
     a: { x: number; z: number; y: number },
     b: { x: number; z: number; y: number },
     out: Vec3,
     lean: Vec3,
-    n: number,
+    ts: number[],
   ): ((t: number, h: number, off: number) => Vec3) => {
     const at = (t: number, h: number, off: number): Vec3 => {
       const x = lerp(a.x, b.x, t);
       const z = lerp(a.z, b.z, t);
       const y0 = lerp(a.y, b.y, t);
       const p0: Vec3 = [x, y0, z];
-      const p1: Vec3 = add([x, top(x, z), z], lean);
+      const xt = x + lean[0];
+      const zt = z + lean[2];
+      const p1: Vec3 = [xt, top(xt, zt), zt];
       const p: Vec3 = [lerp(p0[0], p1[0], h), lerp(p0[1], p1[1], h), lerp(p0[2], p1[2], h)];
       return add(p, scale(normalize(out), off));
     };
-    const lo: number[] = [];
-    const hi: number[] = [];
-    for (let i = 0; i <= n; i++) {
-      lo.push(wood.vertex(at(i / n, 0, 0), VARNISH));
-      hi.push(wood.vertex(at(i / n, 1, 0), VARNISH));
-    }
-    for (let i = 0; i < n; i++) {
+    const lo = ts.map((t) => wood.vertex(at(t, 0, 0), VARNISH));
+    const hi = ts.map((t) => wood.vertex(at(t, 1, 0), VARNISH));
+    for (let i = 0; i + 1 < ts.length; i++) {
       wood.triFacing(lo[i] as number, lo[i + 1] as number, hi[i + 1] as number, out);
       wood.triFacing(lo[i] as number, hi[i + 1] as number, hi[i] as number, out);
     }
     return at;
   };
   const p = housePlan();
-  const seg = D.small ? 10 : 2;
   const [aStar, fStar, fPort, nPort, nIn, nAft] = p as [
     { x: number; z: number; y: number },
     { x: number; z: number; y: number },
@@ -870,12 +990,16 @@ function roundHouse(): {
     { x: number; z: number; y: number },
   ];
   const rake = ROOF_FRONT - HOUSE_FORE;
-  const starboard = wall(fStar, aStar, [1, 0.1, 0], [-TUMBLE, 0, 0], seg);
-  const port = wall(fPort, nPort, [-1, 0.1, 0], [TUMBLE, 0, 0], seg);
+  const starboardTs = wallTs(fStar, aStar);
+  const portTs = wallTs(fPort, nPort);
+  const starboard = wall(fStar, aStar, [1, 0.1, 0], [-TUMBLE, 0, 0], starboardTs);
+  const port = wall(fPort, nPort, [-1, 0.1, 0], [TUMBLE, 0, 0], portTs);
   // The front: raked aft, its sides' top leaning in with them.
+  // Its foot at the sheer's height, under the locker deck and the hulls'
+  // crowned decks, so no slit opens beneath it.
+  const y0 = Math.min(LOCKERS_Y, sheer(uAt(HOUSE_FORE)));
   const front = (t: number, h: number, off: number): Vec3 => {
     const x = lerp(fPort.x, fStar.x, t);
-    const y0 = wallFoot(HOUSE_FORE);
     const xt = x * (1 - TUMBLE / HOUSE_SIDE);
     const p0: Vec3 = [x, y0, HOUSE_FORE];
     const p1: Vec3 = [xt, top(xt, ROOF_FRONT), ROOF_FRONT];
@@ -894,56 +1018,69 @@ function roundHouse(): {
       wood.triFacing(lo[i] as number, hi[i + 1] as number, hi[i] as number, [0, 0.5, -1]);
     }
   }
-  // The sides' gores between the raked front and the leaning sides.
-  for (const s of [1, -1]) {
-    const foot: Vec3 = [s * HOUSE_SIDE, wallFoot(HOUSE_FORE), HOUSE_FORE];
-    const xt = s * (HOUSE_SIDE - TUMBLE);
-    quad(
-      wood,
-      [
-        foot,
-        [xt, top(xt, ROOF_FRONT), ROOF_FRONT],
-        [xt, top(xt, HOUSE_FORE + rake), HOUSE_FORE + rake],
-        foot,
-      ],
-      [s, 0, 0],
-      VARNISH,
-    );
+  // The sides stand forward of the raked front to their full height: their
+  // inner faces there, from the front's edge up to their tops, through the
+  // sides' own points (the front's top corner is the sides' point at the
+  // roof's front).
+  for (const [s, at, ts, len] of [
+    [1, starboard, starboardTs, aStar.z - fStar.z],
+    [-1, port, portTs, nPort.z - fPort.z],
+  ] as [number, (t: number, h: number, off: number) => Vec3, number[], number][]) {
+    const tR = rake / len;
+    const edge = s > 0 ? 1 : 0;
+    const pts: Vec3[] = [
+      ...ts
+        .filter((t) => t <= tR + 1e-9)
+        .reverse()
+        .map((t) => at(t, 1, 0)),
+      at(0, 0, 0),
+    ];
+    const foot = wood.vertex(front(edge, 0, 0), VARNISH);
+    wood.normal(foot, [-s, 0, 0]);
+    const ks = pts.map((q) => {
+      const k = wood.vertex(q, VARNISH);
+      wood.normal(k, [-s, 0, 0]);
+      return k;
+    });
+    for (let k = 0; k + 1 < ks.length; k++) {
+      wood.triFacing(foot, ks[k] as number, ks[k + 1] as number, [-s, 0, 0]);
+    }
   }
   // The after bulkhead, starboard of the notch, and the notch's two walls.
-  const aft = wall(nAft, aStar, [0, 0, 1], [0, 0, 0], seg);
-  const notchSide = wall(nIn, nAft, [1, 0, 0], [0, 0, 0], 2);
-  const notchFace = wall(nPort, nIn, [0, 0, 1], [0, 0, 0], 4);
+  const aftTs = wallTs(nAft, aStar);
+  const aft = wall(nAft, aStar, [0, 0, 1], [0, 0, 0], aftTs);
+  const notchSide = wall(nIn, nAft, [-1, 0, 0], [0, 0, 0], [0, 0.5, 1]);
+  const notchFace = wall(nPort, nIn, [0, 0, 1], [0, 0, 0], [0, 0.25, 0.5, 0.75, 1]);
+  // The after bulkhead's foot down to the sole, where it runs above it
+  // toward the starboard hull's deck.
+  {
+    const lo: number[] = [];
+    const hi: number[] = [];
+    for (const t of aftTs) {
+      const p = aft(t, 0, 0);
+      hi.push(wood.vertex(p, VARNISH));
+      lo.push(wood.vertex([p[0], SOLE, p[2]], VARNISH));
+    }
+    for (let i = 0; i + 1 < aftTs.length; i++) {
+      wood.triFacing(lo[i] as number, lo[i + 1] as number, hi[i + 1] as number, [0, 0, 1]);
+      wood.triFacing(lo[i] as number, hi[i + 1] as number, hi[i] as number, [0, 0, 1]);
+    }
+  }
+  // The after bulkhead and the notch's face stand plumb at their outer ends,
+  // a little beyond the leaning sides: their inner faces there.
+  for (const [w, t, side] of [
+    [aft, 1, starboard],
+    [notchFace, 0, port],
+  ] as [(t: number, h: number, off: number) => Vec3, number, typeof port][]) {
+    quad(wood, [w(t, 0, 0), w(t, 1, 0), side(1, 1, 0), side(1, 0, 0)], [0, 0, -1], VARNISH);
+  }
   // The roof: laid planks fore and aft, from its front to its after edge,
   // overhanging the sides; open over the helm, its landing and the head of
   // its ladder, and on aft over the ladder as far as a sailor climbing it
   // stands tall under the roof.
-  const rx = HOUSE_SIDE + ROOF_OVER;
-  const planks = D.small ? 22 : 2;
-  const nz = D.small ? 24 : 4;
-  const OPEN = {
-    x0: PLAT_OUT - ROOF_OVER - 0.01,
-    x1: LADDER_IN + 0.05,
-    z0: NOTCH_FORE - 0.1,
-    z1: PLAT_AFT + 0.05,
-  };
-  /** The opening's after part, over the ladder: from its port side, aft to here. */
-  const LADDER_OPEN = { x0: PLAT_IN - 0.02, z1: LADDER_FOOT - 0.15 };
-  /** The roof's opening across at z: from x0 to x1, or none. */
-  const openAt = (z: number): [number, number] | null =>
-    z > OPEN.z0 && z < OPEN.z1
-      ? [-rx - 1, OPEN.x1]
-      : z >= OPEN.z1 && z < LADDER_OPEN.z1
-        ? [LADDER_OPEN.x0, OPEN.x1]
-        : null;
-  const zs = Array.from({ length: nz + 1 }, (_, i) => lerp(ROOF_FRONT, ROOF_AFT, i / nz));
-  for (const z of [OPEN.z0, OPEN.z1, LADDER_OPEN.z1]) {
-    zs.push(z);
-  }
-  zs.sort((a, b) => a - b);
   for (let j = 0; j < planks; j++) {
-    const x0 = lerp(-rx, rx, j / planks);
-    const x1 = lerp(-rx, rx, (j + 1) / planks);
+    const x0 = plankXs[j] as number;
+    const x1 = plankXs[j + 1] as number;
     const c = shade(DECK, 0.85 + 0.18 * jitter(j + 140));
     for (let i = 0; i + 1 < zs.length; i++) {
       const z0 = zs[i] as number;
@@ -964,65 +1101,95 @@ function roundHouse(): {
         }
         const seamC = D.seams ? shade(c, 0.6) : c;
         const k = [
-          roof.vertex([lo, roofY(lo, z0), z0], seamC),
-          roof.vertex([hi, roofY(hi, z0), z0], c),
-          roof.vertex([hi, roofY(hi, z1), z1], c),
-          roof.vertex([lo, roofY(lo, z1), z1], seamC),
+          roof.vertex([lo, roofAt(lo, z0), z0], seamC),
+          roof.vertex([hi, roofAt(hi, z0), z0], c),
+          roof.vertex([hi, roofAt(hi, z1), z1], c),
+          roof.vertex([lo, roofAt(lo, z1), z1], seamC),
         ];
         roof.triFacing(k[0] as number, k[1] as number, k[2] as number, [0, 1, 0]);
         roof.triFacing(k[0] as number, k[2] as number, k[3] as number, [0, 1, 0]);
         // Its underside, varnished, seen from the cockpit.
-        if (!D.small) {
-          continue;
-        }
         const u = [
-          wood.vertex([lo, roofY(lo, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
-          wood.vertex([hi, roofY(hi, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
-          wood.vertex([hi, roofY(hi, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
-          wood.vertex([lo, roofY(lo, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
+          wood.vertex([lo, roofAt(lo, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
+          wood.vertex([hi, roofAt(hi, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
+          wood.vertex([hi, roofAt(hi, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
+          wood.vertex([lo, roofAt(lo, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
         ];
         wood.triFacing(u[0] as number, u[1] as number, u[2] as number, [0, -1, 0]);
         wood.triFacing(u[0] as number, u[2] as number, u[3] as number, [0, -1, 0]);
       }
     }
   }
-  // The roof's edges: a varnished fascia round it, and round the opening.
+  // The roof's edges: a varnished fascia round it, and round the opening,
+  // a board seen from both its faces, its top through the planks' own points.
   const fascia = (a: Vec3, b: Vec3, out: Vec3): void => {
-    quad(
-      wood,
-      [a, b, add(b, [0, -ROOF_THICK - 0.04, 0]), add(a, [0, -ROOF_THICK - 0.04, 0])],
-      out,
-      shade(VARNISH, 0.9),
-    );
+    const q = [a, b, add(b, [0, -ROOF_THICK - 0.04, 0]), add(a, [0, -ROOF_THICK - 0.04, 0])];
+    quad(wood, q, out, shade(VARNISH, 0.9));
+    quad(wood, q, scale(out, -1), shade(VARNISH, 0.9));
   };
-  const edgeN = D.small ? 8 : 2;
+  /** A fascia across at z from x0 to x1, its top on the roof's crown. */
+  const across = (z: number, x0: number, x1: number, out: number): void => {
+    const xs = through(x0, x1, plankXs);
+    for (let i = 0; i + 1 < xs.length; i++) {
+      const a = xs[i] as number;
+      const b = xs[i + 1] as number;
+      fascia([a, roofAt(a, z), z], [b, roofAt(b, z), z], [0, 0, out]);
+    }
+  };
+  /** A fascia along at x from z0 to z1; on a far model only where the roof's edge bends. */
+  const along = (x: number, z0: number, z1: number, out: number): void => {
+    const z = D.small ? through(z0, z1, zs) : bends(x, z0, z1);
+    for (let i = 0; i + 1 < z.length; i++) {
+      const a = z[i] as number;
+      const b = z[i + 1] as number;
+      fascia([x, roofAt(x, a), a], [x, roofAt(x, b), b], [out, 0, 0]);
+    }
+  };
   for (const s of [1, -1]) {
-    for (let i = 0; i < nz; i++) {
-      const z0 = lerp(ROOF_FRONT, ROOF_AFT, i / nz);
-      const z1 = lerp(ROOF_FRONT, ROOF_AFT, (i + 1) / nz);
-      fascia([s * rx, roofY(rx, z0), z0], [s * rx, roofY(rx, z1), z1], [s, 0, 0]);
-    }
+    along(s * rx, ROOF_FRONT, ROOF_AFT, s);
   }
-  for (const [z, out] of [
-    [ROOF_FRONT, -1],
-    [ROOF_AFT, 1],
-  ] as [number, number][]) {
-    for (let i = 0; i < edgeN; i++) {
-      const x0 = lerp(-rx, rx, i / edgeN);
-      const x1 = lerp(-rx, rx, (i + 1) / edgeN);
-      fascia([x0, roofY(x0, z), z], [x1, roofY(x1, z), z], [0, 0, out]);
-    }
-  }
+  across(ROOF_FRONT, -rx, rx, -1);
+  across(ROOF_AFT, -rx, rx, 1);
   // Round the opening: its inboard side, its fore end, its after end over
   // the platform, and the ladder's part's port side and after end.
-  const ox = OPEN.x1;
-  const lx = LADDER_OPEN.x0;
-  const lz = LADDER_OPEN.z1;
-  fascia([ox, roofY(ox, OPEN.z0), OPEN.z0], [ox, roofY(ox, lz), lz], [-1, 0, 0]);
-  fascia([-rx, roofY(rx, OPEN.z0), OPEN.z0], [ox, roofY(ox, OPEN.z0), OPEN.z0], [0, 0, 1]);
-  fascia([-rx, roofY(rx, OPEN.z1), OPEN.z1], [lx, roofY(lx, OPEN.z1), OPEN.z1], [0, 0, -1]);
-  fascia([lx, roofY(lx, OPEN.z1), OPEN.z1], [lx, roofY(lx, lz), lz], [1, 0, 0]);
-  fascia([lx, roofY(lx, lz), lz], [ox, roofY(ox, lz), lz], [0, 0, -1]);
+  along(ox, OPEN.z0, lz, -1);
+  across(OPEN.z0, -rx, ox, 1);
+  across(OPEN.z1, -rx, lx, -1);
+  along(lx, OPEN.z1, lz, 1);
+  across(lz, lx, ox, -1);
+  // The heads of the notch's walls under the opening, closing the round-house
+  // between them and the opening's edges: over its face from the opening's
+  // fore end, and over its side from the opening's inboard side.
+  {
+    const head = (a: Vec3[], b: Vec3[]): void => {
+      for (let i = 0; i + 1 < a.length; i++) {
+        quad(
+          wood,
+          [a[i] as Vec3, a[i + 1] as Vec3, b[i + 1] as Vec3, b[i] as Vec3],
+          [0, 1, 0],
+          shade(VARNISH, 0.8),
+        );
+      }
+    };
+    const xs = [-rx, ...Array.from({ length: 5 }, (_, i) => lerp(nPort.x, nIn.x, i / 4)), ox];
+    head(
+      xs.map((x): Vec3 => [x, top(x, OPEN.z0), OPEN.z0]),
+      xs.map(
+        (x, i): Vec3 =>
+          i === 0 || i === xs.length - 1
+            ? [x, top(x, NOTCH_FORE), NOTCH_FORE]
+            : notchFace((i - 1) / 4, 1, 0),
+      ),
+    );
+    const ts = [0, 0.5, 1];
+    head(
+      ts.map((t) => notchSide(t, 1, 0)),
+      ts.map((t): Vec3 => {
+        const z = lerp(nIn.z, nAft.z, t);
+        return [ox, top(ox, z), z];
+      }),
+    );
+  }
   // The posts carrying the roof over the cockpit, on the hulls' decks and at the opening's after corner.
   const posts: [number, number, number][] = [
     [HOUSE_SIDE - 0.1, ROOF_AFT - 0.12, deckAt(HOUSE_SIDE - 0.1, ROOF_AFT - 0.12)],
@@ -1089,18 +1256,16 @@ function roundHouse(): {
       );
     }
     if (deadlight) {
+      // A board standing off the wall, seen from both its faces.
       const d0 = t0 - (t1 - t0) * 0.55;
-      quad(
-        wood,
-        [
-          at(d0, h0 + 0.03, 0.03),
-          at(t0 - 0.005, h0 + 0.03, 0.03),
-          at(t0 - 0.005, h1 - 0.03, 0.03),
-          at(d0, h1 - 0.03, 0.03),
-        ],
-        out,
-        shade(WOOD, 0.9),
-      );
+      const board = [
+        at(d0, h0 + 0.03, 0.03),
+        at(t0 - 0.005, h0 + 0.03, 0.03),
+        at(t0 - 0.005, h1 - 0.03, 0.03),
+        at(d0, h1 - 0.03, 0.03),
+      ];
+      quad(wood, board, out, shade(WOOD, 0.9));
+      quad(wood, board, scale(out, -1), shade(WOOD, 0.9));
       brass.tube([at(t0 - 0.008, h0 + 0.08, 0.02), at(t0 - 0.008, h1 - 0.08, 0.02)], [0.007], 4);
     }
   };
@@ -1153,7 +1318,6 @@ function roundHouse(): {
   }
   // A small window in the notch's face, beside the console.
   window(notchFace, 0.05, 0.25, 0.42, 0.85, [0, 0, 1], 2, 2, false);
-  void notchSide;
   return { wood, roof, glass, frames, brass };
 }
 
@@ -1219,6 +1383,12 @@ function helmStation(): {
   box(wood, [PLAT_OUT, foot, PLAT_AFT - 0.03], [PLAT_IN, PLAT_Y - 0.004, PLAT_AFT], VARNISH);
   box(wood, [PLAT_IN, foot, LANDING_AFT - 0.03], [LADDER_IN, PLAT_Y - 0.004, LANDING_AFT], VARNISH);
   box(wood, [PLAT_IN - 0.03, foot, LANDING_AFT], [PLAT_IN, PLAT_Y - 0.004, PLAT_AFT], VARNISH);
+  box(
+    wood,
+    [LADDER_IN - 0.03, foot, PLAT_FORE],
+    [LADDER_IN, PLAT_Y - 0.004, LANDING_AFT - 0.03],
+    VARNISH,
+  );
   box(
     wood,
     [PLAT_OUT, deckAt(PLAT_OUT, 2) - 0.02, PLAT_FORE],

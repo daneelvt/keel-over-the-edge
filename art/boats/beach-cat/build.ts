@@ -382,13 +382,22 @@ function planking(): { painted: MeshBuilder; bright: MeshBuilder } {
 
 /** The transom: varnished mahogany across the hull's after end, keel to sheer. */
 function transom(m: MeshBuilder): void {
-  const n = Math.max(2, D.girth);
+  // Its edge runs through the planking's own rows at the transom, so no slit
+  // opens between them.
+  const rows = girthRows();
   const ring: number[] = [];
-  for (let i = 0; i <= n; i++) {
-    ring.push(m.vertex(section(0, i / n, 1), MAHOGANY));
+  for (const g of rows) {
+    ring.push(m.vertex(section(0, g, 1), MAHOGANY));
   }
-  for (let i = n - 1; i >= 1; i--) {
-    ring.push(m.vertex(section(0, i / n, -1), MAHOGANY));
+  // Its top follows the deck's crown from the outer sheer to the inner, so
+  // no gap opens under the deck's edge.
+  const across = 2 * D.deckRows;
+  for (let j = 1; j < across; j++) {
+    const x = C + outerAt(0) - (j / across) * (outerAt(0) + innerAt(0));
+    ring.push(m.vertex([x, deckY(x, 0), TRANSOM_Z], MAHOGANY));
+  }
+  for (const g of [...rows].reverse().filter((g) => g > 0)) {
+    ring.push(m.vertex(section(0, g, -1), MAHOGANY));
   }
   const mid = m.vertex([C, sheer(0) / 2, TRANSOM_Z], MAHOGANY);
   for (const k of [...ring, mid]) {
