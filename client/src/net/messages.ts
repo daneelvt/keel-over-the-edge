@@ -715,6 +715,8 @@ export type ToWorker =
   | { type: 'ashore'; who: number }
   /** Retires the boat from the race it sails in. */
   | { type: 'raceRetire' }
+  /** Lifts the own boat home to the start off Port Royal; lifted answers it. */
+  | { type: 'home' }
   /** Close the boat to knocks for this voyage, or open it again. */
   | { type: 'closeKnocks'; closed: boolean }
   /** Come aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
@@ -835,6 +837,12 @@ export type FromWorker =
   | { type: 'shipmateAt'; at: ShipmateAtIn }
   /** A course to a sailor's boat ended, or was refused. */
   | { type: 'courseEnded'; sailor: string; why: CourseEndWhy }
+  /**
+   * The boat sailed or aboard was lifted home at tick, its first snapshot
+   * there that tick's or a later one's; or, tick 0, it was not: soon, it
+   * was lifted within the last minute.
+   */
+  | { type: 'lifted'; tick: number; soon: boolean }
   /** A shipmate set a course to the player's boat: their name. */
   | { type: 'shipmateCourse'; name: string }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */

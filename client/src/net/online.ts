@@ -45,6 +45,7 @@ import {
 } from '../predict/predictor';
 import { ChatLog } from '../ui/chatlog';
 import type { WorldEnd } from '../ui/countdown';
+import { LIFTED_SOON } from '../ui/homewords';
 import { queueLines } from '../ui/queue';
 import { ShipmateThreads } from '../ui/shipmatelog';
 import { BOAT_IN_THE_WATER, endedText, type WatchEndWhy } from '../ui/watchwords';
@@ -303,6 +304,18 @@ export class Online {
   readonly arrived = signal(0);
   /** How many times the own boat has been returned to port. */
   readonly returned = signal(0);
+  /** How many lifts home have arrived: counted at the first snapshot of each, the boat at the start from it. */
+  readonly lifted = signal(0);
+  /** How many lifts home asked for came to nothing: too soon, or no boat of the connection's own. */
+  readonly unlifted = signal(0);
+  /** Told of a lift home of the boat aboard, which its skipper asked for: the page covers its screen. */
+  onLift: (() => void) | null = null;
+  /** The tick of a lift home whose first snapshot has not been taken yet; 0 for none. */
+  #liftTick = 0;
+  /** The tick of the newest snapshot taken. */
+  #takenTick = 0;
+  /** Whether the page asked for the lift home now coming. */
+  #homing = false;
 
   readonly #port: Port;
   readonly #predictor: Predictor;
@@ -450,6 +463,57 @@ export class Online {
   /** Retires the boat from the race it sails in. */
   raceRetire(): void {
     this.#port.postMessage({ type: 'raceRetire' });
+  }
+
+  /** Lifts the own boat home to the start off Port Royal: lifted counts it in, or unlifted counts it refused. */
+  home(): void {
+    this.#homing = true;
+    this.#port.postMessage({ type: 'home' });
+  }
+
+  /**
+   * A lift home answered: refused, said so if too soon; lifted, from its
+   * tick's first snapshot on (at once if that has been taken already), and
+   * a page aboard that did not ask told to cover its screen.
+   */
+  #liftAnswered(tick: number, soon: boolean): void {
+    const asked = this.#homing;
+    this.#homing = false;
+    if (tick === 0) {
+      if (soon) {
+        this.say(LIFTED_SOON);
+      }
+      this.unlifted.value++;
+      return;
+    }
+    if (!asked) {
+      this.onLift?.();
+    }
+    this.#liftTick = tick;
+    if (this.#takenTick >= tick) {
+      this.#landedHome(this.#takenTick);
+    }
+  }
+
+  /**
+   * A snapshot of tick taken; the first of a lift home starts the boat's
+   * drawing afresh there, as a Welcome does, nothing of where it was
+   * carried over, and counts the lift in.
+   */
+  #landedHome(tick: number): void {
+    this.#takenTick = tick;
+    if (this.#liftTick === 0 || tick < this.#liftTick) {
+      return;
+    }
+    this.#liftTick = 0;
+    if (this.watched) {
+      this.#watcher.reset();
+    } else {
+      this.#predictor.started = false;
+    }
+    this.fleet.clear();
+    this.#predictor.wakes.reset();
+    this.lifted.value++;
   }
 
   /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
@@ -631,6 +695,9 @@ export class Online {
         break;
       case 'shipmateCourse':
         this.onShipmateCourse?.(m.name);
+        break;
+      case 'lifted':
+        this.#liftAnswered(m.tick, m.soon);
         break;
       case 'chatState':
         this.chatState.value = m.state;
@@ -978,6 +1045,7 @@ export class Online {
   /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
   #take(data: ArrayBuffer, now: number): void {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
+      this.#landedHome(this.#scratch.tick);
       const f = fleetOf(data);
       // The other boats' samples first: the steps the reconciliation
       // replays sail in their shadow, and the watched boat's step.

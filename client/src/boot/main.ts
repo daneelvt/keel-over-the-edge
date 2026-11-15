@@ -725,13 +725,15 @@ async function start(): Promise<void> {
         clock: clock.clock,
         readClock: clock.read,
         countdown,
-        // The screen again, with a watch's parts or without, and sailing
-        // together's: the layout's tests.
-        remount: (watch, deck = null, statements = null) => {
+        // The screen again, with a watch's parts or without, sailing
+        // together's, and the way home's: the layout's tests.
+        remount: (watch, deck = null, statements = null, home = null) => {
           unmount();
           unmount = mountScreen(
             document.body,
-            watch === null && deck === null ? screen : { ...screen, watch, deck, statements },
+            watch === null && deck === null && home === null
+              ? screen
+              : { ...screen, watch, deck, statements, home },
           );
         },
       });
@@ -1246,6 +1248,59 @@ async function start(): Promise<void> {
     reveal(world, cover, arrived() ? DESCENT_CHANGE : 0);
     changing = false;
   };
+  // The way home: as a change of boat, the cover down over the screen,
+  // the lift asked for under it, and the cover up again once the boat is
+  // drawn at the start with the land about it; at once if the lift comes
+  // to nothing (too soon). A page aboard, whose skipper asked, is covered
+  // at once as the lift comes, and lifted the same way.
+  const homeward = async (ask: boolean): Promise<void> => {
+    if (!atSea || changing) {
+      if (ask) {
+        online.home();
+      }
+      return;
+    }
+    changing = true;
+    const n = online.lifted.value;
+    const refused = online.unlifted.value;
+    clear.show();
+    const start = performance.now();
+    await cover.drop(world.underTest || reducedMotion() || !ask ? 0 : DROP);
+    if (world.drawsWhenReady) {
+      world.stage.loopDraws = false;
+    }
+    if (ask) {
+      online.home();
+    }
+    let placed = false;
+    const lifted = () => online.lifted.value > n;
+    const gate = new Gate(
+      {
+        epoch: () => true,
+        boat: lifted,
+        view: () => placed,
+        land: () => landNear() && world.sailorReady,
+        abandoned: () => !lifted() && online.unlifted.value > refused,
+      },
+      { start, draws: world.drawsWhenReady },
+    );
+    const ready = untilReady(gate, world, cover, start);
+    let waiting = true;
+    void whenCounted(online.lifted, n).then(async () => {
+      if (!waiting) {
+        return;
+      }
+      await frames(2);
+      world.placeFirstView();
+      placed = true;
+    });
+    await ready;
+    waiting = false;
+    reveal(world, cover, lifted() ? DESCENT_CHANGE : 0);
+    changing = false;
+  };
+  online.onLift = () => void homeward(false);
+  const homeAsking = signal(false);
   // Watching, as the screens see it.
   const watchView: WatchView = {
     watching: online.watching,
@@ -1439,6 +1494,17 @@ async function start(): Promise<void> {
       sail: () => watchView.sail(),
       replay: (code) => parts.replay.open(code),
     },
+    home: {
+      offered: () =>
+        !online.spectating.value && online.watching.value === null && online.aboard.value === null,
+      asking: homeAsking,
+      racing: () => {
+        const r = racing.mine();
+        return racing.number() > 0 && (r === null || r.state === 'placed' || r.state === 'racing');
+      },
+      shipmates: () => online.crew.value !== null,
+      go: () => void homeward(true),
+    },
   });
   // A name tapped anywhere opens its log on the chart screen's Log tab, and
   // a sailor's last story the News tab, now the chart screen can be shown;
@@ -1543,6 +1609,18 @@ function sailToBoats(online: Online, parts: ChartParts): void {
 /** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */
 function overboard(line: string): boolean {
   return line !== '' && line !== AGROUND;
+}
+
+/** Resolves once a count has passed n. */
+function whenCounted(count: { readonly value: number }, n: number): Promise<void> {
+  let stop = (): void => {};
+  return new Promise<void>((resolve) => {
+    stop = effect(() => {
+      if (count.value > n) {
+        resolve();
+      }
+    });
+  }).finally(() => stop());
 }
 
 /** Resolves once a boat has arrived after the n-th. */

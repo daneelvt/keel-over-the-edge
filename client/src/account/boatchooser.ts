@@ -153,6 +153,12 @@ export class BoatChooser {
     );
   }
 
+  /** Whether the look chosen differs from the boat's: Save would send it. */
+  changed(): boolean {
+    const b = this.yours;
+    return b !== null && Object.keys(changeOf(b, this.draft.value)).length > 1;
+  }
+
   /** Keeps the look chosen: what changed of it, checked first as the page can. */
   save(): Promise<boolean> {
     const b = this.yours;

@@ -442,13 +442,15 @@ function withWords(named: string[], more: number): string {
     : `${shown.join(', ')} and ${inWords(rest)} ${rest === 1 ? 'other' : 'others'}`;
 }
 
-/** How a voyage ended, where the log tells it: going over the falls, or taken at the world's end; nothing for an ordinary landfall. */
+/** How a voyage ended, where the log tells it: going over the falls, taken at the world's end, or lifted home; nothing for an ordinary landfall. */
 export function endWords(v: LogVoyage): string {
   switch (v.how) {
     case 'over':
       return `Went over the falls ${off(v.place)}, and home again`;
     case 'taken':
       return 'At sea when the falls took the world';
+    case 'lifted':
+      return 'Lifted home to Port Royal';
   }
   return '';
 }
@@ -470,6 +472,8 @@ export function howWords(v: LogVoyage): string {
       return 'went ashore';
     case 'landed':
       return 'ashore as the boat came out of the water';
+    case 'lifted':
+      return 'lifted home to Port Royal';
   }
   return '';
 }

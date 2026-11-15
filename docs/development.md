@@ -2817,6 +2817,45 @@ a snapshot after the fall without the block is the boat back at the start,
 and the prediction starts again from it, once. `trace-over.json` holds the
 Go client's run over the lip, which the page's tests replay.
 
+### The way home, and a boat taken out from the start screen
+
+**`home`** (`Command.home`, `internal/edge/home.go`) lifts the boat a
+connection sails, its own, to the start off Port Royal: the menu's
+Back to Port Royal, after its question. The edge sends `bus.Lift`, and the
+simulation (`sim.lift`) retires the boat from the race it sails in, if
+any, ends its voyage with **`EndLifted`** (the log's `lifted`, "Lifted
+home to Port Royal", migration 00043), and starts it again as a fall over
+the lip ends (`startAgain`): the same boat in the same slot, at the start,
+at rest, its course cleared, on a new voyage that is not placed, so it
+earns; those aboard stay aboard. The edge answers with **`Lifted{tick}`**,
+to the connection and to everyone aboard; the page covers its screen (the
+cover and its gate, as a change of boat does) until its first snapshot of
+that tick or later is drawn, and the prediction starts afresh from it. An
+account is lifted **at most once a minute** (`edge.LiftEvery`, kept by the
+edge, not the simulation, so a replay needs nothing of it): a second
+inside the minute is answered `Lifted{soon: true}` and nothing is sent to
+the simulation ("You were lifted a moment ago."). A connection aboard
+another's boat, watching or with no boat is answered `Lifted{}`. A boat
+falling over the lip is on its way home already, and is not lifted. The
+input log records a Lift as its boat (format 23). Machine sailors have no
+`home`: `boat` with `action: "leave"`, then any call that sails, starts
+them again at the start.
+
+**`POST /api/me/ashore`** (`internal/api/me.go`, the edge's `TakeOut`),
+behind a session, human accounts only (403 `ai-account`), takes the
+account's boat out of the water at once, with no grace, as a watch does:
+one in its grace after its page closed, or one sailing on another screen,
+whose connection is closed with 4003 and "Your boat was taken out of the
+water on another screen." (`edge.ReasonTakenOut`), so that screen shows it
+and goes to its start screen. Those aboard go ashore at the nearest port,
+as for any boat that leaves. It answers `{"out": true}` once the world no
+longer holds the boat, so `GET /api/me` then says it is not at sea (503
+after 5 s), and `{"out": false}` with no boat in the water. The start
+screen calls it after "Take your boat out of the water?": before a change
+of boat or of look is saved, before a watch, and for Start again at Port
+Royal, which then sets sail at the start. Set sail alone sails the boat on
+where it lies.
+
 ### The mist, the lip and the falls, drawn
 
 - **The mist** (`client/src/edge/mist.ts`): over the clear air's haze, a
