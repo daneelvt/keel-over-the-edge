@@ -40,7 +40,7 @@ func TestLogCertificates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c := own.Certificate; c == nil || c.Name != "Deckhand" || !c.ByHand || c.Last {
+	if c := own.Certificate; c == nil || c.Name != "Deckhand" || !c.ByHand || c.Last || c.Pendant != 1 {
 		t.Errorf("Ann's certificate: %+v", c)
 	}
 	tw := own.Toward
@@ -75,12 +75,15 @@ func TestLogCertificates(t *testing.T) {
 	if _, ok := raw["toward"]; ok {
 		t.Errorf("another's log tells the way toward the next: %s", b)
 	}
+	if c, _ := raw["certificate"].(map[string]any); c["pendant"] != 1.0 {
+		t.Errorf("Ann's pendant as Kit reads it: %s", b)
+	}
 	// After the last, the certificate alone.
 	kits, err := svc.Own(ctx, kit, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if kits.Certificate == nil || !kits.Certificate.Last || kits.Toward != nil {
+	if kits.Certificate == nil || !kits.Certificate.Last || kits.Certificate.Pendant != 5 || kits.Toward != nil {
 		t.Errorf("Kit, a Master: %+v, %+v", kits.Certificate, kits.Toward)
 	}
 	// A machine sailor's player sees its way; none held, no certificate.

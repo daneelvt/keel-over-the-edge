@@ -12,6 +12,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const certificatesHeld = `-- name: CertificatesHeld :many
+SELECT account_id, array_agg(certificate ORDER BY earned_at, id)::text[] AS held
+FROM certificate
+WHERE account_id = ANY ($1::uuid[])
+GROUP BY account_id
+`
+
+type CertificatesHeldRow struct {
+	AccountID pgtype.UUID
+	Held      []string
+}
+
+// The certificates some sailors hold, by the catalog's ids, the first
+// earned first; a sailor with none is left out.
+func (q *Queries) CertificatesHeld(ctx context.Context, ids []pgtype.UUID) ([]CertificatesHeldRow, error) {
+	rows, err := q.db.Query(ctx, certificatesHeld, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CertificatesHeldRow
+	for rows.Next() {
+		var i CertificatesHeldRow
+		if err := rows.Scan(&i.AccountID, &i.Held); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const certificatesOf = `-- name: CertificatesOf :many
 SELECT certificate, by_hand, earned_at, world, tasks FROM certificate WHERE account_id = $1 ORDER BY earned_at, id
 `

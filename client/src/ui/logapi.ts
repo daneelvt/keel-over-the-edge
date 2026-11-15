@@ -199,11 +199,12 @@ export interface Log {
   toward?: LogToward;
 }
 
-/** The certificate a log's sailor holds: its name, whether earned by hand, and whether the last there is. */
+/** The certificate a log's sailor holds: its name, whether earned by hand, whether the last there is, and the pendant worn at the neck (its place in the catalog's list and one). */
 export interface LogCertificate {
   name: string;
   byHand?: boolean;
   last?: boolean;
+  pendant?: number;
 }
 
 /** Where a sailor stands toward its next certificate: its name, the tasks it needs and those done, and its tasks. */

@@ -569,16 +569,20 @@ func (s *Store) SpoonsHung(ctx context.Context, id AccountID, world int) (int, e
 // RacePrizes are what a sailor's races in a world show on the water while
 // it lasts: the races they sailed, skipper or crew, the links' codes of
 // those they won, the newest first, the wooden spoons they hang, and the
-// races they ran. Only races of three boats or more count.
+// races they ran. Only races of three boats or more count. Held are the
+// certificates they hold, by the catalog's ids, the first earned first:
+// kept for good, not by the world, and worn at the neck.
 type RacePrizes struct {
 	Sailed int
 	Wins   []string
 	Spoons int
 	Ran    int
+	Held   []string
 }
 
 // PrizesOf are the prizes of the sailors of ids in world, each with at
-// most wins of their wins; a sailor with none is left out.
+// most wins of their wins; a sailor with neither races nor certificates
+// is left out.
 func (s *Store) PrizesOf(ctx context.Context, world int, ids []AccountID, wins int) (map[AccountID]RacePrizes, error) {
 	out := make(map[AccountID]RacePrizes, len(ids))
 	if len(ids) == 0 {
@@ -594,6 +598,16 @@ func (s *Store) PrizesOf(ctx context.Context, world int, ids []AccountID, wins i
 	}
 	for _, r := range rows {
 		out[AccountID(r.AccountID.Bytes)] = RacePrizes{Sailed: int(r.Sailed), Wins: r.Wins, Spoons: int(r.Hung), Ran: int(r.Ran)}
+	}
+	held, err := s.q.CertificatesHeld(ctx, us)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range held {
+		id := AccountID(r.AccountID.Bytes)
+		p := out[id]
+		p.Held = r.Held
+		out[id] = p
 	}
 	return out, nil
 }

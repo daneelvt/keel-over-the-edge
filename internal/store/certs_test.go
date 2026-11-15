@@ -323,3 +323,37 @@ func TestByHandOnlyWhenEveryCourseWas(t *testing.T) {
 		t.Errorf("Deckhand from the log alone told %+v", told)
 	}
 }
+
+// TestPrizesHoldCertificates: the prizes read for some sailors carry the
+// certificates each holds, the first earned first, in whatever world is
+// asked for, and alongside their races; a sailor with neither is left out.
+func TestPrizesHoldCertificates(t *testing.T) {
+	ctx := context.Background()
+	s, _ := storetest.Store(t, store.Options{})
+	var ids []store.AccountID
+	for _, name := range []string{"Ann Bonny", "Tom Bowline"} {
+		id, err := s.CreateAccount(ctx, storetest.NewAccount(name, name[:3], [32]byte{byte(len(name)), name[0]}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	ann, tom := ids[0], ids[1]
+	at := time.Date(2026, 11, 12, 15, 0, 0, 0, time.UTC)
+	for i, id := range []string{"helm-cert", "deckhand-cert"} {
+		c := store.Certificate{ID: id, Earned: at.Add(time.Duration(i) * time.Hour), World: 3}
+		if ok, err := s.Exam().Earn(ctx, ann, &c, id, nil, 0); err != nil || !ok {
+			t.Fatalf("earning %s: %v, %v", id, ok, err)
+		}
+	}
+	got, err := s.PrizesOf(ctx, 9, []store.AccountID{ann, tom}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, ok := got[ann]; !ok || !slices.Equal(p.Held, []string{"helm-cert", "deckhand-cert"}) || p.Sailed != 0 || len(p.Wins) != 0 {
+		t.Errorf("Ann's prizes: %+v, %v", p, ok)
+	}
+	if p, ok := got[tom]; ok {
+		t.Errorf("Tom, with nothing, read as %+v", p)
+	}
+}

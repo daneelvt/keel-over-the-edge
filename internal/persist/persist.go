@@ -107,8 +107,11 @@ type Config struct {
 	// Examiner, if not nil, judges the certificates of the sailors whose
 	// log's rows sailed alone, in the batch's transaction; what it told
 	// goes into the world (bus.Certify) once the batch has committed, by
-	// Hold's sender.
+	// Hold's sender. Earned, if not nil, is told of each sailor who
+	// earned a certificate in it, then too, on the writer's goroutine; it
+	// must not block.
 	Examiner store.Examiner
+	Earned   func(store.AccountID)
 	// Zero values are the defaults above; tests shorten them.
 	Every                             int64
 	BatchEvery, FirstRetry, LastRetry time.Duration
@@ -618,10 +621,14 @@ func (p *Persist) wrote() {
 
 // certified tells the world what a batch's judging of certificates told,
 // on the writer's goroutine: a full queue drops it, and the log says so.
+// Each certificate earned is told to Earned as well.
 func (p *Persist) certified(told []store.Certified) {
 	for _, c := range told {
 		if err := p.cfg.Hold.TrySend(certs.Command(&c)); err != nil && p.cfg.Log != nil {
 			p.cfg.Log.Warn("telling a sailor of a certificate", "account", c.Account.String(), "err", err)
+		}
+		if c.Earned && p.cfg.Earned != nil {
+			p.cfg.Earned(c.Account)
 		}
 	}
 }

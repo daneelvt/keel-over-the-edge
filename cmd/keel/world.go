@@ -411,6 +411,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Hold: b.Commands.Server(), Log: p.log, Metrics: p.metrics,
 		Chart: rw.charts.model, Written: rw.charts.model.Add, News: newsRules(cat, cfg.Schedule.Zone), Boats: boatIDs(cat),
 		Logbook: bookOf(rw, cat), Examiner: certs.Judge{L: p.ladder},
+		// A certificate earned changes the pendant its sailor wears.
+		Earned: func(id store.AccountID) { h.races.Reread(bus.Account(id)) },
 	})
 	h.news = p.newsOf(row)
 	h.clerk = p.clerkOf(h)

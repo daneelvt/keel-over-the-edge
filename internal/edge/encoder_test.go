@@ -15,10 +15,27 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 )
+
+// What a full boat wears is kept for everyone aboard, each person's apart,
+// and reads as the races' prize code does.
+func TestWornAsThePrizeCode(t *testing.T) {
+	code := func(i int) uint32 { return uint32(i%6)<<pendantShift | uint32(i%2)*3 | 1<<22 }
+	var w worn
+	for i := range bus.MaxCrew + 1 {
+		w.put(i, code(i))
+	}
+	for i := range bus.MaxCrew + 1 {
+		p := race.Prizes(code(i))
+		if w.pendant(i) != uint32(p.Pendant()) || w.cockade(i) != p.Cockade() {
+			t.Fatalf("person %d wears pendant %d, cockade %v; the code %#x", i, w.pendant(i), w.cockade(i), code(i))
+		}
+	}
+}
 
 func TestMailbox(t *testing.T) {
 	var m mailbox

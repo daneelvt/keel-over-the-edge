@@ -18,11 +18,14 @@ import (
 // the log's own entry.
 
 // Certificate is the certificate a log's sailor holds: its name, whether
-// earned by hand, and whether it is the last there is.
+// earned by hand, and whether it is the last there is; and the pendant it
+// wears at the neck, its place in the catalog's list and one, as the game
+// sends it (Person.pendant).
 type Certificate struct {
-	Name   string `json:"name"`
-	ByHand bool   `json:"byHand,omitempty"`
-	Last   bool   `json:"last,omitempty"`
+	Name    string `json:"name"`
+	ByHand  bool   `json:"byHand,omitempty"`
+	Last    bool   `json:"last,omitempty"`
+	Pendant int    `json:"pendant"`
 }
 
 // Toward is where a sailor stands toward its next certificate: its name,
@@ -59,7 +62,7 @@ func (s *Service) certificates(ctx context.Context, out *Log, id store.AccountID
 		return err
 	}
 	if st.Held >= 0 {
-		out.Certificate = &Certificate{Name: st.HeldName, ByHand: st.ByHand, Last: st.Next < 0}
+		out.Certificate = &Certificate{Name: st.HeldName, ByHand: st.ByHand, Last: st.Next < 0, Pendant: st.Held + 1}
 	}
 	if !out.Own || st.Next < 0 {
 		return nil

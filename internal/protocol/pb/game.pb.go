@@ -5068,7 +5068,10 @@ type Person struct {
 	// A shipmate of the connection's account.
 	Shipmate bool `protobuf:"varint,8,opt,name=shipmate,proto3" json:"shipmate,omitempty"`
 	// They wear the winner's cockade, for a race won in the world.
-	Cockade       bool `protobuf:"varint,9,opt,name=cockade,proto3" json:"cockade,omitempty"`
+	Cockade bool `protobuf:"varint,9,opt,name=cockade,proto3" json:"cockade,omitempty"`
+	// The pendant they wear at the neck: 0 none, else their highest
+	// certificate's place in the catalog's list and one.
+	Pendant       uint32 `protobuf:"varint,10,opt,name=pendant,proto3" json:"pendant,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5164,6 +5167,13 @@ func (x *Person) GetCockade() bool {
 		return x.Cockade
 	}
 	return false
+}
+
+func (x *Person) GetPendant() uint32 {
+	if x != nil {
+		return x.Pendant
+	}
+	return 0
 }
 
 // Chat is a line said aboard the boat the connection sails, is aboard,
@@ -5949,10 +5959,12 @@ func (x *BoatPrizes) GetPrizes() []*BoatPrize {
 // how many winner's pennants it flies (3 bits, 0 … 5), each one's colour,
 // a place in the races' colours, the newest win's first (five fields of 3
 // bits), its burgee (2 bits: 0 none, 1 the racing burgee, 2 the gilded
-// one), how many wooden spoons hang from its stern (2 bits, 0 … 3) and the
-// committee's flag (1 bit); its skipper wears the winner's cockade while
-// it flies a pennant. number is its race number while it races, from its
-// placing on the line until its race is over; 0 for none.
+// one), how many wooden spoons hang from its stern (2 bits, 0 … 3), the
+// committee's flag (1 bit) and its skipper's pendant (3 bits, 0 none, else
+// their highest certificate's place in the catalog's list and one); its
+// skipper wears the winner's cockade while it flies a pennant. number is
+// its race number while it races, from its placing on the line until its
+// race is over; 0 for none.
 type BoatPrize struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
@@ -9950,7 +9962,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x06holder\x18\x02 \x01(\rR\x06holder\x12\x12\n" +
 	"\x04slot\x18\x03 \x01(\rR\x04slot\",\n" +
 	"\x05Crews\x12#\n" +
-	"\x05crews\x18\x01 \x03(\v2\r.keel.v1.CrewR\x05crews\"\xd6\x01\n" +
+	"\x05crews\x18\x01 \x03(\v2\r.keel.v1.CrewR\x05crews\"\xf0\x01\n" +
 	"\x06Person\x12\x12\n" +
 	"\x04seat\x18\x01 \x01(\rR\x04seat\x12\x12\n" +
 	"\x04look\x18\x02 \x01(\rR\x04look\x12\x12\n" +
@@ -9960,7 +9972,9 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05muted\x18\x06 \x01(\bR\x05muted\x12\x18\n" +
 	"\ablocked\x18\a \x01(\bR\ablocked\x12\x1a\n" +
 	"\bshipmate\x18\b \x01(\bR\bshipmate\x12\x18\n" +
-	"\acockade\x18\t \x01(\bR\acockade\"\xef\x01\n" +
+	"\acockade\x18\t \x01(\bR\acockade\x12\x18\n" +
+	"\apendant\x18\n" +
+	" \x01(\rR\apendant\"\xef\x01\n" +
 	"\x04Chat\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x12\n" +
 	"\x04seat\x18\x02 \x01(\rR\x04seat\x12\x12\n" +

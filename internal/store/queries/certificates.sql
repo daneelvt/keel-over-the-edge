@@ -71,3 +71,11 @@ FROM account a WHERE a.id = @id;
 -- name: SetEveryBoat :execrows
 -- Every kind of boat opened to a sailor by the owner, or closed again.
 UPDATE account SET every_boat = @every_boat WHERE id = @id;
+
+-- name: CertificatesHeld :many
+-- The certificates some sailors hold, by the catalog's ids, the first
+-- earned first; a sailor with none is left out.
+SELECT account_id, array_agg(certificate ORDER BY earned_at, id)::text[] AS held
+FROM certificate
+WHERE account_id = ANY (@ids::uuid[])
+GROUP BY account_id;
