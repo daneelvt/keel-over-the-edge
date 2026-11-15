@@ -938,7 +938,11 @@ export function ChartScreen({
   const chart = sea.chart;
   const surface = useGestures(sea);
   const labels = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
+  // The labels' layer is the chart's before its first frame: the chart is
+  // drawn as soon as it opens, and an effect run after the paint would let
+  // that frame, slow on a software GPU, lay its race and course labels
+  // nowhere.
+  useLayoutEffect(() => {
     chart.view.attachLabels(labels.current);
     return () => chart.view.attachLabels(null);
   }, [chart]);
