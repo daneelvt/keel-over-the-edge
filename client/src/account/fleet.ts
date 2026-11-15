@@ -41,6 +41,8 @@ export interface FleetBoat {
   atSea: boolean;
   /** It is the asking player's. */
   yours: boolean;
+  /** The certificate the player needs to take it, by name; "" (or none, from an older server) for none. */
+  needs?: string;
 }
 
 /** GET /api/fleet: the boat the player sails, or will take on Set sail, and every boat. */
@@ -87,6 +89,11 @@ export function taken(b: FleetBoat): boolean {
   return b.atSea && !b.yours;
 }
 
+/** Whether a boat needs a certificate the player does not hold, and cannot be chosen. */
+export function closed(b: FleetBoat): boolean {
+  return (b.needs ?? '') !== '';
+}
+
 /** The boat the player sails, or will take on Set sail; null for none. */
 export function yoursOf(f: Fleet | null): FleetBoat | null {
   return f?.boats.find((b) => b.id === f.boat) ?? null;
@@ -99,7 +106,8 @@ export function boatOf(f: Fleet | null, sailor: string): FleetBoat | null {
 
 /**
  * Where a boat is, among the fleet's to choose from: "yours", "at sea ·
- * Iron Mary" for one taken, "available", or "available · last sailed by Iron Mary".
+ * Iron Mary" for one taken, "needs Deckhand" for one the player may not
+ * take yet, "available", or "available · last sailed by Iron Mary".
  */
 export function standingWords(f: Fleet, b: FleetBoat): string {
   if (b.id === f.boat) {
@@ -107,6 +115,9 @@ export function standingWords(f: Fleet, b: FleetBoat): string {
   }
   if (taken(b)) {
     return `at sea · ${b.sailor}`;
+  }
+  if (closed(b)) {
+    return `needs ${b.needs}`;
   }
   return b.sailor === '' ? 'available' : `available · last sailed by ${b.sailor}`;
 }
@@ -168,6 +179,8 @@ export function boatReasons(most: number): Readonly<Record<string, string>> {
     'number-range': `A sail number is a whole number from 1 to ${most}.`,
     boat: 'That boat is not one of your fleet’s now. Reload and try again.',
     taken: 'That boat is at sea with another of your sailors.',
+    certificate:
+      'That boat needs a certificate you do not hold yet: crew aboard a friend’s instead.',
     port: 'Only in port: in Port Royal’s harbour or a port town’s, not at a fishing village.',
     look: 'That paint or cloth is not one of ours. Choose another.',
     busy: 'The harbour is busy just now. Try again in a moment.',

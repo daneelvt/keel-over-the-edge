@@ -25,6 +25,7 @@ import {
   boatReasonText,
   boatTitle,
   changeOf,
+  closed,
   type Fleet,
   type FleetBoat,
   fleetRowWords,
@@ -182,6 +183,16 @@ describe('the fleet in words', () => {
     expect(standingWords(f, { ...j2, sailor: 'Copper Kate' })).toBe(
       'available · last sailed by Copper Kate',
     );
+  });
+
+  test('a boat the player may not take yet says which certificate she needs, and is not chosen', () => {
+    const f = fleet();
+    const [, , j2] = f.boats as [FleetBoat, FleetBoat, FleetBoat];
+    const shut = { ...j2, needs: 'Deckhand' };
+    expect(standingWords(f, shut)).toBe('needs Deckhand');
+    expect(closed(shut)).toBe(true);
+    expect(closed(j2)).toBe(false);
+    expect(boatReasonText(catalog, 'certificate')).toContain('certificate');
   });
 
   test('the account page’s line for each boat', () => {

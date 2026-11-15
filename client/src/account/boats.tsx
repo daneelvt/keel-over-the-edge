@@ -18,6 +18,7 @@ import {
   aboardWords,
   type BoatCatalog,
   boatTitle,
+  closed,
   type FleetBoat,
   inOrder,
   kindOf,
@@ -499,7 +500,7 @@ export function ChangeBoat({
   const k = partsFor(board);
   const atSea = board;
   const busy = c.busy.value;
-  const boats = inOrder(c.cat, f.boats).filter((b) => !atSea || !taken(b));
+  const boats = inOrder(c.cat, f.boats).filter((b) => !atSea || (!taken(b) && !closed(b)));
   return (
     <section
       key="change-boat"
@@ -515,7 +516,7 @@ export function ChangeBoat({
               type="button"
               class="change-boat-choice"
               aria-current={b.id === f.boat ? 'true' : undefined}
-              disabled={busy || taken(b)}
+              disabled={busy || taken(b) || closed(b)}
               onClick={() => void c.choose(b.id)}
             >
               <Picture cat={c.cat} b={b} width={56} />

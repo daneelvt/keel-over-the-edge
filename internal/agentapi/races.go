@@ -259,7 +259,7 @@ func (c *Core) retire(ctx context.Context, s *Sea, h *helm, by race.Sailor, name
 	if err != nil {
 		return "", nil, raceError(err, now)
 	}
-	return fmt.Sprintf("Withdrawn from %s before its start: it counts against none of your races.", raceNameWords(card.Name, card.Harbour)), nil, nil
+	return fmt.Sprintf("Withdrawn from %s before its start: it counts against none of your races.", raceNameWords(card.Name, card.Harbour || card.Standing)), nil, nil
 }
 
 // raceCodeOf is the code of the race an agent names: its code, its link,
@@ -277,14 +277,14 @@ func raceCodeOf(ctx context.Context, s *Sea, by race.Sailor, named string) (stri
 		return "", raceError(err, time.Now())
 	}
 	want := plainName(named)
-	for _, list := range [][]race.Summary{b.Mine, b.Harbour} {
+	for _, list := range [][]race.Summary{b.Mine, b.Harbour, b.Trials} {
 		for _, sm := range list {
 			if plainName(sm.Name) == want {
 				return sm.Code, nil
 			}
 		}
 	}
-	return "", refuse(refusedArgs, fmt.Sprintf("No race called %s among yours and the next harbour races: give its code or its link. list shows them.", playerText(named)))
+	return "", refuse(refusedArgs, fmt.Sprintf("No race called %s among yours, the next harbour races and the Harbourmaster's courses: give its code or its link. list shows them.", playerText(named)))
 }
 
 // codeOf is a race's code in a code or a link: ten letters and digits of
@@ -453,6 +453,11 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 		return "A race or a time trial (trial true)."
 	case race.RefuseName:
 		return nameRefusalWords(r.Name)
+	case race.RefuseCertificate:
+		if r.Needs != "" {
+			return fmt.Sprintf("That race's boat needs %s, a certificate you do not hold yet: race a kind you may sail. news with log shows what is left toward your next certificate.", r.Needs)
+		}
+		return "That race's boat needs a certificate you do not hold yet: race a kind you may sail. news with log shows what is left toward your next certificate."
 	case race.RefuseNotEntered:
 		return "You are not entered in that race."
 	case race.RefuseMoved, race.RefuseNotFinished:
@@ -503,7 +508,7 @@ func whenWords(t, now time.Time) string {
 }
 
 // raceNameWords is a race's name as told: a player's in «», the
-// Harbourmaster's as written.
+// Harbourmaster's (harbour) as written.
 func raceNameWords(name string, harbour bool) string {
 	if harbour {
 		return name
@@ -535,7 +540,7 @@ func kindWords(kind, boat string) string {
 
 // summaryWords are a race on a list.
 func summaryWords(sm *race.Summary, now time.Time) string {
-	parts := []string{raceNameWords(sm.Name, sm.Harbour), "code " + sm.Code, kindWords(sm.Kind, sm.Boat.Name)}
+	parts := []string{raceNameWords(sm.Name, sm.Harbour || sm.Standing), "code " + sm.Code, kindWords(sm.Kind, sm.Boat.Name)}
 	start := time.UnixMilli(sm.StartsAt)
 	switch sm.Phase {
 	case race.PhaseOpen, race.PhaseClosed:
@@ -557,6 +562,9 @@ func summaryWords(sm *race.Summary, now time.Time) string {
 	}
 	if sm.Who != race.WhoEveryone {
 		parts = append(parts, "for "+whoWords(sm.Who))
+	}
+	if sm.Toward != "" {
+		parts = append(parts, "counts toward "+sm.Toward+" sailed alone")
 	}
 	var mine []string
 	if sm.Mine.Entered {
@@ -601,6 +609,12 @@ func boardWords(b *race.Board, now time.Time) string {
 	}
 	for i := range b.Harbour {
 		w.WriteString(" " + summaryWords(&b.Harbour[i], now) + "\n")
+	}
+	if len(b.Trials) > 0 {
+		w.WriteString("The Harbourmaster's courses, time trials open all week, in your boat's kind:\n")
+		for i := range b.Trials {
+			w.WriteString(" " + summaryWords(&b.Trials[i], now) + "\n")
+		}
 	}
 	m := &b.Make
 	if !m.Can.OK {
@@ -695,7 +709,7 @@ func startWords(c *race.Card, now time.Time) string {
 // enteredWords answer enter.
 func enteredWords(c *race.Card, now time.Time) string {
 	var w strings.Builder
-	fmt.Fprintf(&w, "Entered %s (code %s): %s on the %s, about %d min.", raceNameWords(c.Name, c.Harbour), c.Code,
+	fmt.Fprintf(&w, "Entered %s (code %s): %s on the %s, about %d min.", raceNameWords(c.Name, c.Harbour || c.Standing), c.Code,
 		kindWords(c.Kind, c.Boat.Name), courseWords(&c.Course), c.Minutes)
 	if c.Kind != race.KindTrial {
 		fmt.Fprintf(&w, " You are No. %d; %d of %d entered.", c.Mine.Number, len(c.Entrants), c.Most)
@@ -708,7 +722,7 @@ func enteredWords(c *race.Card, now time.Time) string {
 // madeWords answer make.
 func madeWords(c *race.Card, now time.Time) string {
 	var w strings.Builder
-	fmt.Fprintf(&w, "Made %s: %s on the %s, about %d min", raceNameWords(c.Name, c.Harbour), kindWords(c.Kind, c.Boat.Name),
+	fmt.Fprintf(&w, "Made %s: %s on the %s, about %d min", raceNameWords(c.Name, c.Harbour || c.Standing), kindWords(c.Kind, c.Boat.Name),
 		courseWords(&c.Course), c.Minutes)
 	if c.Kind != race.KindTrial {
 		fmt.Fprintf(&w, ", its gun %s", whenWords(time.UnixMilli(c.StartsAt), now))

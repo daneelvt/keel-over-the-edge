@@ -31,8 +31,10 @@ type Card struct {
 	Boat     BoatRef    `json:"boat"`
 	StartsAt int64      `json:"startsAt"`
 	Minutes  int        `json:"minutes"`
-	// Owner is the race's owner, nil for the Harbourmaster's.
+	// Owner is the race's owner, nil for the Harbourmaster's; Standing,
+	// one of the Harbourmaster's standing trials.
 	Owner    *Person   `json:"owner"`
+	Standing bool      `json:"standing,omitempty"`
 	Most     int       `json:"most"`
 	Entrants []Entrant `json:"entrants"`
 	Mine     Mine      `json:"mine"`
@@ -129,9 +131,13 @@ type Summary struct {
 	Most     int         `json:"most"`
 	Mine     SummaryMine `json:"mine"`
 	Enter    Can         `json:"enter"`
-	// Toward is the certificate a run of this trial sailed alone would
-	// count toward for the reader, by name; "" for none.
-	Toward string `json:"toward,omitempty"`
+	// Standing: one of the Harbourmaster's standing trials. Toward is the
+	// certificate a run of it sailed alone would count toward for the
+	// reader, by name, "" for none; Course its course as a certificate's
+	// task names it.
+	Standing bool   `json:"standing,omitempty"`
+	Toward   string `json:"toward,omitempty"`
+	Course   string `json:"course,omitempty"`
 }
 
 // SummaryMine is the reader's part in a race on a list.
@@ -227,7 +233,7 @@ func (s *Service) Card(ctx context.Context, by Sailor, code string) (Card, error
 	c := Card{Code: r.Code, Link: s.link(r.Code), Name: r.Name, Kind: r.Kind,
 		Phase: phaseOf(&r, now, s.cfg.World.Number, s.latest(limits)), Harbour: r.Harbour >= 0, Who: r.Who,
 		Course: s.courseCard(&r, &courses), Boat: boat, StartsAt: r.StartsAt.UnixMilli(), Minutes: s.minutesOf(&r, &courses),
-		Most: most, Entrants: []Entrant{}}
+		Most: most, Entrants: []Entrant{}, Standing: !r.HasOwner && r.Kind == KindTrial}
 	entrants, err := s.cfg.Store.RaceEntrants(ctx, &r)
 	if err != nil {
 		return Card{}, err
@@ -406,7 +412,8 @@ func (s *Service) trials(ctx context.Context, by Sailor, now, latest time.Time, 
 		if err != nil {
 			return nil, err
 		}
-		sm.Toward = st.Toward(recordCourse(&rows[i]))
+		sm.Standing, sm.Course = true, recordCourse(&rows[i])
+		sm.Toward = st.Toward(sm.Course)
 		out = append(out, sm)
 	}
 	return out, nil

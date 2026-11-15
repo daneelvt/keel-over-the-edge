@@ -90,6 +90,12 @@ func (r *Recorder) Record(f *bus.Frame) {
 			put(record{tick: f.Tick, kind: evLeft, account: e.Account, boat: e.Reply.Boat, result: e.Reply.Result})
 		case e.Op == bus.Ashore:
 			put(record{tick: f.Tick, kind: evAboard, account: e.Account, boat: e.Reply.Boat, slot: e.Reply.Slot, result: e.Reply.Result, why: e.Why})
+		case e.Op == bus.Certify:
+			kind := evCertificate
+			if e.Certified.Earned {
+				kind = evCertified
+			}
+			put(record{tick: f.Tick, kind: kind, account: e.Account, words: certifiedWords(r.sea.Catalog, &e.Certified)})
 		}
 	}
 	for i := range f.Edges {
@@ -272,6 +278,10 @@ func (h *hub) dispatch(r recordFor) {
 			hm.slot, hm.boat, hm.queued, hm.ordered = r.slot, r.boat, false, false
 		}
 		e = event{Tick: r.tick, Kind: evAboard, Words: ashoreEventWords(r.why, r.result)}
+	case evCertificate, evCertified:
+		// Told after a race's own events of the same tick, as a race's
+		// are after a report.
+		e = event{Tick: max(r.tick, hm.seq+1, hm.ring.last()), Kind: r.kind, Words: r.words}
 	case evRace, evRacePlaced, evRaceAsked:
 		// A race tells several events in one tick (a lone boat finishes
 		// and ends its race at once), each its own record: one handed on

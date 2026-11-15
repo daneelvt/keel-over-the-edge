@@ -125,7 +125,7 @@ func (c *Core) knowRace(ctx context.Context, s *Sea, h *helm, f *bus.Frame) {
 	r := &f.Races[ri]
 	k := &knownRace{entrants: map[int]race.Entrant{}}
 	if card, err := s.Races.CardOf(ctx, race.Sailor{ID: h.account, Machine: true}, r.ID); err == nil {
-		k.name, k.code, k.harbour = card.Name, card.Code, card.Harbour
+		k.name, k.code, k.harbour = card.Name, card.Code, card.Harbour || card.Standing
 		for _, e := range card.Entrants {
 			k.entrants[e.Number] = e
 		}

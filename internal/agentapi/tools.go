@@ -216,7 +216,7 @@ func tools() []toolDef {
 				"With no topic, the list, and which machine sailor you sail as. Read start first.",
 			Annotations: hints("Handbook", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","races","tools","limits"],"description":"Default: the list."}` +
+				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","races","certificates","tools","limits"],"description":"Default: the list."}` +
 				`}}`),
 		}},
 	}
