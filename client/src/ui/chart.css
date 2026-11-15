@@ -370,6 +370,74 @@
   background: rgb(255 255 255 / 30%);
 }
 
+/* Set course, the box's first key, in the instruments' brass. */
+.chart-buttons .chart-set-course {
+  border-color: var(--brass-dark);
+  background: rgb(201 162 76 / 45%);
+}
+
+/* The course on the chart: a brass drawing pin, its point on the place,
+   its name under it; a pin dropped on open water, its box open, the same
+   unnamed. The pin is the head's size, laid so its point is at its place. */
+.chart-pin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--chart-ink);
+  translate: -50% -100%;
+}
+
+.chart-pin[hidden] {
+  display: none;
+}
+
+.chart-pin.chart-course {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.chart-pin-head {
+  display: block;
+  width: 16px;
+  height: 22px;
+  overflow: visible;
+}
+
+.chart-pin-head path {
+  fill: #c9a24c;
+  stroke: #3b2e22;
+  stroke-width: 1.2;
+}
+
+.chart-pin-head circle {
+  fill: #3b2e22;
+}
+
+.chart-pin.chart-dropped .chart-pin-head path {
+  fill: #e6cf8f;
+}
+
+.chart-pin-name {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  translate: -50% 0;
+  font:
+    italic 13px / 1.1 "IM Fell English",
+    Georgia,
+    serif;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px var(--paper),
+    0 0 2px var(--paper);
+}
+
 .chart-list,
 .news-sheet {
   top: calc(var(--edge-top, 12px) + 52px);

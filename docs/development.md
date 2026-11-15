@@ -3776,6 +3776,60 @@ with no letter: 67°24′N 045°12′; at the pole, 90°00′N. The chart's box,
 its list, the pocket's caption and the world page write them so, and the
 world page can put a flagged boat at one.
 
+### A course
+
+A sailor sets **a course**: one point to sail for, kept on the phone
+(`chart/course.ts`, its words in `chart/coursewords.ts`). It is anything
+charted (`kind: 'entry'`, by subject and number), a race course's start
+(`'start'`, by the course's number, its point the way's first), or a pin
+on open water (`'pin'`, east and north); setting one replaces the last.
+Each kind says where its point is now from what the phone holds, so a
+kind whose point moves can join them; an island's is the nearest point of
+its land's bounds, so a large island is reached at its shore. The course
+is a bearing and a distance from the boat, flat-disk `atan2` and `hypot`
+as the chart's list has them; **it never steers**.
+
+It is set on the chart. A charted thing's box has **Set course** first,
+in brass, and for the course set **Clear course**. A tap on the paper that
+picks nothing charted (`view.pick`, within 4% of the camera's distance)
+and falls in no weather system finds a race course's start within the same
+reach (`view.pickStart`), or else drops **a pin** (`Chart.marked`) and opens
+its box: "Pin", its latitude and longitude, its bearing and distance from
+the boat, Set course and Close; Close takes the pin away. Past the rim the
+box says "Beyond the edge." with Close alone. A weather system's box has
+**Pin here** for a pin where it was tapped. The course is drawn on the
+chart (`chart/courselayer.ts`) as a brass pin in the labels layer, its
+name under it, which a tap opens the course's box from, and a faint pencil
+line from the boat, a strip of quads like the race's lines.
+
+At sea the compass card carries it (`CompassCard` in `ui/case.tsx`): a
+brass chevron outside the ticks (r 43–50 of its −50…50 box) turned to the
+course's bearing less the heading (`HudModel.courseMark`, moved each frame
+as the wind's mark is), and a window at the card's foot, the heading's
+window's twin, reading its distance (`HudModel.courseDistance`, "1.2 NM",
+the unit set smaller), with the course in words for a screen reader. The
+pocket chart draws it last as a gold dot in a ring; in a race, framed on
+the course, a course outside the frame is a gold tick on the frame's rim
+the way it lies (`pocketCourse`). In the sea, `SeaScene.markTagOf` gives
+the course's name and distance over its point while it is within the
+camera's sight over the sea's curve (a race's next mark comes first).
+
+Within 0.1 NM of its point (`ARRIVE`) the course is reached: the
+`course-reached` notice ("You've reached Gull Rock", "your pin" for a pin)
+and it clears (`Chart.arrive`, from the HUD's writes). In a race the
+compass gives way to the race line (`Chart.racing`): the mark and window
+are hidden and nothing is reached, and the course is kept for after.
+Watching another's boat (`Chart.watching`) it is not shown, and the keys
+that set it are not offered.
+
+It is kept in `localStorage` (`keel.course`) with the ID of the world it
+was set in (`Chart.atWorld`, from the Welcome's world; the sandbox's is
+`sandbox:<seed>`): a reload or a new voyage in that world has it back,
+before the chart comes too (its point is unknown until then, and nothing
+shows); another world drops it. The catalog's notices also have
+`shipmate-course`, "Ann is sailing to you", for a shipmate told that
+someone sails to them.
+
 ### Looking at it
 
 ```sh

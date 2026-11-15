@@ -9,7 +9,10 @@
 // way they twist; the pocket chart says how far the edge is and opens it;
 // its list puts the nearest first, and lists its island courses; a notice
 // is a status, dismissed by its button; and charted by sight, an island the boat sails up to is charted,
-// the sailor's, with a notice.
+// the sailor's, with a notice. A course set on a charted place from its
+// box puts its distance in the compass's window once the chart is shut; a
+// tap on open water drops a pin whose box sets the course, and past the
+// rim says it is beyond the edge.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
@@ -38,6 +41,7 @@ interface Entry {
   worth: number;
   bounds: number[] | null;
   island: number;
+  light: number;
 }
 
 function entries(): { entries: Entry[]; known: number[] } {
@@ -260,5 +264,133 @@ test.describe('the chart', () => {
       .poll(() => page.evaluate(() => globalThis.keel.chartInfo().mine), { timeout: 10_000 })
       .toContain(isle?.name);
     await expect(page.locator('.notice-line')).toHaveText(/You charted/);
+  });
+
+  test('a course set on a charted place from its box: its distance in the compass’s window at sea', async ({
+    page,
+  }) => {
+    await openScene(page, 'world=1', true);
+    // A lighthouse a mile or more off, so the boat is not there already.
+    const boat = await page.evaluate(() => globalThis.keel.boatAt());
+    const light = entries()
+      .entries.filter((e) => e.subject === 'place' && e.light >= 0 && e.name !== '')
+      .map((e) => ({ e, d: Math.hypot(e.east - boat.east, e.north - boat.north) }))
+      .filter(({ d }) => d > 1852)
+      .sort((a, b) => a.d - b.d)[0]?.e;
+    expect(light).toBeDefined();
+    await page.evaluate((n) => globalThis.keel.chartAt('place', n), light?.number ?? 0);
+    const box = page.locator('.chart-box');
+    await expect(box.locator('h2')).toHaveText(light?.name ?? '');
+    await box.getByRole('button', { name: 'Set course' }).click();
+    await expect(box.getByRole('button', { name: 'Clear course' })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to sea' }).click();
+    await page.evaluate(() => globalThis.keel.render());
+    const course = await page.evaluate(() => globalThis.keel.course());
+    expect(course.course).toEqual({ kind: 'entry', subject: 'place', number: light?.number });
+    const nm = ((course.aim?.distance ?? 0) / 1852).toFixed(1);
+    await expect(page.locator('[data-readout=course-distance]')).toHaveText(`${nm}NM`);
+    expect(course.words).toMatch(new RegExp(`^Course to ${light?.name}: \\d{3}°, ${nm} NM$`));
+    // The mark, turned at the next frame once it is on the card.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          globalThis.keel.render();
+          return globalThis.keel.course().mark;
+        }),
+      )
+      .toMatch(/^rotate\(-?\d+\.\ddeg\)$/);
+  });
+
+  test('a tap on open water drops a pin whose box sets the course; past the rim, beyond the edge', async ({
+    page,
+  }) => {
+    await openScene(page, 'world=1', true);
+    // Open water: near the boat, well clear of everything charted and of
+    // the courses' starts; the weather's systems off the chart, whose box
+    // a tap within one would open.
+    const boat = await page.evaluate(() => globalThis.keel.boatAt());
+    const file = JSON.parse(readFileSync(chartFile, 'utf8')) as {
+      entries: Entry[];
+      courses?: { way: [number, number][] }[];
+    };
+    const points = [
+      ...file.entries.map((e) => [e.east, e.north] as const),
+      ...(file.courses ?? []).map((c) => c.way[0] ?? [0, 0]),
+    ];
+    let water: { east: number; north: number } | null = null;
+    for (let r = 600; r < 3000 && water === null; r += 200) {
+      for (let a = 0; a < 360 && water === null; a += 15) {
+        const east = boat.east + r * Math.sin((a * Math.PI) / 180);
+        const north = boat.north + r * Math.cos((a * Math.PI) / 180);
+        if (points.every(([e, n]) => Math.hypot(e - east, n - north) > 500)) {
+          water = { east, north };
+        }
+      }
+    }
+    expect(water).not.toBeNull();
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.setSky(12);
+      k.chartLayers({ systems: false });
+      k.openChart('chart');
+      k.chartFromBoat(7000);
+    });
+    await drawChart(page);
+    await expect(page.locator('.chart-surface')).toBeVisible();
+    await page.waitForTimeout(200);
+    const at = await page.evaluate(
+      ({ east, north }) => globalThis.keel.chartScreenOf(east, north),
+      water ?? { east: 0, north: 0 },
+    );
+    expect(at).not.toBeNull();
+    await page.mouse.click(at?.x ?? 0, at?.y ?? 0);
+    const box = page.locator('[data-readout=pin-box]');
+    await expect(box.locator('h2')).toHaveText('Pin');
+    await expect(box).toContainText(/\d+°\d\d′N \d{3}°\d\d′/);
+    await drawChart(page, 3);
+    expect((await page.evaluate(() => globalThis.keel.course())).dropped).toBe(true);
+    await box.getByRole('button', { name: 'Set course' }).click();
+    const set = await page.evaluate(() => globalThis.keel.course());
+    expect(set.course?.kind).toBe('pin');
+    expect(
+      Math.hypot(
+        (set.course as { east: number }).east - (water?.east ?? 0),
+        (set.course as { north: number }).north - (water?.north ?? 0),
+      ),
+    ).toBeLessThan(150);
+    // The course on the chart: its pin, named, and the pencil line to it.
+    await drawChart(page, 3);
+    const drawn = await page.evaluate(() => globalThis.keel.course());
+    expect(drawn.pin).toBe('Pin');
+    expect(drawn.line).toBe(true);
+    expect(drawn.dropped).toBe(false);
+    await box.getByRole('button', { name: 'Close' }).click();
+    await expect(box).toHaveCount(0);
+    // A tap past the rim, in the falls, is no pin.
+    await page.evaluate(() => globalThis.keel.fitChart());
+    await drawChart(page, 3);
+    // On the bare paper, not under the strip or the slider, nothing charted near.
+    let beyond: { x: number; y: number } | null = null;
+    for (let a = 0; a < 360 && beyond === null; a += 15) {
+      const east = 9200 * Math.sin((a * Math.PI) / 180);
+      const north = 9200 * Math.cos((a * Math.PI) / 180);
+      // Farther than a tap's reach from the whole disk's view.
+      if (points.some(([e, n]) => Math.hypot(e - east, n - north) < 1200)) {
+        continue;
+      }
+      beyond = await page.evaluate(
+        ([e, n]) => {
+          const p = globalThis.keel.chartScreenOf(e, n);
+          const on = p === null ? null : document.elementFromPoint(p.x, p.y);
+          return on?.classList.contains('chart-surface') === true ? p : null;
+        },
+        [east, north] as const,
+      );
+    }
+    expect(beyond).not.toBeNull();
+    await page.waitForTimeout(400);
+    await page.mouse.click(beyond?.x ?? 0, beyond?.y ?? 0);
+    await expect(box).toHaveText(/^Beyond the edge\.Close$/);
+    await expect(box.getByRole('button', { name: 'Set course' })).toHaveCount(0);
   });
 });

@@ -16,7 +16,9 @@
 // beneath the readouts and the clock's out of its top edge over the
 // speed's empty end, and the open barometer and clock stay open, their
 // column clear of the boat. No pusher stands over the compass card, the
-// readouts' words or another pusher, nor off the screen. The pocket chart's caption
+// readouts' words or another pusher, nor off the screen. With a course
+// set, the compass card carries its mark on its rim and its distance whole
+// in a window at its foot, the case no bigger. The pocket chart's caption
 // is two lines within its frame, the weather's pusher set in the frame.
 // The menu, open, stands over everything and within the screen. The
 // sheet's legend at its longest, the sail luffing or stalled, stands
@@ -1706,6 +1708,105 @@ const STILL = [
   { name: 'the tests’ screen', width: 960, height: 600 },
   { name: 'a desktop', width: 1440, height: 900 },
 ] as const;
+
+test('a course on the compass: its mark on the card’s rim and its distance whole in the window at its foot, the case no bigger, on five screens', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the case is the same on either back end');
+  await page.setViewportSize({ width: STILL[0].width, height: STILL[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const found: string[] = [];
+  const caseBox = () =>
+    page.evaluate(async () => {
+      for (let i = 0; i < 3; i++) {
+        globalThis.keel.render();
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      const r = document.querySelector('.case-top')?.getBoundingClientRect();
+      return r === undefined ? '' : [r.left, r.top, r.width, r.height].map(Math.round).join(',');
+    });
+  for (const s of STILL) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.evaluate(() => {
+      globalThis.keel.setCourse(null);
+      globalThis.keel.render();
+    });
+    const bare = await caseBox();
+    // The farthest a course can be, ahead, abeam, astern and on the quarter.
+    for (const [deg, metres] of [
+      [0, 8000],
+      [90, 3000],
+      [180, 2000],
+      [225, 400],
+    ] as const) {
+      const faults = await page.evaluate(
+        async ([deg, metres]) => {
+          const k = globalThis.keel;
+          const b = k.boatAt();
+          const a = (deg * Math.PI) / 180;
+          k.setCourse({
+            kind: 'pin',
+            east: b.east + metres * Math.sin(a),
+            north: b.north + metres * Math.cos(a),
+          });
+          for (let i = 0; i < 3; i++) {
+            k.render();
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+          const out: string[] = [];
+          const card = document.querySelector('.case .compass')?.getBoundingClientRect();
+          const windows = document.querySelectorAll('.case .compass-window');
+          const foot = windows[1]?.getBoundingClientRect();
+          const text = document
+            .querySelector('[data-readout=course-distance]')
+            ?.getBoundingClientRect();
+          const mark = document
+            .querySelector('[data-readout=course-mark]')
+            ?.getBoundingClientRect();
+          if (
+            card === undefined ||
+            foot === undefined ||
+            text === undefined ||
+            mark === undefined
+          ) {
+            return ['no course on the card'];
+          }
+          const inside = (a: DOMRect, b: DOMRect, slack: number) =>
+            a.left >= b.left - slack &&
+            a.right <= b.right + slack &&
+            a.top >= b.top - slack &&
+            a.bottom <= b.bottom + slack;
+          if (!inside(foot, card, 0.5)) {
+            out.push(`the window at its foot is out of the card`);
+          }
+          if (!inside(text, foot, 0.5)) {
+            out.push(
+              `"${document.querySelector('[data-readout=course-distance]')?.textContent}" spills out of its window (${text.width.toFixed(1)} in ${foot.width.toFixed(1)} px)`,
+            );
+          }
+          // The chevron's stroke may stand a little over the card's rim.
+          if (!inside(mark, card, 2)) {
+            out.push('the mark is off the card');
+          }
+          return out;
+        },
+        [deg, metres] as const,
+      );
+      for (const f of faults) {
+        found.push(`${s.name}, ${deg}°: ${f}`);
+      }
+    }
+    if ((await caseBox()) !== bare) {
+      found.push(`${s.name}: the case is ${await caseBox()} with a course, ${bare} without`);
+    }
+  }
+  expect(found).toEqual([]);
+});
 
 /** The complications' boxes, and the animations running on either. */
 async function stillness(page: Page): Promise<{ boxes: string; running: string[] }> {

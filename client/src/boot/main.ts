@@ -69,6 +69,7 @@ import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../accoun
 import { SETTING_SAIL } from '../account/yoursailor';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { codeOf, lookFrom } from '../catalog/looks';
+import type { Chart } from '../chart/chart';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
 import {
@@ -485,6 +486,9 @@ async function start(): Promise<void> {
     const chartFile = seed === null ? null : await fetchSandboxChart(seed);
     const parts = makeChart(world, sandboxModels(chartFile), null, forecasting);
     hostReplay(parts);
+    // The course is kept for the sandbox's world, by its seed.
+    parts.chart.atWorld(`sandbox:${seed ?? 'sea'}`);
+    courseOnCompass(game, parts.chart);
     sandboxForecast = new SandboxForecast(
       {
         physics: sandbox.physics,
@@ -1061,6 +1065,15 @@ async function start(): Promise<void> {
   // switched off as the account has them.
   const parts = makeChart(world, models, serverNews, forecasting, racing);
   hostReplay(parts);
+  // The course is the sailor's own, kept for the world sailed: a boat
+  // watched shows none.
+  parts.chart.watching = () => online.spectating.value;
+  courseOnCompass(game, parts.chart);
+  const worldBefore = online.onWorld;
+  online.onWorld = (id, sailed) => {
+    worldBefore?.(id, sailed);
+    parts.chart.atWorld(id);
+  };
   const gales = steerByChart(game, world, parts, forecasting);
   // A race's boat tapped on the charts or in the sea, by a page watching
   // the race, is watched.
@@ -1453,6 +1466,14 @@ function hostReplay(parts: ChartParts): void {
   host.open = (code) => {
     void loadReplay().then((m) => m.openReplay(host, parts.chart, code));
   };
+}
+
+/**
+ * The course set on the chart on the compass: its mark and its window,
+ * giving way to the race line in a race; and reached, said and cleared.
+ */
+function courseOnCompass(game: Game, chart: Chart): void {
+  game.hud.course = chart.compass();
 }
 
 /** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */

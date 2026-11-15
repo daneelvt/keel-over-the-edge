@@ -50,6 +50,7 @@ import { harbourWater } from '../boot/harbour';
 import { raceSea } from '../boot/racesea';
 import { catalog } from '../catalog';
 import type { ChartMode, LogWho } from '../chart/chart';
+import type { Course } from '../chart/course';
 import type { ChartParts } from '../chart/make';
 import { placeWords, pointsOf, warningInForce } from '../chart/placeweather';
 import { formatPosition } from '../chart/position';
@@ -4770,6 +4771,43 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Where a point of the water lies on the chart's screen, CSS pixels; null off it. */
     chartScreenOf(east: number, north: number): { x: number; y: number } | null {
       return chartParts().chart.view.screenOf(east, north);
+    },
+
+    /** Sets the course, or with null clears it, as the chart's boxes do. */
+    setCourse(c: Course | null): void {
+      const chart = chartParts().chart;
+      if (c === null) {
+        chart.clearCourse();
+      } else {
+        chart.setCourse(c);
+      }
+    },
+
+    /**
+     * The course as the screens have it: what is set, where it is from the
+     * boat, the compass's window and mark, the pin box and the chart's pins,
+     * the pocket's and the sea's tags.
+     */
+    course() {
+      const chart = chartParts().chart;
+      const a = chart.aim(world.pose.east, world.pose.north);
+      const pin = document.querySelector<HTMLElement>('.chart-pin.chart-course');
+      return {
+        course: chart.course.value,
+        marked: chart.marked.value,
+        aim: a,
+        window: document.querySelector('[data-readout=course-distance]')?.textContent ?? null,
+        mark:
+          document.querySelector<SVGElement>('[data-readout=course-mark]')?.style.transform ?? null,
+        words: document.querySelector('[data-readout=course]')?.textContent ?? '',
+        pin: pin === null || pin.hidden ? null : (pin.textContent ?? ''),
+        dropped: document.querySelector<HTMLElement>('.chart-pin.chart-dropped')?.hidden === false,
+        line: chart.view.course.drawn.line,
+        tag: (() => {
+          const t = document.querySelector<HTMLElement>('[data-readout=mark-tag]');
+          return t === null || t.hidden ? null : t.textContent;
+        })(),
+      };
     },
 
     /** The boat's arrow on the chart: its nose and tail on the screen, CSS pixels, and its scale. */
