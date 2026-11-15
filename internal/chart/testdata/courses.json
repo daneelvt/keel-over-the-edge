@@ -1,0 +1,165 @@
+{
+  "comment": "Written by go test ./internal/chart -run CoursesFile -update: a boat m east and north of the centre, a course's point and an island's bounds (west, south, east, north) or null, and where the course aims, how far, m, its bearing as written, and whether it is reached.",
+  "cases": [
+    {
+      "name": "a point far off",
+      "east": -1200,
+      "north": 300,
+      "pointEast": 3400,
+      "pointNorth": -2100,
+      "bounds": null,
+      "aimEast": 3400,
+      "aimNorth": -2100,
+      "distance": 5188.448708429139,
+      "bearing": "118°",
+      "reached": false
+    },
+    {
+      "name": "a point just outside a tenth of a mile",
+      "east": 500,
+      "north": 500,
+      "pointEast": 685.5,
+      "pointNorth": 500,
+      "bounds": null,
+      "aimEast": 685.5,
+      "aimNorth": 500,
+      "distance": 185.5,
+      "bearing": "090°",
+      "reached": false
+    },
+    {
+      "name": "a point just inside a tenth of a mile",
+      "east": 500,
+      "north": 500,
+      "pointEast": 500,
+      "pointNorth": 315,
+      "bounds": null,
+      "aimEast": 500,
+      "aimNorth": 315,
+      "distance": 185,
+      "bearing": "180°",
+      "reached": true
+    },
+    {
+      "name": "on the point",
+      "east": 77,
+      "north": -77,
+      "pointEast": 77,
+      "pointNorth": -77,
+      "bounds": null,
+      "aimEast": 77,
+      "aimNorth": -77,
+      "distance": 0,
+      "bearing": "000°",
+      "reached": true
+    },
+    {
+      "name": "an island to the north-east, aimed at its corner",
+      "east": 0,
+      "north": 0,
+      "pointEast": 1300,
+      "pointNorth": 2200,
+      "bounds": [
+        1000,
+        2000,
+        1600,
+        2400
+      ],
+      "aimEast": 1000,
+      "aimNorth": 2000,
+      "distance": 2236.06797749979,
+      "bearing": "027°",
+      "reached": false
+    },
+    {
+      "name": "an island to the north, aimed at its south shore",
+      "east": 1200,
+      "north": 1000,
+      "pointEast": 1300,
+      "pointNorth": 2200,
+      "bounds": [
+        1000,
+        2000,
+        1600,
+        2400
+      ],
+      "aimEast": 1200,
+      "aimNorth": 2000,
+      "distance": 1000,
+      "bearing": "000°",
+      "reached": false
+    },
+    {
+      "name": "an island to the west, aimed at its east shore",
+      "east": 2500,
+      "north": 2300,
+      "pointEast": 1300,
+      "pointNorth": 2200,
+      "bounds": [
+        1000,
+        2000,
+        1600,
+        2400
+      ],
+      "aimEast": 1600,
+      "aimNorth": 2300,
+      "distance": 900,
+      "bearing": "270°",
+      "reached": false
+    },
+    {
+      "name": "an island just outside a tenth of a mile",
+      "east": 1300,
+      "north": 2585.5,
+      "pointEast": 1300,
+      "pointNorth": 2200,
+      "bounds": [
+        1000,
+        2000,
+        1600,
+        2400
+      ],
+      "aimEast": 1300,
+      "aimNorth": 2400,
+      "distance": 185.5,
+      "bearing": "180°",
+      "reached": false
+    },
+    {
+      "name": "an island just inside a tenth of a mile",
+      "east": 1785,
+      "north": 2100,
+      "pointEast": 1300,
+      "pointNorth": 2200,
+      "bounds": [
+        1000,
+        2000,
+        1600,
+        2400
+      ],
+      "aimEast": 1600,
+      "aimNorth": 2100,
+      "distance": 185,
+      "bearing": "270°",
+      "reached": true
+    },
+    {
+      "name": "within an island's bounds",
+      "east": 1100,
+      "north": 2100,
+      "pointEast": 1300,
+      "pointNorth": 2200,
+      "bounds": [
+        1000,
+        2000,
+        1600,
+        2400
+      ],
+      "aimEast": 1100,
+      "aimNorth": 2100,
+      "distance": 0,
+      "bearing": "000°",
+      "reached": true
+    }
+  ]
+}

@@ -338,6 +338,12 @@ func TestAMachineSailorMakesEntersAndRaces(t *testing.T) {
 		h, _ := raceHarness(t)
 		a := sailor(1, "Iron Mary")
 		h.call(t, a, "observe", nil)
+		// A course set before the race gives way to the race's lines, and
+		// is told again after.
+		x, y, _ := h.boatAt(a)
+		if _, refused := h.call(t, a, "course", map[string]any{"position": pinFrom(x, y, 180, 3000)}); refused {
+			t.Fatal("no course set")
+		}
 
 		text, refused := h.call(t, a, "race", nil)
 		if refused || !strings.Contains(text, "Your races (entered or made, not over):\n none") || !strings.Contains(text, "island:1: Round the Spar") {
@@ -364,6 +370,9 @@ func TestAMachineSailorMakesEntersAndRaces(t *testing.T) {
 			if !strings.Contains(text, want) {
 				t.Fatalf("no %q on the line:\n%s", want, text)
 			}
+		}
+		if strings.Contains(text, "Course: your pin") {
+			t.Fatalf("the course told on the line:\n%s", text)
 		}
 		// Hold below the line, head to wind, until the gun.
 		h.call(t, a, "steer", map[string]any{"heading": 90, "boom": 10})
@@ -421,6 +430,9 @@ func TestAMachineSailorMakesEntersAndRaces(t *testing.T) {
 		}
 		if strings.Contains(text, "Race:") && !strings.Contains(text, "· over · 1st of 1") {
 			t.Fatalf("the race block after the race:\n%s", text)
+		}
+		if !strings.Contains(text, "Course: your pin") {
+			t.Fatalf("the course not told after the race:\n%s", text)
 		}
 	})
 }

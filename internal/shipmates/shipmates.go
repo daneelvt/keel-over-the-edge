@@ -17,6 +17,13 @@
 // never told, and sees only the name gone from their list. Ending it is
 // recorded nowhere but in the row's deletion, and an offer again needs
 // the two to sail together again. A block ends it too.
+//
+// A shipmate at sea may be sailed to: their boat the other's course, the
+// game connection telling where it is every two seconds (the edge's
+// course, under aboard.MayFind: shipmates, one age band, no block, not
+// appearing offline), and they are told once a voyage who sails to them.
+// Being shipmates is the consent; appearing offline, or ending it, is the
+// way out, at once. Nothing of it is kept.
 package shipmates
 
 import (

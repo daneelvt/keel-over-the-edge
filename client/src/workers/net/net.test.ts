@@ -8,7 +8,13 @@
 import { describe, expect, test } from 'vitest';
 import { applied, Clock, SET_BEYOND } from '../../net/clock';
 import { decodeClient, encodeServer } from '../../net/frame';
-import { ChatRefusal, ChatStatus, ReportReason, WatchEnd } from '../../net/gen/keel/v1/game_pb';
+import {
+  ChatRefusal,
+  ChatStatus,
+  CourseEnd,
+  ReportReason,
+  WatchEnd,
+} from '../../net/gen/keel/v1/game_pb';
 import type { FromWorker } from '../../net/messages';
 import { HEADER_SIZE, newSnapshot, writeSnapshot } from '../../net/snapshot';
 import { FLEET_META, FLEET_RECORD_BYTES, fleetOf } from '../../net/view';
@@ -323,6 +329,46 @@ describe('the session', () => {
       case: 'command',
       value: { body: { case: 'knock', value: { token: '', machine: '', shipmate: id } } },
     });
+  });
+
+  test('a course to a boat: asked and stopped, where it is, its ends, and a shipmate sailing to the player', () => {
+    const s = welcomed();
+    const id = '0b6a2f9e-1c1d-4e55-9a51-8d2f0e3b7c41';
+    expect(decodeClient(s.courseToCommand(1, id)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'courseTo', value: { sailor: id } } },
+    });
+    expect(decodeClient(s.courseToCommand(2, '')).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'courseTo', value: { sailor: '' } } },
+    });
+    expect(
+      s.receive(
+        3,
+        encodeServer({
+          body: {
+            case: 'shipmateAt',
+            value: { sailor: id, name: 'Ann Bonny', east: -1200, north: 3400 },
+          },
+        }),
+      ),
+    ).toEqual({
+      kind: 'shipmateAt',
+      at: { sailor: id, name: 'Ann Bonny', east: -1200, north: 3400 },
+    });
+    for (const [why, told] of [
+      [CourseEnd.ASHORE, 'ashore'],
+      [CourseEnd.GONE, 'gone'],
+      [CourseEnd.REFUSED, 'refused'],
+      [CourseEnd.UNSPECIFIED, 'refused'],
+    ] as const) {
+      expect(
+        s.receive(4, encodeServer({ body: { case: 'courseEnded', value: { sailor: id, why } } })),
+      ).toEqual({ kind: 'courseEnded', sailor: id, why: told });
+    }
+    expect(
+      s.receive(5, encodeServer({ body: { case: 'shipmateCourse', value: { name: 'Bob Read' } } })),
+    ).toEqual({ kind: 'shipmateCourse', name: 'Bob Read' });
   });
 
   test('the commands of chat: a line, a mute by seat, a block by line, a report', () => {

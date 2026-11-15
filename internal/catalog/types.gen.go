@@ -2395,8 +2395,10 @@ type NoticeKind struct {
 	// What raises it: a place the player charts, a great discovery by anyone, the
 	// world closing, its end near, a new world begun, a new gale warning, a sailor
 	// the player follows setting sail, a harbour race about to start, a race the
-	// player entered about to start, a task of the player's next certificate done, or
-	// a certificate earned.
+	// player entered about to start, a task of the player's next certificate done, a
+	// certificate earned, the course the player set reached, a shipmate sailing to
+	// the player, the player alongside a boat they sailed to, or a course to a boat
+	// ended.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -2432,6 +2434,9 @@ type On string
 const OnCertificateEarned On = "certificate-earned"
 const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
+const OnCourseAlongside On = "course-alongside"
+const OnCourseEnded On = "course-ended"
+const OnCourseReached On = "course-reached"
 const OnFallsComing On = "falls-coming"
 const OnFallsSoon On = "falls-soon"
 const OnFollowedSailed On = "followed-sailed"
@@ -2439,6 +2444,7 @@ const OnGaleWarned On = "gale-warned"
 const OnHarbourRace On = "harbour-race"
 const OnNewWorld On = "new-world"
 const OnRaceSoon On = "race-soon"
+const OnShipmateCourse On = "shipmate-course"
 const OnTaskDone On = "task-done"
 
 // Where the certificate's pendant hangs: where its cord runs through its bail, on
@@ -6175,4 +6181,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "4658d9e109ce49fe"
+const Version = "3ffedd6a7cd63a06"

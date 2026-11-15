@@ -9134,7 +9134,7 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, or a certificate earned.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, a certificate earned, the course the player set reached, a shipmate sailing to the player, the player alongside a boat they sailed to, or a course to a boat ended.
    */
   on:
     | "charted-own"
@@ -9147,7 +9147,11 @@ export interface NoticeKind {
     | "harbour-race"
     | "race-soon"
     | "task-done"
-    | "certificate-earned";
+    | "certificate-earned"
+    | "course-reached"
+    | "shipmate-course"
+    | "course-alongside"
+    | "course-ended";
   /**
    * For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.
    *
@@ -10160,4 +10164,4 @@ export interface PendantsArt {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '4658d9e109ce49fe';
+export const CATALOG_VERSION = '3ffedd6a7cd63a06';

@@ -2,8 +2,9 @@
 
 // The chart's screens: the chart itself over the whole screen, where a
 // drag moves it, two fingers pinch and turn it, a double tap fits the whole
-// disk and a tap opens a place's box, or a weather system's with the
-// course to meet it; its list, everything charted nearest first, the
+// disk and a tap opens a place's box, a race course's start's, or a
+// weather system's with the course to meet it, and on open water drops a
+// pin; each box but the weather's can set the course; its list, everything charted nearest first, the
 // chart's readable twin; the news, a period sheet; the pocket chart in the
 // corner at sea, with its weather's pusher, whose decal is the sky at the
 // boat now; and the notice line.
@@ -11,16 +12,29 @@
 import './chart.css';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Raycaster, Vector2 } from 'three';
-import type { Chart, ChartMode, TappedWeather } from '../chart/chart';
+import type { Chart, ChartMode, Marked, TappedWeather } from '../chart/chart';
+import type { Course, CourseAim } from '../chart/course';
+import {
+  BEYOND_THE_EDGE,
+  CLEAR_COURSE,
+  MACHINE_AT_SEA,
+  PIN,
+  PIN_HERE,
+  SET_COURSE,
+  SHIPMATE_AT_SEA,
+  START_KIND,
+} from '../chart/coursewords';
 import type { Forecasting } from '../chart/forecasting';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
 import { type RaceDrawing, trackColour } from '../chart/racelayer';
 import {
+  bearingText,
   type ChartStore,
   chartList,
   courseLines,
   dayText,
+  distanceText,
   edgeCaption,
   pocketCaption,
   whenText,
@@ -28,7 +42,7 @@ import {
 import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
 import type { BoatAt, ChartView } from '../chart/view';
 import { momentOf } from '../chart/weather';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, CourseOpen } from '../net/messages';
 import { Pusher, useUpright } from './case';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { clockAngles, worldTimeText } from './clock';
@@ -104,7 +118,7 @@ function classWords(c: string): string {
 }
 
 /** A charted thing's box: what it is, who charted it, and what was found with it. */
-function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () => void }) {
+export function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () => void }) {
   const store = sea.chart.store;
   const now = Date.now();
   const found = store.entries.filter((o) => o.island === e.number && e.subject === 'island');
@@ -139,6 +153,7 @@ function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () =
         <p class="chart-place-position">{formatPosition(e.east, e.north)}</p>
       )}
       <div class="chart-buttons">
+        <CourseKey sea={sea} c={{ kind: 'entry', subject: e.subject, number: e.number }} />
         <button type="button" onClick={() => sea.chart.show('list')}>
           Show in the list
         </button>
@@ -148,6 +163,197 @@ function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () =
       </div>
     </section>
   );
+}
+
+/**
+ * Set course, or for the course set, Clear course: the box's first key,
+ * in brass. Never on a boat watched: the course is the sailor's own.
+ */
+export function CourseKey({ sea, c }: { sea: ChartSea; c: Course }) {
+  const chart = sea.chart;
+  void chart.course.value;
+  if (chart.watching()) {
+    return null;
+  }
+  const set = chart.isCourse(c);
+  return (
+    <button
+      type="button"
+      class="chart-set-course"
+      data-course={set ? 'clear' : 'set'}
+      onClick={() => (set ? chart.clearCourse() : chart.setCourse(c))}
+    >
+      {set ? CLEAR_COURSE : SET_COURSE}
+    </button>
+  );
+}
+
+/**
+ * The box of a point marked on the paper: a race course's start, its name,
+ * kind and where it is from the boat; or a pin dropped on open water, its
+ * latitude and longitude. Each can be the course. A pin past the rim, in
+ * the falls, is no pin: its box says so. Close takes a pin away, unless it
+ * is the course. And the boat the course is set to, opened from its pin: a
+ * shipmate's or the player's own machine sailor's, its name, where it is
+ * from the boat, and Clear course.
+ */
+export function MarkedBox({ sea, m, close }: { sea: ChartSea; m: Marked; close: () => void }) {
+  if (m.kind === 'boat') {
+    const b = sea.boat();
+    const a = sea.chart.aim(b.east, b.north);
+    return (
+      <section
+        class="chart-panel chart-box chart-marked"
+        aria-label={m.name}
+        data-readout="boat-box"
+      >
+        <h2>
+          <PlayerText text={m.name} />
+        </h2>
+        <p class="chart-kind">{m.machine ? MACHINE_AT_SEA : SHIPMATE_AT_SEA}</p>
+        {a !== null ? (
+          <>
+            <p class="chart-place-position">{formatPosition(a.east, a.north)}</p>
+            <p class="chart-list-where">
+              {bearingText(a.bearing)} {distanceText(a.distance)}
+            </p>
+          </>
+        ) : null}
+        <div class="chart-buttons">
+          <CourseKey
+            sea={sea}
+            c={{ kind: 'boat', sailor: m.sailor, name: m.name, machine: m.machine }}
+          />
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </div>
+      </section>
+    );
+  }
+  if (m.kind === 'start') {
+    const k = m.course;
+    const b = sea.boat();
+    const line = courseLines([k], b.east, b.north, sea.chart.store.words.boats)[0];
+    const at = k.way[0] ?? [0, 0];
+    return (
+      <section class="chart-panel chart-box chart-marked" aria-label={k.name}>
+        <h2>{k.name}</h2>
+        <p class="chart-kind">
+          {START_KIND} · {line?.kind ?? ''}
+        </p>
+        <p class="chart-place-position">{formatPosition(at[0], at[1])}</p>
+        {line !== undefined ? <p class="chart-list-where">{line.where}</p> : null}
+        <div class="chart-buttons">
+          <CourseKey sea={sea} c={{ kind: 'start', course: k.number }} />
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </div>
+      </section>
+    );
+  }
+  const beyond = Math.hypot(m.east, m.north) > sea.lip;
+  const b = sea.boat();
+  return (
+    <section class="chart-panel chart-box chart-marked" aria-label={PIN} data-readout="pin-box">
+      {beyond ? (
+        <p>{BEYOND_THE_EDGE}</p>
+      ) : (
+        <>
+          <h2>{PIN}</h2>
+          <p class="chart-place-position">{formatPosition(m.east, m.north)}</p>
+          <p class="chart-list-where">
+            {bearingText(Math.atan2(m.east - b.east, m.north - b.north))}{' '}
+            {distanceText(Math.hypot(m.east - b.east, m.north - b.north))}
+          </p>
+        </>
+      )}
+      <div class="chart-buttons">
+        {beyond ? null : <CourseKey sea={sea} c={{ kind: 'pin', east: m.east, north: m.north }} />}
+        <button type="button" onClick={close}>
+          Close
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** What the course's own pin on the chart opens: the box of what it was set for. */
+export function openCourseBox(chart: Chart): void {
+  const c = chart.course.peek();
+  if (c === null) {
+    return;
+  }
+  chart.tapped.value = null;
+  switch (c.kind) {
+    case 'entry': {
+      const e = chart.store.get(c.subject, c.number) ?? null;
+      chart.marked.value = null;
+      chart.picked.value = e;
+      return;
+    }
+    case 'start': {
+      const k = chart.store.courses.find((o) => o.number === c.course);
+      chart.picked.value = null;
+      chart.marked.value = k === undefined ? null : { kind: 'start', course: k };
+      return;
+    }
+    case 'pin':
+      chart.picked.value = null;
+      chart.marked.value = { kind: 'pin', east: c.east, north: c.north };
+      return;
+    case 'boat':
+      chart.picked.value = null;
+      chart.marked.value = { kind: 'boat', sailor: c.sailor, name: c.name, machine: c.machine };
+      return;
+  }
+}
+
+/**
+ * What a tap on the paper away from any name opens: a race course's start
+ * within a hand's breadth, unless a charted thing is nearer on the screen;
+ * a weather system it falls in, unless a place is under the finger; and on
+ * open water, a pin, but not on a boat watched.
+ */
+export function tapOnPaper(
+  chart: Chart,
+  picked: ChartEntry | null,
+  start: CourseOpen | null,
+  weather: TappedWeather | null,
+  at: { east: number; north: number } | null,
+  near: (east: number, north: number) => number,
+): void {
+  let entry = picked;
+  let course = start;
+  if (entry !== null && course !== null) {
+    const s = course.way[0] ?? [0, 0];
+    if (near(s[0], s[1]) < near(entry.east, entry.north)) {
+      entry = null;
+    } else {
+      course = null;
+    }
+  }
+  // Within a system, a place wins only under the finger.
+  if (weather !== null) {
+    if (entry !== null && near(entry.east, entry.north) > FINGER) {
+      entry = null;
+    }
+    const s = course?.way[0];
+    if (s !== undefined && near(s[0], s[1]) > FINGER) {
+      course = null;
+    }
+  }
+  chart.picked.value = entry;
+  chart.tapped.value = entry === null && course === null ? weather : null;
+  chart.marked.value =
+    entry !== null
+      ? null
+      : course !== null
+        ? { kind: 'start', course }
+        : weather !== null || at === null || chart.watching()
+          ? null
+          : { kind: 'pin', east: at.east, north: at.north };
 }
 
 /** Where the boat is, as its latitude and longitude, and how far the edge. */
@@ -277,17 +483,17 @@ function useGestures(sea: ChartSea) {
             before = pair();
             return;
           }
-          let picked = view.pick(x, y);
-          const weather = weatherTapped(sea, x, y, r);
-          // Within a system, a place wins only under the finger.
-          if (picked !== null && weather !== null) {
-            const p = view.screenOf(picked.east, picked.north);
-            if (p === null || Math.hypot(p.x - x, p.y - y) > FINGER) {
-              picked = null;
-            }
-          }
-          sea.chart.picked.value = picked;
-          sea.chart.tapped.value = picked === null ? weather : null;
+          tapOnPaper(
+            sea.chart,
+            view.pick(x, y),
+            view.pickStart(x, y),
+            weatherTapped(sea, x, y, r),
+            paperAt(view, x, y, r),
+            (east, north) => {
+              const p = view.screenOf(east, north);
+              return p === null ? Number.POSITIVE_INFINITY : Math.hypot(p.x - x, p.y - y);
+            },
+          );
         }
       }
       pts.delete(e.pointerId);
@@ -354,13 +560,16 @@ function weatherTapped(
     return null;
   }
   const at = paperAt(sea.chart.view, x, y, size);
-  const hit = at === null ? null : hitTest(scene, at, sea.lip);
+  if (at === null) {
+    return null;
+  }
+  const hit = hitTest(scene, at, sea.lip);
   if (hit === null) {
     return null;
   }
   return hit.kind === 'system'
-    ? { kind: 'system', slot: hit.system.slot, seed: hit.system.seed }
-    : { kind: 'front', sin: hit.front.sin, cos: hit.front.cos };
+    ? { kind: 'system', slot: hit.system.slot, seed: hit.system.seed, at }
+    : { kind: 'front', sin: hit.front.sin, cos: hit.front.cos, at };
 }
 
 /** The tapped thing as the chart's weather last drew it, or null if it is no longer drawn. */
@@ -459,6 +668,21 @@ function SystemBoxPanel({ sea, t, close }: { sea: ChartSea; t: TappedWeather; cl
             }}
           >
             Steer {threeDigits(wholeDegrees(steer))}°
+          </button>
+        ) : null}
+        {t.at !== undefined && !sea.chart.watching() ? (
+          <button
+            type="button"
+            data-pin="here"
+            onClick={() => {
+              const at = t.at;
+              if (at !== undefined) {
+                sea.chart.tapped.value = null;
+                sea.chart.marked.value = { kind: 'pin', east: at.east, north: at.north };
+              }
+            }}
+          >
+            {PIN_HERE}
           </button>
         ) : null}
         <button type="button" onClick={close}>
@@ -714,7 +938,11 @@ export function ChartScreen({
   const chart = sea.chart;
   const surface = useGestures(sea);
   const labels = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
+  // The labels' layer is the chart's before its first frame: the chart is
+  // drawn as soon as it opens, and an effect run after the paint would let
+  // that frame, slow on a software GPU, lay its race and course labels
+  // nowhere.
+  useLayoutEffect(() => {
     chart.view.attachLabels(labels.current);
     return () => chart.view.attachLabels(null);
   }, [chart]);
@@ -741,6 +969,7 @@ export function ChartScreen({
   const upright = useUpright();
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
+  const marked = chart.marked.value;
   // A race replayed: its head under the strip, its time at the foot.
   const host = sea.replay ?? null;
   const replaying = mode === 'chart' && host !== null && host.model.value !== null;
@@ -780,6 +1009,9 @@ export function ChartScreen({
       ) : null}
       {mode === 'chart' && picked === null && tapped !== null ? (
         <SystemBoxPanel sea={sea} t={tapped} close={() => (chart.tapped.value = null)} />
+      ) : null}
+      {mode === 'chart' && picked === null && tapped === null && marked !== null ? (
+        <MarkedBox sea={sea} m={marked} close={() => (chart.marked.value = null)} />
       ) : null}
       {mode === 'chart' && sea.forecasting !== null && !replaying ? (
         <TimeBar chart={chart} src={sea.forecasting} />
@@ -1050,7 +1282,81 @@ export function drawPocket(
   ctx.beginPath();
   ctx.arc(bx, by, 4, 0, 2 * Math.PI);
   ctx.fill();
+  const aim = sea.chart.aim(b.east, b.north);
+  const course = aim === null ? null : pocketCourse(aim, frame, k, tilt, w, h);
+  if (course?.kind === 'dot') {
+    drawPocketDot(ctx, course.x, course.y);
+  }
   ctx.restore();
+  // Outside a race's frame, a tick on its rim the way it lies.
+  if (course?.kind === 'tick') {
+    ctx.beginPath();
+    ctx.moveTo(course.x, course.y);
+    ctx.lineTo(course.x + course.dx * POCKET_TICK, course.y + course.dy * POCKET_TICK);
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = POCKET_GOLD;
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+}
+
+/** The course's gold on the pocket chart, the boat's own. */
+const POCKET_GOLD = '#c8952c';
+/** The course's dot and ring, and the tick on a race's frame, canvas pixels. */
+const POCKET_DOT = 4;
+const POCKET_RING = 7;
+const POCKET_TICK = 13;
+
+/**
+ * Where the course goes on the pocket chart, w by h canvas pixels framed
+ * on frame at k pixels a metre, seen tilted: a dot within the frame; out
+ * of a race's frame, a tick on its rim, its start and the way out along it.
+ */
+export function pocketCourse(
+  aim: Pick<CourseAim, 'east' | 'north'>,
+  frame: { east: number; north: number; radius: number },
+  k: number,
+  tilt: number,
+  w: number,
+  h: number,
+):
+  | { kind: 'dot'; x: number; y: number }
+  | { kind: 'tick'; x: number; y: number; dx: number; dy: number } {
+  const de = aim.east - frame.east;
+  const dn = aim.north - frame.north;
+  if (Math.hypot(de, dn) <= frame.radius) {
+    return { kind: 'dot', x: w / 2 + de * k, y: h / 2 - dn * k * tilt };
+  }
+  const a = Math.atan2(de, dn);
+  const rim = frame.radius * k;
+  // Out from the middle along the ellipse's own normal at that point.
+  const nx = Math.sin(a) * tilt;
+  const ny = -Math.cos(a);
+  const n = Math.hypot(nx, ny);
+  return {
+    kind: 'tick',
+    x: w / 2 + Math.sin(a) * rim,
+    y: h / 2 - Math.cos(a) * rim * tilt,
+    dx: nx / n,
+    dy: ny / n,
+  };
+}
+
+/** The course's dot with its ring, over everything else on the pocket chart. */
+function drawPocketDot(ctx: CanvasRenderingContext2D, px: number, py: number): void {
+  ctx.beginPath();
+  ctx.arc(px, py, POCKET_RING, 0, 2 * Math.PI);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = POCKET_GOLD;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(px, py, POCKET_DOT, 0, 2 * Math.PI);
+  ctx.fillStyle = POCKET_GOLD;
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(59, 46, 34, 0.9)';
+  ctx.stroke();
 }
 
 /** A race on the pocket chart: its way, its lines, its marks numbered, the boat's track and the fleet. */

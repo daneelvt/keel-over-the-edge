@@ -76,6 +76,12 @@ type viewer struct {
 	shipmates int
 	// certified are what the sailor's certificates came to, in order.
 	certified []*pb.Certified
+
+	// at are where a course's boat was told, in order; courseEnded the
+	// latest end told; sailedTo the names of those told to sail to it.
+	at          []*pb.ShipmateAt
+	courseEnded *pb.CourseEnded
+	sailedTo    []string
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -176,6 +182,12 @@ func (v *viewer) take(r client.Received) {
 		v.shipmates++
 	case *pb.ServerMessage_Certified:
 		v.certified = append(v.certified, m.Certified)
+	case *pb.ServerMessage_ShipmateAt:
+		v.at = append(v.at, m.ShipmateAt)
+	case *pb.ServerMessage_CourseEnded:
+		v.courseEnded = m.CourseEnded
+	case *pb.ServerMessage_ShipmateCourse:
+		v.sailedTo = append(v.sailedTo, m.ShipmateCourse.GetName())
 	case *pb.ServerMessage_Crews:
 		if v.crews == nil {
 			v.crews = map[uint32]*pb.Crew{}

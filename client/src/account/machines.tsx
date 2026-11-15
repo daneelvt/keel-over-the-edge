@@ -18,7 +18,9 @@
 // A machine sailor can be watched by anyone whenever it sails: by its
 // owner from the start screen, with how many watch it, and by anyone from
 // the list of sailors to watch; and the account page copies a link that
-// opens the game watching it.
+// opens the game watching it. At sea, the menu's panel offers Sail to for
+// each one in the water: its boat becomes the course, found always, as the
+// player's own; for the one sailed to, Clear course.
 //
 // Loaded only when shown: none of it is in the game's first download.
 
@@ -26,7 +28,9 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { MACHINE } from '../catalog/looks';
+import { CLEAR_COURSE, SAIL_TO } from '../chart/coursewords';
 import { ITS_LOG, openLog } from '../ui/loglazy';
+import { sailTo } from '../ui/sailto';
 import { linkState, NewLink, ShareLink } from '../ui/sharelink';
 import { useWatch } from '../ui/watchlazy';
 import {
@@ -325,7 +329,8 @@ export function FleetWatchLink({ code, cls }: { code: string; cls: string }) {
  * The machine sailors' list under its heading and line, with how to
  * connect each and another made. open is the one whose connecting is
  * shown, toggled by toggle. On the start screen, watch is given the
- * sailor chosen to watch, and each at sea offers it.
+ * sailor chosen to watch, and each at sea offers it. At sea, each one in
+ * the water offers Sail to, and sailed is told once it is the course.
  */
 export function MachineList({
   page,
@@ -336,6 +341,7 @@ export function MachineList({
   make,
   watch = null,
   fleet = null,
+  sailed = () => {},
 }: {
   page: MachinesPage;
   heading: ComponentChildren;
@@ -346,7 +352,9 @@ export function MachineList({
   watch?: ((name: string) => void) | null;
   /** The account's fleet, which names each one's boat; null while it is not known. */
   fleet?: Fleet | null;
+  sailed?: () => void;
 }) {
+  const host = sailTo();
   return (
     <section aria-labelledby="machines-title">
       <h2 id="machines-title">{heading}</h2>
@@ -378,6 +386,28 @@ export function MachineList({
                 <p class="start-text start-faint">{stoppedOn(m)}.</p>
               ) : (
                 <>
+                  {host?.is(m.id) ? (
+                    <button
+                      type="button"
+                      class="start-sign-in"
+                      data-course="clear"
+                      onClick={() => host.clear()}
+                    >
+                      {CLEAR_COURSE}
+                    </button>
+                  ) : host !== null && m.atSea ? (
+                    <button
+                      type="button"
+                      class="start-sign-in"
+                      data-course="set"
+                      onClick={() => {
+                        host.sail(m.id, m.name, true);
+                        sailed();
+                      }}
+                    >
+                      {SAIL_TO}
+                    </button>
+                  ) : null}
                   <MachineWatchLink m={m} cls="start-sign-in" />
                   <button
                     type="button"
@@ -423,6 +453,7 @@ function MachinesBody({
   line = '',
   watch = null,
   fleet = null,
+  sailed = () => {},
 }: {
   page: MachinesPage;
   setPage: (p: MachinesPage) => void;
@@ -431,6 +462,7 @@ function MachinesBody({
   line?: string;
   watch?: ((name: string) => void) | null;
   fleet?: Fleet | null;
+  sailed?: () => void;
 }) {
   const [view, setView] = useState<View>({ kind: first ? 'form' : 'list' });
   const [open, setOpen] = useState('');
@@ -467,6 +499,7 @@ function MachinesBody({
       make={() => setView({ kind: 'form' })}
       watch={watch}
       fleet={fleet}
+      sailed={sailed}
     />
   );
 }
@@ -613,6 +646,7 @@ export function MachinesPanel({ close }: { close: () => void }) {
           first={false}
           heading="Machine sailors"
           fleet={fleet}
+          sailed={close}
         />
       )}
       <button type="button" class="menu-close" onClick={close}>

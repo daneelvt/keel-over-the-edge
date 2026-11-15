@@ -25,7 +25,7 @@ import (
 // The lookout report: what the boat's sailor sees and hears, in a
 // sailor's words, in one fixed order of labelled lines, each left out when
 // it has nothing to say. The clock comes first, with why the report was
-// woken; then the boat, the wind, the autopilot, the sea, the weather,
+// woken; then the boat, the wind, its race and its course, the autopilot, the sea, the weather,
 // where the boat is, the gust coming, what is in sight, what is heard, and
 // what happened since the last report. A brief report, the default, has
 // the vital lines and what changed; a full one everything. The boat's
@@ -65,6 +65,7 @@ type report struct {
 	Boat    *boatFacts    `json:"boat,omitempty"`
 	Wind    *windFacts    `json:"wind,omitempty"`
 	Race    *raceFacts    `json:"race,omitempty"`
+	Course  *courseFacts  `json:"course,omitempty"`
 	Shoal   *shoalFacts   `json:"shoal,omitempty"`
 	Sky     *skyFacts     `json:"sky,omitempty"`
 	Pilot   *pilotFacts   `json:"pilot,omitempty"`
@@ -224,6 +225,9 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 
 	// Its race, while it sails one.
 	r.Race = h.raceFactsFor(s, f, sl, r.brief)
+
+	// Its course, but while it races.
+	r.Course = h.courseFor(s, f, sl)
 
 	// The shoal water about the boat: in the brief report while it is
 	// near, or the boat is on it or aground.
@@ -957,6 +961,9 @@ func (r *report) text() string {
 	}
 	if rc := r.Race; rc != nil {
 		rc.text(&b)
+	}
+	if c := r.Course; c != nil {
+		b.WriteString("Course: " + c.text() + "\n")
 	}
 	if s := r.Shoal; s != nil {
 		b.WriteString("Shoal: " + s.text() + "\n")

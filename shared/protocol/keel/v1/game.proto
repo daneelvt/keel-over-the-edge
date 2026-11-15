@@ -111,6 +111,7 @@ message Command {
     ComeAboard come_aboard = 17;
     RaceRetire race_retire = 18;
     Cheer cheer = 19;
+    CourseTo course_to = 20;
   }
 }
 
@@ -122,6 +123,20 @@ message RaceRetire {}
 // words. At most one every ten seconds counts, from the warning signal
 // until the race ends; the cheers come back gathered (RaceCheered).
 message Cheer {}
+
+// CourseTo asks where a sailor's boat is, for a course to it: a shipmate
+// at sea, by their account as the shipmates' list names it, or one of the
+// account's own machine sailors in the water, by its account. sailor empty
+// stops it. One sailor at a time: a new one replaces the last. While it
+// holds, ShipmateAt says where their boat is every two seconds; when it
+// no longer does, or is refused, CourseEnded says so, and nothing more is
+// sent. A shipmate is sailed to only while both are shipmates, of one age
+// band, neither blocking the other, and they are not appearing offline;
+// every refusal is told alike, never why. Nothing of it is kept: a new
+// connection asks again.
+message CourseTo {
+  string sailor = 1;
+}
 
 // ComeAboard brings an owner watching their own machine sailor aboard its
 // boat, as crew, without knocking: the boat is theirs. It is told how it
@@ -366,6 +381,9 @@ message ServerMessage {
     RaceCheered race_cheered = 40;
     BoatPrizes boat_prizes = 41;
     Certified certified = 42;
+    ShipmateAt shipmate_at = 43;
+    CourseEnded course_ended = 44;
+    ShipmateCourse shipmate_course = 45;
   }
 }
 
@@ -893,6 +911,45 @@ message BoatNames {
 message BoatName {
   uint32 slot = 1;
   string name = 2;
+}
+
+// ShipmateAt is where the boat of the sailor a CourseTo asked for is,
+// every two seconds while the course holds: sailor as it was asked, their
+// name as players see it, and the boat's place, m east and north of the
+// world's centre. It is the only place a sailor's position goes beyond
+// the boats in view and a race's picture.
+message ShipmateAt {
+  string sailor = 1;
+  string name = 2;
+  sint32 east = 3;
+  sint32 north = 4;
+}
+
+// CourseEnded says a course to a sailor's boat (CourseTo) has ended or was
+// refused: sailor as it was asked, and why.
+message CourseEnded {
+  string sailor = 1;
+  CourseEnd why = 2;
+}
+
+// CourseEnd is why a course to a sailor's boat ended: they came ashore,
+// still in the game; they are no longer at sea, out of the game, or, a
+// machine sailor, its boat out of the water; or anything else, which is
+// never said: not shipmates, a block, appearing offline, another age band,
+// someone else's machine sailor, or a shipmate not at sea when it was
+// asked.
+enum CourseEnd {
+  COURSE_END_UNSPECIFIED = 0;
+  COURSE_END_ASHORE = 1;
+  COURSE_END_GONE = 2;
+  COURSE_END_REFUSED = 3;
+}
+
+// ShipmateCourse tells a sailor that a shipmate has set a course to their
+// boat: the shipmate's name. Once a voyage for each shipmate; never for a
+// machine sailor sailed to by its owner.
+message ShipmateCourse {
+  string name = 1;
 }
 
 // BoatPrizes are what boats fly for their skippers' races in the world:
