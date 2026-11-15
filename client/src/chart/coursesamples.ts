@@ -84,8 +84,13 @@ export const ROUND: CourseOpen = {
 
 /** A store with Gull Rock, Long Cay and a course round it charted. */
 export function chartedStore(): ChartStore {
+  return storeWith([GULL, ISLE], [ROUND]);
+}
+
+/** A store with these entries and courses charted. */
+export function storeWith(entries: ChartEntry[], courses: CourseOpen[] = []): ChartStore {
   const s = new ChartStore(words);
-  s.receive([GULL, ISLE], true, [ROUND]);
+  s.receive(entries, true, courses);
   return s;
 }
 
