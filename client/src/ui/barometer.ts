@@ -8,16 +8,19 @@
 // atmospheric pressure … to determine if the atmospheric pressure is rising
 // or falling"); and beneath, its reading and tendency in the Met Office's
 // words, "1009 hPa, falling quickly", over its own readings now, five and
-// fifteen minutes before. After a load its past is filled from the truth
-// kept, at the boat's place.
+// fifteen minutes before, held until the pressure has really moved and
+// changed at most once in WORDS_HOLD. After a load its past is filled from
+// the truth kept, at the boat's place.
 
 import { signal } from '@preact/signals';
-import { barometerWords } from '../chart/words';
+import { type BarometerSaid, saidWords, steadyBarometer } from '../chart/words';
 import { Moved, rotate } from './model';
 
 /** Ticks a second, and a minute. */
 const SECOND = 30;
 const MINUTE = 60 * SECOND;
+/** The least time between one change of the words and the next, ticks. */
+export const WORDS_HOLD = 10 * SECOND;
 
 /** How the barometer is drawn: its dial's range, hPa, and its set hand's lag, minutes. */
 export interface BarometerLook {
@@ -70,6 +73,11 @@ export class Barometer {
   readonly #ticks: number[] = [];
   readonly #hpa: number[] = [];
   #last = Number.NEGATIVE_INFINITY;
+  /** What the words say, and the tick they last changed. */
+  #said: BarometerSaid | null = null;
+  #changed = Number.NEGATIVE_INFINITY;
+  /** The words held by holdWords: not written by a reading. */
+  #wordsHeld = false;
 
   constructor(look: BarometerLook) {
     this.look = look;
@@ -81,6 +89,19 @@ export class Barometer {
    */
   hold(rate: number | null, tick: number): void {
     this.held = rate === null ? null : { rate, from: tick, base: this.#heldAt(tick) };
+  }
+
+  /**
+   * Holds the words at these, a reading writing none, as the tests that
+   * measure the case at its shortest and longest do; null lets them follow
+   * the readings again from the next.
+   */
+  holdWords(words: string | null): void {
+    this.#wordsHeld = words !== null;
+    if (words !== null) {
+      this.words.value = words;
+    }
+    this.#said = null;
   }
 
   /** A held change added to a reading at a tick. */
@@ -104,6 +125,7 @@ export class Barometer {
       // Another world, or the clock set back: what was read is not this.
       this.#ticks.length = 0;
       this.#hpa.length = 0;
+      this.#said = null;
     }
     this.#last = tick;
     const now = read() + this.#heldAt(tick);
@@ -121,10 +143,28 @@ export class Barometer {
     const quarter = this.readingAt(tick - this.look.set * MINUTE, past);
     this.now = now;
     this.set = quarter ?? now;
-    this.words.value = barometerWords(now, before ?? now, quarter ?? now);
+    this.#say(tick, steadyBarometer(now, before ?? now, quarter ?? now, this.#said));
     this.setWords.value = setWords(this.set, this.look.set);
     this.hand.set(dialAngle(now, this.look));
     this.setHand.set(dialAngle(this.set, this.look));
+  }
+
+  /** Writes what is said, unless the words changed less than WORDS_HOLD before or are held. */
+  #say(tick: number, said: BarometerSaid): void {
+    if (this.#wordsHeld) {
+      return;
+    }
+    const words = saidWords(said);
+    if (words === this.words.peek()) {
+      this.#said = said;
+      return;
+    }
+    if (this.#said !== null && tick - this.#changed < WORDS_HOLD) {
+      return;
+    }
+    this.#said = said;
+    this.#changed = tick;
+    this.words.value = words;
   }
 
   /** The reading at a tick: its own, the nearest at or before it, or the truth's, or null. */

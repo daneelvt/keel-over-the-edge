@@ -10,7 +10,9 @@
 // on the screen. One page, its viewport changed screen by screen, with
 // less motion asked for, so that nothing is measured mid-slide.
 //
-// The case is one size whatever its readouts say. Held sideways it is no
+// The case is one size whatever its readouts say, and its complications
+// one size and in one place whatever the barometer's words say, the
+// clock's dial level with the barometer's. Held sideways it is no
 // taller than its compass card, its pushers standing on three edges; held
 // upright the barometer's and the board's stand out of its bottom edge
 // beneath the readouts and the clock's out of its top edge over the
@@ -328,26 +330,49 @@ async function longestCaption(page: Page): Promise<string[]> {
   });
 }
 
-/** What is wrong with the case: its size as its readouts change, its height, its pushers. */
+/**
+ * What is wrong with the case: its size, and its complications' sizes and
+ * places, as its readouts and the barometer's words change; its height,
+ * its pushers.
+ */
 async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
+  const boxes = {
+    'the case': '.case-top',
+    'the complications': '.complications',
+    'the barometer': '[data-complication=barometer]',
+    'the clock': '[data-complication=clock]',
+    'the barometer’s dial': '[data-complication=barometer] svg',
+    'the clock’s dial': '[data-complication=clock] svg',
+  };
   const size = (at: 'shortest' | 'longest') =>
-    page.evaluate(async (at) => {
-      globalThis.keel.readouts(at);
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const r = document.querySelector('.case-top')?.getBoundingClientRect();
-      return r === undefined ? null : [r.left, r.top, r.width, r.height];
-    }, at);
+    page.evaluate(
+      async ({ at, boxes }) => {
+        globalThis.keel.readouts(at);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return Object.fromEntries(
+          Object.entries(boxes).map(([name, sel]) => {
+            const r = document.querySelector(sel)?.getBoundingClientRect();
+            return [name, r === undefined ? null : [r.left, r.top, r.width, r.height]];
+          }),
+        );
+      },
+      { at, boxes },
+    );
   const found: string[] = [];
   const short = await size('shortest');
   const long = await size('longest');
-  if (
-    short === null ||
-    long === null ||
-    short.some((v, i) => Math.abs(v - (long[i] ?? 0)) > 0.01)
-  ) {
-    found.push(
-      `the case is ${short?.join(' ')} at its shortest, ${long?.join(' ')} at its longest`,
-    );
+  for (const name of Object.keys(boxes)) {
+    const s = short[name];
+    const l = long[name];
+    if (!s || !l || s.some((v, i) => Math.abs(v - (l[i] ?? 0)) > 0.01)) {
+      found.push(`${name} is ${s?.join(' ')} at its shortest, ${l?.join(' ')} at its longest`);
+    }
+  }
+  // Side by side, the two dials stand level.
+  const baro = long['the barometer’s dial'];
+  const clock = long['the clock’s dial'];
+  if (!upright && baro && clock && Math.abs((baro[1] ?? 0) - (clock[1] ?? 0)) > 0.5) {
+    found.push(`the clock’s dial is at ${clock[1]}, the barometer’s at ${baro[1]}`);
   }
   found.push(
     ...(await page.evaluate((upright) => {

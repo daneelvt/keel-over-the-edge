@@ -55,6 +55,7 @@ import type { ChartParts } from '../chart/make';
 import { placeWords, pointsOf, warningInForce } from '../chart/placeweather';
 import { formatPosition } from '../chart/position';
 import { type Layer, momentOf } from '../chart/weather';
+import { BAROMETER_LONGEST, BAROMETER_SHORTEST } from '../chart/words';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
@@ -1861,12 +1862,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
     },
     /**
-     * Holds the case's readouts at the shortest or the longest they say, or
-     * lets them follow the boat again (null).
+     * Holds the case's readouts and the barometer's words at the shortest
+     * or the longest they say, or lets them follow the boat again (null).
      */
     readouts(at: 'shortest' | 'longest' | null): void {
       const h = game.hud;
       h.held = at !== null;
+      sailing.barometer?.holdWords(
+        at === null ? null : at === 'longest' ? BAROMETER_LONGEST : BAROMETER_SHORTEST,
+      );
       if (at === null) {
         h.flush();
         return;

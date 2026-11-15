@@ -542,21 +542,26 @@
   }
 
   .complication {
-    padding: 6px 8px 8px;
+    padding: 6px 8px 6px;
   }
 
-  .case .baro-words {
-    max-width: 96px;
+  /* The barometer's two lines close under its dial, leaving the left
+     column beneath the case its room. */
+  .complication .dial:not(.big) {
+    gap: 2px;
+  }
+
+  .complication .dial:not(.big) .baro-slot .baro-words {
+    line-height: 1.15;
   }
 }
 
 /* Held upright, the boat stands in the middle of the screen: the case's
-   face across the top, small, and its complications in a column, no
-   wider than the compass, beside the boat. */
+   face across the top, small, and its complications in a column, as wide
+   as the barometer's dial and its words, beside the boat. */
 @media (orientation: portrait) {
   .complications {
     flex-direction: column;
-    max-width: 96px;
   }
 
   .complication {
@@ -1990,9 +1995,26 @@
 }
 
 .baro-words {
-  max-width: 110px;
   font-size: 13px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+/* The reading's slot, as big as the longest it can say, laid out unseen:
+   always two lines, the figure above the tendency, since one line of the
+   longest would push the clock beside it under the case's pushers. Its
+   size never changes with its words. */
+.baro-slot {
+  justify-items: center;
+}
+
+.baro-slot .baro-words {
+  white-space: nowrap;
+}
+
+.baro-slot :is(.baro-figure, .baro-tendency) {
+  display: block;
 }
 
 /* The reading in words, and enlarged the set hand's beneath it. */
@@ -2088,6 +2110,7 @@
 .clock-words {
   max-width: 110px;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
@@ -2161,6 +2184,10 @@
   .clock.big .clock-words {
     max-width: 180px;
     text-align: left;
+  }
+
+  .barometer.big .baro-slot {
+    justify-items: start;
   }
 }
 

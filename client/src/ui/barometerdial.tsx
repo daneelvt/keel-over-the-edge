@@ -5,11 +5,35 @@
 // it as decoration ("Do not take any notice of the words Rain, Change,
 // Fair", Weems & Plath), its main hand at the pressure where the boat is
 // and its set hand at its reading of a quarter of an hour before, both
-// moved by transforms; and beside it, its reading in words, which a screen
-// reader is given. A tap on it enlarges it, its figures readable and a
-// third line saying what the set hand reads; a tap shrinks it.
+// moved by transforms; and beneath it, its reading in words, which a screen
+// reader is given, in a slot as big as the longest words it can say, laid
+// out unseen, so the dial and the clock beside it never move as the words
+// change: always two lines, the figure above the tendency. A tap on it
+// enlarges it, its figures readable and a third line saying what the set
+// hand reads; a tap shrinks it.
 
+import { TENDENCY_WORDS } from '../chart/words';
 import { type Barometer, dialAngle, SWEEP } from './barometer';
+
+/** The widest figure the words say, tabular: four digits. */
+const WIDEST_FIGURE = '1040 hPa,';
+
+/** The barometer's words, "1009 hPa, falling quickly", as its figure and its tendency. */
+function Said({ words }: { words: string }) {
+  const i = words.indexOf(' ', words.indexOf(',') + 1);
+  return (
+    <>
+      <span class="baro-figure">{i < 0 ? words : words.slice(0, i)}</span>
+      {i < 0 ? null : ' '}
+      <span class="baro-tendency">{i < 0 ? '' : words.slice(i + 1)}</span>
+    </>
+  );
+}
+
+/** The words now: drawn again as they change, the dial not. */
+function Reading({ barometer }: { barometer: Barometer }) {
+  return <Said words={barometer.words.value} />;
+}
 
 /** A point on the dial at radius r and angle a, degrees clockwise from straight up. */
 function at(r: number, a: number): [number, number] {
@@ -90,8 +114,15 @@ export function BarometerDial({
         <circle class="baro-boss" r="3" />
       </svg>
       <span class="baro-reading">
-        <span class="baro-words" id="baro-words" data-readout="barometer">
-          {barometer.words}
+        <span class="slot baro-slot">
+          {TENDENCY_WORDS.map((t) => (
+            <span key={t} class="slot-size baro-words" aria-hidden="true">
+              <Said words={`${WIDEST_FIGURE} ${t}`} />
+            </span>
+          ))}
+          <span class="baro-words" id="baro-words" data-readout="barometer">
+            <Reading barometer={barometer} />
+          </span>
         </span>
         {big ? (
           <span class="baro-words baro-set-words" data-readout="barometer-set">
