@@ -16,9 +16,9 @@ ON CONFLICT (account_id, source) DO NOTHING;
 -- name: InsertLogEntry :execrows
 -- An entry, once by its source, while its account is.
 INSERT INTO log_entry (account_id, source, world, at, kind, title, what, worth, grp, find, x, y, place,
-  other_id, other_name, other_machine, other_boat, article, fault)
+  other_id, other_name, other_machine, other_boat, article, fault, alone)
 SELECT @account_id, @source, @world, @at, @kind, @title, @what, @worth, @grp, @find, @x, @y, @place,
-  @other_id, @other_name, @other_machine, @other_boat, @article, @fault
+  @other_id, @other_name, @other_machine, @other_boat, @article, @fault, @alone
 WHERE EXISTS (SELECT 1 FROM account a WHERE a.id = @account_id)
 ON CONFLICT (account_id, source) DO NOTHING;
 

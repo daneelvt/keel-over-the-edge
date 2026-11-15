@@ -230,3 +230,19 @@ func (c *Catalog) StoryScore(of NewsStoryOf) int {
 	}
 	return 0
 }
+
+// CertificateScore is the score of the news's story of the certificate at
+// place i of the ladder earned: its own, or the kind's score for one it
+// has none of; 0 for a catalog with no such story.
+func (c *Catalog) CertificateScore(i int) int {
+	for _, s := range c.News.Stories {
+		if s.Of != NewsStoryOfCertificate {
+			continue
+		}
+		if i >= 0 && i < len(s.Scores) {
+			return s.Scores[i]
+		}
+		return s.Score
+	}
+	return 0
+}

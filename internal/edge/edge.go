@@ -365,6 +365,7 @@ func New(cfg Config) *Edge {
 // sim.Recorder. It wakes the encoders and never blocks.
 func (e *Edge) Record(f *bus.Frame) {
 	e.latest.Store(f.Tick)
+	e.certified(f)
 	for _, enc := range e.encs {
 		enc.wake()
 	}
@@ -487,13 +488,43 @@ type toldName struct {
 
 // toldCrew is what a client was last told of the crew of a view slot's
 // boat: the boat, its deck's count of changes aboard, its skipper's look,
-// and who aboard wears the cockade (cockadesOf).
+// and what those aboard wear (wornOf).
 type toldCrew struct {
-	boat     uint64
-	deck     uint32
-	look     uint32
-	cockades uint64
+	boat uint64
+	deck uint32
+	look uint32
+	worn worn
 }
+
+// toldDeck is what a client aboard or watching a boat was last told of
+// its crew: the boat, its deck's count of changes aboard, and what those
+// aboard wear (wornOf).
+type toldDeck struct {
+	boat uint64
+	deck uint32
+	worn worn
+}
+
+// worn is what those aboard a boat wear of their prizes, four bits a
+// person, the skipper first, then its crew in order: the cockade (1 bit)
+// and the pendant (3 bits, BoatPrize's). It holds the skipper and as many
+// crew as a boat takes.
+type worn [(bus.MaxCrew + 16) / 16]uint64
+
+// put has person i wear a prize code's cockade and pendant.
+func (w *worn) put(i int, prizes uint32) {
+	n := uint64(prizes>>pendantShift&7) << 1
+	if prizes&pennantsMask != 0 {
+		n |= 1
+	}
+	w[i/16] |= n << (i % 16 * 4)
+}
+
+// cockade says whether person i wears the cockade.
+func (w *worn) cockade(i int) bool { return w[i/16]>>(i%16*4)&1 != 0 }
+
+// pendant is the pendant person i wears, 0 for none.
+func (w *worn) pendant(i int) uint32 { return uint32(w[i/16] >> (i%16*4 + 1) & 7) }
 
 // toldPrize is a boat's prizes as a client was last told them: its prize
 // code and its race number.
@@ -503,8 +534,12 @@ type toldPrize struct {
 }
 
 // pennantsMask is a prize code's count of winner's pennants (BoatPrize):
-// a sailor whose boat flies any wears the cockade.
-const pennantsMask = 7
+// a sailor whose boat flies any wears the cockade. pendantShift is where
+// its pendant is, 3 bits.
+const (
+	pennantsMask = 7
+	pendantShift = 23
+)
 
 // prizesOf is a sailor's prize code: none without Prizes.
 func (e *Edge) prizesOf(a bus.Account) uint32 {
@@ -514,25 +549,20 @@ func (e *Edge) prizesOf(a bus.Account) uint32 {
 	return e.cfg.Prizes(a)
 }
 
-// cockade says whether a sailor wears the winner's cockade.
-func (e *Edge) cockade(a bus.Account) bool { return e.prizesOf(a)&pennantsMask != 0 }
-
-// cockadesOf is who aboard the boat in slot s of f wears the cockade, f's
-// crew of it f.Crew[lo:hi]: bit 0 its skipper, bit i+1 f.Crew[lo+i].
-func (e *Edge) cockadesOf(f *bus.Frame, s int32, lo, hi int) uint64 {
+// wornOf is what those aboard the boat in slot s of f wear, f's crew of
+// it f.Crew[lo:hi]: person 0 its skipper, person i+1 f.Crew[lo+i].
+func (e *Edge) wornOf(f *bus.Frame, s int32, lo, hi int) worn {
+	var w worn
 	if e.cfg.Prizes == nil {
-		return 0
+		return w
 	}
-	var m uint64
-	if e.cockade(f.Owner[s]) {
-		m = 1
-	}
+	w.put(0, e.cfg.Prizes(f.Owner[s]))
 	for i, a := range f.Crew[lo:hi] {
-		if i < 63 && e.cockade(a.Account) {
-			m |= 1 << (i + 1)
+		if i < bus.MaxCrew {
+			w.put(i+1, e.cfg.Prizes(a.Account))
 		}
 	}
-	return m
+	return w
 }
 
 // raceNumber is the race number of the boat in slot s of f while it

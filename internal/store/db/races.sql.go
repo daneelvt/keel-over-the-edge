@@ -409,6 +409,44 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 	return err
 }
 
+const insertStandingTrial = `-- name: InsertStandingTrial :execrows
+INSERT INTO race (world_id, kind, course_kind, course, shape, long, boat, who, name, starts_at, made_at)
+VALUES ($1, 'trial', $2, $3, $4, $5, $6, 'everyone', $7, $8, $9)
+ON CONFLICT (world_id, course_kind, course, shape, long, boat) WHERE owner_id IS NULL AND kind = 'trial' DO NOTHING
+`
+
+type InsertStandingTrialParams struct {
+	WorldID    pgtype.UUID
+	CourseKind string
+	Course     int32
+	Shape      pgtype.Text
+	Long       bool
+	Boat       string
+	Name       string
+	StartsAt   time.Time
+	MadeAt     time.Time
+}
+
+// One of the world's standing trials, the Harbourmaster's, made once for
+// its course and boat.
+func (q *Queries) InsertStandingTrial(ctx context.Context, arg InsertStandingTrialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertStandingTrial,
+		arg.WorldID,
+		arg.CourseKind,
+		arg.Course,
+		arg.Shape,
+		arg.Long,
+		arg.Boat,
+		arg.Name,
+		arg.StartsAt,
+		arg.MadeAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const lockRacing = `-- name: LockRacing :exec
 SELECT pg_advisory_xact_lock(hashtextextended($1::text, 7))
 `
@@ -569,10 +607,10 @@ func (q *Queries) PrizesOf(ctx context.Context, arg PrizesOfParams) ([]PrizesOfR
 
 const putRaceRecord = `-- name: PutRaceRecord :exec
 INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
-  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed, added)
+  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed, added, piloted, alone, course)
 SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
   $13, $14, $15, $16, $17, $18, $19, $20,
-  $21, $22, $23, $24
+  $21, $22, $23, $24, $25, $26, $27
 WHERE EXISTS (SELECT 1 FROM account WHERE id = $1)
 ON CONFLICT (account_id, source) DO NOTHING
 `
@@ -602,6 +640,9 @@ type PutRaceRecordParams struct {
 	Number         pgtype.Int2
 	Elapsed        pgtype.Float4
 	Added          float32
+	Piloted        bool
+	Alone          bool
+	Course         pgtype.Text
 }
 
 // A race in a sailor's lasting record, once for its source, while the
@@ -632,6 +673,9 @@ func (q *Queries) PutRaceRecord(ctx context.Context, arg PutRaceRecordParams) er
 		arg.Number,
 		arg.Elapsed,
 		arg.Added,
+		arg.Piloted,
+		arg.Alone,
+		arg.Course,
 	)
 	return err
 }
@@ -1150,7 +1194,7 @@ SELECT r.account_id, r.source, r.world, r.at, r.code, r.race_name, r.kind, r.cou
   coalesce(r.how, '')::text AS how, coalesce(r.medal, '')::text AS medal, r.awards,
   coalesce(r.skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
   coalesce(r.skipper_name, '')::text AS skipper_name, r.skipper_machine, coalesce(r.number, 0)::smallint AS number,
-  coalesce(r.elapsed, -1)::real AS elapsed, r.added
+  coalesce(r.elapsed, -1)::real AS elapsed, r.added, r.piloted, r.alone, coalesce(r.course, '')::text AS course
 FROM race_record r
 WHERE r.code = $1 AND r.role IN ('skipper', 'crew') AND r.source LIKE 'race:%'
   AND r.world = (SELECT max(n.world) FROM race_record n WHERE n.code = $1 AND n.role IN ('skipper', 'crew'))
@@ -1182,6 +1226,9 @@ type RaceRecordsByCodeRow struct {
 	Number         int16
 	Elapsed        float32
 	Added          float32
+	Piloted        bool
+	Alone          bool
+	Course         string
 }
 
 // The lasting records of a race's boats and their crews by its link's
@@ -1220,6 +1267,9 @@ func (q *Queries) RaceRecordsByCode(ctx context.Context, code string) ([]RaceRec
 			&i.Number,
 			&i.Elapsed,
 			&i.Added,
+			&i.Piloted,
+			&i.Alone,
+			&i.Course,
 		); err != nil {
 			return nil, err
 		}
@@ -1235,7 +1285,7 @@ const raceRecordsOf = `-- name: RaceRecordsOf :many
 SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
   newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
   awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
-  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung, piloted, alone, coalesce(course, '')::text AS course
 FROM race_record
 WHERE account_id = $1
 ORDER BY at DESC, id DESC
@@ -1269,6 +1319,9 @@ type RaceRecordsOfRow struct {
 	SkipperName    string
 	SkipperMachine bool
 	Hung           bool
+	Piloted        bool
+	Alone          bool
+	Course         string
 }
 
 // A sailor's lasting race records, the newest first.
@@ -1303,6 +1356,9 @@ func (q *Queries) RaceRecordsOf(ctx context.Context, arg RaceRecordsOfParams) ([
 			&i.SkipperName,
 			&i.SkipperMachine,
 			&i.Hung,
+			&i.Piloted,
+			&i.Alone,
+			&i.Course,
 		); err != nil {
 			return nil, err
 		}
@@ -1388,7 +1444,7 @@ const raceRibbonsOf = `-- name: RaceRibbonsOf :many
 SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
   newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
   awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
-  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung, piloted, alone, coalesce(course, '')::text AS course
 FROM race_record
 WHERE account_id = $1 AND role IN ('skipper', 'crew')
 ORDER BY at DESC, id DESC
@@ -1424,6 +1480,9 @@ type RaceRibbonsOfRow struct {
 	SkipperName    string
 	SkipperMachine bool
 	Hung           bool
+	Piloted        bool
+	Alone          bool
+	Course         string
 }
 
 // A sailor's lasting records of races sailed, skipper or crew, the newest
@@ -1459,6 +1518,9 @@ func (q *Queries) RaceRibbonsOf(ctx context.Context, arg RaceRibbonsOfParams) ([
 			&i.SkipperName,
 			&i.SkipperMachine,
 			&i.Hung,
+			&i.Piloted,
+			&i.Alone,
+			&i.Course,
 		); err != nil {
 			return nil, err
 		}
@@ -1715,6 +1777,39 @@ func (q *Queries) SpoonsHung(ctx context.Context, arg SpoonsHungParams) (int32, 
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const standingTrialIDs = `-- name: StandingTrialIDs :many
+SELECT id FROM race
+WHERE world_id = $1 AND owner_id IS NULL AND kind = 'trial' AND state = 'open' AND boat = $2
+ORDER BY course_kind, long, shape DESC, course
+`
+
+type StandingTrialIDsParams struct {
+	WorldID pgtype.UUID
+	Boat    string
+}
+
+// A world's standing trials open for a kind of boat, the buoy courses
+// first.
+func (q *Queries) StandingTrialIDs(ctx context.Context, arg StandingTrialIDsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, standingTrialIDs, arg.WorldID, arg.Boat)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const startEntries = `-- name: StartEntries :exec

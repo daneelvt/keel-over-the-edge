@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
@@ -57,6 +58,34 @@ func TestPrizesFromRecords(t *testing.T) {
 	}
 }
 
+// The pendant is of the highest certificate held, whatever the order
+// they were earned in, and leaves the rest of the code alone; none
+// without one, nor for an id the catalog no longer has.
+func TestPendantFromCertificates(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := PrizeRulesOf(cat)
+	if len(cat.Certificates) != 5 {
+		t.Fatalf("%d certificates", len(cat.Certificates))
+	}
+	id := func(i int) string { return string(cat.Certificates[i].ID) }
+	if p := PrizesFrom(store.RacePrizes{Held: []string{"no such certificate"}}, rules); p.Pendant() != 0 || p != 0 {
+		t.Errorf("an unknown certificate: %#x", uint32(p))
+	}
+	for i := range cat.Certificates {
+		if p := PrizesFrom(store.RacePrizes{Held: []string{id(i)}}, rules); p.Pendant() != i+1 {
+			t.Errorf("%s: pendant %d", id(i), p.Pendant())
+		}
+	}
+	p := PrizesFrom(store.RacePrizes{Sailed: rules.Gilded, Wins: []string{"abcdefghij"}, Spoons: 3, Ran: rules.Ran,
+		Held: []string{id(0), id(4), id(1)}}, rules)
+	if p.Pendant() != 5 || p.Pennants() != 1 || p.Burgee() != BurgeeGilded || p.Spoons() != 3 || !p.Committee() {
+		t.Errorf("the Master's with every prize: pendant %d, code %#x", p.Pendant(), uint32(p))
+	}
+}
+
 // A sailor is read once asked for, at the next turn, and shows nothing
 // till then; read again when asked again; asked again after a failed read.
 func TestPrizeBoardReadsWhenAsked(t *testing.T) {
@@ -100,6 +129,49 @@ func TestPrizeBoardReadsWhenAsked(t *testing.T) {
 	fail = false
 	if err := b.load(ctx, 10, read); err != nil || len(reads) != 3 {
 		t.Errorf("not asked again after a failed read: %v, %v", reads, err)
+	}
+}
+
+// A sailor's pendant is read from the certificates they hold, kept for
+// good: read again once asked after an earning, and worn in the next world
+// too.
+func TestPendantReadAgainOnEarning(t *testing.T) {
+	s := newSea(t)
+	sailor := s.human()
+	a := bus.Account(sailor.ID)
+	read := func(svc *Service) Prizes {
+		t.Helper()
+		svc.PrizesOf(a)
+		if err := svc.LoadPrizes(s.ctx); err != nil {
+			t.Fatal(err)
+		}
+		return svc.PrizesOf(a)
+	}
+	if p := read(s.svc); p.Pendant() != 0 {
+		t.Fatalf("no certificate: pendant %d", p.Pendant())
+	}
+	earn := func(i int) {
+		t.Helper()
+		c := store.Certificate{ID: string(s.cat.Certificates[i].ID), Earned: time.Now(), World: s.world.Number}
+		if ok, err := s.db.Exam().Earn(s.ctx, sailor.ID, &c, s.cat.Certificates[i].Name, nil, 0); err != nil || !ok {
+			t.Fatalf("earning %s: %v, %v", c.ID, ok, err)
+		}
+	}
+	earn(0)
+	earn(1)
+	if p := s.svc.PrizesOf(a); p.Pendant() != 0 {
+		t.Errorf("read again unasked: pendant %d", p.Pendant())
+	}
+	s.svc.Reread(a)
+	if err := s.svc.LoadPrizes(s.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if p := s.svc.PrizesOf(a); p.Pendant() != 2 {
+		t.Errorf("after earning the second: pendant %d", p.Pendant())
+	}
+	next := New(Config{Store: s.db, Catalog: s.cat, World: World{ID: s.world.ID, Number: s.world.Number + 1}})
+	if p := read(next); p.Pendant() != 2 || p.Pennants() != 0 {
+		t.Errorf("the next world: %#x", uint32(p))
 	}
 }
 

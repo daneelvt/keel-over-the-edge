@@ -41,8 +41,10 @@
 // The chart screen's Log tab, the strip still one row with its four tabs,
 // where the boat is and the way back to sea, holds a sailor's log on its
 // paper within the screen under the strip: a long log's days, its
-// collection (three kinds a row upright, five sideways) and its ribbons, who may read it,
-// another sailor's, a machine sailor's, an empty one and one not there;
+// collection (three kinds a row upright, five sideways) and its ribbons, the
+// next certificate's block at their head (its name alone after the last),
+// who may read it, another sailor's (their certificate at its head), a
+// machine sailor's, an empty one and one not there;
 // its keys the head keys' size, its day rows and kinds a 44 px touch, no
 // words under 13 px, nothing wider than the sheet.
 //
@@ -83,8 +85,10 @@
 // the line), racing and with a call at its longest, on every screen, it
 // covers no part and no part covers it, it stands clear of the boat, and
 // its words are whole within it, none cut short. Its ⋯'s window, the
-// finish's card and the results fit every screen, their keys the head
-// keys' size.
+// finish's card and the results, with what the run counted toward a
+// certificate at its longest, fit every screen, their keys the head keys'
+// size. The notices of certificates, a task done and a certificate earned
+// with See, keep the notices' rules on the phones held either way.
 //
 // Watching a race, the race bar takes the watch plate's place: one row at
 // the foot of the screen, within it, clear of every part and the boat,
@@ -109,7 +113,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
-import { emptyLog, LONG_NAME, longLog, standInLogs } from './logs';
+import { emptyLog, LONG_NAME, longLog, masterLog, standInLogs } from './logs';
 import { firstEdition, fullDay, quietDay, standInNews } from './news';
 import { OTHERS, REFUSED, standInRaces } from './races';
 import { GONE, RACED, standInReplays } from './replays';
@@ -2331,6 +2335,66 @@ test('every panel and window on the screen at sea is in the plate’s brass and 
   expect(found).toEqual([]);
 });
 
+test('the notices of certificates, a task done and a certificate earned with See, keep the notices’ rules on the phones held either way', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the notices are the same on either back end');
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    // The autopilot's head open, the barometer and the clock shut, as a
+    // harbour race's notice with Enter is held: held sideways, the column
+    // under the case has no room for a notice with a key under both.
+    k.settings({ barometer: false, clock: false, pilotHead: true, rightOfWay: true });
+    k.render();
+  });
+  await expect(page.locator('[data-pusher=board]')).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  /** The notice shown, by the rules every notice keeps: within the screen, no wider than it shows, its key the head keys' size and in reach, in the plate's brass. */
+  const check = async (where: string, sel: string) => {
+    for (const f of await raceFaults(page, sel)) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  for (const s of [SCREENS[1], SCREENS[5]]) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.waitForTimeout(200);
+    // A task of the log done, its words at their longest.
+    await page.evaluate(() =>
+      globalThis.keel.certified({ certificate: 4, task: 6, done: 5, of: 5, way: 'log' }),
+    );
+    await expect(page.locator('.notice-passive')).toContainText('Toward Master: Every weather');
+    await check(`${s.name}, a task done`, '.notice');
+    for (const f of await lookFaults(page, '.notice')) {
+      found.push(`${s.name}, a task done: ${f}`);
+    }
+    await page.locator('.notice-dismiss').click();
+    // A certificate earned, the longest boats' words: active, with See.
+    await page.evaluate(() =>
+      globalThis.keel.certified({ certificate: 0, task: -1, done: 3, of: 3, earned: true }),
+    );
+    await expect(page.locator('.notice-active.with-act')).toContainText("You're a Deckhand!");
+    await check(`${s.name}, a certificate earned`, '.notice.with-act');
+    for (const f of await lookFaults(page, '.notice.with-act')) {
+      // Its key is the head keys' size, 40 px, its touch reaching beyond.
+      if (!f.includes('“See”')) {
+        found.push(`${s.name}, a certificate earned: ${f}`);
+      }
+    }
+    await page.locator('.notice-dismiss').click();
+  }
+  expect(found).toEqual([]);
+});
+
 test('the list of sailors to watch and the card fit every screen, Watch in view', async ({
   context,
   page,
@@ -3229,7 +3293,9 @@ async function logFaults(page: Page, collection: boolean): Promise<string[]> {
         );
       }
     }
-    for (const k of sheet.querySelectorAll('.log-day:not(.log-day-heads), .log-cell')) {
+    for (const k of sheet.querySelectorAll(
+      '.log-day:not(.log-day-heads), .log-cell, .log-toward-line, .log-toward-course',
+    )) {
       const r = k.getBoundingClientRect();
       if (shown(k) && r.height < 43.5) {
         out.push(`“${k.textContent?.slice(0, 20)}” is ${Math.round(r.height)} px tall`);
@@ -3315,6 +3381,11 @@ test('the chart screen’s Log tab holds a long log, its collection, who may rea
     await check(`${s.name}, a log not there`);
     await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
     await expect(page.locator('.log-day').nth(1)).toBeVisible();
+    // The Captain's pendant at the portrait's neck, beside the cockade.
+    await expect(page.locator('.log-ink-frame .log-pendant')).toHaveAttribute(
+      'aria-label',
+      /spyglass/,
+    );
     await check(`${s.name}, a long log`);
     await page.locator('.log-day:not(.log-day-heads)').first().click();
     await check(`${s.name}, a day opened`);
@@ -3327,12 +3398,22 @@ test('the chart screen’s Log tab holds a long log, its collection, who may rea
     await check(`${s.name}, the collection`, true);
     await page.getByRole('tab', { name: 'Ribbons' }).click();
     await expect(page.locator('.log-ribbon').first()).toBeVisible();
+    // The next certificate heads one's own Ribbons, every task listed.
+    await expect(page.locator('.log-toward-task')).toHaveCount(7);
     await check(`${s.name}, the ribbons`);
     await page.locator('[data-key=older-ribbons]').click();
     await expect(page.locator('.log-ribbon')).toHaveCount(45);
     await check(`${s.name}, the older ribbons`);
+    // After the last certificate, its name alone.
+    own = masterLog;
+    await page.evaluate(() => globalThis.keel.openLog({ kind: 'own', tab: 'ribbons' }));
+    await expect(page.locator('.log-toward-head')).toHaveText('Master');
+    await check(`${s.name}, the ribbons after the last certificate`);
+    own = longLog;
     await page.evaluate((name) => globalThis.keel.openLog({ kind: 'sailor', name }), LONG_NAME);
     await expect(page.locator('.log-back')).toBeVisible();
+    // Their certificate at the head; never their way toward the next.
+    await expect(page.locator('[data-readout=log-certificate]')).toHaveText('Captain by hand');
     await check(`${s.name}, another’s log`);
     await page.evaluate(() =>
       globalThis.keel.openLog({ kind: 'machine', id: '0', name: 'Clockwork Kestrel' }),
@@ -3860,7 +3941,11 @@ test('the race line stands clear of every part and the boat on every screen, its
       const k = globalThis.keel;
       k.raceFinish({ number: 2, place: 1, elapsedMs: 570_000 });
       k.raceFinish({ number: 1, place: 10, elapsedMs: 3_604_200, added: 30 });
+      // What the run counted, at its longest: a course's task done the
+      // autopilot way.
+      k.certified({ certificate: 3, task: 1, done: 4, of: 4, way: 'pilot' });
     });
+    await expect(page.locator('[data-readout=race-certified]')).toBeVisible();
     for (const f of await raceWindowFaults(page, '[data-panel=race-finish]')) {
       found.push(`${s.name}, the finish’s card: ${f}`);
     }

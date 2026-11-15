@@ -80,6 +80,7 @@ import {
   positionGeometry,
   select,
   sin,
+  texture,
   uniform,
   uv,
   varying,
@@ -141,7 +142,14 @@ import {
 } from './fleetparts';
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { lineMaterial, litMaterial, sailGlow } from './materials';
-import { apparentWind, cockadeOf, type PrizeRig, type PrizesAfloat, prizeRig } from './prizes';
+import {
+  apparentWind,
+  cockadeOf,
+  type PrizeRig,
+  type PrizesAfloat,
+  pendantOf,
+  prizeRig,
+} from './prizes';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
 import { bridgeOf, namesBridgeClips } from './sailors/bridgedeck';
 import { namesCatClips } from './sailors/cat';
@@ -150,14 +158,17 @@ import { type ArtFiles, type FleetLook, FleetLooks } from './sailors/fleetlooks'
 import {
   type NearBoat,
   NearSailors,
+  nearPendantNode,
   nearSailorNodes,
   ROW_HEAD,
   rigidSailorNodes,
+  rowInstances,
   SailorRows,
   swayOf,
 } from './sailors/fleetsailors';
 import { type SailorColours, sailorColours, sailorMaterial } from './sailors/material';
 import { catOf, NO_SOLID, wireColour } from './sailors/onboat';
+import { noPendants, pendantMaterial, whenPendants } from './sailors/pendant';
 import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
 import { type Trapeze, trapezeOf, wireNode } from './sailors/trapeze';
@@ -604,6 +615,9 @@ export class FleetView {
   nearSailors: NearSailors | null = null;
   /** The skinned sailors' mesh, in the near level. */
   skinned: InstancedMesh | null = null;
+  /** The pendants the near boats' skinned sailors wear, a draw of its own; and how many wear one this frame. */
+  pendants: InstancedMesh | null = null;
+  wearing = 0;
   /** The near boat's parts, which the sailors are seated by; null until loaded. */
   parts: BoatParts | null = null;
 
@@ -856,6 +870,14 @@ export class FleetView {
         },
       });
       this.skinned = this.near.add(looks.near, m, 'skinned', n.opacity);
+      const row = int(instanceIndex);
+      const pm = pendantMaterial(nearPendantNode(near.texture, row, this.#cog, looks));
+      this.pendants = this.near.add(
+        noPendants(),
+        pm,
+        'pendants',
+        varying(rowInstances(texture(near.texture), row).rig.z) as unknown as Node<'float'>,
+      );
     }
   }
 
@@ -881,6 +903,7 @@ export class FleetView {
       level.sailorTriangles = 0;
       level.kites = 0;
     }
+    this.wearing = 0;
     if (this.wires !== null) {
       this.wires.count = 0;
     }
@@ -998,6 +1021,10 @@ export class FleetView {
     this.far.commit();
     if (this.skinned !== null) {
       this.skinned.count = this.near.count > this.near.rigid ? this.near.count : 0;
+    }
+    if (this.pendants !== null) {
+      // None worn, no draw.
+      this.pendants.count = this.wearing > 0 ? this.near.count : 0;
     }
     this.nearSailors?.commit();
     this.wires?.commit();
@@ -1240,8 +1267,20 @@ export class FleetView {
       d[r + 25] = this.#sway.z;
       d[r + 26] = this.nearSailors.seated(b.slot);
     }
-    // Skinned, with the winner's cockade on its skipper if it flies a pennant.
-    d[r + 27] = skinned ? (cockadeOf(b.prizes) ? 2 : 1) : 0;
+    // Skinned, with the winner's cockade on its skipper if it flies a
+    // pennant, and the pendant they wear.
+    const pendant = skinned && this.pendants !== null ? pendantOf(b.prizes) : 0;
+    d[r + 27] = skinned ? 1 + (cockadeOf(b.prizes) ? 1 : 0) + 2 * pendant : 0;
+    if (pendant > 0 && this.pendants !== null) {
+      this.wearing++;
+      const mesh = this.pendants;
+      whenPendants((p) => {
+        if (mesh.geometry !== p.all) {
+          mesh.geometry.dispose();
+          mesh.geometry = p.all;
+        }
+      });
+    }
   }
 
   /** The fleet's sailors' meshes in this view: the rigid figures of each level and the skinned ones. */

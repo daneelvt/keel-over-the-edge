@@ -369,7 +369,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	c.steering = f.Holder[s] == (bus.Account{})
 	c.holding = c.steering
 	c.wmu.Unlock()
-	c.toldDeck, c.toldCrew = [3]uint64{}, false
+	c.toldDeck, c.toldCrew = toldDeck{}, false
 	c.toldWatchers = 0
 	c.toldLook = f.Look[s]
 	c.toldBoat(f, s)
@@ -634,7 +634,7 @@ func (c *conn) crews(f *bus.Frame, v *connView) bool {
 		// Unchanged since told: nothing to look up.
 		s := v.slot[vs]
 		lo, hi := f.CrewOf(s)
-		now := toldCrew{boat: v.boat[vs], deck: f.Deck[s], look: f.Look[s], cockades: c.e.cockadesOf(f, s, lo, hi)}
+		now := toldCrew{boat: v.boat[vs], deck: f.Deck[s], look: f.Look[s], worn: c.e.wornOf(f, s, lo, hi)}
 		if c.crewKnown&bit != 0 && c.toldCrews[vs] == now {
 			continue
 		}
@@ -648,7 +648,7 @@ func (c *conn) crews(f *bus.Frame, v *connView) bool {
 			continue
 		}
 		c.crewed |= bit
-		crews = append(crews, crewIn(f, s, lo, hi, vs, now.cockades))
+		crews = append(crews, crewIn(f, s, lo, hi, vs, &now.worn))
 	}
 	if len(crews) == 0 {
 		return true
@@ -659,16 +659,16 @@ func (c *conn) crews(f *bus.Frame, v *connView) bool {
 // crewIn is the crew of the boat in slot s of f, f.Crew[lo:hi] its crew
 // but its skipper, as those aboard no boat are told it, for view slot vs:
 // the skipper at seat 0, then the rest in seat order, and the seat of
-// whoever holds the controls, 0 for the skipper; cockades says who wears
-// the cockade (cockadesOf).
-func crewIn(f *bus.Frame, s int32, lo, hi, vs int, cockades uint64) *pb.Crew {
+// whoever holds the controls, 0 for the skipper; w is what each wears
+// (wornOf).
+func crewIn(f *bus.Frame, s int32, lo, hi, vs int, w *worn) *pb.Crew {
 	people := make([]pb.Person, hi-lo+1)
 	list := make([]*pb.Person, hi-lo+1)
-	people[0] = pb.Person{Look: f.Look[s], Machine: f.Machine[s], Cockade: cockades&1 != 0}
+	people[0] = pb.Person{Look: f.Look[s], Machine: f.Machine[s], Cockade: w.cockade(0), Pendant: w.pendant(0)}
 	list[0] = &people[0]
 	holder := uint32(0)
 	for i, a := range f.Crew[lo:hi] {
-		people[i+1] = pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine, Cockade: cockades>>(i+1)&1 != 0}
+		people[i+1] = pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine, Cockade: w.cockade(i + 1), Pendant: w.pendant(i + 1)}
 		list[i+1] = &people[i+1]
 		if f.Holder[s] == a.Account {
 			holder = uint32(a.Seat)

@@ -88,6 +88,7 @@ built files are committed; the catalog's `art.model` names them, and
   underside and the roof's top at its after end. Its `wheel` node stands
   off the centreline, with no spread; the `sailor` node is the helm's
   stance aft of it.
+- `pendants/build.ts`: the certificates' pendants (below).
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -561,6 +562,25 @@ root nodes laid out as the boats are, each origin on the waterline:
 Every part's colour is in its vertices and every material is plain, so the
 page merges each node into one instanced draw, its parts' roughness and
 metalness carried in its vertices.
+
+## The pendants
+
+`pendants/build.ts` builds the certificates' pendants into
+`pendants/pendants.glb`, the catalog's `pendants.art.model`, a root node
+for each, named as a certificate's `pendantNode`: `anchor` (copper),
+`wheel` (a bronze ship's wheel), `compass-rose` (a silver star raised on a
+blackened disc), `spyglass` (silver, hung across the chest) and `sunburst`
+(gold), each about three centimetres, at most 480 triangles with its bail
+and cord. Each hangs from a bail, a small ring square to its face; its
+origin is where the cord runs through the bail, x across, y up and z out
+from the chest, its back (the bail's too) on z = 0. The cord's two ends
+rise up and back from the bail, to pass under the clothes at the neck.
+Every part's colour is in its vertices and its metalness and roughness in
+its second texture coordinate, so one plain material draws them all. The
+script fails on a pendant over its triangles or out of its size, and on a
+certificate whose pendant it does not build;
+`client/src/render/sailors/pendant.test.ts` checks the committed file and
+where each look's figures wear it.
 
 ## The log's glyphs
 

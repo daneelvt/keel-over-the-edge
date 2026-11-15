@@ -223,6 +223,29 @@ export interface RaceCheeredIn {
   mine: boolean;
 }
 
+/** How a certificate's task counted: a task of the log, a course by hand, or a course's longer venture on the autopilot. */
+export type CertWayIn = 'log' | 'hand' | 'pilot';
+
+/**
+ * What the sailor's certificates came to, as the race or the log that
+ * counted is written: a task of its next certificate done (task, its place
+ * among the certificate's tasks; −1 for none), a course's venture a run
+ * nearer (runs of runsOf, the task not yet done; runsOf 0 otherwise), or
+ * the certificate earned, by hand or not. certificate is its place in the
+ * catalog's list; done of of the tasks done of those it needs.
+ */
+export interface CertifiedIn {
+  certificate: number;
+  task: number;
+  done: number;
+  of: number;
+  way: CertWayIn;
+  runs: number;
+  runsOf: number;
+  earned: boolean;
+  byHand: boolean;
+}
+
 /** A race's boat to watch: its race by number (0 for none) or its link's code, and its race number (0: the boat the game chooses). */
 export interface RaceWatchAsk {
   race: number;
@@ -453,6 +476,8 @@ export interface PersonTold {
   shipmate: boolean;
   /** They wear the winner's cockade, for a race won in the world. */
   cockade?: boolean;
+  /** The pendant they wear at the neck: 0 none, else their highest certificate's place in the catalog's list and one. */
+  pendant?: number;
 }
 
 /**
@@ -469,7 +494,7 @@ export interface CrewTold {
 /** Who is aboard a boat in view, by its view slot: each person's seat, look and machine mark, and the holder's seat; never a name. */
 export interface ViewCrewTold {
   slot: number;
-  people: { seat: number; look: number; machine: boolean; cockade?: boolean }[];
+  people: { seat: number; look: number; machine: boolean; cockade?: boolean; pendant?: number }[];
   holder: number;
 }
 
@@ -854,6 +879,8 @@ export type FromWorker =
   | { type: 'raceResults'; results: RaceResultsIn }
   /** The crowd's cheers for a boat of the race. */
   | { type: 'raceCheered'; cheered: RaceCheeredIn }
+  /** What the sailor's certificates came to. */
+  | { type: 'certified'; certified: CertifiedIn }
   /** Chunks of the land the boat could see: their addresses to fetch. */
   | { type: 'chunks'; chunks: ChunksHanded }
   /** The places in chunks just handed. */

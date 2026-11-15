@@ -38,8 +38,12 @@ func (s *Service) Harbour(ctx context.Context, lease int64, now time.Time) (int,
 		}
 	}
 	courses := s.cfg.Courses()
+	trials, err := s.standing(ctx, lease, now, limits, &courses)
+	if err != nil {
+		return 0, "", err
+	}
 	if len(courses.Areas) == 0 {
-		return 0, fmt.Sprintf("world %d: no racing area", w.Number), nil
+		return trials, fmt.Sprintf("world %d: no racing area, %d standing trials", w.Number, trials), nil
 	}
 	greenhorn := map[string]int{}
 	for _, d := range days {
@@ -49,7 +53,7 @@ func (s *Service) Harbour(ctx context.Context, lease int64, now time.Time) (int,
 	ahead := max(HarbourAhead, time.Duration(HarbourShown*limits.Every)*time.Hour)
 	slots := Slots(window, now, now.Add(ahead), limits.Every, s.cfg.Zone)
 	if len(slots) == 0 {
-		return 0, fmt.Sprintf("world %d: no harbour race due", w.Number), nil
+		return trials, fmt.Sprintf("world %d: no harbour race due, %d standing trials", w.Number, trials), nil
 	}
 	busy, err := s.cfg.Store.BusyAreas(ctx, w.ID, slots[0].At.Add(-AreaApart), slots[len(slots)-1].At.Add(AreaApart))
 	if err != nil {
@@ -93,5 +97,53 @@ func (s *Service) Harbour(ctx context.Context, lease int64, now time.Time) (int,
 	if err != nil {
 		return 0, "", err
 	}
-	return made, fmt.Sprintf("world %d: %d harbour races made of %d due", w.Number, made, len(races)), nil
+	return made + trials, fmt.Sprintf("world %d: %d harbour races made of %d due, %d standing trials", w.Number, made, len(races), trials), nil
+}
+
+// The Harbourmaster's standing trials, made with the world's harbour
+// races: on each buoy course a newcomer is set to sail (the short
+// windward–leeward, the short triangle and the long windward–leeward),
+// for every kind of boat that races buoy courses, and on each island
+// course open, for every kind it is offered to. Each is made once, and
+// stays open for runs the whole world long, the course laid to the wind
+// at each run. A course a certificate asks for is always one of these.
+var standingBuoys = []struct {
+	shape string
+	long  bool
+}{{ShapeWindwardLeeward, false}, {ShapeTriangle, false}, {ShapeWindwardLeeward, true}}
+
+// standing makes the standing trials not yet made, fenced by the lease's
+// epoch: how many it made.
+func (s *Service) standing(ctx context.Context, lease int64, now time.Time, limits store.RaceSettings, courses *Courses) (int, error) {
+	if latest := s.latest(limits); !latest.IsZero() && now.After(latest) {
+		return 0, nil
+	}
+	w := &s.cfg.World
+	var trials []store.NewRace
+	for i := range s.cfg.Catalog.Boats {
+		b := &s.cfg.Catalog.Boats[i]
+		if !s.inAreas(b, courses) {
+			continue
+		}
+		for _, c := range standingBuoys {
+			trials = append(trials, store.NewRace{World: w.ID, Kind: KindTrial, CourseKind: CourseBuoy, Shape: c.shape, Long: c.long,
+				Boat: string(b.ID), Who: WhoEveryone, Name: StandingName(CourseBuoy, c.shape, c.long, ""), StartsAt: now, Harbour: -1,
+				MadeAt: now})
+		}
+	}
+	for _, ic := range courses.Island {
+		for i := range s.cfg.Catalog.Boats {
+			b := &s.cfg.Catalog.Boats[i]
+			if _, ok := ic.Boats[string(b.ID)]; !ok {
+				continue
+			}
+			trials = append(trials, store.NewRace{World: w.ID, Kind: KindTrial, CourseKind: CourseIsland, Course: ic.Number,
+				Boat: string(b.ID), Who: WhoEveryone, Name: StandingName(CourseIsland, "", false, ic.Name), StartsAt: now, Harbour: -1,
+				MadeAt: now})
+		}
+	}
+	if len(trials) == 0 {
+		return 0, nil
+	}
+	return s.cfg.Store.MakeStandingTrials(ctx, lease, trials)
 }

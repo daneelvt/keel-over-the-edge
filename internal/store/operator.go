@@ -31,6 +31,9 @@ const (
 	ActionUnpriority = "unpriority"
 	ActionCap        = "cap"
 	ActionLifetime   = "lifetime"
+	// ActionEveryBoat is every kind of boat opened to a sailor, or closed
+	// again: its detail on or off.
+	ActionEveryBoat = "every-boat"
 )
 
 // Where an action came from: the world page, or the command.
@@ -481,6 +484,8 @@ type Card struct {
 	LastSeen        time.Time
 	Tools, Priority bool
 	Cap             int
+	// EveryBoat: the owner opened every kind of boat to it.
+	EveryBoat bool
 	// Stopped is when it was stopped, zero if it is not, and StopReason
 	// why.
 	Stopped    time.Time
@@ -511,7 +516,7 @@ func (s *Store) Card(ctx context.Context, id AccountID) (Card, error) {
 		ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name,
 		Look:    Look{Look: r.Look, Version: r.Version, Skin: r.Skin, Hair: r.Hair, Colour: r.Colour, Finish: r.Finish, Chosen: r.LookChosen},
 		Created: r.CreatedAt, LastSeen: r.LastSeenAt,
-		Tools: r.Tools, Priority: r.Priority, Cap: int(r.MachineCap), Stopped: notEpoch(r.StoppedAt), StopReason: r.StopReason,
+		Tools: r.Tools, Priority: r.Priority, Cap: int(r.MachineCap), EveryBoat: r.EveryBoat, Stopped: notEpoch(r.StoppedAt), StopReason: r.StopReason,
 		OwnerName: r.OwnerName, OwnerTools: r.OwnerTools, OwnerStopped: notEpoch(r.OwnerStoppedAt),
 	}
 	if r.HasRecovery {

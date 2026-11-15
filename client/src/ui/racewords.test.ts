@@ -116,6 +116,7 @@ describe('refusals, told kindly', () => {
       'not-found',
       'not-entered',
       'offline',
+      'certificate',
     ]) {
       expect(enterRefusalText(r, t()), r).not.toBe(fallback);
     }
@@ -123,7 +124,18 @@ describe('refusals, told kindly', () => {
   });
 
   test('every reason making may be refused for has words of its own', () => {
-    for (const r of ['made', 'owned', 'soon', 'late', 'course', 'areas', 'who', 'boat', 'name']) {
+    for (const r of [
+      'made',
+      'owned',
+      'soon',
+      'late',
+      'course',
+      'areas',
+      'who',
+      'boat',
+      'name',
+      'certificate',
+    ]) {
       expect(makeRefusalText(r, t()), r).not.toBe(fallback);
     }
   });

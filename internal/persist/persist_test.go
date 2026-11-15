@@ -568,3 +568,27 @@ func TestPlacedEdgeEvents(t *testing.T) {
 		}
 	})
 }
+
+// TestEarnedTold: of what a batch's judging told, each certificate earned
+// is told to Earned, by its sailor, and a task done alone is not; both go
+// into the world.
+func TestEarnedTold(t *testing.T) {
+	q := bus.NewQueue()
+	var earned []store.AccountID
+	p := &Persist{cfg: Config{Hold: q.Server(), Earned: func(id store.AccountID) { earned = append(earned, id) }}}
+	ann, kit := store.AccountID(acct(1)), store.AccountID(acct(2))
+	p.certified([]store.Certified{
+		{Account: ann, Certificate: 1, Task: 2, Done: 2, Of: 4, Way: store.WayLog},
+		{Account: kit, Certificate: 0, Task: -1, Done: 3, Of: 3, Earned: true},
+	})
+	if !slices.Equal(earned, []store.AccountID{kit}) {
+		t.Errorf("told earned: %v", earned)
+	}
+	n := 0
+	for _, ok := q.Receive(); ok; _, ok = q.Receive() {
+		n++
+	}
+	if n != 2 {
+		t.Errorf("%d commands into the world, not 2", n)
+	}
+}

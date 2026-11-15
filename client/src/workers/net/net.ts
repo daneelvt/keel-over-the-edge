@@ -542,6 +542,9 @@ export class NetWorker {
         case 'raceCheered':
           this.#d.post({ type: 'raceCheered', cheered: r.cheered });
           break;
+        case 'certified':
+          this.#d.post({ type: 'certified', certified: r.certified });
+          break;
         case 'chunks':
           this.#d.post({ type: 'chunks', chunks: r.chunks });
           break;

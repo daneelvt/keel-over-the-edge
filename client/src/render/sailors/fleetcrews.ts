@@ -224,9 +224,12 @@ export class FleetCrews {
       return;
     }
     this.#looks = looks;
-    this.#near = new CrewLevel('fleet near', looks.bones, 3 * DECK_TRIANGLES, 16, looks);
+    this.#near = new CrewLevel('fleet near', looks.bones, 3 * DECK_TRIANGLES, 16, looks, true);
     this.#far = new CrewLevel('fleet far', looks.bones, 3 * FAR_TRIANGLES, FAR_FIGURES, looks);
     this.group.add(this.#near.mesh, this.#far.mesh);
+    if (this.#near.pendants !== null) {
+      this.group.add(this.#near.pendants);
+    }
   }
 
   /** A kind's crew, from the fleet's model of it, as it loads. */
@@ -726,14 +729,25 @@ export class FleetCrews {
       rows.forEach((p, r) => {
         const placed = level.pool.placed.get(keys[r] as string);
         if (placed !== undefined) {
-          const worn =
-            boats[r]?.told?.people.find((q) => q.seat === p.member.seat)?.cockade === true;
-          level.head(r, placed, p.colours, p.look.layer, p.look.machine, worn);
+          const told = boats[r]?.told?.people.find((q) => q.seat === p.member.seat);
+          level.head(
+            r,
+            placed,
+            p.colours,
+            p.look.layer,
+            p.look.machine,
+            told?.cockade === true,
+            told?.pendant ?? 0,
+          );
         }
       });
       level.commit(rows.length, keys);
     }
-    this.drawn = { near: this.#nearRows.length, far: this.#farRows.length };
+    this.drawn = {
+      near: this.#nearRows.length,
+      far: this.#farRows.length,
+      pendants: near.wearing,
+    };
   }
 
   /** The boat of each near row, and of each far row. */
@@ -841,8 +855,8 @@ export class FleetCrews {
   /** Frames drawn, people posed and the milliseconds posing them took, counted until read and reset. */
   stats = { frames: 0, posed: 0, ms: 0 };
 
-  /** How many are drawn at each level, at the last change. */
-  drawn = { near: 0, far: 0 };
+  /** How many are drawn at each level, at the last change, and how many near wear a pendant. */
+  drawn = { near: 0, far: 0, pendants: 0 };
 }
 
 /**

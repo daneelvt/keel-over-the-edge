@@ -8,7 +8,8 @@
 // the sea is not drawn while it is open; two fingers twisted turn it the
 // way they twist; the pocket chart says how far the edge is and opens it;
 // its list puts the nearest first, and lists its island courses; a notice
-// is a status, dismissed by its button; and charted by sight, an island the boat sails up to is charted,
+// is a status, dismissed by its button; what a sailor's certificates came
+// to raises its notices, See opening the log's Ribbons; and charted by sight, an island the boat sails up to is charted,
 // the sailor's, with a notice. A course set on a charted place from its
 // box puts its distance in the compass's window once the chart is shut; a
 // tap on open water drops a pin whose box sets the course, and past the
@@ -19,6 +20,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 import { openScene } from './helpers';
+import { standInLogs } from './logs';
 
 const chartFile = new URL('../../.dev/worlds/1.chart', import.meta.url);
 const catalogFile = new URL('../src/catalog/catalog.gen.json', import.meta.url);
@@ -244,6 +246,51 @@ test.describe('the chart', () => {
     expect(await page.evaluate(() => document.activeElement?.tagName ?? '')).toBe(before);
     await page.getByRole('button', { name: 'Dismiss' }).click();
     await expect(status).toBeEmpty();
+  });
+
+  test('what a sailor’s certificates came to raises its notices: a task done passing, a certificate earned staying with See, which opens the log’s Ribbons, and the bell rung twice', async ({
+    page,
+  }) => {
+    await standInLogs(page);
+    await openScene(page, 'world=1', true);
+    const status = page.locator('.notice-line[role="status"]');
+    // A task of the log done: a passing notice, its words the catalog's.
+    const rung = await page.evaluate(() =>
+      globalThis.keel.certified({ certificate: 1, task: 3, done: 2, of: 4, way: 'log' }),
+    );
+    expect(rung).toBe(0);
+    await expect(page.locator('.notice-passive')).toHaveText(
+      /^Toward Helm: A night at sea ✓ · 2 of 4/,
+    );
+    // A second folds into it.
+    await page.evaluate(() =>
+      globalThis.keel.certified({ certificate: 1, task: 2, done: 3, of: 4, way: 'log' }),
+    );
+    await expect(page.locator('.notice-passive')).toHaveText(/^Toward Helm: 2 tasks done · 3 of 4/);
+    await page.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(status).toBeEmpty();
+    // Helm earned: a notice that stays, with See, and the bell rung, twice.
+    expect(
+      await page.evaluate(() =>
+        globalThis.keel.certified({
+          certificate: 1,
+          task: -1,
+          done: 4,
+          of: 4,
+          earned: true,
+          byHand: true,
+        }),
+      ),
+    ).toBe(1);
+    await expect(page.locator('.notice-active')).toHaveText(
+      /You're a Helm! The beach cat is yours to take/,
+    );
+    await page.locator('.notice-act').click();
+    // See: the log, on its Ribbons, the next certificate at their head.
+    await expect(page.locator('.log-sheet [role=tab][aria-selected=true]')).toHaveText('Ribbons');
+    await expect(page.locator('.log-toward-head')).toBeVisible();
+    await expect(status).toBeEmpty();
+    await page.evaluate(() => globalThis.keel.openChart(null));
   });
 
   test('charted by sight: an island the boat comes up to is charted, the sailor’s, with a notice', async ({

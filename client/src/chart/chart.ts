@@ -38,7 +38,7 @@ export type ChartMode = 'chart' | 'list' | 'news' | 'log';
  * one of the player's machine sailors' by its account's id.
  */
 export type LogWho =
-  | { kind: 'own' }
+  | { kind: 'own'; tab?: 'ribbons' }
   | { kind: 'sailor'; name: string }
   | { kind: 'machine'; id: string; name: string };
 

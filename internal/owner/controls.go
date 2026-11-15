@@ -39,6 +39,13 @@ type PriorityRequest struct {
 	On      bool   `json:"on"`
 }
 
+// EveryBoatRequest opens every kind of boat to an account's sailor, human
+// or AI, whatever its certificates, or closes them again.
+type EveryBoatRequest struct {
+	Account string `json:"account"`
+	On      bool   `json:"on"`
+}
+
 // PlaceRequest moves a flagged account's boat, at rest: to a point (East
 // and North, m), to a position as written (Position: 67°24′N 045°12′), to
 // the start, to an island's approach (Island, its number), to a place's
@@ -202,6 +209,46 @@ func (o *Owner) priority(w http.ResponseWriter, r *http.Request) {
 	o.count(action)
 	o.record(r, action, &id, "")
 	o.cfg.Log.Info("owner: an account's priority set", "action", action, "account", id.String(), "from", r.RemoteAddr)
+	writeJSON(w, map[string]any{"account": id.String(), "on": req.On})
+}
+
+// everyBoat opens every kind of boat to an account's sailor, human or AI,
+// whatever its certificates, for the owner's testing, or closes them
+// again. Nothing is pushed: every boat it may take is read from the
+// database as it takes one, and a boat it sails now that closes to it is
+// kept until it next changes boat or goes to sea. It gives no
+// certificate.
+//
+//	POST /owner/api/every-boat {"account": "…", "on": true}
+func (o *Owner) everyBoat(w http.ResponseWriter, r *http.Request) {
+	var req EveryBoatRequest
+	if !readBody(w, r, &req) {
+		return
+	}
+	id, ok := parseAccount(req.Account)
+	if !ok {
+		o.refuse(w, store.ActionEveryBoat, http.StatusBadRequest, "account is not an account's id")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
+	defer cancel()
+	err := o.cfg.Accounts.SetEveryBoat(ctx, id, req.On)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		o.refuse(w, store.ActionEveryBoat, http.StatusNotFound, "no account of that id")
+		return
+	case err != nil:
+		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	o.b.forget(id)
+	detail := "on"
+	if !req.On {
+		detail = "off"
+	}
+	o.count(store.ActionEveryBoat)
+	o.record(r, store.ActionEveryBoat, &id, detail)
+	o.cfg.Log.Info("owner: every boat set", "account", id.String(), "every_boat", detail, "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"account": id.String(), "on": req.On})
 }
 

@@ -22,6 +22,7 @@ import { decodeServer, encodeClient } from '../../net/frame';
 import {
   AshoreWhy,
   BumpPart,
+  CertWay,
   type ChartEntry as ChartEntryWire,
   ChartSubject,
   ChatRefusal,
@@ -47,6 +48,8 @@ import type {
   BoatPrizeTold,
   BumpTold,
   CapSeen,
+  CertifiedIn,
+  CertWayIn,
   ChartEntry,
   ChatRefusalTold,
   ChatStateTold,
@@ -134,6 +137,13 @@ const COURSE_ENDS: Record<number, CourseEndWhy> = {
 };
 
 /** How a boat stands in its race, as the page names it. */
+/** How a certificate's task counted, by the wire's. */
+const CERT_WAYS: Record<number, CertWayIn> = {
+  [CertWay.LOG]: 'log',
+  [CertWay.HAND]: 'hand',
+  [CertWay.PILOT]: 'pilot',
+};
+
 const RACER_STATES: Record<number, RacerStateIn> = {
   [RacerState.DNS]: 'dns',
   [RacerState.PLACED]: 'placed',
@@ -291,6 +301,7 @@ export type Received =
   /** A race's picture, a call, a boat home, its results. */
   | { kind: 'racePicture'; picture: RacePictureIn }
   | { kind: 'raceCheered'; cheered: RaceCheeredIn }
+  | { kind: 'certified'; certified: CertifiedIn }
   | { kind: 'raceCall'; call: RaceCallIn }
   | { kind: 'raceFinish'; finish: RaceFinishIn }
   | { kind: 'raceResults'; results: RaceResultsIn }
@@ -473,6 +484,7 @@ export class Session {
               blocked: p.blocked,
               shipmate: p.shipmate,
               cockade: p.cockade,
+              pendant: p.pendant,
             })),
             holder: m.body.value.holder,
           },
@@ -565,6 +577,7 @@ export class Session {
               look: p.look,
               machine: p.machine,
               cockade: p.cockade,
+              pendant: p.pendant,
             })),
             holder: c.holder,
           })),
@@ -755,6 +768,24 @@ export class Session {
         return {
           kind: 'raceCheered',
           cheered: { race: v.race, number: v.number, count: v.count, crowd: v.crowd, mine: v.mine },
+        };
+      }
+      case 'certified': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'certified',
+          certified: {
+            certificate: v.certificate,
+            task: v.task,
+            done: v.done,
+            of: v.of,
+            way: CERT_WAYS[v.way] ?? 'log',
+            runs: v.runs,
+            runsOf: v.runsOf,
+            earned: v.earned,
+            byHand: v.byHand,
+          },
         };
       }
       case 'raceCall': {

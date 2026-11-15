@@ -61,6 +61,27 @@ export function setLogHost(h: ((who: LogWho) => void) | null): void {
   host = h;
 }
 
+let raceHost: ((code: string) => void) | null = null;
+
+/** Sets how a race's card opens from the log: over the sea, the chart put away; null for none. */
+export function setRaceHost(h: ((code: string) => void) | null): void {
+  raceHost = h;
+}
+
+/** The link of a race's card, by its code: the game's own address, ?r=. */
+export function raceLink(code: string): string {
+  return `/?r=${encodeURIComponent(code)}`;
+}
+
+/** Opens a race's card from the log: in the page where its races are, else by its link. True if done in the page. */
+export function openRaceCard(code: string): boolean {
+  if (raceHost === null) {
+    return false;
+  }
+  raceHost(code);
+  return true;
+}
+
 /** Opens a sailor's log, or the reader's own: on the chart screen's Log tab, or on its own where there is no chart yet. */
 export function openLog(who: LogWho): void {
   if (host !== null) {

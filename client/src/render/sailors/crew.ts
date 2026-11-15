@@ -51,11 +51,12 @@ import { ShipBraces } from './shipbraces';
 import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
 import { type ShipMember, ShipRules } from './shiprules';
 
-/** Someone aboard, as the crew drawn needs them: their seat and look code, and whether they wear the winner's cockade. */
+/** Someone aboard, as the crew drawn needs them: their seat and look code, whether they wear the winner's cockade, and the pendant they wear (0 none). */
 export interface CrewPerson {
   seat: number;
   look: number;
   cockade?: boolean;
+  pendant?: number;
 }
 
 /** Who is aboard, the skipper (seat 0) first, and the seat of whoever holds the controls. */
@@ -248,9 +249,12 @@ export class CrewDeck {
       return;
     }
     this.#looks = looks;
-    this.#near = new CrewLevel('near', looks.bones, 3 * DECK_TRIANGLES, 12, looks);
+    this.#near = new CrewLevel('near', looks.bones, 3 * DECK_TRIANGLES, 12, looks, true);
     this.#far = new CrewLevel('far', looks.bones, 3 * FAR_TRIANGLES, FAR_FIGURES, looks);
     this.group.add(this.#near.mesh, this.#far.mesh);
+    if (this.#near.pendants !== null) {
+      this.group.add(this.#near.pendants);
+    }
     this.#show();
   }
 
@@ -793,8 +797,16 @@ export class CrewDeck {
       rows.forEach((p, r) => {
         const placed = level.pool.placed.get(keys[r] as string);
         if (placed !== undefined) {
-          const worn = this.#crew?.people.find((q) => q.seat === p.member.seat)?.cockade === true;
-          level.head(r, placed, p.colours, p.look.layer, p.look.machine, worn);
+          const told = this.#crew?.people.find((q) => q.seat === p.member.seat);
+          level.head(
+            r,
+            placed,
+            p.colours,
+            p.look.layer,
+            p.look.machine,
+            told?.cockade === true,
+            told?.pendant ?? 0,
+          );
           level.frame(r, null);
         }
       });
@@ -813,6 +825,7 @@ export class CrewDeck {
       far: this.#farRows.length,
       nearTriangles: tn,
       farTriangles: tf,
+      pendants: near.wearing,
     };
   }
 
@@ -835,8 +848,8 @@ export class CrewDeck {
 
   /**
    * How many were drawn at each level at the last change, and their
-   * figures' triangles (the draws' own count is more: every instance runs
+   * figures' triangles, and how many near wear a pendant (the draws' own count is more: every instance runs
    * its level's largest figure's vertices, those past its own folded).
    */
-  drawn = { near: 0, far: 0, nearTriangles: 0, farTriangles: 0 };
+  drawn = { near: 0, far: 0, nearTriangles: 0, farTriangles: 0, pendants: 0 };
 }

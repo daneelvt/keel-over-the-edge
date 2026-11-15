@@ -14,6 +14,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 // A call, from the door to its answer: the helm of the machine sailor the
@@ -333,7 +334,7 @@ func atSeaRefusal(err error, jr joinResult) *refusal {
 }
 
 // noticesOf are what a call is told of going to sea.
-func (c *Core) noticesOf(s *Sea, jr joinResult) []string {
+func (c *Core) noticesOf(ctx context.Context, s *Sea, account store.AccountID, jr joinResult) []string {
 	var out []string
 	if w := leftWords(jr.told, c.cfg.Silence); w != "" {
 		out = append(out, w)
@@ -344,6 +345,9 @@ func (c *Core) noticesOf(s *Sea, jr joinResult) []string {
 			where = "at " + s.Start
 		}
 		out = append(out, "At sea: you are in the water "+where+".")
+		if w := towardLine(ctx, s, account); w != "" {
+			out = append(out, w)
+		}
 	}
 	return out
 }
@@ -373,7 +377,7 @@ func (c *Core) order(ctx context.Context, h *helm, give func(s *Sea, f *bus.Fram
 	if refused != "" {
 		return "", nil, refuse(refusedOrder, refused)
 	}
-	lines := append(c.noticesOf(s, jr), orderLine(s, f, sl, w))
+	lines := append(c.noticesOf(ctx, s, h.account, jr), orderLine(s, f, sl, w))
 	return strings.Join(lines, "\n"), nil, nil
 }
 
@@ -474,7 +478,7 @@ func (c *Core) observe(ctx context.Context, h *helm, req *mcp.CallToolRequest, o
 	if r := atSeaRefusal(err, jr); r != nil {
 		return "", nil, r
 	}
-	notices := c.noticesOf(s, jr)
+	notices := c.noticesOf(ctx, s, h.account, jr)
 	woke := ""
 	wait := 0
 	if o.Wait != nil {

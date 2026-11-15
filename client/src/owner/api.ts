@@ -1139,6 +1139,10 @@ export interface AccountCard {
   lastActiveAt: number;
   tools: boolean;
   priority: boolean;
+  /** Every kind of boat opened to its sailor by the owner, whatever its certificates. */
+  everyBoat?: boolean;
+  /** Its certificate and the next one's count, in a line: "Helm · by hand · Skipper 2 of 4". */
+  certificate?: string;
   /** byOwner: a machine sailor stopped only because its human is. */
   stopped: { at: number; reason: string; byOwner: boolean } | null;
   sea: { boat: number; east: number; north: number; connected: boolean; grace: number } | null;
@@ -1296,6 +1300,7 @@ export type Control =
   | 'settings'
   | 'machines'
   | 'priority'
+  | 'every-boat'
   | 'accounts/stop'
   | 'accounts/start'
   | 'accounts/revoke'

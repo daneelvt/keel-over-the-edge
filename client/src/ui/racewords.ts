@@ -88,6 +88,11 @@ export function whoText(who: Who): string {
 /** Under newcomers' choice: who a newcomer is. */
 export const NEWCOMERS_DETAIL = 'Sailors with fewer than five races sailed';
 
+/** One of the Harbourmaster's standing trials on the board: "Time trial · Jolly boat". */
+export function trialText(boat: string): string {
+  return boat === '' ? 'Time trial' : `Time trial · ${boat}`;
+}
+
 /** A race or a time trial. */
 export function kindText(kind: 'race' | 'trial'): string {
   return kind === 'trial' ? 'Time trial' : 'Race';
@@ -190,6 +195,8 @@ export function countWords(n: number): string {
 /** What the limits' words may name: when a refusal lifts, and the time now, ms of UTC. */
 export interface RefusalTime {
   until?: number | undefined;
+  /** For a boat the player may not sail yet, the certificate that opens her. */
+  needs?: string | undefined;
   now: number;
   locale?: string;
   zone?: string;
@@ -260,9 +267,19 @@ export function enterRefusalText(reason: string, t: RefusalTime): string {
       return 'The world ends too soon to sail this trial now.';
     case 'not-entered':
       return 'You’re not entered in this race.';
+    case 'certificate':
+      return certificateText(t);
     default:
       return common(reason);
   }
+}
+
+/** Why a race in a boat the player may not sail yet is refused. */
+function certificateText(t: RefusalTime): string {
+  const needs = t.needs ?? '';
+  return needs === ''
+    ? 'This boat needs a certificate you don’t hold yet. Crew aboard a friend’s instead.'
+    : `This boat needs ${needs}. Crew aboard a friend’s instead, or earn it sailing alone.`;
 }
 
 /** Why a race cannot be made, kindly, with when it may be. */
@@ -294,6 +311,8 @@ export function makeRefusalText(reason: string, t: RefusalTime, name?: string): 
       return 'There is no such boat. Choose another.';
     case 'name':
       return nameRefusalText(name ?? '');
+    case 'certificate':
+      return certificateText(t);
     default:
       return common(reason);
   }

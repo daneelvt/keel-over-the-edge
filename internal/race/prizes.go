@@ -20,13 +20,15 @@ import (
 // stern; one who has run races flies the committee's flag. Only races of
 // three boats from three accounts count, as for every prize. They are read
 // from the world's lasting records, so a new world starts bare and the log
-// keeps the races for good.
+// keeps the races for good. With them goes the pendant a sailor wears at
+// the neck, of the highest certificate they hold: certificates are kept
+// for good, so it goes from world to world.
 //
 // The game's connections ask a boat's prizes for every boat in view, many
 // times a second, so they are kept here, read from the database for a few
 // sailors at a time: a sailor first asked for is read at the clerk's next
 // turn, and again when a race of theirs is written or they hang or take
-// down a spoon. Until read, a sailor shows nothing.
+// down a spoon or earn a certificate. Until read, a sailor shows nothing.
 
 // Prizes is a sailor's prizes in a world as the game draws them, a prize
 // code (Code, and the protocol's BoatPrize).
@@ -35,7 +37,8 @@ type Prizes uint32
 // A prize code's fields, from the low bits: how many winner's pennants (3
 // bits), each pennant's colour, the newest win's first (3 bits each, five),
 // the burgee (2 bits: BurgeeNone, BurgeeRacing, BurgeeGilded), how many
-// wooden spoons (2 bits), and the committee's flag (1 bit).
+// wooden spoons (2 bits), the committee's flag (1 bit), and the pendant
+// (3 bits: 0 none, else the highest certificate's place and one).
 const (
 	pennantBits   = 3
 	colourBits    = 3
@@ -44,6 +47,8 @@ const (
 	spoonShift    = burgeeShift + 2
 	committeeFlag = 1 << (spoonShift + 2)
 	mostSpoons    = 3
+	pendantShift  = spoonShift + 3
+	pendantBits   = 3
 )
 
 // The burgees.
@@ -75,20 +80,30 @@ func (p Prizes) Committee() bool { return p&committeeFlag != 0 }
 // however many wins.
 func (p Prizes) Cockade() bool { return p.Pennants() > 0 }
 
+// Pendant is the pendant the sailor wears at the neck: 0 for none, else
+// their highest certificate's place in the catalog's list and one.
+func (p Prizes) Pendant() int { return int(p >> pendantShift & (1<<pendantBits - 1)) }
+
 // PrizeRules are the catalog's: how many pennants and spoons show at
 // most, how many races sailed earn each burgee and how many run the
-// committee's flag, and how many colours the races take.
+// committee's flag, and how many colours the races take; and each
+// certificate's place in the catalog's list, by its id.
 type PrizeRules struct {
 	Pennants, Spoons int
 	Burgee, Gilded   int
 	Ran              int
 	Colours          int
+	Certificates     map[string]int
 }
 
 // PrizeRulesOf are the catalog's rules for the prizes afloat.
 func PrizeRulesOf(cat *catalog.Catalog) PrizeRules {
 	p := cat.World.Committee.Prizes
-	r := PrizeRules{Pennants: int(p.Pennants), Spoons: int(p.Spoons), Burgee: int(p.Burgee), Gilded: int(p.Gilded), Ran: int(p.Ran)}
+	r := PrizeRules{Pennants: int(p.Pennants), Spoons: int(p.Spoons), Burgee: int(p.Burgee), Gilded: int(p.Gilded), Ran: int(p.Ran),
+		Certificates: make(map[string]int, len(cat.Certificates))}
+	for i := range cat.Certificates {
+		r.Certificates[string(cat.Certificates[i].ID)] = i
+	}
 	for _, f := range cat.World.Committee.Flags {
 		if f.Signal == catalog.SignalVictory {
 			r.Colours++
@@ -129,6 +144,13 @@ func PrizesFrom(r store.RacePrizes, rules PrizeRules) Prizes {
 	if r.Ran >= rules.Ran {
 		p |= committeeFlag
 	}
+	pendant := 0
+	for _, id := range r.Held {
+		if i, ok := rules.Certificates[id]; ok {
+			pendant = max(pendant, min(i+1, 1<<pendantBits-1))
+		}
+	}
+	p |= Prizes(pendant) << pendantShift
 	return p
 }
 
@@ -213,6 +235,10 @@ const readMost = 256
 func (s *Service) PrizesOf(a bus.Account) Prizes {
 	return s.prizes.of(a)
 }
+
+// Reread has a sailor's prizes read again at the clerk's next turn: once
+// they have earned a certificate. It never waits.
+func (s *Service) Reread(a bus.Account) { s.prizes.want(a) }
 
 // LoadPrizes reads the prizes of the sailors asked for since the last
 // turn: the clerk's work, once a second.

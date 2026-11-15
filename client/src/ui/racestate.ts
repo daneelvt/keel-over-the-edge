@@ -52,6 +52,8 @@ export class Racing {
   readonly finish = signal<RaceFinishIn | null>(null);
   /** The race's results as it ended, kept after its course is taken up until another race; null before. */
   readonly ended = signal<RaceEnded | null>(null);
+  /** What the boat's run counted toward its sailor's next certificate, for the finish's card and its results; null for nothing. */
+  readonly certified = signal<string | null>(null);
   /** Whether the results' window is open; the finish card's. */
   readonly resultsOpen = signal(false);
   readonly finishOpen = signal(false);
@@ -116,6 +118,7 @@ export class Racing {
     this.call.value = null;
     this.finish.value = null;
     this.finishOpen.value = false;
+    this.certified.value = null;
     this.more.value = false;
   }
 
@@ -189,6 +192,7 @@ export class Racing {
       return;
     }
     this.finish.value = f;
+    this.certified.value = null;
     this.finishOpen.value = true;
   }
 

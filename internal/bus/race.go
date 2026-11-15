@@ -202,6 +202,10 @@ type Racer struct {
 	Machine bool
 	// Crew: those aboard race with it.
 	Crew bool
+	// Piloted: its autopilot steered it in a tick of its run; Company:
+	// someone else was aboard in a tick of its run. A run sailed with
+	// neither is one sailed alone by hand.
+	Piloted, Company bool
 	// Slot and Boat are its boat in the world.
 	Slot  int32
 	Boat  uint64

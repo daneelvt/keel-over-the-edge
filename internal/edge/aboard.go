@@ -61,7 +61,7 @@ func (enc *encoder) aboardWelcome(c *conn, f *bus.Frame, s int32, skipper string
 	c.wmu.Unlock()
 	c.holding, c.seat = false, a.Seat
 	c.crew.Store(true)
-	c.toldDeck, c.toldCrew = [3]uint64{}, false
+	c.toldDeck, c.toldCrew = toldDeck{}, false
 	c.toldWatchers = 0
 	c.toldLook = f.Look[s]
 	c.toldBoat(f, s)
@@ -194,8 +194,8 @@ func (enc *encoder) ashore(c *conn, f *bus.Frame) {
 // were told of someone before.
 func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 	lo, hi := f.CrewOf(s)
-	cockades := c.e.cockadesOf(f, s, lo, hi)
-	told := [3]uint64{f.Boat[s], uint64(f.Deck[s]), cockades}
+	told := toldDeck{boat: f.Boat[s], deck: f.Deck[s], worn: c.e.wornOf(f, s, lo, hi)}
+	w := &told.worn
 	if told == c.toldDeck && !c.recrew.Load() {
 		return true
 	}
@@ -220,7 +220,8 @@ func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 	}
 	holder := uint32(0)
 	people := make([]*pb.Person, 0, hi-lo+1)
-	skipper := &pb.Person{Seat: 0, Look: f.Look[s], Machine: f.Machine[s], You: !c.w.on && !c.crew.Load(), Cockade: cockades&1 != 0}
+	skipper := &pb.Person{Seat: 0, Look: f.Look[s], Machine: f.Machine[s], You: !c.w.on && !c.crew.Load(),
+		Cockade: w.cockade(0), Pendant: w.pendant(0)}
 	if named {
 		skipper.Name = c.e.decks.name(f.Owner[s])
 	}
@@ -228,7 +229,7 @@ func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 	people = append(people, skipper)
 	for i, a := range f.Crew[lo:hi] {
 		p := &pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine, You: !c.w.on && a.Account == c.account,
-			Cockade: cockades>>(i+1)&1 != 0}
+			Cockade: w.cockade(i + 1), Pendant: w.pendant(i + 1)}
 		if named {
 			p.Name = a.Name
 		}

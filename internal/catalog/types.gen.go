@@ -471,6 +471,10 @@ type Catalog struct {
 	// Boat types.
 	Boats []Boat `json:"boats"`
 
+	// The certificates, in the order they are earned: each opens boats to the sailor
+	// who holds it or a later one.
+	Certificates []Certificate `json:"certificates,omitempty,omitzero"`
+
 	// Encounters corresponds to the JSON schema field "encounters".
 	Encounters Encounters `json:"encounters"`
 
@@ -485,6 +489,9 @@ type Catalog struct {
 
 	// Notices corresponds to the JSON schema field "notices".
 	Notices Notices `json:"notices"`
+
+	// Pendants corresponds to the JSON schema field "pendants".
+	Pendants *Pendants `json:"pendants,omitempty,omitzero"`
 
 	// Polars corresponds to the JSON schema field "polars".
 	Polars *Polars `json:"polars,omitempty,omitzero"`
@@ -504,6 +511,90 @@ type Catalog struct {
 
 	// World corresponds to the JSON schema field "world".
 	World World `json:"world"`
+}
+
+// A certificate: its name, its pendant, the boats it opens, and its tasks, of
+// which it needs some. Every task counts only what the sailor sails alone, since
+// the certificate before it was earned.
+type Certificate struct {
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Its name: "You're a Deckhand!"
+	Name string `json:"name"`
+
+	// How many of its tasks earn it.
+	Needs int `json:"needs"`
+
+	// The boats it opens, by their ids: each boat is opened by one certificate at
+	// most, and one opened by none is open to every sailor.
+	Opens []ID `json:"opens"`
+
+	// The pendant worn by those who hold it, in words.
+	Pendant string `json:"pendant"`
+
+	// The pendant's node in the pendants' model.
+	PendantNode string `json:"pendantNode"`
+
+	// Tasks corresponds to the JSON schema field "tasks".
+	Tasks []CertificateTask `json:"tasks"`
+}
+
+type CertificateCourse string
+
+const CertificateCourseIsland CertificateCourse = "island"
+const CertificateCourseLong CertificateCourse = "long"
+const CertificateCourseLongTriangle CertificateCourse = "long-triangle"
+const CertificateCourseShort CertificateCourse = "short"
+const CertificateCourseTriangle CertificateCourse = "triangle"
+
+// A task toward a certificate: a course, sailed as a time trial (courses, with
+// what sailing it by hand asks and what the autopilot's longer way asks), or a
+// measure of the sailor's log reaching a mark (measure and at).
+type CertificateTask struct {
+	// The mark a log task's measure reaches: at least this, or for the lip at most
+	// this.
+	At *float64 `json:"at,omitempty,omitzero"`
+
+	// A course task's courses: a buoy course by its shape and length, or any island
+	// course.
+	Courses []CertificateCourse `json:"courses,omitempty,omitzero"`
+
+	// Hand corresponds to the JSON schema field "hand".
+	Hand *CertificateWay `json:"hand,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// A log task's measure: the distance sailed alone (NM), places seen, places
+	// charted first, kinds of the sea's life met, nights at sea, gales ridden out,
+	// storms ridden out or landfalls in fog, the closest approach to the lip survived
+	// (m, at most at), worlds sailed in, falls over the edge, and every weather met
+	// (a gale, a storm, fog and a night).
+	Measure *Measure `json:"measure,omitempty,omitzero"`
+
+	// Its words, as the log and the tools list it.
+	Name string `json:"name"`
+
+	// Venture corresponds to the JSON schema field "venture".
+	Venture *CertificateWay `json:"venture,omitempty,omitzero"`
+}
+
+// What a course task asks of runs sailed one way: the least medal (finish for any
+// finish), how many runs, whether each on a different course of the world, and
+// whether one on each of its courses.
+type CertificateWay struct {
+	// Apart corresponds to the JSON schema field "apart".
+	Apart *bool `json:"apart,omitempty,omitzero"`
+
+	// Each corresponds to the JSON schema field "each".
+	Each *bool `json:"each,omitempty,omitzero"`
+
+	// Medal corresponds to the JSON schema field "medal".
+	Medal Medal `json:"medal"`
+
+	// Runs corresponds to the JSON schema field "runs".
+	Runs *int `json:"runs,omitempty,omitzero"`
 }
 
 // The chart key's line for each of what the chart draws that is not a kind of
@@ -2074,6 +2165,27 @@ type Machine struct {
 	Versions []SailorVersion `json:"versions"`
 }
 
+type Measure string
+
+const MeasureDistance Measure = "distance"
+const MeasureEveryWeather Measure = "every-weather"
+const MeasureFalls Measure = "falls"
+const MeasureGales Measure = "gales"
+const MeasureLifeKinds Measure = "life-kinds"
+const MeasureLip Measure = "lip"
+const MeasureNights Measure = "nights"
+const MeasurePlacesCharted Measure = "places-charted"
+const MeasurePlacesSeen Measure = "places-seen"
+const MeasureStormsOrFogs Measure = "storms-or-fogs"
+const MeasureWorlds Measure = "worlds"
+
+type Medal string
+
+const MedalBronze Medal = "bronze"
+const MedalFinish Medal = "finish"
+const MedalGold Medal = "gold"
+const MedalSilver Medal = "silver"
+
 // A feature a name may need, by its word, and what shows it: 0 or false for a test
 // it does not have; a feature with none is never shown.
 type NameFeature struct {
@@ -2235,15 +2347,20 @@ type NewsStory struct {
 	// What makes it: a great discovery first sighted; a record at the falls; a rare
 	// creature met; a crew in company; a sailor's first charting ever; the day's
 	// longest run; a milestone; any other charting; a course opened by charting; a
-	// race won; a time trial sailed to gold or better.
+	// race won; a time trial sailed to gold or better; a certificate earned.
 	Of NewsStoryOf `json:"of"`
 
 	// How interesting it is: the edition shows the highest first.
 	Score int `json:"score"`
+
+	// For a certificate earned: its score by the certificate, one for each in the
+	// certificates' order; score is for any it has no score for.
+	Scores []int `json:"scores,omitempty,omitzero"`
 }
 
 type NewsStoryOf string
 
+const NewsStoryOfCertificate NewsStoryOf = "certificate"
 const NewsStoryOfCharting NewsStoryOf = "charting"
 const NewsStoryOfCourse NewsStoryOf = "course"
 const NewsStoryOfCrew NewsStoryOf = "crew"
@@ -2278,9 +2395,10 @@ type NoticeKind struct {
 	// What raises it: a place the player charts, a great discovery by anyone, the
 	// world closing, its end near, a new world begun, a new gale warning, a sailor
 	// the player follows setting sail, a harbour race about to start, a race the
-	// player entered about to start, the course the player set reached, a shipmate
-	// sailing to the player, the player alongside a boat they sailed to, or a course
-	// to a boat ended.
+	// player entered about to start, a task of the player's next certificate done, a
+	// certificate earned, the course the player set reached, a shipmate sailing to
+	// the player, the player alongside a boat they sailed to, or a course to a boat
+	// ended.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -2290,8 +2408,10 @@ type NoticeKind struct {
 	Switchable bool `json:"switchable"`
 
 	// Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the
-	// player's own time), {left} (the time left), and for a gale warning {wind},
-	// {when} and {where} are filled in.
+	// player's own time), {left} (the time left), for a gale warning {wind}, {when}
+	// and {where}, and for a certificate {cert} (its name), {task} (the task's),
+	// {done} and {of} (the tasks done of those it needs) and {boats} (the boats it
+	// opens, as a sentence opens) are filled in.
 	Text string `json:"text"`
 }
 
@@ -2311,6 +2431,7 @@ const OfWorld Of = "world"
 
 type On string
 
+const OnCertificateEarned On = "certificate-earned"
 const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
 const OnCourseAlongside On = "course-alongside"
@@ -2324,6 +2445,38 @@ const OnHarbourRace On = "harbour-race"
 const OnNewWorld On = "new-world"
 const OnRaceSoon On = "race-soon"
 const OnShipmateCourse On = "shipmate-course"
+const OnTaskDone On = "task-done"
+
+// Where the certificate's pendant hangs: where its cord runs through its bail, on
+// the figure as it is bound, clear of the clothes in front of the breastbone.
+type PendantPlace struct {
+	// Where its cord runs through its bail, on the figure as it is bound, m: across
+	// to its left, up and forward.
+	At []float64 `json:"at"`
+
+	// The way its face looks out from the clothes under it, the same axes.
+	Facing []float64 `json:"facing"`
+
+	// Where its cord runs through its bail on the inked portrait, as shares of its
+	// width from the left and of its height from the top.
+	Inked []float64 `json:"inked"`
+}
+
+// The certificates' pendants, worn on a cord at the neck by those who hold one:
+// the highest held.
+type Pendants struct {
+	// The pendants' art.
+	Art PendantsArt `json:"art"`
+}
+
+// The pendants' art.
+type PendantsArt struct {
+	// The pendants' model: a glTF binary of a node for each pendant, its origin where
+	// the cord runs through its bail, x across, y up and z out from the chest, its
+	// back on z = 0; its parts' colours in its vertices, their metalness and
+	// roughness in its second texture coordinate.
+	Model ArtPath `json:"model"`
+}
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
@@ -3557,6 +3710,10 @@ type SailorArt struct {
 	// skeleton, with its atlas and mask, drawn on the boat in view and on the boats
 	// near the camera.
 	Model ArtPath `json:"model"`
+
+	// Where the certificate's pendant hangs: where its cord runs through its bail, on
+	// the figure as it is bound, clear of the clothes in front of the breastbone.
+	Pendant PendantPlace `json:"pendant"`
 
 	// The colour portrait's base, AVIF: head and shoulders, shaded, its option
 	// regions in neutral grey.
@@ -6024,4 +6181,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "bb3b7865e3081f1d"
+const Version = "3ffedd6a7cd63a06"

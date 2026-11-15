@@ -505,15 +505,17 @@ func (b *Book) charted(f *bus.Frame, charts []store.Charting, rows func() *store
 			Place: b.Place(s.X, s.Y), Charting: key, Finds: finds,
 		}
 		r := rows()
-		r.Entries = append(r.Entries, e)
 		sl := c.Slot
 		if int(sl) >= f.Capacity() || !f.Occupied[sl] || f.Boat[sl] != c.Boat {
+			r.Entries = append(r.Entries, e)
 			continue
 		}
 		lo, hi := f.CrewOf(sl)
+		e.Crewed = hi > lo
+		r.Entries = append(r.Entries, e)
 		for _, a := range f.Crew[lo:hi] {
 			x := e
-			x.Account, x.Kind = store.AccountID(a.Account), store.LogSighted
+			x.Account, x.Kind, x.Crewed = store.AccountID(a.Account), store.LogSighted, true
 			x.Other, x.OtherMachine, x.OtherBoat = store.AccountID(c.Owner), f.Machine[sl], f.BoatName[sl]
 			r.Entries = append(r.Entries, x)
 		}
@@ -589,6 +591,7 @@ func (b *Book) met1(f *bus.Frame, s int32, kind uint16, rows func() *store.LogRo
 	k := &b.life[kind]
 	st := &f.State[s]
 	place := ""
+	lo, hi := f.CrewOf(s)
 	try := func(account bus.Account, began int64) {
 		key := metKey{account: account, began: began, kind: kind}
 		if _, ok := b.met[key]; ok {
@@ -602,7 +605,8 @@ func (b *Book) met1(f *bus.Frame, s int32, kind uint16, rows func() *store.LogRo
 		r.Entries = append(r.Entries, store.LogEntry{
 			Account: store.AccountID(account), Source: fmt.Sprintf("m:%d:%d:%d:%s", b.world, f.Boat[s], began, k.ID), World: b.world,
 			At: b.At(f.Tick), Kind: store.LogMet, Title: k.Name, Group: GroupLife, Find: k.ID, X: st.X, Y: st.Y, Place: place,
-			Finds: []store.LogFind{{Group: GroupLife, Kind: k.ID}},
+			Finds:  []store.LogFind{{Group: GroupLife, Kind: k.ID}},
+			Crewed: account != f.Owner[s] || hi > lo,
 		})
 		if account != f.Owner[s] || b.news.life <= 0 || int(kind) >= len(b.news.rare) || !b.news.rare[kind] {
 			return
@@ -612,14 +616,12 @@ func (b *Book) met1(f *bus.Frame, s int32, kind uint16, rows func() *store.LogRo
 		story := b.story(store.StoryLife, b.news.life, account, f.Boat[s], f.BoatName[s], f.Kind[s], f.Tick, st.X, st.Y, place)
 		story.Source = fmt.Sprintf("%s:%d:%d:%d:%s", store.StoryLife, b.world, f.Boat[s], began, k.ID)
 		story.Facts.Life = k.ID
-		lo, hi := f.CrewOf(s)
 		for _, a := range f.Crew[lo:hi] {
 			story.Named = append(story.Named, store.AccountID(a.Account))
 		}
 		r.Stories = append(r.Stories, story)
 	}
 	try(f.Owner[s], v.Log.Began)
-	lo, hi := f.CrewOf(s)
 	for _, a := range f.Crew[lo:hi] {
 		try(a.Account, a.Since)
 	}

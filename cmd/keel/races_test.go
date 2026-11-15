@@ -26,6 +26,14 @@ func (noRaces) MakeRace(context.Context, *store.NewRace, time.Time, time.Time, t
 	return "", errNoAccounts
 }
 func (noRaces) MakeHarbourRaces(context.Context, int64, []store.NewRace) (int, error) { return 0, nil }
+func (noRaces) MakeStandingTrials(context.Context, int64, []store.NewRace) (int, error) {
+	return 0, nil
+}
+func (noRaces) StandingTrials(context.Context, [16]byte, int, string) ([]store.Race, error) {
+	return nil, nil
+}
+func (noRaces) Exam() *store.Exam                                         { return nil }
+func (noRaces) SetEveryBoat(context.Context, store.AccountID, bool) error { return store.ErrNotFound }
 func (noRaces) RaceByCode(context.Context, string) (store.Race, error) {
 	return store.Race{}, store.ErrNotFound
 }

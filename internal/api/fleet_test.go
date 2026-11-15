@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
+	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
@@ -89,5 +91,51 @@ func TestFleet(t *testing.T) {
 	}
 	if status, _ := other.post("/api/boat", `{"boat":"`+keel+`"}`); status != 404 {
 		t.Fatalf("Mary takes Ann's keelboat: %d", status)
+	}
+}
+
+// TestFleetCertificates: a new sailor's keelboat says the certificate she
+// needs and is refused with 409; opened by the owner's every boat, she
+// needs none and is taken.
+func TestFleetCertificates(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ladder := certs.New(cat)
+	st, _ := storetest.Store(t, store.Options{})
+	srv := newTestServer(t, st, func(c *Config) {
+		c.Boat, c.SharedBoats = "jolly-boat", []string{"keelboat"}
+		c.Fleet = fleet.New(fleet.Config{Store: st, Catalog: cat, Ladder: ladder, Log: slog.New(slog.DiscardHandler)})
+	})
+	b, _ := makeSailor(t, srv, "Ann Bonny")
+	var f fleetJSON
+	read := func(status int, body string) {
+		t.Helper()
+		if status != 200 {
+			t.Fatalf("%d %s", status, body)
+		}
+		if err := json.Unmarshal([]byte(body), &f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read(b.do("GET", "/api/fleet", ""))
+	keel := f.Boats[1]
+	if f.Boats[0].Needs != "" || keel.Needs != ladder.Name(ladder.Opener("keelboat")) || keel.Needs == "" {
+		t.Fatalf("the fleet: %+v", f.Boats)
+	}
+	if status, body := b.post("/api/boat", `{"boat":"`+keel.ID+`"}`); status != 409 || strings.TrimSpace(body) != `{"error":"certificate"}` {
+		t.Fatalf("taking the keelboat: %d %s", status, body)
+	}
+	ann, err := st.LogSailorByKey(t.Context(), moderation.Key("Ann Bonny"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetEveryBoat(t.Context(), ann.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	read(b.post("/api/boat", `{"boat":"`+keel.ID+`"}`))
+	if f.Boat != keel.ID || f.Boats[1].Needs != "" {
+		t.Fatalf("the keelboat with every boat: %+v", f)
 	}
 }

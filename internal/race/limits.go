@@ -54,9 +54,12 @@ type entering struct {
 	most     int
 	newcomer bool
 	blocked  bool
-	limits   store.RaceSettings
-	now      time.Time
-	latest   time.Time
+	// needs is the certificate the sailor needs to sail the race's boat,
+	// "" for none.
+	needs  string
+	limits store.RaceSettings
+	now    time.Time
+	latest time.Time
 }
 
 // refusedEntry is why an entry is refused, as the rows read in its
@@ -96,6 +99,9 @@ func (in *entering) refusedEntry(e store.RaceEntering) error {
 	}
 	if in.blocked {
 		return refuse(RefuseBlocked)
+	}
+	if in.needs != "" {
+		return &Refusal{Reason: RefuseCertificate, Needs: in.needs}
 	}
 	if r.Kind != KindTrial && e.Entered >= in.most {
 		return refuse(RefuseFull)

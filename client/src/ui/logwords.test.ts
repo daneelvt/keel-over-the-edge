@@ -11,6 +11,8 @@ import type { LogDay, LogEntry, LogRecord, LogRibbon, LogVoyage } from './logapi
 
 import {
   bumpWords,
+  certificateEntry,
+  certificateHead,
   companyWords,
   dayCell,
   empty,
@@ -23,6 +25,8 @@ import {
   ribbonCounts,
   ribbonLines,
   span,
+  towardHead,
+  towardTaskLine,
   worldHeading,
 } from './logwords';
 
@@ -261,5 +265,54 @@ describe('the ribbons', () => {
     expect(ribbonLines({ ...r, how: 'ret', role: 'skipper', awards: [] }, 'Jolly boat')[0]).toBe(
       'Tuesday Triangle · Jolly boats · retired',
     );
+  });
+});
+
+describe('certificates', () => {
+  test('a certificate earned heads its day, by hand if it was', () => {
+    const d: LogDay = {
+      date: '2026-11-12',
+      runM: 0,
+      voyages: [voyage({})],
+      entries: [
+        { at: 0, kind: 'met', find: 'bottlenose-dolphin', title: 'Bottlenose dolphin', times: 1 },
+        { at: 1, kind: 'certificate', title: 'Helm', what: 'by hand' },
+      ],
+    };
+    expect(remarks(d)[0]).toBe('Earned the Helm certificate, by hand');
+    expect(certificateEntry({ at: 0, kind: 'certificate', title: 'Deckhand', what: '' })).toBe(
+      'Earned the Deckhand certificate',
+    );
+  });
+
+  test('the head’s word, by hand apart for its small capitals', () => {
+    expect(certificateHead(undefined)).toBeNull();
+    expect(certificateHead({ name: 'Helm', byHand: true })).toEqual(['Helm', 'by hand']);
+    expect(certificateHead({ name: 'Master', last: true })).toEqual(['Master', '']);
+  });
+
+  test('the Ribbons’ block: its count, each task ticked with its way or how far it has come', () => {
+    expect(towardHead({ name: 'Skipper', needs: 4, done: 2, tasks: [] })).toBe(
+      'Toward Skipper · 2 of 4',
+    );
+    expect(towardHead({ name: 'Skipper', needs: 4, done: 6, tasks: [] })).toBe(
+      'Toward Skipper · 4 of 4',
+    );
+    expect(towardTaskLine({ name: 'Ride out a gale', done: true, way: 'log' })).toEqual({
+      mark: '✓',
+      name: 'Ride out a gale',
+      how: '',
+    });
+    expect(
+      towardTaskLine({ name: 'An island course', done: true, way: 'hand', course: true }),
+    ).toEqual({ mark: '✓', name: 'An island course', how: 'by hand' });
+    expect(
+      towardTaskLine({ name: 'Any buoy course, silver', course: true, runs: 1, of: 3 }).how,
+    ).toBe('the autopilot way, 1 of 3');
+    expect(towardTaskLine({ name: 'Any buoy course, silver', course: true, of: 3 })).toEqual({
+      mark: '·',
+      name: 'Any buoy course, silver',
+      how: '',
+    });
   });
 });

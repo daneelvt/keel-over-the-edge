@@ -74,6 +74,9 @@ type viewer struct {
 	reported  *pb.Reported
 	// shipmates counts the Shipmates told: the list changed.
 	shipmates int
+	// certified are what the sailor's certificates came to, in order.
+	certified []*pb.Certified
+
 	// at are where a course's boat was told, in order; courseEnded the
 	// latest end told; sailedTo the names of those told to sail to it.
 	at          []*pb.ShipmateAt
@@ -177,6 +180,8 @@ func (v *viewer) take(r client.Received) {
 		v.reported = m.Reported
 	case *pb.ServerMessage_Shipmates:
 		v.shipmates++
+	case *pb.ServerMessage_Certified:
+		v.certified = append(v.certified, m.Certified)
 	case *pb.ServerMessage_ShipmateAt:
 		v.at = append(v.at, m.ShipmateAt)
 	case *pb.ServerMessage_CourseEnded:
