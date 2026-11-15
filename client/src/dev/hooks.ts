@@ -706,6 +706,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     },
 
     /**
+     * Hides the page, or shows it again, as a tab put behind another and
+     * brought back: the document says so and visibilitychange is fired,
+     * and no frame is drawn meanwhile, the first one back timed from the
+     * last one drawn, as a hidden tab's is.
+     */
+    hide(on: boolean): void {
+      const state: DocumentVisibilityState = on ? 'hidden' : 'visible';
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => on });
+      if (on) {
+        stage.freeze(true);
+      }
+      document.dispatchEvent(new Event('visibilitychange'));
+      if (!on) {
+        stage.freeze(false, true);
+      }
+    },
+
+    /**
      * The picture a link is shared with, made of the next frame as the
      * player's tap makes it, naming name: its size, its type and weight,
      * and of the view above its strip, the share of pixels lit and the
@@ -1971,6 +1990,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         traffic: { ...o.traffic },
         tools: o.tools.value,
         stays: p.stays,
+        // The records waiting for a frame at most at once since the page
+        // was last hidden, the snaps seen through, and the boat in view's
+        // newest snapshot.
+        mostQueued: o.mostQueued,
+        snapped: o.snapped.value,
+        newest: o.newest(),
       };
     },
     /**

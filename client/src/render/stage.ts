@@ -140,10 +140,14 @@ export class Stage {
     await gfx.renderer.setAnimationLoop((now: number) => this.#frame(now));
   }
 
-  /** Stops the frame loop (tests drive frames with renderOnce). */
-  freeze(frozen: boolean): void {
+  /**
+   * Stops the frame loop (tests drive frames with renderOnce). Let go, the
+   * next frame's time step starts from now; with keep, from the last frame,
+   * as a hidden tab's does.
+   */
+  freeze(frozen: boolean, keep = false): void {
     this.#frozen = frozen;
-    if (!frozen) {
+    if (!frozen && !keep) {
       this.#last = performance.now();
     }
   }
@@ -152,6 +156,11 @@ export class Stage {
   resumed(): void {
     this.cap.restart();
     this.#hooks.resumed?.();
+  }
+
+  /** The next frame's time step starts from now, not from the last frame: the world starts again where it is. */
+  restartFrames(): void {
+    this.#last = performance.now();
   }
 
   /** Updates and draws one frame now, at time now; updates it alone without a renderer. */

@@ -6191,8 +6191,10 @@ for its tick, bit for bit, changes nothing, as it is whenever the inputs
 arrived in time; one that differs puts the boat back to the server's state
 and steps it again to the present, and the drawn boat eases the difference
 away over 100 ms (at once past 3 m or 20°). A snapshot older than the 64
-ticks kept is let go. Behind its target by more than 30 ticks (a stall, a
-hidden page), the boat is put back to the latest snapshot. `?dev` shows the
+ticks kept is let go. Behind its target by more than 30 ticks with no
+snapshot newer than the boat (a connection lost before its `Welcome`), the
+boat is held where it was, the sea with it, rather than stepped 30 ticks a
+frame alone; the next snapshot puts it back. `?dev` shows the
 clock's offset, the round trip, *m*, margins, corrections and bytes.
 
 **Testing it.** `internal/edge/edgetest` runs a world, the edge and the
@@ -6276,6 +6278,35 @@ than real time, and never back. Past its newest sample a boat is carried on
 its last velocity and turn for 250 ms, then held; when data comes the
 difference is eased away over 100 ms. Boats fade in and out over half a
 second, dithered (`alphaHash`), so they stay in the opaque pass.
+
+**A hidden page.** A hidden tab draws no frames, so it reads no records,
+while the server goes on sending 15 snapshots a second. The page tells the
+net worker when it is hidden (`visibilitychange`, `Online.shown`), and the
+worker then keeps **one snapshot**, the newest: its record filled again for
+each, what every snapshot since the page's last did to each view slot
+folded in (`foldHeld` in `client/src/net/view.ts`: a slot whose boat
+changed is entered, one a boat left is left, and every boat in view
+sampled). Every other message, the names and crews of boats in view among
+them, still goes to the page as it comes: nothing else rides in a snapshot.
+The worker hands the record over once the page is shown. Shown after more
+than **2 s** hidden, or welcomed on a connection made again (Safari, or
+Chrome's Energy Saver, freeze a page and its socket may go), the page
+**snaps** to it rather than play the missed seconds through: any record
+still waiting for a frame handed back, the watched boat's headers or the
+prediction started again from it, each other boat's samples, ease and
+drawn speed forgotten (no wake flares from the jump), the render ticks set
+from it at once with the lateness window moved up to it (the delays stay as
+they were, so the render tick runs at real time from the first frame), the
+prediction's wakes and the sea's wake and wake waves cleared, the worker's
+clock set at once to its estimate, and the next frame timed from now. The
+start's cover (`client/src/boot/undercover.ts`, shared with a change of
+boat) comes down at once over it and lifts, a short fade, once its gate
+passes: the snap's snapshot taken, the camera placed behind the boat two
+frames on, the land near and a few frames drawn. Hidden for less, nothing
+snaps: the one snapshot comes and the render tick's slew covers it.
+`keel.hide(on)` hides a page under test as a tab is hidden, its next frame
+timed from the last one drawn; `e2e/watch.spec.ts` hides one for 20 s
+watching a machine sailor, then sailing.
 
 **Drawing** (`client/src/render/fleet.ts`, `fleetparts.ts`). Each kind has
 its view (`FleetView`), made when a boat of the kind first comes into

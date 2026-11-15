@@ -121,6 +121,20 @@ export class Clock {
     c.rtt = median(best.map((s) => s.rtt));
   }
 
+  /**
+   * Sets the offset at its estimate at once, at now: the slew toward it is
+   * for a page drawing all along, and one coming back after a while hidden
+   * starts again from where the world is.
+   */
+  settle(now: number): void {
+    const c = this.state;
+    if (!c.have) {
+      return;
+    }
+    c.offset = c.target;
+    c.at = now;
+  }
+
   worldUs(now: number): number {
     return worldUs(this.state, now);
   }

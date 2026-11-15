@@ -343,8 +343,6 @@ export const WAKE_WAVES = {
   tileTexel: 2.5,
   /** The low tier steps its field at most this often, per second of world time. */
   cpuRate: 30,
-  /** A frame longer than this, in seconds (a page hidden and shown again), starts the field afresh. */
-  longest: 1,
 } as const;
 
 /** Spray: sprites thrown from the bow, and torn off the crests from force 7. */

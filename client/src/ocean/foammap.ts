@@ -387,7 +387,7 @@ export class FoamMap {
     this.#placed = false;
   }
 
-  /** Forgets every wake. */
+  /** Forgets every wake: a page shown again after a while hidden, its boat where it is now. */
   clear(): void {
     this.#placed = false;
   }
@@ -461,10 +461,6 @@ export class FoamMap {
     const texel = WAKE.span / this.size;
     const east = Math.round(f.boatEast / texel) * texel;
     const north = Math.round(f.boatNorth / texel) * texel;
-    if (f.dt > 1) {
-      // A page hidden and shown again: what was there is long gone.
-      this.#placed = false;
-    }
     const fresh = !this.#placed;
     const moving = f.dt > 0;
     let de = fresh ? 0 : east - this.centre.east;
