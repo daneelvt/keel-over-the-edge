@@ -46,6 +46,11 @@ describe('a boat as the course', () => {
     fixes.take('a1', 500, 500);
     now = 61_000;
     expect(fixes.where('a1')).toEqual({ east: 500, north: 500 });
+    // Nor does a leap no boat sails, back to port or into another boat.
+    now = 63_000;
+    fixes.take('a1', 500, 1500);
+    now = 64_000;
+    expect(fixes.where('a1')).toEqual({ east: 500, north: 1500 });
     // Another sailor's first fix forgets Ann's.
     fixes.take('b2', 0, 0);
     expect(fixes.where('a1')).toBeNull();

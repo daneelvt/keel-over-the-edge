@@ -43,6 +43,9 @@ const AHEAD = 4000;
 /** Fixes further apart than this, ms, give no way to move on by. */
 const APART = 6000;
 
+/** Faster than this between two fixes, m/s, a boat has not sailed but moved (back to port, swapped): held. */
+const FASTEST = 25;
+
 /**
  * Where the boat a course is set to was told to be, the last two times:
  * between the server's two-second fixes, the pin moves on by the way the
@@ -83,7 +86,12 @@ export class BoatFixes {
     }
     const b = this.#before;
     const gap = b === null ? 0 : l.at - b.at;
-    if (b === null || gap <= 0 || gap > APART) {
+    if (
+      b === null ||
+      gap <= 0 ||
+      gap > APART ||
+      (Math.hypot(l.east - b.east, l.north - b.north) * 1000) / gap > FASTEST
+    ) {
       return { east: l.east, north: l.north };
     }
     const ahead = Math.min(Math.max(this.#now() - l.at, 0), AHEAD) / gap;
