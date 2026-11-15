@@ -11,8 +11,9 @@
 // luffed in a gust with her sheet held and is righted, pitchpoles borne
 // away in a breeze with it held, and reefs. The yacht beats, tacks,
 // reaches, rounds up in a gust and reefs. The catamaran beats, tacks
-// through about a hundred degrees, reaches past 7.6 knots, is told her
-// hull is flying in a squall with her sheet held, and reefs.
+// through about a hundred degrees, reaches past 7.6 knots, flies a hull in
+// a squall with her sheet held, and reefs. Neither cat's flying hull or
+// burying bows puts a line on the screen or dims the controls.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -71,6 +72,40 @@ async function pilotTo(page: Page, degrees: number): Promise<void> {
     await page.keyboard.press(`${step}${degrees > d ? 'q' : 'e'}`);
   }
   expect(await held()).toBe(degrees);
+}
+
+/**
+ * Watches the screen for two seconds, a frame at a time, while the boat
+ * flies a hull or buries her bows, her sailor aboard: how many frames she
+ * did, and how many of those showed a sailor's line or the controls dimmed.
+ */
+function whileFlying(page: Page): Promise<{ flying: number; shown: number }> {
+  return page.evaluate(
+    () =>
+      new Promise<{ flying: number; shown: number }>((resolve) => {
+        let flying = 0;
+        let shown = 0;
+        const end = performance.now() + 2000;
+        const look = () => {
+          const b = globalThis.keel.boat();
+          if (b.state.sailorMode === 0 && (b.out.hullFlying > 0 || b.out.bowsBurying > 0)) {
+            flying++;
+            if (
+              document.querySelector('[data-readout=sailor]') !== null ||
+              document.querySelector('.control.dimmed') !== null
+            ) {
+              shown++;
+            }
+          }
+          if (performance.now() < end) {
+            requestAnimationFrame(look);
+          } else {
+            resolve({ flying, shown });
+          }
+        };
+        requestAnimationFrame(look);
+      }),
+  );
 }
 
 /** The boat's angle off the mean wind, degrees, positive with the wind over starboard. */
@@ -301,6 +336,8 @@ test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes
     await page.waitForFunction(() => globalThis.keel.boat().out.hullFlying > 0, null, {
       timeout: 40_000,
     });
+    // No line says so, and the controls stay as they are.
+    expect((await whileFlying(page)).shown).toBe(0);
     // Luffed hard in a gust, the sheet hauled in and held: over onto her side.
     await wind(30);
     await sheet('KeyW', 2.2);
@@ -444,7 +481,7 @@ test('the yacht chosen from the fleet: she beats in a breeze, tacks, reaches pas
   }
 });
 
-test('the catamaran chosen from the fleet: she beats in a breeze, tacks through about a hundred degrees, reaches past 7.6 knots, flies a hull in a squall with her sheet held, and reefs', {
+test('the catamaran chosen from the fleet: she beats in a breeze, tacks through about a hundred degrees, reaches past 7.6 knots, flies a hull in a squall with her sheet held, no line saying so, and reefs', {
   tag: '@world',
 }, async ({ context, page, request }) => {
   test.skip(catamaran === undefined, 'the catalog has no cruising catamaran');
@@ -515,7 +552,8 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks through 
       timeout: 90_000,
     });
     // Held there in a squall, the sheet hauled in and held, the helm
-    // fixed: her windward hull lifts, and the case says so.
+    // fixed: her windward hull lifts, as she shows; no line says so, and
+    // the controls stay as they are.
     await page.keyboard.press('p');
     await expect.poll(() => page.evaluate(() => globalThis.keel.boat().pilot.mode)).toBe(0);
     await wind(42);
@@ -523,9 +561,9 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks through 
     await page.waitForFunction(() => globalThis.keel.boat().out.hullFlying > 0, null, {
       timeout: 60_000,
     });
-    await expect(page.locator('[data-readout=sailor]')).toHaveText('Hull flying', {
-      timeout: 10_000,
-    });
+    const seen = await whileFlying(page);
+    expect(seen.flying).toBeGreaterThan(0);
+    expect(seen.shown).toBe(0);
     // Let fly, and one reef, as the Reef key says it.
     await wind(14);
     await sheet('KeyS', 2.2);

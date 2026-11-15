@@ -139,13 +139,12 @@ import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '..
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
 import { certifiedTold } from '../ui/certwords';
-import { ClearView, type Needed, needed } from '../ui/clearview';
+import { ClearView, type Needed, needed, overboard } from '../ui/clearview';
 import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { deckOf } from '../ui/decklazy';
 import { mountScreen, type ScreenProps } from '../ui/hud';
 import { setLogHost, setRaceHost } from '../ui/loglazy';
-import { AGROUND } from '../ui/model';
 import { openNews, setNewsHost } from '../ui/newslazy';
 import { serverNews } from '../ui/newsread';
 import { saveNoticesOff } from '../ui/notices';
@@ -1538,11 +1537,6 @@ function sailToBoats(online: Online, parts: ChartParts): void {
   online.onCourseEnded = (sailor, why) => chart.boatEnded(sailor, why);
   online.onShipmateCourse = (name) =>
     parts.notices.raise('shipmate-course', { who: name }, performance.now());
-}
-
-/** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */
-function overboard(line: string): boolean {
-  return line !== '' && line !== AGROUND;
 }
 
 /** Resolves once a boat has arrived after the n-th. */
