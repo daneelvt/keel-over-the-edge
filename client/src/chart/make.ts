@@ -11,12 +11,13 @@ import type { ChartEntry, CourseOpen } from '../net/messages';
 import { type Physics, VISIBILITY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { SeaScene } from '../render/scene';
 import { hourAt, skyPeriods } from '../sky/skytime';
-import { type ChartSea, chartNews } from '../ui/chart';
+import { type ChartSea, chartNews, openCourseBox } from '../ui/chart';
 import type { NewsSource } from '../ui/newsread';
 import { type NoticeKind, Notices } from '../ui/notices';
 import { nextMarkOf, Racing, raceDrawingOf } from '../ui/racestate';
 import { ReplayHost } from '../ui/replayhost';
 import { Chart } from './chart';
+import { sameCourse } from './course';
 import type { Forecasting } from './forecasting';
 import { FEATURE_MARKS, PLACE_MARKS } from './marks';
 import { Models } from './model';
@@ -169,8 +170,26 @@ export function makeChart(
     }
   }
   world.cover = view;
-  // In a race, the next mark's number over its spar in the sea.
-  world.markTagOf = () => nextMarkOf(racing);
+  // In a race, the compass gives way to the race line.
+  chart.racing = () => racing.told.peek() !== null;
+  // The course on the chart: its pin and pencil line, and a pin dropped,
+  // its box open; a tap on the course's pin opens its box.
+  view.courseDrawing = () => {
+    const b = boat();
+    const a = chart.aim(b.east, b.north);
+    const m = chart.marked.peek();
+    const pin =
+      m?.kind === 'pin' &&
+      Math.hypot(m.east, m.north) <= w.disk.radius &&
+      !sameCourse(chart.course.peek(), m)
+        ? { east: m.east, north: m.north }
+        : null;
+    return { course: a === null ? null : { east: a.east, north: a.north, name: a.name }, pin };
+  };
+  view.course.onTap = () => openCourseBox(chart);
+  // In a race, the next mark's number over its spar in the sea; otherwise
+  // the course's name and distance over its point, within sight.
+  world.markTagOf = () => nextMarkOf(racing) ?? chart.seaTag(world.pose.east, world.pose.north);
   const motion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   if (motion !== undefined) {
     view.reducedMotion = motion.matches;

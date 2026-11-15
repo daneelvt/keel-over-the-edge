@@ -8,6 +8,9 @@
 // hand over, without a render, and only when it has moved.
 
 import { signal } from '@preact/signals';
+import { turnOf } from '../chart/course';
+import { courseLine } from '../chart/coursewords';
+import { distanceText } from '../chart/store';
 import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
@@ -352,6 +355,14 @@ export function reefLine(c: HudControls | null, reef: number): string {
   return c === null || level === 0 ? '' : (c.reef[level] ?? '');
 }
 
+/** The course as the compass reads it: where it is from a boat, and its arrival. */
+export interface CompassCourse {
+  /** The course from a boat at (east, north): its point and name; null with none shown. */
+  aim(east: number, north: number): { east: number; north: number; name: string } | null;
+  /** Told where the sailor's boat is: a course reached is said and clears. */
+  arrive(east: number, north: number): void;
+}
+
 /** The helm's knob travels along an arc of this many degrees each side of the top. */
 export const HELM_ARC = 55;
 
@@ -388,6 +399,12 @@ export class HudModel {
   readonly reefed = signal('');
   /** Whether the downwind sail is set, more than half hoisted: the sheet's word is its own. */
   readonly kite = signal(false);
+  /** How far the course is, as the compass's window at its foot reads it; empty with none shown. */
+  readonly courseDistance = signal('');
+  /** The course in words, read out beside the compass; empty with none shown. */
+  readonly courseWords = signal('');
+  /** The course set on the chart, which the compass points to; null without. */
+  course: CompassCourse | null = null;
   #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
@@ -398,6 +415,8 @@ export class HudModel {
   readonly rose = new Moved(rotate, 0.1);
   /** The wind's mark on the rim, at the direction the wind of the last three seconds comes from. */
   readonly windMark = new Moved(rotate, 0.1);
+  /** The course's mark on the rim, outside the ticks, at the course's bearing from the boat. */
+  readonly courseMark = new Moved(rotate, 0.1);
   /** The helm's knob (the target) and its shadow (where the rudder is). */
   readonly helmKnob = new Moved(rotate, 0.1);
   readonly helmActual = new Moved(rotate, 0.1);
@@ -465,6 +484,12 @@ export class HudModel {
     // shadow, less wind and a header.
     a.add(time * 1000, wind.shadowSpeed, wind.shadowFrom);
     this.windMark.set(((a.from - pose.heading) * 180) / Math.PI);
+    const aim = this.course?.aim(pose.east, pose.north) ?? null;
+    if (aim !== null) {
+      this.courseMark.set(
+        turnOf(Math.atan2(aim.east - pose.east, aim.north - pose.north), pose.heading),
+      );
+    }
     this.helmKnob.set(helm * HELM_ARC);
     this.helmActual.set(rudder * HELM_ARC);
     this.sheetKnob.set(sheet);
@@ -494,6 +519,21 @@ export class HudModel {
     const c = this.controls.peek();
     this.reefed.value = downwindLine(c, pose.hoist, pose.hoistTarget) || reefLine(c, pose.reef);
     this.kite.value = c?.downwind === true && pose.hoist >= 0.5;
+    // A course reached clears: the mark and the window go with it.
+    this.course?.arrive(pose.east, pose.north);
+    const to = this.course?.aim(pose.east, pose.north) ?? null;
+    if (to === null) {
+      this.courseDistance.value = '';
+      this.courseWords.value = '';
+    } else {
+      const d = Math.hypot(to.east - pose.east, to.north - pose.north);
+      this.courseDistance.value = distanceText(d);
+      this.courseWords.value = courseLine(
+        to.name,
+        Math.atan2(to.east - pose.east, to.north - pose.north),
+        d,
+      );
+    }
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';
     }

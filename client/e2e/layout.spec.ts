@@ -16,7 +16,9 @@
 // beneath the readouts and the clock's out of its top edge over the
 // speed's empty end, and the open barometer and clock stay open, their
 // column clear of the boat. No pusher stands over the compass card, the
-// readouts' words or another pusher, nor off the screen. The pocket chart's caption
+// readouts' words or another pusher, nor off the screen. With a course
+// set, the compass card carries its mark on its rim and its distance whole
+// in a window at its foot, the case no bigger. The pocket chart's caption
 // is two lines within its frame, the weather's pusher set in the frame.
 // The menu, open, stands over everything and within the screen. The
 // sheet's legend at its longest, the sail luffing or stalled, stands
@@ -1711,6 +1713,105 @@ const STILL = [
   { name: 'a desktop', width: 1440, height: 900 },
 ] as const;
 
+test('a course on the compass: its mark on the card’s rim and its distance whole in the window at its foot, the case no bigger, on five screens', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the case is the same on either back end');
+  await page.setViewportSize({ width: STILL[0].width, height: STILL[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const found: string[] = [];
+  const caseBox = () =>
+    page.evaluate(async () => {
+      for (let i = 0; i < 3; i++) {
+        globalThis.keel.render();
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      const r = document.querySelector('.case-top')?.getBoundingClientRect();
+      return r === undefined ? '' : [r.left, r.top, r.width, r.height].map(Math.round).join(',');
+    });
+  for (const s of STILL) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.evaluate(() => {
+      globalThis.keel.setCourse(null);
+      globalThis.keel.render();
+    });
+    const bare = await caseBox();
+    // The farthest a course can be, ahead, abeam, astern and on the quarter.
+    for (const [deg, metres] of [
+      [0, 8000],
+      [90, 3000],
+      [180, 2000],
+      [225, 400],
+    ] as const) {
+      const faults = await page.evaluate(
+        async ([deg, metres]) => {
+          const k = globalThis.keel;
+          const b = k.boatAt();
+          const a = (deg * Math.PI) / 180;
+          k.setCourse({
+            kind: 'pin',
+            east: b.east + metres * Math.sin(a),
+            north: b.north + metres * Math.cos(a),
+          });
+          for (let i = 0; i < 3; i++) {
+            k.render();
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+          const out: string[] = [];
+          const card = document.querySelector('.case .compass')?.getBoundingClientRect();
+          const windows = document.querySelectorAll('.case .compass-window');
+          const foot = windows[1]?.getBoundingClientRect();
+          const text = document
+            .querySelector('[data-readout=course-distance]')
+            ?.getBoundingClientRect();
+          const mark = document
+            .querySelector('[data-readout=course-mark]')
+            ?.getBoundingClientRect();
+          if (
+            card === undefined ||
+            foot === undefined ||
+            text === undefined ||
+            mark === undefined
+          ) {
+            return ['no course on the card'];
+          }
+          const inside = (a: DOMRect, b: DOMRect, slack: number) =>
+            a.left >= b.left - slack &&
+            a.right <= b.right + slack &&
+            a.top >= b.top - slack &&
+            a.bottom <= b.bottom + slack;
+          if (!inside(foot, card, 0.5)) {
+            out.push(`the window at its foot is out of the card`);
+          }
+          if (!inside(text, foot, 0.5)) {
+            out.push(
+              `"${document.querySelector('[data-readout=course-distance]')?.textContent}" spills out of its window (${text.width.toFixed(1)} in ${foot.width.toFixed(1)} px)`,
+            );
+          }
+          // The chevron's stroke may stand a little over the card's rim.
+          if (!inside(mark, card, 2)) {
+            out.push('the mark is off the card');
+          }
+          return out;
+        },
+        [deg, metres] as const,
+      );
+      for (const f of faults) {
+        found.push(`${s.name}, ${deg}°: ${f}`);
+      }
+    }
+    if ((await caseBox()) !== bare) {
+      found.push(`${s.name}: the case is ${await caseBox()} with a course, ${bare} without`);
+    }
+  }
+  expect(found).toEqual([]);
+});
+
 /** The complications' boxes, and the animations running on either. */
 async function stillness(page: Page): Promise<{ boxes: string; running: string[] }> {
   return page.evaluate(async () => {
@@ -1985,6 +2086,42 @@ test('on the chart the arrow shrinks as it zooms out, the notices stand clear of
         await button.click();
       }
     }
+    // The place's box on the screen, every key of it within it.
+    const box = await page.evaluate(() => {
+      const e = document.querySelector('.chart-box');
+      const r = e?.getBoundingClientRect();
+      if (e === null || r === undefined) {
+        return ['no box'];
+      }
+      const out: string[] = [];
+      if (
+        r.left < -0.5 ||
+        r.top < -0.5 ||
+        r.right > innerWidth + 0.5 ||
+        r.bottom > innerHeight + 0.5
+      ) {
+        out.push(
+          `the box is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+        );
+      }
+      for (const k of e.querySelectorAll('button')) {
+        const b = k.getBoundingClientRect();
+        if (b.left < r.left - 0.5 || b.right > r.right + 0.5) {
+          out.push(`“${k.textContent}” sticks out of the box`);
+        }
+        // Its words on one line.
+        const words = document.createRange();
+        words.selectNodeContents(k);
+        const lines = new Set([...words.getClientRects()].map((l) => Math.round(l.top)));
+        if (lines.size > 1 || k.scrollWidth > k.clientWidth + 0.5) {
+          out.push(`“${k.textContent}” does not fit its key on one line`);
+        }
+      }
+      return out;
+    });
+    for (const c of box) {
+      found.push(`${s.name}: ${c}`);
+    }
     await page.locator('.notice-dismiss').click();
     // The chart's clock: in the strip, or under it held upright, and swept
     // on by the slider.
@@ -2053,6 +2190,67 @@ async function lookFaults(page: Page, sel: string): Promise<string[]> {
     return out;
   }, sel);
 }
+
+// A long notice under the case wraps beside the pocket chart, on every
+// screen: on the screen, clear of the pocket chart, its × not under it.
+test('a long notice stands beside the pocket chart, not under it, its × in reach, on every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    for (const [on, fill] of [
+      ['new-world', {}],
+      ['course-reached', { name: 'the start of Round Long Cay' }],
+    ] as const) {
+      await page.evaluate(([on, fill]) => globalThis.keel.raiseNotice(on, fill), [
+        on,
+        fill,
+      ] as const);
+      await expect(page.locator('.notice-line .notice')).toBeVisible();
+      const faults = await page.evaluate(() => {
+        const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+        const over = (a: DOMRect, b: DOMRect) =>
+          Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+        const n = box('.notice-line .notice');
+        const x = box('.notice-line .notice-dismiss');
+        const pocket = box('.hud-right .pocket');
+        if (n === null || x === null) {
+          return ['no notice'];
+        }
+        const out: string[] = [];
+        if (n.left < -0.5 || n.right > innerWidth + 0.5 || n.top < -0.5) {
+          out.push(`it is off the screen (${[n.left, n.right].map(Math.round)})`);
+        }
+        if (pocket !== null && over(n, pocket)) {
+          out.push(
+            `it runs under the pocket chart (${Math.round(n.right)} past ${Math.round(pocket.left)})`,
+          );
+        }
+        const on = document.elementFromPoint((x.left + x.right) / 2, (x.top + x.bottom) / 2);
+        if (on === null || on.closest('.notice-dismiss') === null) {
+          out.push('its × is covered');
+        }
+        return out;
+      });
+      for (const f of faults) {
+        found.push(`${s.name}, ${on}: ${f}`);
+      }
+      await page.locator('.notice-line .notice-dismiss').click();
+      await expect(page.locator('.notice-line .notice')).toHaveCount(0);
+    }
+  }
+  expect(found).toEqual([]);
+});
 
 test('every panel and window on the screen at sea is in the plate’s brass and lacquer, its keys the head’s, the watch plate centred', async ({
   page,

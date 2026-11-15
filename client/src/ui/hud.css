@@ -679,6 +679,33 @@
   stroke-width: 0.8;
 }
 
+/* The course's mark: a brass chevron on the rim, outside the ticks,
+   pointing in; a stroke, not the wind's filled arrowhead, so the two read
+   apart by shape as well as colour. */
+.compass-course {
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+/* The course's distance, read through the window at the card's foot. */
+.compass-distance {
+  fill: var(--ink);
+  font:
+    500 15px "Alegreya Sans",
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.compass-unit {
+  font-size: 10px;
+}
+
 .compass-boat {
   fill: var(--ink);
 }

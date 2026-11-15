@@ -27,6 +27,7 @@ import {
   ChartSubject,
   ChatRefusal,
   ChatStatus,
+  CourseEnd,
   CourseKind,
   type Course as CourseWire,
   type Harbour as HarbourTold,
@@ -54,6 +55,7 @@ import type {
   ChatStateTold,
   ChatTold,
   ChunksHanded,
+  CourseEndWhy,
   CourseOpen,
   CrewTold,
   ForecastTold,
@@ -77,6 +79,7 @@ import type {
   RaceWatchAsk,
   ReportReasonTold,
   SeaAreas,
+  ShipmateAtIn,
   TiedTold,
   ViewCrewTold,
   WeatherKeyframe,
@@ -124,6 +127,13 @@ const SIGNALS: Record<number, RaceSignalIn['signal']> = {
   [RaceSignalKind.START]: 'start',
   [RaceSignalKind.RECALL]: 'recall',
   [RaceSignalKind.FINISH]: 'finish',
+};
+
+/** Why a course to a sailor's boat ended, as the page names it: anything else is refused. */
+const COURSE_ENDS: Record<number, CourseEndWhy> = {
+  [CourseEnd.ASHORE]: 'ashore',
+  [CourseEnd.GONE]: 'gone',
+  [CourseEnd.REFUSED]: 'refused',
 };
 
 /** How a boat stands in its race, as the page names it. */
@@ -256,6 +266,10 @@ export type Received =
   | { kind: 'reported'; ok: boolean }
   /** The account's shipmates changed: the list is read again. */
   | { kind: 'shipmates' }
+  /** Where the boat the course is set to is; a course to one ended; a shipmate sailing to the player. */
+  | { kind: 'shipmateAt'; at: ShipmateAtIn }
+  | { kind: 'courseEnded'; sailor: string; why: CourseEndWhy }
+  | { kind: 'shipmateCourse'; name: string }
   /** Whether the AI of the own machine sailor watched attends to it. */
   | { kind: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look: its code. */
@@ -528,6 +542,24 @@ export class Session {
       case 'shipmates':
         this.#lastHeard = now;
         return { kind: 'shipmates' };
+      case 'shipmateAt': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'shipmateAt',
+          at: { sailor: v.sailor, name: v.name, east: v.east, north: v.north },
+        };
+      }
+      case 'courseEnded':
+        this.#lastHeard = now;
+        return {
+          kind: 'courseEnded',
+          sailor: m.body.value.sailor,
+          why: COURSE_ENDS[m.body.value.why] ?? 'refused',
+        };
+      case 'shipmateCourse':
+        this.#lastHeard = now;
+        return { kind: 'shipmateCourse', name: m.body.value.name };
       case 'lookChanged':
         this.#lastHeard = now;
         return { kind: 'look', look: m.body.value.look };
@@ -913,6 +945,13 @@ export class Session {
         case: 'command',
         value: { body: { case: 'knock', value: { token, machine, shipmate } } },
       },
+    });
+  }
+
+  /** Asks where a sailor's boat is, for a course to it; "" stops it. */
+  courseToCommand(now: number, sailor: string): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'courseTo', value: { sailor } } } },
     });
   }
 

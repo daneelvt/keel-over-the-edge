@@ -23,6 +23,12 @@
 # done of those it needs; a certificate earned, {cert} and {boats}, the
 # boats it opens as a sentence opens them ("The beach cat is"). Both are in
 # the log's Ribbons too; a course's task is said on the finish's card.
+# A course reached fills in {name}, what it was set for ("Gull Rock",
+# "your pin"); the compass's mark and window going say it too. A shipmate
+# sailing to the player fills in {who}, and is told once a voyage. A boat
+# sailed to, a shipmate's or the player's own machine sailor's, fills in
+# {who} once alongside; a course to one that ends fills in {why}, the
+# whole of what is said ("Ann has come ashore"), from the phone's words.
 # Whatever a notice tells is in the news, on the chart, in the countdown or
 # on the list of sailors to watch too, so one missed is never lost (WCAG 2.2, 2.2.1). The world's end is worked out on the phone from the end the
 # Welcome gives and the world clock: each of its notices is shown once a
@@ -121,6 +127,38 @@ notices:
       stays: 30
       text: "You're a {cert}! {boats} yours to take"
       folded: "You're a {cert}! {boats} yours to take"
+    - id: courses-reached
+      name: Courses reached
+      on: course-reached
+      level: active
+      switchable: false
+      stays: 6
+      text: "You've reached {name}"
+      folded: "You've reached {name}"
+    - id: shipmates-coming
+      name: Shipmates sailing to you
+      on: shipmate-course
+      level: active
+      switchable: true
+      stays: 8
+      text: "{who} is sailing to you"
+      folded: "{count} shipmates are sailing to you"
+    - id: boats-alongside
+      name: Alongside a boat sailed to
+      on: course-alongside
+      level: active
+      switchable: false
+      stays: 6
+      text: "You're alongside {who}"
+      folded: "You're alongside {who}"
+    - id: boat-courses-ended
+      name: Courses to a boat ended
+      on: course-ended
+      level: active
+      switchable: false
+      stays: 8
+      text: "{why}"
+      folded: "{why}"
 
 # The news, a daily edition in the manner of the old shipping lists. What
 # could be news is written as a candidate story with its kind's score; each

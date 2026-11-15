@@ -59,7 +59,7 @@ const DOT = 4;
 const LIFT = 6;
 
 /** A strip of quads, coloured by its corners. */
-class Strips {
+export class Strips {
   readonly pos: number[] = [];
   readonly col: number[] = [];
   readonly idx: number[] = [];

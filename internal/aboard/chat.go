@@ -425,3 +425,15 @@ func (t *Ties) Refuses(skipper, knocker [16]byte) bool { return t.Blocks(skipper
 func MayBeShipmates(a, b Band) bool {
 	return a == b && (a == Adult || a == Teen)
 }
+
+// MayFind reports whether seeker may be told where shipmate's boat is, for
+// a course to it: two people who are shipmates, neither blocking the
+// other, both of one age band (MayBeShipmates, so a teen turned 18 is no
+// longer found by a teen shipmate), and shipmate not appearing offline.
+// Being shipmates is the consent; appearing offline, or ending being
+// shipmates, is the way out. A machine sailor is never found so: its owner
+// finds their own by its account, not as a shipmate.
+func MayFind(seeker, shipmate Speaker, shipmates, blocked bool) bool {
+	return shipmates && !blocked && !shipmate.Offline && !seeker.Machine && !shipmate.Machine &&
+		MayBeShipmates(seeker.Band, shipmate.Band)
+}

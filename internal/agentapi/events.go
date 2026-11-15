@@ -61,6 +61,7 @@ const (
 	evRaceAsked   // the race's committee asks whether it still races
 	evCertificate // a task of its next certificate done
 	evCertified   // a certificate earned
+	evCourse      // its course was reached
 )
 
 // always are the events that end any wait: a sailor would notice them
@@ -96,6 +97,8 @@ func (k evKind) wake() string {
 		return wakeBoat
 	case evRace, evRacePlaced, evRaceAsked:
 		return wakeRace
+	case evCourse:
+		return wakeCourse
 	}
 	return ""
 }
@@ -175,6 +178,8 @@ func (k evKind) word() string {
 		return "race: the committee asks"
 	case evCertificate, evCertified:
 		return "certificate"
+	case evCourse:
+		return wakeCourse
 	}
 	return "event"
 }

@@ -128,12 +128,13 @@ const (
 	outRaceCheered
 	outBoatPrizes
 	outCertified
+	outCourse
 	outs
 )
 
 var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted", "island_caps", "forecast", "watch_ended", "watchers", "agent_lamp", "look_changed",
 	"boat_look_changed", "boat_names", "life", "knock", "knocking", "crew", "handed", "ashore", "chat", "crews", "race_told", "race_picture",
-	"race_signal", "race_call", "race_finish", "race_results", "race_cheered", "boat_prizes", "certified"}
+	"race_signal", "race_call", "race_finish", "race_results", "race_cheered", "boat_prizes", "certified", "course"}
 
 // Changes aboard boats.
 const (

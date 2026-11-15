@@ -34,11 +34,12 @@ import {
   Vector3,
 } from 'three';
 import type { WebGPURenderer } from 'three/webgpu';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, CourseOpen } from '../net/messages';
 import { chartMaterial } from '../render/materials';
 import type { Racing } from '../ui/racestate';
 import { raceDrawingOf } from '../ui/racestate';
 import { ARROW_HEIGHT, ARROW_NOSE, ARROW_TAIL, arrowSize, placeChartCamera } from './arrow';
+import { type CourseDrawing, CourseLayer } from './courselayer';
 import type { IslandModel, Models } from './model';
 import { PAPER_MARGIN, type PaperLook, paintCourses, paintPaper } from './paper';
 import { type RaceDrawing, RaceLayer } from './racelayer';
@@ -147,6 +148,10 @@ export class ChartView {
   raceDrawing: () => RaceDrawing | null = () => null;
   /** The race's course, tracks and boats over the paper. */
   readonly race = new RaceLayer();
+  /** The course set and a pin dropped, from the chart's choices: none unless set. */
+  courseDrawing: () => CourseDrawing = () => ({ course: null, pin: null });
+  /** The course's pin and its pencil line, and a pin dropped. */
+  readonly course = new CourseLayer();
 
   readonly #store: ChartStore;
   readonly #models: Models;
@@ -238,6 +243,7 @@ export class ChartView {
       this.#streaks,
       falls,
       this.race.group,
+      this.course.group,
     );
     // The table the chart lies on.
     this.scene.background = new Color(TABLE);
@@ -305,6 +311,7 @@ export class ChartView {
     }
     this.#labels.clear();
     this.race.attach(layer);
+    this.course.attach(layer);
     this.#dirty = true;
   }
 
@@ -410,8 +417,9 @@ export class ChartView {
     this.#dirty = true;
   }
 
-  /** The entry nearest a tap at (x, y) CSS pixels, within a hand's breadth of it. */
-  pick(x: number, y: number): ChartEntry | null {
+  /** Where a tap at (x, y) CSS pixels meets the paper, m east and north; null off it. */
+  paperAt(x: number, y: number): { east: number; north: number } | null {
+    this.#placeCamera();
     const ndc = new Vector2((x / this.#width) * 2 - 1, -(y / this.#height) * 2 + 1);
     this.#ray.setFromCamera(ndc, this.camera);
     const o = this.#ray.ray.origin;
@@ -420,14 +428,43 @@ export class ChartView {
       return null;
     }
     const t = -o.y / d.y;
-    const east = o.x + d.x * t;
-    const north = -(o.z + d.z * t);
+    return { east: o.x + d.x * t, north: -(o.z + d.z * t) };
+  }
+
+  /** The entry nearest a tap at (x, y) CSS pixels, within a hand's breadth of it. */
+  pick(x: number, y: number): ChartEntry | null {
+    const at = this.paperAt(x, y);
+    if (at === null) {
+      return null;
+    }
     let best: ChartEntry | null = null;
     let bestD = this.#distance * 0.04;
     for (const e of this.#store.entries) {
-      const dd = Math.hypot(e.east - east, e.north - north);
+      const dd = Math.hypot(e.east - at.east, e.north - at.north);
       if (dd < bestD) {
         best = e;
+        bestD = dd;
+      }
+    }
+    return best;
+  }
+
+  /** The race course whose start is nearest a tap at (x, y) CSS pixels, within a hand's breadth of it. */
+  pickStart(x: number, y: number): CourseOpen | null {
+    const at = this.paperAt(x, y);
+    if (at === null) {
+      return null;
+    }
+    let best: CourseOpen | null = null;
+    let bestD = this.#distance * 0.04;
+    for (const c of this.#store.courses) {
+      const s = c.way[0];
+      if (s === undefined) {
+        continue;
+      }
+      const dd = Math.hypot(s[0] - at.east, s[1] - at.north);
+      if (dd < bestD) {
+        best = c;
         bestD = dd;
       }
     }
@@ -579,6 +616,9 @@ export class ChartView {
         (2 * this.#distance * Math.tan((this.camera.fov * Math.PI) / 360)) /
         Math.max(this.#height, 1);
       if (this.race.update(this.raceDrawing(), metres, this.#look.ink)) {
+        this.#dirty = true;
+      }
+      if (this.course.update(this.courseDrawing(), b, metres)) {
         this.#dirty = true;
       }
     }
@@ -842,6 +882,7 @@ export class ChartView {
       }
     }
     this.race.place(this.camera, this.#width, this.#height);
+    this.course.place(this.camera, this.#width, this.#height);
   }
 
   #makeLabel(e: ChartEntry, layer: HTMLElement): Label {

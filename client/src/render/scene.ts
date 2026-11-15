@@ -63,7 +63,7 @@ import { GustRings } from './gustring';
 import { type BoatLantern, Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
 import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
-import { domeCentre, domeDrop } from './materials';
+import { domeCentre, domeDrop, horizonDistance } from './materials';
 import { Overlays } from './overlays';
 import { cockadeOf, PrizesAfloat, pendantOf } from './prizes';
 import {
@@ -308,8 +308,14 @@ export class SeaScene {
   cover: Cover | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
-  /** A tag over a point of the sea, a race's next mark's number, while there is one; placed each frame where the camera sees it. */
-  markTagOf: (() => { east: number; north: number; text: string } | null) | null = null;
+  /**
+   * A tag over a point of the sea while there is one: a race's next mark's
+   * number, or the course's name and distance; placed each frame where the
+   * camera sees it, and with sight, only while the point is within the
+   * camera's sight over the sea's curve.
+   */
+  markTagOf: (() => { east: number; north: number; text: string; sight?: boolean } | null) | null =
+    null;
   #markTag: HTMLElement | null = null;
   readonly #tagAt = new Vector3();
   /** Called after each frame is drawn, with the main thread's work on it, ms. */
@@ -2189,14 +2195,22 @@ export class SeaScene {
     }
     const ow = this.origin.world;
     const d = Math.hypot(t.east - this.pose.east, t.north - this.pose.north);
+    // Within sight: the tag's height over the sea's curve from the camera's.
+    const cam = camera.position;
+    const seen =
+      t.sight !== true ||
+      Math.hypot(t.east - ow.x - cam.x, -(t.north - ow.y) - cam.z) <=
+        horizonDistance(cam.y) + horizonDistance(MARK_TAG_HEIGHT);
     // Over the spar's top, dropped by the dome as the sea is.
     const v = this.#tagAt
       .set(t.east - ow.x, MARK_TAG_HEIGHT - domeDrop(d), -(t.north - ow.y))
       .project(camera);
-    const on = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+    const on = seen && v.z < 1 && v.z > -1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
     el.hidden = !on;
     if (on) {
-      el.textContent = t.text;
+      if (el.textContent !== t.text) {
+        el.textContent = t.text;
+      }
       el.style.transform = `translate(${(((v.x + 1) / 2) * width).toFixed(1)}px, ${(((1 - v.y) / 2) * height).toFixed(1)}px)`;
     }
   }

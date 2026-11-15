@@ -26,8 +26,8 @@ const toolsGolden = "testdata/tools.golden.json"
 
 // mostToolBytes bounds the tool list's size, compact: 7,969 bytes, 1,953
 // o200k tokens, when it was written; 8,859 bytes, 2,192 tokens, once race
-// was built.
-const mostToolBytes = 9000
+// was built; 9,359 bytes, 2,315 tokens, once course was.
+const mostToolBytes = 9400
 
 // listTools is the server's tools/list answer, as a client receives it.
 func listTools(t *testing.T) *mcp.ListToolsResult {
@@ -100,7 +100,7 @@ func TestToolsList(t *testing.T) {
 			}
 		}
 	}
-	if got := strings.Join(names, " "); got != "observe steer trim chart pencil forecast news say race boat bottle handbook" {
+	if got := strings.Join(names, " "); got != "observe steer trim chart course pencil forecast news say race boat bottle handbook" {
 		t.Fatalf("the tools in order: %s", got)
 	}
 }
@@ -130,9 +130,12 @@ func TestHandbookPages(t *testing.T) {
 		// The longest, aboard, is about 705 o200k tokens, with the
 		// catamaran's twelve named; trim, a table for each of seven boats,
 		// the beach cat's hulls and bows and the catamaran's reefing by the
-		// wind, about 1,255.
+		// wind, about 1,255. By this estimate charting is about 800 and
+		// tools 765 with the course (602 and 646 o200k tokens).
 		most := 700
 		switch topic {
+		case "charting", "tools":
+			most = 820
 		case "aboard":
 			most = 720
 		case "trim":

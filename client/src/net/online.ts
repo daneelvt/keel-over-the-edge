@@ -67,6 +67,7 @@ import type {
   ChartEntry,
   ChatStateTold,
   ChunksHanded,
+  CourseEndWhy,
   CourseOpen,
   CrewTold,
   ForecastTold,
@@ -89,6 +90,7 @@ import type {
   RaceToldIn,
   RaceWatchAsk,
   ReportReasonTold,
+  ShipmateAtIn,
   Status,
   ToWorker,
   Traffic,
@@ -210,6 +212,8 @@ export class Online {
   readonly shipmatesChanged = signal(0);
   /** Why the connection last left a boat it was aboard, until its own boat's Welcome. */
   #ashore: AshoreWhyTold | null = null;
+  /** The sailor whose boat a course is set to, asked again of each new connection; "" for none. */
+  #courseTo = '';
   /** What the server last told of the AI of the own machine sailor watched, and of which watch. */
   readonly #lamp = signal<{ state: LampState; of: WatchingTold } | null>(null);
   /**
@@ -253,6 +257,10 @@ export class Online {
   onRaceCheered: ((c: RaceCheeredIn) => void) | null = null;
   /** What the sailor's certificates came to: a task done, a venture's run, a certificate earned. */
   onCertified: ((c: CertifiedIn) => void) | null = null;
+  /** Where the boat a course is set to is; a course to a boat ended; a shipmate sailing to the player. */
+  onShipmateAt: ((at: ShipmateAtIn) => void) | null = null;
+  onCourseEnded: ((sailor: string, why: CourseEndWhy) => void) | null = null;
+  onShipmateCourse: ((name: string) => void) | null = null;
   /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
   onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
     null;
@@ -387,6 +395,19 @@ export class Online {
   /** Asks to come aboard by a link's token, or sends the player's machine sailor named machine: knocking tells how it stands. */
   knock(token: string, machine = ''): void {
     this.#port.postMessage({ type: 'knock', token, machine });
+  }
+
+  /**
+   * Asks where a sailor's boat is, for a course to it: a shipmate or one of
+   * the player's own machine sailors, by account; "" stops it. Asked again
+   * of each new connection while it is set.
+   */
+  courseTo(sailor: string): void {
+    if (sailor === this.#courseTo) {
+      return;
+    }
+    this.#courseTo = sailor;
+    this.#port.postMessage({ type: 'courseTo', sailor });
   }
 
   /** Asks to come aboard the boat a shipmate (their account ID) skippers, without a link. */
@@ -597,6 +618,20 @@ export class Online {
       case 'shipmates':
         this.shipmatesChanged.value++;
         break;
+      case 'shipmateAt':
+        if (m.at.sailor === this.#courseTo) {
+          this.onShipmateAt?.(m.at);
+        }
+        break;
+      case 'courseEnded':
+        if (m.sailor === this.#courseTo) {
+          this.#courseTo = '';
+          this.onCourseEnded?.(m.sailor, m.why);
+        }
+        break;
+      case 'shipmateCourse':
+        this.onShipmateCourse?.(m.name);
+        break;
       case 'chatState':
         this.chatState.value = m.state;
         break;
@@ -752,6 +787,10 @@ export class Online {
         this.holding.value = m.watching === null && m.aboard === null;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
+        if (m.first && this.#courseTo !== '') {
+          // A new connection knows nothing of the course: asked again.
+          this.#port.postMessage({ type: 'courseTo', sailor: this.#courseTo });
+        }
         this.onWorld?.(m.world, m.land);
         this.world = m.world;
         this.endsMs = m.endsUs / 1000;

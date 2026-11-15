@@ -3776,6 +3776,87 @@ with no letter: 67°24′N 045°12′; at the pole, 90°00′N. The chart's box,
 its list, the pocket's caption and the world page write them so, and the
 world page can put a flagged boat at one.
 
+### A course
+
+A sailor sets **a course**: one point to sail for, kept on the phone
+(`chart/course.ts`, its words in `chart/coursewords.ts`). It is anything
+charted (`kind: 'entry'`, by subject and number), a race course's start
+(`'start'`, by the course's number, its point the way's first), or a pin
+on open water (`'pin'`, east and north); setting one replaces the last.
+Each kind says where its point is now from what the phone holds, so a
+kind whose point moves can join them; an island's is the nearest point of
+its land's bounds, so a large island is reached at its shore. The course
+is a bearing and a distance from the boat, flat-disk `atan2` and `hypot`
+as the chart's list has them; **it never steers**. Its aim and arrival
+have a Go twin, `internal/chart/course.go` (`CourseAim`, `Arrive`,
+`Reached`), which a machine sailor's course uses; both are held to
+`internal/chart/testdata/courses.json` (`go test ./internal/chart -run
+CoursesFile -update` writes it, `chart/coursefile.test.ts` reads it).
+
+It is set on the chart. A charted thing's box has **Set course** first,
+in brass, and for the course set **Clear course**. A tap on the paper that
+picks nothing charted (`view.pick`, within 4% of the camera's distance)
+and falls in no weather system finds a race course's start within the same
+reach (`view.pickStart`), or else drops **a pin** (`Chart.marked`) and opens
+its box: "Pin", its latitude and longitude, its bearing and distance from
+the boat, Set course and Close; Close takes the pin away. Past the rim the
+box says "Beyond the edge." with Close alone. A weather system's box has
+**Pin here** for a pin where it was tapped. The course is drawn on the
+chart (`chart/courselayer.ts`) as a brass pin in the labels layer, its
+name under it, which a tap opens the course's box from, and a faint pencil
+line from the boat, a strip of quads like the race's lines.
+
+At sea the compass card carries it (`CompassCard` in `ui/case.tsx`): a
+brass chevron outside the ticks (r 43–50 of its −50…50 box) turned to the
+course's bearing less the heading (`HudModel.courseMark`, moved each frame
+as the wind's mark is), and a window at the card's foot, the heading's
+window's twin, reading its distance (`HudModel.courseDistance`, "1.2 NM",
+the unit set smaller), with the course in words for a screen reader. The
+pocket chart draws it last as a gold dot in a ring; in a race, framed on
+the course, a course outside the frame is a gold tick on the frame's rim
+the way it lies (`pocketCourse`). In the sea, `SeaScene.markTagOf` gives
+the course's name and distance over its point while it is within the
+camera's sight over the sea's curve (a race's next mark comes first).
+
+Within 0.1 NM of its point (`ARRIVE`) the course is reached: the
+`course-reached` notice ("You've reached Gull Rock", "your pin" for a pin)
+and it clears (`Chart.arrive`, from the HUD's writes). In a race the
+compass gives way to the race line (`Chart.racing`): the mark and window
+are hidden and nothing is reached, and the course is kept for after.
+Watching another's boat (`Chart.watching`) it is not shown, and the keys
+that set it are not offered.
+
+It is kept in `localStorage` (`keel.course`) with the ID of the world it
+was set in (`Chart.atWorld`, from the Welcome's world; the sandbox's is
+`sandbox:<seed>`): a reload or a new voyage in that world has it back,
+before the chart comes too (its point is unknown until then, and nothing
+shows); another world drops it.
+
+**A sailor's boat** is a course too (`kind: 'boat'`, by the sailor's
+account, with their name and whether a machine sailor's), set by *Sail
+to* behind a shipmate's ⋯ on the shipmates' panel while they are at sea,
+and on the menu's machine sailors' panel for each of the player's own in
+the water (`client/src/ui/sailto.ts`, the chart its host while the
+player's own compass is shown; neither panel offers it while watching
+another's boat, nor on the start screen); for the one sailed to, the same
+key reads *Clear course*. While the course is a boat the page asks the
+server where it is (`Online.courseTo`, `CourseTo{sailor}`, again from
+each new connection's first Welcome, and `CourseTo{}` once it is not);
+`ShipmateAt` every two seconds is kept in `Chart.boats` (`BoatFixes`),
+whose last two fixes move the pin on between them, by the way the boat
+made, for up to 4 s. Until the first comes the boat is nowhere and
+nothing shows, as after a reload: a boat course kept for the world is
+asked of the server again, which may refuse it. Within 0.1 NM the
+`course-alongside` notice says "You're alongside Ann" and it clears. A
+`CourseEnded` clears it, with the `course-ended` notice in the words of
+`courseEndedText` (`chart/coursewords.ts`): "Ann has come ashore", "Ann
+is no longer at sea", or for every refusal "You can't sail to Ann now".
+Its pin on the chart opens a box with its name, kind, where it is and
+*Clear course*. `keel.courseBoatAt(at)` and `keel.courseBoatEnded(sailor,
+why)` stand in for the server in the sandbox, whose *Sail to* is always
+offered. A shipmate sailing to the player raises `shipmate-course`, "Ann
+is sailing to you" (*Shipmates* in the next section has the rules).
+
 ### Looking at it
 
 ```sh
@@ -5854,15 +5935,19 @@ deletes them.
 
 ### Machine sailors at sea
 
-A machine sailor's agent sails through twelve tools at the MCP address
+A machine sailor's agent sails through thirteen tools at the MCP address
 (`internal/agentapi/tools.go`, the whole `tools/list` answer held to
 `testdata/tools.golden.json`): `observe`, `steer`, `trim`, `chart`,
-`pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`, `handbook`.
-`pencil` and `bottle` answer "not yet", as do `say`'s `hail` and
-`spectators`: the list never changes as the game grows, since apps cache
-it. A change to a description or a
-schema is a deliberate change: run `go test ./internal/agentapi -run
-ToolsList -update` and name it in the release notes.
+`course`, `pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`,
+`handbook`. `pencil` and `bottle` answer "not yet", as do `say`'s `hail`
+and `spectators`: the list changes seldom as the game grows, since apps
+cache it (`course` came after the first twelve; an app sees it when it
+lists the tools again). A change to a description or a schema is a
+deliberate change: run `go test ./internal/agentapi -run ToolsList
+-update` and name it in the release notes. The list is held under
+`mostToolBytes` compact (9,359 bytes, 2,315 o200k tokens, with `course`),
+and each handbook page under an estimate of its tokens
+(`TestHandbookPages`).
 
 **The helm** (`helm.go`). Each machine sailor whose agent has called since
 keel started has one, in memory, shared by every app approved for it: its
@@ -5914,7 +5999,7 @@ restarts, as a count kept in memory would not. `observe` tells the events
 after its last answer; `since` tells them again.
 
 **Waits.** `observe` with `wait` (0–50 s) holds the call until something in
-`wake_on` happens, or capsizes, groundings, bumps, the falls, a restart,
+`wake_on` happens (the course reached among them, by default), or capsizes, groundings, bumps, the falls, a restart,
 an admission or the world's end; a second wait ends the first
 ("superseded"); a closed stream ends it (counted in
 `keel_agent_wait_cut_seconds` by app), and the next report says so, once.
@@ -5973,6 +6058,29 @@ rest wake `race`. `news` with `log` adds the lasting race records
 (`RaceRecordsOf`). Tests: `races_test.go` races a machine sailor round a
 spar in the sea harness against races kept in memory, and holds the race
 block to `testdata/race_block.golden.txt`.
+
+**A course** (`course.go`). `course` sets the machine sailor's one
+course, as a person sets one on the chart: `place`, a charted place by its
+name or title (folded, as `chart` matches names), or an open course's name
+(or "Start of" it) for its start; `position` for a pin, read by
+`chart.ParsePosition`; `clear`; with nothing, it tells the course. Never a
+boat. A name not charted is refused with the nearest charted names, a
+malformed position with `ParsePosition`'s words, one past the lip with the
+lip's distance; one within 0.1 NM of the boat is not set. The next replaces
+it. It is kept on the core by account (`Core.courses`, a lock of its own),
+with the `Sea` it was set in, so a helm forgotten while idle keeps it, and
+`Open` lets every course go: a restart or a new world loses it, and the
+handbook's charting page tells the agent to set it again when `observe`
+shows none. `observe` tells it in brief and full on a `Course:` line after
+the race's, "Course: Gull Rock 045° 1.2 NM" (a pin's with " · at" its
+position), and `course {name, bearing, nm, position}` in JSON, its aim
+`chart.CourseAim` (an island at its nearest bounds). The hub, at each look,
+reaches it within `chart.Arrive`: the event "you've reached Gull Rock: the
+course is cleared" (`evCourse`), which ends a wait on `wake_on` `course`
+(in the default), and the course clears. While the boat races, on the line
+or under way, it is neither told nor reached, as on the phone. Tests:
+`course_test.go` (pins in the sea harness, short; places, an island's shore
+and a course's start in seed 1), and `races_test.go`'s race hides it.
 
 **The helmsman** (`internal/helmsman`, `go run ./tools/helmsman`) sails a
 machine sailor to a charted place with no model, by the chart's bearings:
@@ -6959,6 +7067,43 @@ offline, is not skippering a boat at sea, or is no shipmate reads as not
 at sea. `KnockCard.shipmate` and `Person.shipmate` mark shipmates (★) on
 the skipper's card and in who is aboard.
 
+**Sailing to a shipmate** (`internal/edge/course.go`): `Command.courseTo
+{sailor}`, a shipmate's account ID as the list names it, or one of the
+account's own machine sailors' (checked once by `WatchByID`), asks where
+their boat is; an empty one stops it. The encoder answers at its next
+frame and then every two seconds (the race picture's rate), from the
+frame: `ShipmateAt{sailor, name, east, north}` while it holds, or
+`CourseEnded{sailor, why}` once, after which nothing more is sent. For a
+shipmate it holds while `aboard.MayFind` does (shipmates, neither
+blocking the other, both of one age band by `MayBeShipmates`, so a teen
+turned 18 is no longer found by a teen shipmate, and the shipmate not
+appearing offline) and they are at sea, in a boat of their own or aboard
+another's, not kept unseen by the owner's tools. Being shipmates is the
+consent; appearing offline, or ending being shipmates, is the way out,
+and either ends it within two seconds. `why` is `ashore` (still in the
+game, out of the water), `gone` (out of the game) or `refused` for
+everything else, which never says which; a shipmate not to be found when
+first asked is always `refused`, so nothing tells whether one who appears
+offline is in the game. The shipmate is sent `ShipmateCourse{name}` the
+first time each shipmate sails to them on a voyage (by the boat they are
+in, `Edge.sailedTo`), never for a machine sailor; its notice switch,
+*Shipmates sailing to you*, stops their being told, not their being found. A player's own
+machine sailor is found whenever its boat is in the water, and is told
+nothing; out of the water it is `gone`. Nothing is sent to a connection
+while it watches another's boat (its compass shows no course), and the
+ask is the connection's alone: nothing of it is kept, and a new
+connection asks again. Counted in `keel_edge_messages_total{direction="out"}`
+as `course`.
+
+**What a shipmate's position gives away**: their boat's place, to the
+metre, every two seconds, to one shipmate who asked, while both are at
+sea and the rule holds; kept nowhere, neither on the server (in the
+connection's memory only while it asks) nor on the phone beyond the last
+two fixes in memory (the course kept in `localStorage` names the sailor,
+never a place). The watch list and its cards still never give a
+position: only a shipmate's course, or an owner's to their own machine
+sailor, does.
+
 **The routes** (`internal/api/shipmates.go`, people only): `GET
 /api/shipmates` is the account's shipmates by name with where each is
 (`game`, `sea`, or nothing for one not in the game or appearing offline;
@@ -6981,8 +7126,8 @@ thread, or the boat last sailed on with someone of recent crew), and `POST
 together's parts): the menu's *Shipmates* opens the list: offers first
 (*Accept*, ✕), then shipmates with where they are, then *Recent crew*.
 Each row shows its one key (*Message*; *Be shipmates* for recent crew)
-and keeps the rest behind ⋯ (*Ask to come aboard*, *Watch*, *No longer
-shipmates*, *Block*, *Report*); ending and blocking ask once in the row.
+and keeps the rest behind ⋯ (*Sail to*, *Ask to come aboard*, *Watch*,
+*No longer shipmates*, *Block*, *Report*); ending and blocking ask once in the row.
 *Appear offline* is at the list's foot and on the account panel. A thread
 (`ShipmateThreads`, `client/src/ui/shipmatelog.ts`) keeps each shipmate's
 newest 50 messages in the page's memory only, and closes silently when the
@@ -7007,8 +7152,14 @@ and no message's text in any column); `internal/edge/edgetest/shipmates_test.go`
 refused and kept nowhere, appearing offline, both switches, a report of a
 thread, ending it mid-conversation, knocks without a link and the marks,
 the tally's five minutes, and no text in the log or metrics);
+`internal/edge/edgetest/course_test.go` (a shipmate sailed to, told every
+two seconds and told once a voyage across a new connection; refused for
+a stranger, across the bands and for someone else's machine sailor; ended,
+refused, by appearing offline, no longer being shipmates and a block
+either way; `gone` out of the game and `ashore` watching, refused when
+asked so; the own machine sailor found and `gone` out of the water);
 `internal/api`'s `TestShipmatesRoutes`; `internal/aboard`'s
-`TestMayBeShipmates`.
+`TestMayBeShipmates` and `TestMayFind`; `client/src/chart/boatcourse.test.ts`.
 
 ## The local cluster
 

@@ -117,7 +117,7 @@ func TestAMachineSailorSails(t *testing.T) {
 		token, _ := db.machine("Iron Mary", "Ann Bonny", false)
 		cs := agentSession(t, s, token)
 
-		// The list of tools is the twelve, in their order.
+		// The list of tools, in their order.
 		tl, err := cs.ListTools(t.Context(), nil)
 		if err != nil {
 			t.Fatal(err)
@@ -126,7 +126,7 @@ func TestAMachineSailorSails(t *testing.T) {
 		for _, tool := range tl.Tools {
 			names = append(names, tool.Name)
 		}
-		if got := strings.Join(names, " "); got != "observe steer trim chart pencil forecast news say race boat bottle handbook" {
+		if got := strings.Join(names, " "); got != "observe steer trim chart course pencil forecast news say race boat bottle handbook" {
 			t.Fatalf("the tools: %s", got)
 		}
 
