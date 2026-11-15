@@ -190,7 +190,9 @@ test('the skiff chosen from the fleet: her crew sets the gennaker bearing away, 
   test.skip(skiff === undefined, 'the catalog has no boat with a downwind sail');
   const set = skiff?.physics.downwind.setAngle ?? 0;
   const drop = skiff?.physics.downwind.dropAngle ?? 0;
-  await sailor(context, 'Skiff');
+  const made = await sailor(context, 'Skiff');
+  // A new sailor holds no certificate: the skiff opened by the owner's box.
+  await everyBoat(context.request, made.name);
   await page.goto(GAME);
   const readout = page.locator('.your-sailor [data-readout=boat]');
   await expect(readout).toBeVisible({ timeout: 90_000 });
@@ -258,7 +260,9 @@ test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes
 }, async ({ context, page, request }) => {
   test.skip(cat === undefined, 'the catalog has no boat of two hulls');
   test.setTimeout(240_000);
-  await sailor(context, 'Cat');
+  const made = await sailor(context, 'Cat');
+  // A new sailor holds no certificate: the beach cat opened by the owner's box.
+  await everyBoat(context.request, made.name);
   await page.goto(GAME);
   const readout = page.locator('.your-sailor [data-readout=boat]');
   await expect(readout).toBeVisible({ timeout: 90_000 });
@@ -353,7 +357,9 @@ test('the yacht chosen from the fleet: she beats in a breeze, tacks, reaches pas
 }, async ({ context, page, request }) => {
   test.skip(yacht === undefined, 'the catalog has no cruising yacht');
   test.setTimeout(240_000);
-  await sailor(context, 'Cruiser');
+  const made = await sailor(context, 'Cruiser');
+  // A new sailor holds no certificate: the yacht opened by the owner's box.
+  await everyBoat(context.request, made.name);
   await page.goto(GAME);
   const readout = page.locator('.your-sailor [data-readout=boat]');
   await expect(readout).toBeVisible({ timeout: 90_000 });
@@ -443,7 +449,9 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks through 
 }, async ({ context, page, request }) => {
   test.skip(catamaran === undefined, 'the catalog has no cruising catamaran');
   test.setTimeout(240_000);
-  await sailor(context, 'Bridgedeck');
+  const made = await sailor(context, 'Bridgedeck');
+  // A new sailor holds no certificate: the catamaran opened by the owner's box.
+  await everyBoat(context.request, made.name);
   await page.goto(GAME);
   const readout = page.locator('.your-sailor [data-readout=boat]');
   await expect(readout).toBeVisible({ timeout: 90_000 });
