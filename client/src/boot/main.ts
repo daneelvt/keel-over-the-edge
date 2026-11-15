@@ -650,13 +650,15 @@ async function start(): Promise<void> {
         clock: clock.clock,
         readClock: clock.read,
         countdown,
-        // The screen again, with a watch's parts or without, and sailing
-        // together's: the layout's tests.
-        remount: (watch, deck = null, statements = null) => {
+        // The screen again, with a watch's parts or without, sailing
+        // together's, and the way home's: the layout's tests.
+        remount: (watch, deck = null, statements = null, home = null) => {
           unmount();
           unmount = mountScreen(
             document.body,
-            watch === null && deck === null ? screen : { ...screen, watch, deck, statements },
+            watch === null && deck === null && home === null
+              ? screen
+              : { ...screen, watch, deck, statements, home },
           );
         },
       });
@@ -1128,6 +1130,11 @@ async function start(): Promise<void> {
   });
   const changeBoat = (act: () => void): Promise<void> => underCover.change(act);
   online.onSnap = () => void underCover.snap();
+  // The way home, under the same cover; a page aboard, whose skipper
+  // asked, covered as the lift comes.
+  const homeward = (ask: boolean): Promise<void> => underCover.home(ask);
+  online.onLift = () => void homeward(false);
+  const homeAsking = signal(false);
   // Watching, as the screens see it.
   const watchView: WatchView = {
     watching: online.watching,
@@ -1320,6 +1327,17 @@ async function start(): Promise<void> {
       },
       sail: () => watchView.sail(),
       replay: (code) => parts.replay.open(code),
+    },
+    home: {
+      offered: () =>
+        !online.spectating.value && online.watching.value === null && online.aboard.value === null,
+      asking: homeAsking,
+      racing: () => {
+        const r = racing.mine();
+        return racing.number() > 0 && (r === null || r.state === 'placed' || r.state === 'racing');
+      },
+      shipmates: () => online.crew.value !== null,
+      go: () => void homeward(true),
     },
   });
   // A name tapped anywhere opens its log on the chart screen's Log tab, and

@@ -269,6 +269,8 @@ export type Received =
   /** Where the boat the course is set to is; a course to one ended; a shipmate sailing to the player. */
   | { kind: 'shipmateAt'; at: ShipmateAtIn }
   | { kind: 'courseEnded'; sailor: string; why: CourseEndWhy }
+  /** The boat lifted home at tick, or (tick 0) not, soon if too soon. */
+  | { kind: 'lifted'; tick: number; soon: boolean }
   | { kind: 'shipmateCourse'; name: string }
   /** Whether the AI of the own machine sailor watched attends to it. */
   | { kind: 'lamp'; state: LampState }
@@ -560,6 +562,9 @@ export class Session {
       case 'shipmateCourse':
         this.#lastHeard = now;
         return { kind: 'shipmateCourse', name: m.body.value.name };
+      case 'lifted':
+        this.#lastHeard = now;
+        return { kind: 'lifted', tick: Number(m.body.value.tick), soon: m.body.value.soon };
       case 'lookChanged':
         this.#lastHeard = now;
         return { kind: 'look', look: m.body.value.look };
@@ -1000,6 +1005,13 @@ export class Session {
   cheerCommand(now: number): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: { case: 'command', value: { body: { case: 'cheer', value: {} } } },
+    });
+  }
+
+  /** Lifts the own boat home to the start. */
+  homeCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'home', value: {} } } },
     });
   }
 

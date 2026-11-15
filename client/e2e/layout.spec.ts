@@ -2640,6 +2640,140 @@ test('the player’s own panel keeps Set sail in view with their boat, and the b
   expect(found).toEqual([]);
 });
 
+/** A window's faults: off the screen, its keys out of it or of the screen, or a key under 40 px tall or a 44 px touch wide. */
+async function windowFaults(page: Page, where: string, sel: string): Promise<string[]> {
+  const out = await page.evaluate((sel) => {
+    const w = document.querySelector(sel);
+    if (w === null) {
+      return [`no ${sel}`];
+    }
+    const found: string[] = [];
+    const r = w.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      found.push(
+        `${sel} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+      );
+    }
+    for (const b of w.querySelectorAll('button')) {
+      const k = b.getBoundingClientRect();
+      const name = `“${(b as HTMLElement).innerText}”`;
+      if (
+        k.left < r.left - 0.5 ||
+        k.right > r.right + 0.5 ||
+        k.top < r.top - 0.5 ||
+        k.bottom > r.bottom + 0.5
+      ) {
+        found.push(`${name} is outside ${sel}`);
+      }
+      if (k.bottom > innerHeight + 0.5 || k.right > innerWidth + 0.5) {
+        found.push(`${name} is off the screen`);
+      }
+      if (k.height < 39.5 || k.width < 43.5) {
+        found.push(`${name} is ${Math.round(k.width)} × ${Math.round(k.height)}`);
+      }
+    }
+    return found;
+  }, sel);
+  return out.map((f) => `${where}: ${f}`);
+}
+
+test('with the boat still in the water, the player’s own panel keeps Set sail in view and Start again at Port Royal within reach, and the question before the boat is taken out fits every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(120_000);
+  const o = data.sailorOptions;
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (r) =>
+      r.fulfill({
+        json: {
+          name: LONG,
+          look: data.sailors[0]?.id,
+          version: data.sailors[0]?.versions[0]?.id,
+          skin: o.skins[0]?.id,
+          hair: o.hairs[0]?.id,
+          colour: o.colours[0]?.id,
+          lookChosen: true,
+          kind: data.boats[0]?.id,
+          spectators: 'no',
+          atSea: true,
+        },
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/fleet',
+    (r) => r.fulfill({ json: longFleet() }),
+  );
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(GAME);
+  await expect(page.locator('.your-sailor [data-readout=boat]')).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('.your-sailor')).toContainText('still in the water');
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.waitForTimeout(100);
+    if (!(await inView(page, '.your-sailor-go'))) {
+      found.push(`${s.name}: Set sail is out of view`);
+    }
+    // Start again under it, in view as the panel scrolls to it.
+    await page.locator('.your-sailor-again').scrollIntoViewIfNeeded();
+    if (!(await inView(page, '.your-sailor-again'))) {
+      found.push(`${s.name}: Start again at Port Royal is out of view`);
+    }
+    await page.getByRole('button', { name: 'Start again at Port Royal' }).click();
+    await expect(page.locator('.take-out')).toBeVisible();
+    found.push(...(await windowFaults(page, s.name, '.take-out')));
+    await page.getByRole('button', { name: 'Keep it' }).click();
+    await expect(page.locator('.take-out')).toHaveCount(0);
+  }
+  expect(found).toEqual([]);
+});
+
+test('the way home’s question, racing and with shipmates aboard, fits every screen over the sea, its keys the head keys’ size; Back to Port Royal in the menu', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.evaluate(() =>
+      globalThis.keel.homeScene({ asking: true, racing: true, shipmates: true }),
+    );
+    await expect(page.locator('.home-question')).toContainText('Your shipmates come too.');
+    found.push(...(await windowFaults(page, s.name, '.home-question')));
+    await page.getByRole('button', { name: 'Stay', exact: true }).click();
+    await expect(page.locator('.home-question')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    const item = page.locator('.menu').getByRole('button', { name: 'Back to Port Royal' });
+    await item.scrollIntoViewIfNeeded();
+    if (!(await item.isVisible())) {
+      found.push(`${s.name}: no Back to Port Royal in the menu`);
+    }
+    await page.locator('.menu-x').click();
+  }
+  await page.evaluate(() => globalThis.keel.homeScene(null));
+  expect(found).toEqual([]);
+});
+
 test('a link’s parts on the player’s own panel fit every screen: a refused link’s words and ☆ Follow at its head, Set sail in view, the share within reach', async ({
   page,
 }) => {

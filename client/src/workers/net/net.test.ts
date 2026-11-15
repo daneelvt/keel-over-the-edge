@@ -381,6 +381,28 @@ describe('the session', () => {
     ).toEqual({ kind: 'shipmateCourse', name: 'Bob Read' });
   });
 
+  test('the way home: Home asked, and Lifted told, lifted at its tick or not, too soon', () => {
+    const s = welcomed();
+    expect(decodeClient(s.homeCommand(1)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'home', value: {} } },
+    });
+    expect(
+      s.receive(2, encodeServer({ body: { case: 'lifted', value: { tick: 4200n } } })),
+    ).toEqual({
+      kind: 'lifted',
+      tick: 4200,
+      soon: false,
+    });
+    expect(s.receive(3, encodeServer({ body: { case: 'lifted', value: { soon: true } } }))).toEqual(
+      {
+        kind: 'lifted',
+        tick: 0,
+        soon: true,
+      },
+    );
+  });
+
   test('the commands of chat: a line, a mute by seat, a block by line, a report', () => {
     const s = welcomed();
     expect(decodeClient(s.sayCommand(1, 'Fair winds', 4)).body).toMatchObject({

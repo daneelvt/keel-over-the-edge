@@ -5,7 +5,9 @@
 // with no correction; a wind changed on the server reaches the boat; a
 // reload within the grace finds the same boat; a restart of keel rings the
 // harbourmaster's bell and the same boat is there after; and a second
-// device takes the boat, and is taken back from. The pages draw nothing
+// device takes the boat, and is taken back from; and the way home, Back
+// to Port Royal from the menu, lifting the boat to the start, at rest, its
+// voyage in the log, and once a minute at most. The pages draw nothing
 // (?draw=off): the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
@@ -145,4 +147,53 @@ test('another device takes the boat, and Take over takes it back', async ({ page
   await expect(second.locator('[data-readout="connection"]')).toHaveText(/another device/);
   expect((await net(page)).boat).toBe(boat);
   await other.close();
+});
+
+test('the way home: Back to Port Royal lifts the boat to the start, at rest, the voyage in the log; again at once, too soon', async ({
+  page,
+  context,
+}) => {
+  await sailor(context);
+  await sail(page);
+  const start = (await page.evaluate(() => globalThis.keel.boat())).state;
+  // Off the start: under way a moment, then far out.
+  await page.evaluate(() => globalThis.keel.setControls(0.4, 0.5));
+  await page.waitForTimeout(3_000);
+  await alone(page);
+  const fromStart = () =>
+    page.evaluate(
+      ([x, y]) => {
+        const s = globalThis.keel.boat().state;
+        return Math.hypot(s.x - x, s.y - y);
+      },
+      [start.x, start.y] as const,
+    );
+  expect(await fromStart()).toBeGreaterThan(1000);
+  const home = async () => {
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('button', { name: 'Back to Port Royal', exact: true }).click();
+    const q = page.getByRole('alertdialog', { name: 'Back to Port Royal?' });
+    await expect(q).toContainText(
+      'Your boat is lifted to the start off Port Royal. This voyage ends here.',
+    );
+    await q.getByRole('button', { name: 'Back to Port Royal', exact: true }).click();
+    await expect(q).toHaveCount(0);
+  };
+  await home();
+  // At the start, among the new boats' places, at rest.
+  await expect.poll(fromStart, { timeout: 10_000 }).toBeLessThan(150);
+  const s = (await page.evaluate(() => globalThis.keel.boat())).state;
+  expect(Math.hypot(s.surge, s.sway)).toBeLessThan(1.5);
+  expect((await net(page)).status).toBe('sailing');
+  // Again at once: too soon, and the boat stays where it is.
+  await home();
+  await expect(page.locator('[data-readout="connection"]')).toHaveText(
+    'You were lifted a moment ago.',
+  );
+  expect(await fromStart()).toBeLessThan(150);
+  // The voyage ended lifted, in the log: the day's remark, after its first.
+  await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
+  await expect(page.locator('.log-sheet')).toContainText(/lifted home to Port Royal/i, {
+    timeout: 20_000,
+  });
 });

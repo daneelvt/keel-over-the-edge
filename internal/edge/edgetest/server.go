@@ -344,6 +344,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Sessions: s.sessions,
 		Game:     s.Edge,
 		Chunks:   cfg.Payloads,
+		Ashore:   s.Edge,
 	})
 	s.handler.Store(&h)
 	ctx, cancel := context.WithCancel(context.Background())

@@ -13,7 +13,10 @@
 // reaches, rounds up in a gust and reefs. The catamaran beats, tacks
 // through about a hundred degrees, reaches past 7.6 knots, flies a hull in
 // a squall with her sheet held, and reefs. Neither cat's flying hull or
-// burying bows puts a line on the screen or dims the controls.
+// burying bows puts a line on the screen or dims the controls. A boat left
+// in its grace keeps the start screen open: the note says so, Change boat
+// is offered, and choosing the beach cat asks first to take the boat out,
+// then sails her from the start.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -178,6 +181,57 @@ test('a boat chosen and its look set from the player’s own panel, then sailed'
   });
   expect(res.status()).toBe(409);
   expect(((await res.json()) as { error: string }).error).toBe('port');
+});
+
+test('a boat in its grace: the start screen says so and offers Change boat; the beach cat chosen, the boat taken out first, and sailed from the start', async ({
+  context,
+  page,
+}) => {
+  test.skip(cat === undefined, 'the catalog has no boat of two hulls');
+  const made = await sailor(context, 'Grace');
+  await everyBoat(context.request, made.name);
+  await page.goto(GAME);
+  await setSail(page);
+  await page.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+    timeout: 60_000,
+  });
+  const start = (await page.evaluate(() => globalThis.keel.boat())).state;
+  const first = (await page.evaluate(() => globalThis.keel.net())).boat;
+  // The page closed: the boat sails on in its grace.
+  await page.close();
+  const again = await context.newPage();
+  await again.goto(GAME);
+  const yours = again.locator('.your-sailor');
+  await expect(yours).toContainText('Your boat is still in the water, where you left it.', {
+    timeout: 90_000,
+  });
+  await expect(again.getByRole('button', { name: 'Start again at Port Royal' })).toBeVisible();
+  await again.getByRole('button', { name: 'Change boat', exact: true }).click();
+  await again
+    .locator('.change-boat-choice', { hasText: cat?.name ?? '' })
+    .first()
+    .click();
+  const q = again.getByRole('alertdialog', { name: 'Take your boat out of the water?' });
+  await expect(q).toContainText('It ends that voyage.');
+  await q.getByRole('button', { name: 'Take it out' }).click();
+  const readout = again.locator('.your-sailor [data-readout=boat]');
+  await expect(readout).toContainText(cat?.name ?? '');
+  await expect(yours).not.toContainText('still in the water');
+  expect((await fleet(again)).boats.find((b) => b.yours)?.kind).toBe(cat?.id);
+  await setSail(again);
+  await again.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+    timeout: 60_000,
+  });
+  expect((await again.evaluate(() => globalThis.keel.net())).boat).not.toBe(first);
+  await expect.poll(async () => (await fleet(again)).boats.find((b) => b.yours)?.atSea).toBe(true);
+  // A new boat, at the start: on the new boats' rows south of the centre,
+  // where the first was, 20 m apart and 64 to a row.
+  const s = (await again.evaluate(() => globalThis.keel.boat())).state;
+  for (const b of [start, s]) {
+    expect(Math.abs(b.x)).toBeLessThan(700);
+    expect(b.y).toBeLessThan(0);
+    expect(b.y).toBeGreaterThan(-400);
+  }
 });
 
 test('the tall ship chosen from the fleet and sailed, her yards braced', async ({

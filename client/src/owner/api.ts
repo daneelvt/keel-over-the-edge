@@ -1005,7 +1005,7 @@ export interface LogVoyage {
   boatName?: string;
   began: number;
   ended: number;
-  how: 'returned' | 'expired' | 'over' | 'taken' | 'aboard' | 'ashore' | 'landed';
+  how: 'returned' | 'expired' | 'over' | 'taken' | 'aboard' | 'ashore' | 'landed' | 'lifted';
   place?: string;
   runM: number | null;
   closestM?: number;

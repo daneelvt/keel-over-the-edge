@@ -41,6 +41,7 @@ import type { ShipsClock } from './clock';
 import { Helm, Reef, type ReefActions, Sheet } from './controls';
 import type { Countdown } from './countdown';
 import { type DeckView, deckPlate, deckShown, useDeck } from './decklazy';
+import { HomeQuestion, type HomeView } from './home';
 import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
@@ -286,6 +287,8 @@ export interface ScreenProps {
   races?: RacesView | null;
   /** The race the boat sails in: its line, its windows; null without. */
   racing?: RaceSource | null;
+  /** The way home: Back to Port Royal in the menu, and its question; null in the offline sandbox. */
+  home?: HomeView | null;
 }
 
 /** Whether a key press is the player's, not typing in a field. */
@@ -497,8 +500,10 @@ function Screen(props: ScreenProps) {
           deck={deck}
           fullScreen={full}
           races={props.races ?? null}
+          home={props.home ?? null}
         />
       ) : null}
+      {props.home?.asking.value === true ? <HomeQuestion home={props.home} /> : null}
       {barred && racing !== null ? <LazyRaceLine src={racing} part="bar" /> : null}
       {barred && racing !== null && !cleared ? <LazyRaceLine src={racing} part="crier" /> : null}
       {watch !== null && !decked && !barred ? <LazyWatch watch={watch} part="plate" /> : null}

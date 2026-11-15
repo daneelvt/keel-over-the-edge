@@ -75,6 +75,7 @@ const HOW: Record<LogVoyage['how'], string> = {
   aboard: 'left to go aboard another’s boat',
   ashore: 'went ashore',
   landed: 'ashore as the boat left the water',
+  lifted: 'lifted home to Port Royal',
 };
 
 const MET: Record<string, string> = {

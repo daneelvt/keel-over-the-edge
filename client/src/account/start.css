@@ -648,3 +648,8 @@
     display: none;
   }
 }
+
+/* The question before a boat still in the water is taken out: its words centred under its head. */
+.take-out .start-text {
+  text-align: center;
+}

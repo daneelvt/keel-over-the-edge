@@ -306,6 +306,7 @@ type Edge struct {
 	watchers boatWatchers
 	crowd    crowds
 	sailedTo sailedTo
+	lifts    lifts
 
 	mu      sync.Mutex
 	closing bool

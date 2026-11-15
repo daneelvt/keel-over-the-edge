@@ -166,6 +166,39 @@ export class UnderCover {
   }
 
   /**
+   * The way home, as a change of boat: the cover down over the screen, the
+   * lift asked for under it (ask), and the cover up again once the boat is
+   * drawn at the start with the land about it; at once if the lift comes to
+   * nothing (too soon). A page aboard, whose skipper asked, is covered at
+   * once as the lift comes (ask false), and lifted the same way.
+   */
+  async home(ask: boolean): Promise<void> {
+    const { world, cover, online } = this.#p;
+    if (!this.atSea || this.#busy) {
+      if (ask) {
+        online.home();
+      }
+      return;
+    }
+    this.#busy = true;
+    const n = online.lifted.value;
+    const refused = online.unlifted.value;
+    this.#p.showScreen();
+    const start = performance.now();
+    await cover.drop(world.underTest || reducedMotion() || !ask ? 0 : DROP);
+    if (world.drawsWhenReady) {
+      world.stage.loopDraws = false;
+    }
+    if (ask) {
+      online.home();
+    }
+    const lifted = () => online.lifted.value > n;
+    await this.#until(lifted, start, online.lifted, n, () => online.unlifted.value > refused);
+    reveal(world, cover, lifted() ? DESCENT_CHANGE : 0);
+    this.#busy = false;
+  }
+
+  /**
    * A snap (Online's onSnap), the page started again from the newest
    * snapshot: the cover down at once, so the world is never seen lurching
    * from where it was; the wakes, and the frames' time, from now; the

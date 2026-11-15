@@ -143,6 +143,7 @@ import { certifiedTold } from '../ui/certwords';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
+import type { HomeView } from '../ui/home';
 import { setLogHost } from '../ui/loglazy';
 import { downwindLine, type SailState } from '../ui/model';
 import { openNews, setNewsHost } from '../ui/newslazy';
@@ -299,11 +300,12 @@ export type Sailing = (
   countdown?: Countdown;
   /** The full screen's switch and key. */
   fullScreen?: FullScreen;
-  /** The sandbox's screen drawn again, with a watch's parts or without, and sailing together's. */
+  /** The sandbox's screen drawn again, with a watch's parts or without, sailing together's, and the way home's. */
   remount?: (
     watch: WatchView | null,
     deck?: DeckView | null,
     statements?: StatementsView | null,
+    home?: HomeView | null,
   ) => void;
   /** What the page did from the tap to the world's reveal; null before it. */
   revealed?: () => Revealed | null;
@@ -1807,6 +1809,24 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** What the screen of the latest deckScene asked of it, in order. */
     deckCalls(): string[] {
       return [...deckCalls];
+    },
+    /**
+     * The sandbox's screen with the way home offered in its menu, and its
+     * question asked, racing and with shipmates aboard as given; null as it
+     * is offline, with neither.
+     */
+    homeScene(home: { asking: boolean; racing: boolean; shipmates: boolean } | null): void {
+      if (home === null) {
+        sailing.remount?.(null, null);
+        return;
+      }
+      sailing.remount?.(null, null, null, {
+        offered: () => true,
+        asking: signal(home.asking),
+        racing: () => home.racing,
+        shipmates: () => home.shipmates,
+        go: () => {},
+      });
     },
     /**
      * The question asked before the own boat leaves the water to watch, in

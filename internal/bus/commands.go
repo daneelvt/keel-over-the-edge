@@ -20,7 +20,7 @@ type Op uint8
 // The commands. Join, Leave and Disconnect come from players' connections,
 // SetLook from a player's change of look at Port Royal, and SetBoat and
 // SetBoatLook from a change of boat or of its look in port;
-// RaceRetire from a racer's;
+// RaceRetire from a racer's, and Lift from a skipper's on the way home;
 // SetWeather, Place and RaiseLife are for developers only: tests,
 // scripted sailors, scenes and replays; Hold is the server's own, from what writes the world to the
 // database, Chart, which marks what the world's chart holds from its
@@ -54,6 +54,7 @@ const (
 	RaceWritten               // Race's run Race.Run, ended, has its results written: the committee lets it go
 	RaceCheer                 // Account's boat, racing, is cheered Cheers times by its spectators
 	Certify                   // what Account's certificates came to, Certified, is told through the frame's events
+	Lift                      // Boat is lifted home: out of any race, its voyage ended, at the start on a new one, at rest, those aboard still aboard
 	opEnd
 )
 
@@ -63,10 +64,10 @@ const LifeAboard uint16 = 1 << 15
 
 // Ops lists every op, in order, for tables keyed by op.
 var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook, RaiseLife,
-	Board, Ashore, SetHolder, RacePlace, RaceRetire, RaceWritten, RaceCheer, Certify}
+	Board, Ashore, SetHolder, RacePlace, RaceRetire, RaceWritten, RaceCheer, Certify, Lift}
 
 var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end", "set_look",
-	"set_boat", "set_boat_look", "raise_life", "board", "ashore", "set_holder", "race_place", "race_retire", "race_written", "race_cheer", "certify"}
+	"set_boat", "set_boat_look", "raise_life", "board", "ashore", "set_holder", "race_place", "race_retire", "race_written", "race_cheer", "certify", "lift"}
 
 // Why someone goes ashore, in an Ashore's Why.
 const (
@@ -178,7 +179,7 @@ type Command struct {
 	Op      Op
 	Account Account       // Join, Disconnect with no boat: the account; in a Leave's event, the tick's record of who sailed the boat
 	Conn    uint64        // Join, Disconnect: the connection; 0 for none
-	Boat    uint64        // Leave, Place, Disconnect, Teleport, Stay, Unseen: the boat; Disconnect: 0 for whatever Account has
+	Boat    uint64        // Leave, Place, Disconnect, Teleport, Stay, Unseen, Lift: the boat; Disconnect: 0 for whatever Account has
 	Weather Weather       // SetWeather
 	State   physics.State // Place, Teleport
 	Held    bool          // Hold: held, or let go
@@ -231,7 +232,7 @@ const (
 	Rejoined                   // the account's existing boat
 	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
-	Done                       // SetWeather, Place, Hold, Teleport, Stay, Unseen, End, SetLook, SetBoat or SetBoatLook applied; Disconnect's grace begun
+	Done                       // SetWeather, Place, Hold, Teleport, Stay, Unseen, End, SetLook, SetBoat, SetBoatLook or Lift applied; Disconnect's grace begun
 	NoBoat                     // no such boat; for SetLook, SetBoat and SetBoatLook, no boat afloat nor place in the queue
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
 	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored
@@ -297,7 +298,7 @@ func NewQueue() *Queue {
 }
 
 // Players returns a sender for players' commands: Join, Leave,
-// Disconnect, SetLook, SetBoat, SetBoatLook, RaceRetire, and Board, Ashore and
+// Disconnect, SetLook, SetBoat, SetBoatLook, RaceRetire, Lift, and Board, Ashore and
 // SetHolder, which the game connection sends only as a boat's skipper and
 // crew may ask them.
 func (q *Queue) Players() Sender { return Sender{q: q, from: fromPlayers} }
