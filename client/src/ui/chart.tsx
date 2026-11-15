@@ -1248,7 +1248,7 @@ export function drawPocket(
     ctx.beginPath();
     ctx.moveTo(course.x, course.y);
     ctx.lineTo(course.x + course.dx * POCKET_TICK, course.y + course.dy * POCKET_TICK);
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.lineCap = 'round';
     ctx.strokeStyle = POCKET_GOLD;
     ctx.stroke();
@@ -1261,7 +1261,7 @@ const POCKET_GOLD = '#c8952c';
 /** The course's dot and ring, and the tick on a race's frame, canvas pixels. */
 const POCKET_DOT = 4;
 const POCKET_RING = 7;
-const POCKET_TICK = 9;
+const POCKET_TICK = 13;
 
 /**
  * Where the course goes on the pocket chart, w by h canvas pixels framed
