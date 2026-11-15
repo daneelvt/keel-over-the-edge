@@ -32,15 +32,20 @@ func wayWords(way uint8) string {
 }
 
 // certifiedWords are an event of a sailor's certificates: "Toward Helm:
-// The Triangle, bronze ✓ by hand · 3 of 4", and "You earned Helm, by hand:
-// the beach cat is yours to take."
+// The Triangle, bronze ✓ by hand · 3 of 4"; a run nearer a venture,
+// "Toward Helm: The Triangle, bronze, the autopilot way · 1 of 2 runs";
+// and "You earned Helm, by hand: the beach cat is yours to take."
 func certifiedWords(cat *catalog.Catalog, c *bus.Certified) string {
 	if cat == nil || int(c.Certificate) < 0 || int(c.Certificate) >= len(cat.Certificates) {
 		return "a certificate's task done"
 	}
 	ct := &cat.Certificates[c.Certificate]
 	var parts []string
-	if t := int(c.Task); t >= 0 && t < len(ct.Tasks) {
+	t := int(c.Task)
+	switch {
+	case t >= 0 && t < len(ct.Tasks) && c.RunsOf > 0:
+		parts = append(parts, fmt.Sprintf("Toward %s: %s, the autopilot way · %d of %d runs", ct.Name, ct.Tasks[t].Name, c.Runs, c.RunsOf))
+	case t >= 0 && t < len(ct.Tasks):
 		task := ct.Tasks[t].Name + " ✓"
 		if w := wayWords(c.Way); w != "" {
 			task += " " + w

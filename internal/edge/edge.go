@@ -364,6 +364,7 @@ func New(cfg Config) *Edge {
 // sim.Recorder. It wakes the encoders and never blocks.
 func (e *Edge) Record(f *bus.Frame) {
 	e.latest.Store(f.Tick)
+	e.certified(f)
 	for _, enc := range e.encs {
 		enc.wake()
 	}

@@ -38,6 +38,8 @@ type Ladder struct {
 	// certificate that opens each boat, by the boat's id.
 	byID   map[string]int
 	opener map[string]int
+	// scores are the news's story's score for each certificate earned.
+	scores []int
 }
 
 // New is the catalog's ladder of certificates.
@@ -49,6 +51,7 @@ func New(cat *catalog.Catalog) *Ladder {
 		for _, b := range c.Opens {
 			l.opener[string(b)] = i
 		}
+		l.scores = append(l.scores, cat.CertificateScore(i))
 	}
 	return l
 }
@@ -65,6 +68,15 @@ func (l *Ladder) Name(i int) string {
 		return ""
 	}
 	return l.certs[i].Name
+}
+
+// Score is the score of the news's story of the certificate at place i
+// earned.
+func (l *Ladder) Score(i int) int {
+	if i < 0 || i >= len(l.scores) {
+		return 0
+	}
+	return l.scores[i]
 }
 
 // Place is the place of the certificate of an id, −1 for none.
@@ -327,7 +339,7 @@ func (j Judge) Standing(ctx context.Context, x *store.Exam, account store.Accoun
 }
 
 func storeStanding(l *Ladder, st *Standing) store.Standing {
-	out := store.Standing{Done: map[string]string{}}
+	out := store.Standing{Done: map[string]string{}, Runs: map[string]int{}}
 	if st.Next < 0 {
 		return out
 	}
@@ -336,12 +348,16 @@ func storeStanding(l *Ladder, st *Standing) store.Standing {
 		if t.Done {
 			out.Done[t.ID] = t.Way
 		}
+		if t.Course {
+			out.Runs[t.ID] = t.Runs
+		}
 	}
 	return out
 }
 
 // Judge judges a sailor once its rows are written: each task of its next
-// certificate done since before is told, and once enough are done the
+// certificate done since before is told, and each course task not yet
+// done whose venture has more runs than before; once enough are done the
 // certificate is earned, by hand if every course task it counted was,
 // at the time of the rows (or its last earning's, if later), in world.
 func (j Judge) Judge(ctx context.Context, x *store.Exam, account store.AccountID, world int, at time.Time,
@@ -353,9 +369,14 @@ func (j Judge) Judge(ctx context.Context, x *store.Exam, account store.AccountID
 	}
 	var out []store.Certified
 	for i, t := range st.Tasks {
-		if t.Done && before.Done[t.ID] == "" {
+		switch {
+		case t.Done && before.Done[t.ID] == "":
 			out = append(out, store.Certified{Account: account, Certificate: st.Next, Task: i, Done: min(st.Done, st.Needs), Of: st.Needs,
 				Way: t.Way})
+		case !t.Done && t.Course && t.Of > 1 && t.Runs > before.Runs[t.ID]:
+			// A run nearer the venture: told, the task still to do.
+			out = append(out, store.Certified{Account: account, Certificate: st.Next, Task: i, Done: min(st.Done, st.Needs), Of: st.Needs,
+				Way: store.WayPilot, Runs: t.Runs, RunsOf: t.Of})
 		}
 	}
 	if st.Done < st.Needs {
@@ -379,11 +400,16 @@ func (j Judge) Judge(ctx context.Context, x *store.Exam, account store.AccountID
 		}
 	}
 	c.ByHand = courses > 0 && hands == courses
-	ok, err := x.Earn(ctx, account, &c, l.certs[st.Next].Name)
+	cert := &l.certs[st.Next]
+	opens := make([]string, len(cert.Opens))
+	for i, b := range cert.Opens {
+		opens[i] = string(b)
+	}
+	ok, err := x.Earn(ctx, account, &c, cert.Name, opens, l.Score(st.Next))
 	if err != nil || !ok {
 		return out, err
 	}
-	if len(out) == 0 {
+	if len(out) == 0 || out[len(out)-1].RunsOf > 0 {
 		out = append(out, store.Certified{Account: account, Certificate: st.Next, Task: -1, Done: st.Needs, Of: st.Needs})
 	}
 	// The last told is the earning.
@@ -418,7 +444,7 @@ func Command(c *store.Certified) bus.Command {
 	}
 	return bus.Command{Op: bus.Certify, Account: bus.Account(c.Account), Certified: bus.Certified{
 		Certificate: int16(c.Certificate), Task: int16(c.Task), Done: uint8(min(max(c.Done, 0), 255)), Of: uint8(min(max(c.Of, 0), 255)),
-		Way: way, Earned: c.Earned, ByHand: c.ByHand}}
+		Way: way, Runs: uint8(min(max(c.Runs, 0), 255)), RunsOf: uint8(min(max(c.RunsOf, 0), 255)), Earned: c.Earned, ByHand: c.ByHand}}
 }
 
 // Line is a standing in a line, as the owner's card shows it: the

@@ -80,21 +80,27 @@ type SoloLog struct {
 type Standing struct {
 	Next string
 	Done map[string]string
+	// Runs are the runs counted so far toward each course task's venture,
+	// by the task's id.
+	Runs map[string]int
 }
 
 // Certified is what a judging tells a sailor: a task of its next
 // certificate newly done (Task, the task's place among the certificate's
-// tasks), and the certificate earned (Earned, Task −1 if nothing but the
-// earning is told). Certificate is its place in the catalog's list; Done
-// of Of the tasks done of those it needs; Way the task's way.
+// tasks), a course task's venture a run nearer (Runs of RunsOf, the task
+// not yet done; RunsOf 0 otherwise), and the certificate earned (Earned,
+// Task −1 if nothing but the earning is told). Certificate is its place
+// in the catalog's list; Done of Of the tasks done of those it needs; Way
+// the task's way.
 type Certified struct {
-	Account     AccountID
-	Certificate int
-	Task        int
-	Done, Of    int
-	Way         string
-	Earned      bool
-	ByHand      bool
+	Account      AccountID
+	Certificate  int
+	Task         int
+	Done, Of     int
+	Way          string
+	Runs, RunsOf int
+	Earned       bool
+	ByHand       bool
 }
 
 // Examiner judges sailors' certificates in the transactions that write
@@ -107,8 +113,12 @@ type Examiner interface {
 }
 
 // Exam reads and writes a sailor's certificates and what counts toward
-// them, in a transaction of the store's or on the pool.
-type Exam struct{ q *db.Queries }
+// them, in a transaction of the store's or on the pool; nw, if not nil,
+// is the news its earnings' stories are written to.
+type Exam struct {
+	q  *db.Queries
+	nw *newsWrite
+}
 
 // Exam reads certificates on the pool, outside any transaction.
 func (s *Store) Exam() *Exam { return &Exam{q: s.q} }
@@ -160,10 +170,15 @@ func (x *Exam) Solo(ctx context.Context, account AccountID, since time.Time) (So
 	}, nil
 }
 
+// StoryCertificate is a story of a certificate earned: its title the
+// certificate's name, its what "by hand" if it was, its facts' boats the
+// kinds it opens.
+const StoryCertificate = "certificate"
+
 // Earn writes a certificate earned, once, and its entry in the sailor's
-// log, its title name: false if the sailor held it already, or is no
-// longer kept.
-func (x *Exam) Earn(ctx context.Context, account AccountID, c *Certificate, name string) (bool, error) {
+// log, its title name, and with the news, its story, of a score: false
+// if the sailor held it already, or is no longer kept.
+func (x *Exam) Earn(ctx context.Context, account AccountID, c *Certificate, name string, opens []string, score int) (bool, error) {
 	tasks := c.Tasks
 	if tasks == nil {
 		tasks = []CertTask{}
@@ -187,6 +202,14 @@ func (x *Exam) Earn(ctx context.Context, account AccountID, c *Certificate, name
 	}
 	if _, err := insertEntry(ctx, x.q, &LogEntry{Account: account, Source: source, World: c.World, At: c.Earned, Kind: LogCertificate,
 		Title: name, What: what}, pgtype.Text{}); err != nil {
+		return false, err
+	}
+	if x.nw == nil {
+		return true, nil
+	}
+	st := Story{Story: StoryCertificate, Score: score, At: c.Earned, Account: account, Subject: SubjectSailor, Title: name, What: what,
+		Island: -1, Facts: StoryFacts{Boats: opens}, Source: fmt.Sprintf("cert:%s:%x", c.ID, account[:])}
+	if _, err := insertStory(ctx, x.q, x.nw, &st); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -241,11 +264,11 @@ type judging struct {
 	told    []Certified
 }
 
-func newJudging(ex Examiner, q *db.Queries) *judging {
+func newJudging(ex Examiner, q *db.Queries, nw *newsWrite) *judging {
 	if ex == nil {
 		return nil
 	}
-	return &judging{ex: ex, x: &Exam{q: q}, before: map[AccountID]Standing{}, world: map[AccountID]int{}, at: map[AccountID]time.Time{},
+	return &judging{ex: ex, x: &Exam{q: q, nw: nw}, before: map[AccountID]Standing{}, world: map[AccountID]int{}, at: map[AccountID]time.Time{},
 		written: map[AccountID]bool{}}
 }
 

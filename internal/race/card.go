@@ -422,6 +422,32 @@ func (s *Service) trials(ctx context.Context, by Sailor, now, latest time.Time, 
 	return out, nil
 }
 
+// CourseTrials are the codes of the Harbourmaster's standing trials in
+// the boat the sailor of id sails now (or the one each sailor brings), by
+// their courses (store.CourseShort …): the first of each on the board.
+func (s *Service) CourseTrials(ctx context.Context, id store.AccountID) (map[string]string, error) {
+	boat := ""
+	if s.cfg.BoatOf != nil {
+		boat = s.cfg.BoatOf(id)
+	}
+	if s.boat(boat) == nil {
+		boat = s.sailorBoat()
+	}
+	w := &s.cfg.World
+	rows, err := s.cfg.Store.StandingTrials(ctx, w.ID, w.Number, boat)
+	if err != nil {
+		return nil, err
+	}
+	slices.SortStableFunc(rows, func(a, b store.Race) int { return standingOrder(&a) - standingOrder(&b) })
+	out := map[string]string{}
+	for i := range rows {
+		if c := recordCourse(&rows[i]); out[c] == "" {
+			out[c] = rows[i].Code
+		}
+	}
+	return out, nil
+}
+
 // standingOrder is a standing trial's place on the board: the short
 // windward–leeward, the short triangle, the long windward–leeward, the
 // long triangle, then the island courses by number.

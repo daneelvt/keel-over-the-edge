@@ -9106,7 +9106,7 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, or a race the player entered about to start.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, or a certificate earned.
    */
   on:
     | "charted-own"
@@ -9117,7 +9117,9 @@ export interface NoticeKind {
     | "gale-warned"
     | "followed-sailed"
     | "harbour-race"
-    | "race-soon";
+    | "race-soon"
+    | "task-done"
+    | "certificate-earned";
   /**
    * For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.
    *
@@ -9138,7 +9140,7 @@ export interface NoticeKind {
    */
   stays: number;
   /**
-   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), and for a gale warning {wind}, {when} and {where} are filled in.
+   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), for a gale warning {wind}, {when} and {where}, and for a certificate {cert} (its name), {task} (the task's), {done} and {of} (the tasks done of those it needs) and {boats} (the boats it opens, as a sentence opens) are filled in.
    */
   text: string;
   /**
@@ -9305,13 +9307,42 @@ export interface NewsMilestones {
 export interface NewsStory {
   id: Id;
   /**
-   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better.
+   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better; a certificate earned.
    */
-  of: "great" | "record" | "life" | "crew" | "first" | "run" | "milestone" | "charting" | "course" | "race" | "trial";
+  of:
+    | "great"
+    | "record"
+    | "life"
+    | "crew"
+    | "first"
+    | "run"
+    | "milestone"
+    | "charting"
+    | "course"
+    | "race"
+    | "trial"
+    | "certificate";
   /**
    * How interesting it is: the edition shows the highest first.
    */
   score: number;
+  /**
+   * For a certificate earned: its score by the certificate, one for each in the certificates' order; score is for any it has no score for.
+   *
+   * @minItems 1
+   * @maxItems 10
+   */
+  scores?:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number];
 }
 /**
  * The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.
@@ -10079,4 +10110,4 @@ export interface CertificateWay {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '777aa2f5dab7fa9a';
+export const CATALOG_VERSION = '7853049583744877';

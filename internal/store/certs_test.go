@@ -133,7 +133,8 @@ func (w *judgeWorld) run(who store.AccountID, course, medal string, piloted, alo
 func (w *judgeWorld) log(rows store.LogRows) []store.Certified {
 	w.t.Helper()
 	w.told = nil
-	b := store.Batch{World: w.world.ID, Epoch: w.epoch, Log: rows, Examiner: w.ex, Told: func(c []store.Certified) { w.told = c }}
+	b := store.Batch{World: w.world.ID, Epoch: w.epoch, Log: rows, Examiner: w.ex, Told: func(c []store.Certified) { w.told = c },
+		News: &store.NewsRules{Zone: "UTC", Column: "discoveries"}}
 	if err := w.p.Write(context.Background(), b); err != nil {
 		w.t.Fatal(err)
 	}
@@ -198,15 +199,17 @@ func TestTheJudgeCountsRunsAlone(t *testing.T) {
 	if told := w.run(ann, store.CourseShort, "", false, true); len(told) != 0 {
 		t.Errorf("a task done twice told again: %+v", told)
 	}
-	// Tom on the autopilot: 1 of 2, then done the autopilot way.
-	if told := w.run(tom, store.CourseShort, "bronze", true, true); len(told) != 0 {
+	// Tom on the autopilot: 1 of 2, told as a run nearer, then done the
+	// autopilot way.
+	if told := w.run(tom, store.CourseShort, "bronze", true, true); len(told) != 1 || told[0].Task != 0 || told[0].Way != store.WayPilot ||
+		told[0].Runs != 1 || told[0].RunsOf != 2 || told[0].Done != 0 || told[0].Earned {
 		t.Errorf("one run of a venture of two told %+v", told)
 	}
 	if task := taskOf(t, w.standing(tom), "short-course"); task.Done || task.Runs != 1 || task.Of != 2 {
 		t.Errorf("after one piloted run: %+v", task)
 	}
 	told = w.run(tom, store.CourseShort, "", true, true)
-	if len(told) != 1 || told[0].Way != store.WayPilot {
+	if len(told) != 1 || told[0].Way != store.WayPilot || told[0].RunsOf != 0 || told[0].Done != 1 {
 		t.Errorf("the venture's second run told %+v", told)
 	}
 	// A run on another course counts toward nothing of Deckhand's.
@@ -254,6 +257,24 @@ func TestThreeTasksEarnDeckhand(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("%d log entries of the certificate: %+v", n, entries)
+	}
+	// And a story of the news, about Ann, scored as its certificate is.
+	stories, err := w.s.DayStories(ctx, w.world.ID, w.at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n = 0
+	for _, st := range stories {
+		if st.Story == store.StoryCertificate {
+			n++
+			if st.Account != ann || st.Title != "Deckhand" || st.What != "by hand" || st.Subject != store.SubjectSailor ||
+				len(st.Facts.Boats) != 2 || st.Score != w.ex.L.Score(0) {
+				t.Errorf("the certificate's story: %+v", st)
+			}
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d stories of the certificate: %+v", n, stories)
 	}
 	st := w.standing(ann)
 	if st.Held != 0 || st.Next != 1 || st.Done != 0 || st.Needs != 4 {

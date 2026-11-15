@@ -71,14 +71,15 @@ import (
 //	            its account; a RaceWritten its race's ID and run; a RaceCheer
 //	            its account and its cheers; a Certify its account, the
 //	            certificate's and the task's places as varints, then the
-//	            tasks done, needed and the way, a byte each, and a byte of
-//	            flags (1: earned, 2: by hand)
+//	            tasks done, needed and the way, the venture's runs and
+//	            those it asks, a byte each, and a byte of flags (1: earned,
+//	            2: by hand)
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 21
+	formatVersion = 22
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -312,7 +313,7 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendVarint(dst, int64(c.Certificate))
 		dst = binary.AppendVarint(dst, int64(c.Task))
-		dst = append(dst, c.Done, c.Of, c.Way, certFlags(c))
+		dst = append(dst, c.Done, c.Of, c.Way, c.Runs, c.RunsOf, certFlags(c))
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -806,6 +807,7 @@ func (p *payload) event(e *bus.Event) {
 		c := &e.Certified
 		c.Certificate, c.Task = int16(p.varint()), int16(p.varint())
 		c.Done, c.Of, c.Way = p.byte(), p.byte(), p.byte()
+		c.Runs, c.RunsOf = p.byte(), p.byte()
 		if f := p.byte(); f&^(certEarned|certByHand) != 0 {
 			p.err = fmt.Errorf("a certify of flags %d", f)
 		} else {

@@ -197,7 +197,7 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 			if b.News != nil {
 				nw = &newsWrite{world: world, rules: b.News}
 			}
-			j := newJudging(b.Examiner, q)
+			j := newJudging(b.Examiner, q, nw)
 			if err := writeLog(ctx, q, &b.Log, written, nw, j); err != nil {
 				return err
 			}

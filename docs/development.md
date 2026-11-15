@@ -4017,7 +4017,26 @@ standing before the rows are written is read first, so only what is new is
 told; enough tasks done earns the certificate (`certificate`, once by its
 source) with a `log_entry` of kind `certificate`. After the commit each told
 item is a `bus.Certify` command, whose event carries `bus.Certified` through
-the frame to the machine sailors' events (`certificate`).
+the frame to the machine sailors' events (`certificate`). A course task not
+yet done whose venture has a run more than before is told too (`Runs` of
+`RunsOf`). An earning writes the news's candidate story, kind `certificate`,
+scored by the certificate (`scores` of the story in `notices.yaml`).
+
+### On the phone
+
+The edge reads every frame's `Certify` events as the frame is published
+(`Edge.Record`) and sends the sailor's own connection a `Certified` message,
+wherever it is; a sailor with none is told nothing (the log keeps it). The
+page (`ui/certwords.ts`) puts a course's task on the finish's card and a
+trial's results (`Racing.certified`), raises `task-done` (passive) for a task
+of the log, or for a course's while no card shows it, and
+`certificate-earned` (active, See opening the log's Ribbons) with the
+harbour's bell rung twice. The log's answer carries the certificate held
+(`certificate`, read by whoever may read the log) and, in one's own,
+`toward`: the next certificate's tasks, each course task with the code of
+the Harbourmaster's course that counts in the sailor's boat
+(`race.Service.CourseTrials`). In the sandbox `keel.certified({...})` tells
+the page as the server would.
 
 ### Gating
 
@@ -4045,6 +4064,8 @@ go test ./internal/store -run 'BoatsKept|TheJudge|ThreeTasks|ByHand' -v
 go test ./internal/race -run 'RacesAskTheCertificates|ATrialsRun|HarbourJob' -v
 go test ./internal/fleet ./internal/owner -run 'Certificates|EveryBoat' -v
 go test ./internal/agentapi -run 'CertificateWords|BoatNeedsACertificate' -v
+go test ./internal/edge/edgetest -run CertifiedToTheSailor -v
+go test ./internal/logbook -run LogCertificates -v
 ```
 
 ## The weekly world

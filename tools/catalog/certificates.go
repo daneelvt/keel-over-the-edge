@@ -15,7 +15,8 @@ import (
 // open); a certificate needing more tasks than it has; a task id twice in
 // one certificate; a course task without both ways, or with a measure; a
 // log task without its measure and mark, or with a course; a way asking
-// for one run on each course of a task of one course.
+// for one run on each course of a task of one course; a story with scores
+// by the certificate that is not a certificate's, or with not one for each.
 func checkCertificates(doc map[string]any) error {
 	certs := asList(doc["certificates"])
 	if len(certs) == 0 {
@@ -79,6 +80,20 @@ func checkCertificates(doc map[string]any) error {
 					problems = append(problems, fmt.Sprintf("  %s: task %q asks for one run on each of one course", id, tid))
 				}
 			}
+		}
+	}
+	// A story's scores by the certificate: one each, and only a
+	// certificate's story's.
+	news, _ := doc["news"].(map[string]any)
+	for _, st := range asList(news["stories"]) {
+		id, _ := st["id"].(string)
+		scores, has := st["scores"].([]any)
+		of, _ := st["of"].(string)
+		switch {
+		case has && of != "certificate":
+			problems = append(problems, fmt.Sprintf("  story %s has scores by the certificate, but is not a certificate's", id))
+		case has && len(scores) != len(certs):
+			problems = append(problems, fmt.Sprintf("  story %s has %d scores for %d certificates", id, len(scores), len(certs)))
 		}
 	}
 	if len(problems) > 0 {

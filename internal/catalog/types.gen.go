@@ -2341,15 +2341,20 @@ type NewsStory struct {
 	// What makes it: a great discovery first sighted; a record at the falls; a rare
 	// creature met; a crew in company; a sailor's first charting ever; the day's
 	// longest run; a milestone; any other charting; a course opened by charting; a
-	// race won; a time trial sailed to gold or better.
+	// race won; a time trial sailed to gold or better; a certificate earned.
 	Of NewsStoryOf `json:"of"`
 
 	// How interesting it is: the edition shows the highest first.
 	Score int `json:"score"`
+
+	// For a certificate earned: its score by the certificate, one for each in the
+	// certificates' order; score is for any it has no score for.
+	Scores []int `json:"scores,omitempty,omitzero"`
 }
 
 type NewsStoryOf string
 
+const NewsStoryOfCertificate NewsStoryOf = "certificate"
 const NewsStoryOfCharting NewsStoryOf = "charting"
 const NewsStoryOfCourse NewsStoryOf = "course"
 const NewsStoryOfCrew NewsStoryOf = "crew"
@@ -2383,8 +2388,9 @@ type NoticeKind struct {
 
 	// What raises it: a place the player charts, a great discovery by anyone, the
 	// world closing, its end near, a new world begun, a new gale warning, a sailor
-	// the player follows setting sail, a harbour race about to start, or a race the
-	// player entered about to start.
+	// the player follows setting sail, a harbour race about to start, a race the
+	// player entered about to start, a task of the player's next certificate done, or
+	// a certificate earned.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -2394,8 +2400,10 @@ type NoticeKind struct {
 	Switchable bool `json:"switchable"`
 
 	// Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the
-	// player's own time), {left} (the time left), and for a gale warning {wind},
-	// {when} and {where} are filled in.
+	// player's own time), {left} (the time left), for a gale warning {wind}, {when}
+	// and {where}, and for a certificate {cert} (its name), {task} (the task's),
+	// {done} and {of} (the tasks done of those it needs) and {boats} (the boats it
+	// opens, as a sentence opens) are filled in.
 	Text string `json:"text"`
 }
 
@@ -2415,6 +2423,7 @@ const OfWorld Of = "world"
 
 type On string
 
+const OnCertificateEarned On = "certificate-earned"
 const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
 const OnFallsComing On = "falls-coming"
@@ -2424,6 +2433,7 @@ const OnGaleWarned On = "gale-warned"
 const OnHarbourRace On = "harbour-race"
 const OnNewWorld On = "new-world"
 const OnRaceSoon On = "race-soon"
+const OnTaskDone On = "task-done"
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
@@ -6124,4 +6134,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "777aa2f5dab7fa9a"
+const Version = "7853049583744877"

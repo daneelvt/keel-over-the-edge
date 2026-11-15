@@ -291,7 +291,8 @@ func (s *Store) EndRace(ctx context.Context, lease int64, rules NewsRules, e *Ra
 	var told []Certified
 	err := s.fenced(ctx, lease, func(q *db.Queries) error {
 		told = nil
-		j := newJudging(e.Examiner, q)
+		nw := &newsWrite{world: world, rules: &rules}
+		j := newJudging(e.Examiner, q, nw)
 		for i := range e.Records {
 			if r := &e.Records[i]; r.Kind == "trial" && r.Role == RoleSkipper && r.Alone {
 				if err := j.look(ctx, r.Account, r.World, r.At); err != nil {
@@ -361,7 +362,6 @@ func (s *Store) EndRace(ctx context.Context, lease int64, rules NewsRules, e *Ra
 				return fmt.Errorf("a race's run: %w", err)
 			}
 		}
-		nw := &newsWrite{world: world, rules: &rules}
 		for i := range e.Stories {
 			if _, err := insertStory(ctx, q, nw, &e.Stories[i]); err != nil {
 				return err

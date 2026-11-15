@@ -30,6 +30,10 @@ func TestCertificateWords(t *testing.T) {
 	if want := "Toward " + first.Name + ": " + first.Tasks[0].Name + " ✓ by hand · 1 of 3"; got != want {
 		t.Errorf("a task done: %q, want %q", got, want)
 	}
+	got = certifiedWords(cat, &bus.Certified{Certificate: 0, Task: 0, Done: 1, Of: 3, Way: bus.CertPilot, Runs: 1, RunsOf: 2})
+	if want := "Toward " + first.Name + ": " + first.Tasks[0].Name + ", the autopilot way · 1 of 2 runs"; got != want {
+		t.Errorf("a run nearer a venture: %q, want %q", got, want)
+	}
 	got = certifiedWords(cat, &bus.Certified{Certificate: 0, Task: 2, Done: 3, Of: 3, Earned: true, ByHand: true})
 	if !strings.Contains(got, "You earned "+first.Name+", by hand: the ") || !strings.Contains(got, "yours to take") {
 		t.Errorf("a certificate earned: %q", got)
