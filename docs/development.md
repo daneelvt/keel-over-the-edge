@@ -133,9 +133,9 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the sizes of its parts loaded apart (the approval page, the log, the news), the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. The built page's, when either's ran: the page built and served by keel, and a new sailor's first download to the reveal held under 4 MB on the wire (`critical.spec.ts`). Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2`; `npx vite build`, then `npx playwright test -c playwright.built.config.ts` |
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
@@ -5423,7 +5423,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_AI_SILENCE` | `3m` | How long a machine sailor's boat stays at sea with no call from its agent before its minute's grace begins, from 1s to 1h |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
-| `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world); `tools/e2e` sets it too) |
+| `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world); `tools/e2e` sets it too, but with `-land`) |
 | `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1, as `tools/e2e` does |
 | `KEEL_WORLD_SCHEDULE` | `Sun 18:00 America/New_York notice=72h ahead=24h` | When worlds end, how long before a world is closing and its successor made; or a period from an anchor in UTC (see [The weekly world](#the-weekly-world)) |
 | `KEEL_WORLD_KEEP` | `672h` | How long an ended world's data is kept before its partitions are dropped |
@@ -8134,7 +8134,7 @@ secrets are made from:
 | `tunnel.tf` | The tunnel `keel-prod`, remotely managed: `play.keelovertheedge.com` → `http://traefik.kube-system.svc.cluster.local:80`, anything else 404. Its token, written into Infisical |
 | `dns.tf` | `play` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
 | `zone.tf` | TLS strict, HTTPS always, TLS 1.2 at least, no 0-RTT, WebSockets; HSTS; nothing that rewrites the page or answers in its place; no bot or AI-crawler blocking |
-| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited); no script of Cloudflare's added to the page (its Web Analytics beacon, Zaraz) |
+| `rules.tf` | `/assets/` cached as the game says; the models and other binary assets under `/assets/` (`model/gltf-binary`, `application/octet-stream`) compressed by a Compression Rule, since Cloudflare's own list of types it compresses has neither; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited); no script of Cloudflare's added to the page (its Web Analytics beacon, Zaraz) |
 | `secrets.tf` | The database's password: ephemeral, written into Infisical write-only, in no plan or state |
 | `notifications.tf` | An e-mail to the owner when the tunnel's health changes |
 
@@ -9424,7 +9424,7 @@ page loads the physics module, so build it first (`go run ./tools/physics`).
 Playwright starts four servers: `keel`, which `go run ./tools/e2e` builds from
 the tree and serves on a database of its own on the test database's server
 (so start it first: `go run ./tools/dev -db`), on ports 18080, 18081 and
-19090, dropping the database when it stops, with developer commands on and land off (the terrain made from seed 1), the
+19090, dropping the database when it stops, with developer commands on and land off (the terrain made from seed 1; `-land` turns it on), the
 lag proxy on 18090 (200 ms, 2%) and, on 19099, `POST /restart`, which
 restarts `keel`; Vite on `http://localhost:5181` in front of it; a second
 Vite on `http://localhost:5182` whose traffic goes through the lag proxy;
@@ -9621,6 +9621,61 @@ when a file they read changed: a change to the server alone runs the
 page's, to the shaders alone the scene's (`tools/e2e/filters_test.go` holds
 the two filters to what each reads). A new folder under `client/src` is
 both kinds', unless it only draws or only keel's pages use it.
+
+### The built page and its first download
+
+Every project above runs against Vite in development. The `built` project
+(`playwright.built.config.ts`, its files named in `builtFiles` there, which
+the other projects leave out) runs against the page as players load it:
+built by Vite, served by keel (`go run ./tools/e2e -client client/dist
+-land`, `KEEL_CLIENT_DIR`), with the world's land on, and opened at `/`
+with no `?test`, so that the page draws and its cover lifts only once the
+world under it is ready. In front of keel, tools/e2e runs a stand-in for
+Cloudflare's edge on `http://localhost:18088`, the page's origin, which
+gzips what Cloudflare would: the types on Cloudflare's list, and the
+models and binary assets under `/assets/` that the zone's Compression
+Rule adds (`tools/e2e/edge.go`). So the bytes the browser receives are
+those of the wire players have, at gzip's size (Cloudflare sends zstd, a
+little smaller), though over HTTP/1.1, where Cloudflare speaks HTTP/2 and
+3. Chromium draws on the GPU the `webgl2` project does (lavapipe on
+Linux), at a phone's 360 × 640 at 3×, with no WebGPU.
+
+```sh
+cd client
+npx vite build
+PW_CHANNEL=chrome npx playwright test -c playwright.built.config.ts
+```
+
+A test that needs a second build served (a deploy) builds it into another
+directory (`npx vite build --outDir dist2`) and restarts keel on it:
+`POST http://127.0.0.1:19099/restart?client=client/dist2`, the directory
+from the repository's root; keel serves it from then on.
+
+`critical.spec.ts` is the critical download's check. A new player opens
+the start screen, makes a sailor with Playwright's authenticator, keeps the
+start screen's look, and sets sail from Port Royal, on a network throttled
+to DevTools' Fast 4G (`CRITICAL_NETWORK=slow4g` for Slow 4G). Every
+response from the first request to the reveal is counted as it came over
+the wire (its headers and its encoded body): the page, its code, fonts,
+models, portraits, the sky and the land's chunks. Not counted: the game's
+connection (`/ws`, which is data use), and the passkey's own requests
+(`/account/`, `/signin/`). The reveal is the html element losing its class
+`covered`, which the cover drops only as it lifts at sea
+(`client/src/boot/cover.ts`); the start screen is its name field
+appearing. **It fails over 4 MB** (4 × 1024 × 1024 bytes). Its table goes to
+the job's summary and the log: the total, what it would be without the
+Compression Rule and as keel sends it, the bytes by kind, the times from
+the navigation's start to the start screen, each Set sail, the sailor made
+and the reveal, and every response with when it was asked for and ended.
+The look shown on the start screen is drawn at random, so the total moves
+by a look's size from run to run. CI's runners are not phones: the bytes
+are the check there, and the times are only told. `pr.render`'s `built`
+job builds the page and runs the project whenever the page's tests or the
+scene's would run, beside them, on one runner.
+
+`client/build/size.ts`, in the `client` job, keeps the budgets of the
+parts loaded apart: the approval page (30 KB), the log's chunk (60 KB) and
+the news sheet's (20 KB), gzipped.
 
 ## The contributor agreement
 
