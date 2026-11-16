@@ -24,6 +24,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/access"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
@@ -428,7 +429,21 @@ func (memWriter) Close() {}
 // with has a server use d for its database, its lease and its writer.
 func (d *memDB) with(opt serveOptions) serveOptions {
 	opt.openDB, opt.openLease, opt.openWriter = d.open, d.openLease, d.openWriter
+	if opt.access == nil {
+		opt.access = testAccess{}
+	}
 	return opt
+}
+
+// testAccess lets through the website's status's requests that carry the
+// token "test-access", as Cloudflare Access lets through the website's.
+type testAccess struct{}
+
+func (testAccess) Check(r *http.Request) error {
+	if r.Header.Get(access.Header) != "test-access" {
+		return errors.New("not through Access")
+	}
+	return nil
 }
 
 // Write is the world's writer's: fenced by the lease's epoch.

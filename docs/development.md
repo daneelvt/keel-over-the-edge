@@ -3770,7 +3770,7 @@ hexagons, each cell's highest ground and surface, gzipped
 | `GET /owner/api/charted.json` | the world page's chart: what is charted, by whom, when, its worth |
 | `GET /owner/api/accounts.json` | the players' accounts: how many, made in the last seven days, seen in the last day (the world card's "Accounts" line) |
 | `POST /debug/chart?all` or `?subject=island:N` | charts by hand, credited to no one (developer's commands) |
-| `GET /api/status` | the website's: boats at sea and queued, the world, its end and whether it is closing; no session; kept 30 s |
+| `GET /api/status` | the website's: the numbers, the world's end and the map; behind Cloudflare Access and its token, for the website's Worker alone (see [`/api/status`](#apistatus)) |
 | `POST /debug/end?in=90s` | brings the world's end near (developer's commands) |
 
 A discovery's **worth**: an island's size class's (`world.sizes`) times its
@@ -4281,10 +4281,54 @@ rises out of it after its Welcome.
 
 ### `/api/status`
 
-`GET /api/status` is the website's: `{"atSea": 37, "queued": 0, "world":
-14, "endsAt": "2026-11-01T23:00:00Z", "closing": true}`, published once a
-second, cached 30 s by Cloudflare (`infra/tofu/rules.tf`), readable by the
-website's origin (the players' without `play.`).
+`GET /api/status` is the website's, the one route its Worker reads, and
+**only that Worker may call it**. Two locks, either of which holds alone:
+
+- **At Cloudflare**, an Access application on
+  `play.keelovertheedge.com/api/status` with a Service Auth policy that
+  lets through one service token, the Worker's (`infra/tofu/access.tf`). The
+  Worker sends the token's `CF-Access-Client-Id` and
+  `CF-Access-Client-Secret`; anyone else is refused before the tunnel.
+- **In keel**, `internal/access` checks the token Access signs every
+  request it lets through with, `Cf-Access-Jwt-Assertion`: RS256 against
+  the team's keys (`https://<team>/cdn-cgi/access/certs`, fetched when a
+  token names one not held, at most once every 10 s), issued by the team,
+  for the application's audience tag, in date. Anything else is 403
+  `access`. Its settings, `KEEL_ACCESS_TEAM` and `KEEL_ACCESS_AUD`, are
+  written to Infisical by OpenTofu from the application itself; with
+  either unset, **the route is not registered at all**, so a cluster
+  without Access serves nothing (the local cluster, `tools/dev`).
+
+It reads no session, sends no CORS, and says `Cache-Control: private,
+no-store`: the protected address is never in the zone's cache. A caller
+that takes gzip gets it gzipped (about a quarter of the size).
+
+What it carries is built by `internal/status` from the newest frame, never
+from the simulation, and kept 30 s, so a burst of calls costs one build:
+
+- the numbers: `atSea` (every boat in the water), `machinesAtSea`,
+  `queued`, `world`, `endsAt`, `closing`, `turn` (the schedule's weekday,
+  time and zone, for the countdown's words and a calendar), `charted` (the
+  subjects the world's sailors charted, not Port Royal's island known from
+  the start), `hour` (the sky's hour at the centre, noon 12) and `at`;
+- `map`: the disk's `lip` and mist `band`; the charted `islands`,
+  `places` and `features`, each a table of columns in the order the chart
+  letters them, places to 25 m, each island's coast traced from its model
+  and rounded to 25 m (worked out once per island per world); the
+  `weather`, the whole disk's as every sailor's chart shows it, a 32 × 32
+  grid (mean wind and its direction, gust, rain, fog, pressure) sampled
+  with the chart's own physics, and its systems and fronts as the chart
+  draws them; and up to `KEEL_STATUS_BOATS` boats anyone may watch, the
+  watch list's liveliest first with no viewer, to 100 m and 15°, their
+  kind and whether a machine sailor sails them, nothing else.
+
+**Nothing uncharted is ever in it**: its subjects and coasts are the
+chart's entries alone. `internal/status/testdata/status.md` describes it
+field by field and `seed1.json` is one, of seed 1's world all charted at a
+busy moment, for the website's tests (`go test ./internal/status -run
+TestSeed1 -update` writes it again). Seed 1 half charted is about 35 KB, 8
+KB gzipped; all charted, 43 KB, 10 KB gzipped; a build takes a few
+milliseconds.
 
 ### On the world page
 
@@ -5427,6 +5471,9 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1, as `tools/e2e` does |
 | `KEEL_WORLD_SCHEDULE` | `Sun 18:00 America/New_York notice=72h ahead=24h` | When worlds end, how long before a world is closing and its successor made; or a period from an anchor in UTC (see [The weekly world](#the-weekly-world)) |
 | `KEEL_WORLD_KEEP` | `672h` | How long an ended world's data is kept before its partitions are dropped |
+| `KEEL_ACCESS_TEAM` | none | The Cloudflare Access team's domain the website's status is behind, as `keel.cloudflareaccess.com`. With `KEEL_ACCESS_AUD`, `GET /api/status` answers only requests Access signed for its application; with either unset it is not served at all (see [`/api/status`](#apistatus)). Production's come from Infisical, written there by OpenTofu |
+| `KEEL_ACCESS_AUD` | none | The Access application's audience tag |
+| `KEEL_STATUS_BOATS` | 12 | The most boats the website's map shows, from 0 to 100 |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…`, `?front`, `?system=…&in=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
@@ -5654,12 +5701,14 @@ be.** The routes that answer without one are listed in `openRoutes`
 (`internal/api/api.go`), each with its reason: the page and its files,
 `/api/version`, the notice page and its form (anyone may tell of illegal
 content), making a sailor and signing in, the game connection (it reads
-the session itself), `/api/status` (the website's), the world's chunks and
+the session itself), the world's chunks and
 islands' models (capability addresses handed out over the game
 connection), and `robots.txt`; and the sign-in service's own for AI apps
 (`oauth.Routes`). `TestOpenRoutes` finds every route registered without
 `auth.Required` or `auth.Signed` and fails on one not listed, so opening a
-route is always a decision made in review.
+route is always a decision made in review. `/api/status`, the website's,
+is not open: it is behind Cloudflare Access, and `TestOpenRoutes` finds it
+registered behind keel's check of Access's token (`accessRoutes`).
 
 Errors are `{"error": "<code>"}`; the client puts codes into words
 (`client/src/account/reasons.ts`). A session held to adding a passkey is
@@ -8132,11 +8181,13 @@ secrets are made from:
 | `versions.tf`, `.terraform.lock.hcl` | OpenTofu `~> 1.13.0`; the Cloudflare, Infisical and random providers at exact versions, their hashes for Linux on amd64 and arm64 and the Mac |
 | `backend.tf` | The state, in the B2 bucket, encrypted with a key made from the passphrase; a run without it fails rather than write plain state |
 | `tunnel.tf` | The tunnel `keel-prod`, remotely managed: `play.keelovertheedge.com` → `http://traefik.kube-system.svc.cluster.local:80`, anything else 404. Its token, written into Infisical |
-| `dns.tf` | `play` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
+| `dns.tf` | `play` and `agents` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
 | `zone.tf` | TLS strict, HTTPS always, TLS 1.2 at least, no 0-RTT, WebSockets; HSTS; nothing that rewrites the page or answers in its place; no bot or AI-crawler blocking |
-| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited); no script of Cloudflare's added to the page (its Web Analytics beacon, Zaraz) |
+| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited; the free plan's rule names the path alone, on every host); no script of Cloudflare's added to the game's page or the website's (its Web Analytics beacon, Zaraz); no challenge where servers call (AI apps, GitHub's webhook, the website's Worker at `/api/status`) |
+| `access.tf` | The Access application on `play.keelovertheedge.com/api/status`, its Service Auth policy and the website's service token (a year; renewed by raising `website_token_term`, its secret rotated by `website_token_generation`); the team's domain and the application's audience tag written to Infisical's `/keel-access/` for keel; the token's ID and secret as sensitive outputs, for the website's deploy |
+| `website.tf` | The website's KV namespace (its ID an output); `www`'s placeholder record (proxied, `100::`); the redirects: `www.` to the apex, the apex's `/play` to `https://play.keelovertheedge.com/`, each keeping the query. No apex record: the Worker's custom domain makes it |
 | `secrets.tf` | The database's password: ephemeral, written into Infisical write-only, in no plan or state |
-| `notifications.tf` | An e-mail to the owner when the tunnel's health changes |
+| `notifications.tf` | An e-mail to the owner when the tunnel's health changes, and a week before an Access service token ends |
 
 **Actions → accounts → Run workflow**, `mode`:
 

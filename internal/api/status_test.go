@@ -3,9 +3,13 @@
 package api
 
 import (
-	"encoding/json"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -13,21 +17,46 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
 
-// TestStatus: the status needs no session, is kept 30 s by caches, and
-// may be read by the website's pages alone; before there is one, 503.
+// passToken is an Access that lets through a request with the token
+// "signed", and no other.
+type passToken struct{}
+
+func (passToken) Check(r *http.Request) error {
+	if r.Header.Get("Cf-Access-Jwt-Assertion") != "signed" {
+		return errors.New("not signed")
+	}
+	return nil
+}
+
+// TestStatus: the status answers only a request Access signed, never
+// kept by a cache, gzipped to a caller that takes it, with no cookie and
+// no CORS; 503 before there is one; and without Access, or without a
+// status, it is not served at all.
 func TestStatus(t *testing.T) {
 	st, _ := storetest.Store(t, store.Options{})
-	var now atomic.Pointer[Status]
-	srv := newTestServer(t, st, func(c *Config) {
-		c.Status, c.Website = now.Load, "https://keelovertheedge.com"
-	})
-	get := func(origin string) (*http.Response, string) {
+	var body atomic.Pointer[[]byte]
+	now := func(context.Context) ([]byte, []byte, error) {
+		b := body.Load()
+		if b == nil {
+			return nil, nil, nil
+		}
+		var z bytes.Buffer
+		zw := gzip.NewWriter(&z)
+		_, _ = zw.Write(*b)
+		_ = zw.Close()
+		return *b, z.Bytes(), nil
+	}
+	srv := newTestServer(t, st, func(c *Config) { c.Status, c.Access = now, passToken{} })
+	get := func(srv *testServer, token, encoding string) (*http.Response, string) {
 		t.Helper()
 		req, _ := http.NewRequest("GET", srv.URL+"/api/status", nil)
-		if origin != "" {
-			req.Header.Set("Origin", origin)
+		req.Header.Set("Origin", "https://keelovertheedge.com")
+		if token != "" {
+			req.Header.Set("Cf-Access-Jwt-Assertion", token)
 		}
-		res, err := http.DefaultClient.Do(req)
+		// Asked for by hand, the transport leaves the answer as it came.
+		req.Header.Set("Accept-Encoding", encoding)
+		res, err := http.DefaultTransport.RoundTrip(req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,28 +64,47 @@ func TestStatus(t *testing.T) {
 		b, _ := io.ReadAll(res.Body)
 		return res, string(b)
 	}
-	if res, _ := get(""); res.StatusCode != http.StatusServiceUnavailable || res.Header.Get("Cache-Control") != "no-store" {
+	if res, _ := get(srv, "signed", ""); res.StatusCode != http.StatusServiceUnavailable || !strings.Contains(res.Header.Get("Cache-Control"), "no-store") {
 		t.Fatalf("before a status: %d %q", res.StatusCode, res.Header.Get("Cache-Control"))
 	}
-	now.Store(&Status{AtSea: 37, Queued: 0, World: 14, EndsAt: "2026-11-01T23:00:00Z", Closing: true})
-	res, body := get("https://keelovertheedge.com")
-	if res.StatusCode != 200 || res.Header.Get("Cache-Control") != "public, max-age=30" ||
-		res.Header.Get("Content-Type") != "application/json" || res.Header.Get("Set-Cookie") != "" {
-		t.Fatalf("the status: %d %v", res.StatusCode, res.Header)
+	b := []byte(`{"atSea":37,"world":14}`)
+	body.Store(&b)
+	for _, token := range []string{"", "forged"} {
+		res, got := get(srv, token, "")
+		if res.StatusCode != http.StatusForbidden || got == string(b) || res.Header.Get("Cache-Control") != "no-store" {
+			t.Errorf("token %q: %d %s", token, res.StatusCode, got)
+		}
 	}
-	if res.Header.Get("Access-Control-Allow-Origin") != "https://keelovertheedge.com" || res.Header.Get("Access-Control-Allow-Credentials") != "" {
+	res, got := get(srv, "signed", "identity")
+	if res.StatusCode != 200 || got != string(b) || res.Header.Get("Cache-Control") != "private, no-store" ||
+		res.Header.Get("Content-Type") != "application/json" || res.Header.Get("Set-Cookie") != "" || res.Header.Get("Content-Encoding") != "" {
+		t.Fatalf("the status: %d %v %s", res.StatusCode, res.Header, got)
+	}
+	if res.Header.Get("Access-Control-Allow-Origin") != "" {
 		t.Errorf("CORS: %v", res.Header)
 	}
-	var got map[string]any
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
+	res, got = get(srv, "signed", "br, gzip;q=0.8")
+	if res.Header.Get("Content-Encoding") != "gzip" {
+		t.Fatalf("gzip asked for: %v", res.Header)
+	}
+	zr, err := gzip.NewReader(bytes.NewReader([]byte(got)))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got["atSea"] != 37.0 || got["world"] != 14.0 || got["endsAt"] != "2026-11-01T23:00:00Z" || got["closing"] != true || got["queued"] != 0.0 {
-		t.Errorf("the status: %s", body)
+	if plain, _ := io.ReadAll(zr); string(plain) != string(b) {
+		t.Errorf("gzipped: %s", plain)
 	}
-	// Another origin's page gets the same answer, which names the website
-	// alone: a browser keeps it from that page.
-	if res, _ := get("https://evil.example"); res.Header.Get("Access-Control-Allow-Origin") != "https://keelovertheedge.com" {
-		t.Errorf("another origin: %v", res.Header)
+	if res, _ := get(srv, "signed", "gzip;q=0"); res.Header.Get("Content-Encoding") != "" {
+		t.Errorf("gzip refused: %v", res.Header)
+	}
+	// Fails closed: no Access, or no status, and there is no route.
+	for name, change := range map[string]func(*Config){
+		"no Access": func(c *Config) { c.Status = now },
+		"no status": func(c *Config) { c.Access = passToken{} },
+	} {
+		srv := newTestServer(t, st, change)
+		if res, _ := get(srv, "signed", ""); res.StatusCode != http.StatusNotFound {
+			t.Errorf("%s: %d", name, res.StatusCode)
+		}
 	}
 }

@@ -166,6 +166,9 @@ type boat struct {
 	sailor store.Sailor
 	key    string
 	facts  Facts
+	// east, north and heading are where it is and the way it heads, m and
+	// rad clockwise from north.
+	east, north, heading float64
 }
 
 // card is a card's facts of a boat, and when they were made.
@@ -341,6 +344,48 @@ func (s *Service) List(ctx context.Context, viewer store.AccountID, q Query) (Pa
 	return p, nil
 }
 
+// Seen is a boat anyone may watch, as the website's map shows it: where it
+// is and the way it heads, m east and north and rad clockwise from north,
+// its kind of boat, the catalog's id, and whether a machine sailor sails
+// it. Nothing says whose it is.
+type Seen struct {
+	East, North, Heading float64
+	Kind                 string
+	Machine              bool
+}
+
+// Liveliest are at most n of the boats in the water that anyone may watch,
+// as the rule says for a viewer who is no one: a machine sailor's, and a
+// human's who allows spectators for this voyage; in the list's liveliest
+// order.
+func (s *Service) Liveliest(ctx context.Context, n int) ([]Seen, error) {
+	boats, err := s.read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var nobody store.AccountID
+	watched := s.cfg.Edge.Watched()
+	var rows []entry
+	for i := range boats {
+		b := &boats[i]
+		if b.sailor.Name == "" {
+			continue
+		}
+		t := b.target()
+		if Allowed(t, s.boatOf(b, nobody), nobody) != Yes {
+			continue
+		}
+		rows = append(rows, s.entry(b, t, nobody, false, false, watched))
+	}
+	sortRows(rows, SortLiveliest)
+	out := make([]Seen, 0, min(n, len(rows)))
+	for _, r := range rows[:min(n, len(rows))] {
+		b := r.boat
+		out = append(out, Seen{East: b.east, North: b.north, Heading: b.heading, Kind: s.kindOf(b.kind), Machine: r.item.Machine})
+	}
+	return out, nil
+}
+
 // keeps reports whether the filter keeps t, followed or not.
 func (q Query) keeps(t Target, followed bool) bool {
 	switch q.Who {
@@ -379,6 +424,7 @@ func goneItems(fol map[store.AccountID]store.Sailor, gone map[store.AccountID]Ve
 type entry struct {
 	item  Item
 	facts *Facts
+	boat  *boat
 }
 
 // entry is the row of boat b, whose sailor is t, as viewer sees it.
@@ -393,7 +439,7 @@ func (s *Service) entry(b *boat, t Target, viewer store.AccountID, followed, wit
 		e := x.Edge
 		it.EdgeNM = &e
 	}
-	return entry{item: it, facts: x}
+	return entry{item: it, facts: x, boat: b}
 }
 
 // sortRows puts rows in order: the viewer's own machine sailors, the
@@ -828,7 +874,9 @@ func (s *Service) read(ctx context.Context) ([]boat, error) {
 	boats := make([]boat, 0, len(f.Live))
 	ids := make([]store.AccountID, 0, len(f.Live))
 	for _, slot := range f.Live {
-		boats = append(boats, boat{owner: store.AccountID(f.Owner[slot]), id: f.Boat[slot], kind: f.Kind[slot], look: f.Look[slot], unseen: f.Unseen[slot]})
+		st := &f.State[slot]
+		boats = append(boats, boat{owner: store.AccountID(f.Owner[slot]), id: f.Boat[slot], kind: f.Kind[slot], look: f.Look[slot], unseen: f.Unseen[slot],
+			east: st.X, north: st.Y, heading: st.Heading})
 		ids = append(ids, store.AccountID(f.Owner[slot]))
 	}
 	facts := make([]Facts, len(boats))

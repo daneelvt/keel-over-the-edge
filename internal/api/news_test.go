@@ -150,7 +150,7 @@ func TestOpenRoutes(t *testing.T) {
 			}
 		}
 	}
-	open, closed := map[string]bool{}, map[string]bool{}
+	open, closed, behindAccess := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, f := range files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
@@ -178,6 +178,10 @@ func TestOpenRoutes(t *testing.T) {
 			if c, ok := call.Args[1].(*ast.CallExpr); ok {
 				if id, ok := c.Fun.(*ast.Ident); ok && (id.Name == "required" || id.Name == "signed") {
 					closed[pattern] = true
+					return true
+				}
+				if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "accessed" {
+					behindAccess[pattern] = true
 					return true
 				}
 			}
@@ -212,6 +216,17 @@ func TestOpenRoutes(t *testing.T) {
 	}
 	if open[newsRoute] || !closed[newsRoute] {
 		t.Error("the news answers without a session")
+	}
+	// The website's status answers only behind Access, never open.
+	for p := range behindAccess {
+		if !accessRoutes[p] || openRoutes[p] != "" {
+			t.Errorf("%s is behind Access, and is not one of accessRoutes, or is an open route too", p)
+		}
+	}
+	for p := range accessRoutes {
+		if !behindAccess[p] || open[p] || sessionless[p] {
+			t.Errorf("%s is not registered behind Access alone", p)
+		}
 	}
 	if len(oauth.Routes) == 0 {
 		t.Error("the sign-in service has no routes")
