@@ -258,6 +258,11 @@ export class NetWorker {
           this.#session.frameMs = Math.round(m.ms);
         }
         break;
+      case 'fetched':
+        if (this.#session !== null) {
+          this.#session.fetchedBytes += Math.max(0, Math.round(m.bytes));
+        }
+        break;
       case 'quality':
         this.#tier = Math.max(0, Math.round(m.tier));
         this.#scale = Math.max(0, Math.round(m.scale * 100));
