@@ -602,6 +602,12 @@ bands, levels and curves for the wind, the rigging, the flogging sail, the
 water on the hull and the sea about the boat. They are art like the models. Each names the art licence
 in its first field, `licence`.
 
+`sound/mix.json` is the mix, which only the page reads: each bus's
+balance, the limiter, the fades, the curve the bed's levels are played on
+and each voice's trim, the calm's lapping, and the tones that make the
+synthesis gentle. The other recipes' numbers are what the server's lookout
+hears too, so how loud a sound is in the mix is changed here, not there.
+
 The race committee's signal gun is played from `gun.json`: the crack of
 its blast, a thump falling in pitch, the boom of low-passed noise, and the
 boom's echoes off the water, each later, fainter and duller.

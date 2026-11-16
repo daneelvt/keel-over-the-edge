@@ -642,6 +642,34 @@ async function menuFaults(page: Page): Promise<string[]> {
         `the menu does not have the focus: ${document.activeElement?.tagName}.${document.activeElement?.className}`,
       );
     }
+    // The Sound block: each slider a 44 px touch with room to move, its
+    // percentage whole, all within the menu's width.
+    const sound = document.querySelector('.menu-sound');
+    if (sound === null) {
+      out.push('no Sound block');
+    } else {
+      const b = sound.getBoundingClientRect();
+      if (b.left < m.left - 0.5 || b.right > m.right + 0.5) {
+        out.push(
+          `the Sound block is wider than the menu (${Math.round(b.left)} to ${Math.round(b.right)})`,
+        );
+      }
+      const sliders = [...sound.querySelectorAll<HTMLInputElement>('input[type=range]')];
+      if (sliders.length !== 3) {
+        out.push(`the Sound block has ${sliders.length} sliders`);
+      }
+      for (const r of sliders.map((e) => e.getBoundingClientRect())) {
+        if (r.width < 160 || r.height < 44) {
+          out.push(`a sound slider is ${Math.round(r.width)} × ${Math.round(r.height)}`);
+        }
+      }
+      for (const v of sound.querySelectorAll<HTMLElement>('.menu-range-value')) {
+        const r = v.getBoundingClientRect();
+        if (v.scrollWidth > v.clientWidth + 0.5 || r.right > b.right + 0.5) {
+          out.push(`a sound slider’s percentage is cut: ${v.textContent}`);
+        }
+      }
+    }
     // Nothing over it: at its corners, its middle and its head's close.
     const xr = x.getBoundingClientRect();
     // Inside its rounded corners.

@@ -9305,10 +9305,39 @@ hull speed, 2.4 m/s on the Jolly boat's waterline and faster as the square
 root of a longer one's; **sea**, a wide, low band that rises and brightens with the
 significant height of the waves under the boat, louder with its whitecaps
 and with the boat's speed through the water, and silent on flat water. `client/src/audio/voices.ts` maps them onto the physics;
-`engine.ts` plays them, setting parameters at most every 50 ms. Audio starts
-on the first tap (a touch's `pointerup`, a mouse's `pointerdown`, a key) and
-is suspended while the page is hidden. On an iPhone with the silent switch
-on, the page plays no sound.
+`engine.ts` plays them, setting parameters at most every 50 ms, each voice
+reading its own long noise (`audio/noise.ts`: pink for the wind, brown for
+the water and the sea). Audio starts on the first tap (a touch's
+`pointerup`, a mouse's `pointerdown`, a key), never while the sound is off,
+and fades in; it fades out and is suspended while the page is hidden or
+the sound is muted. The page's audio session is set to ambient first, so
+the game mixes with the player's own music, and on an iPhone with the
+silent switch on the page plays no sound.
+
+**The mix** (`client/src/audio/mix.ts`, its numbers in
+`art/sound/mix.json`, which the page alone reads): every voice plays into
+its family's bus (the sea, the world, the boat, the races, notices), each
+bus balanced against the others, into the master, a fade and a safety
+limiter (−6 dB, 20:1, staged to stay idle). The bed's levels as the recipes
+give them, which the server's lookout tells machine sailors in words, are
+played on a curve that brings a calm, a breeze and a gale nearer, and a
+drifting boat hears the calm's lapping at her hull. The menu's Sound block
+holds the switch (the mute; M on a keyboard), **Volume**, **Sea and wind**
+and **Sounds**, each heard as its cube and kept in `keel.settings`; Volume
+starts at 70%, 9.3 dB down.
+
+**The loudness budget** is a test: `e2e/audio.spec.ts` renders the real
+engine offline (`e2e/audio.html`, an `OfflineAudioContext`, no GPU) at the
+scripted scenes of `e2e/audioscenes.ts` (a calm, the harbour, a gentle and
+a fresh breeze, a gale, fog with a horn, a squall with thunder and rain,
+near the edge, a race's guns and cheers) and measures each with
+`audio/loudness.ts`, a meter after ITU-R BS.1770-4 tested against EBU Tech
+3341's cases: typical sailing at −20 ±2 LUFS at full volume, each step of
+weather at most 6 LU louder and a gale at most −16, a calm at least −36
+and the harbour at most −24, every true peak at most −1 dBTP, the limiter
+at most 1 dB in typical weather, and at most 15% of the bed's energy above
+2 kHz. `KEEL_AUDIO_OUT=<folder> KEEL_AUDIO_SECONDS=120` writes each scene's
+rendering there to listen to, with the table.
 
 ## Browser tests
 
