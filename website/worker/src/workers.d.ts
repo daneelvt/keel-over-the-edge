@@ -37,3 +37,25 @@ declare namespace Cloudflare {
 declare module 'cloudflare:workers' {
   export const env: Cloudflare.Env;
 }
+
+/** The runtime's streaming HTML rewriter, as much of it as the page's hour takes. */
+interface HTMLRewriterElement {
+  readonly tagName: string;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): HTMLRewriterElement;
+}
+
+interface HTMLRewriterText {
+  readonly text: string;
+  readonly lastInTextNode: boolean;
+}
+
+interface HTMLRewriterHandlers {
+  element?(element: HTMLRewriterElement): void | Promise<void>;
+  text?(text: HTMLRewriterText): void | Promise<void>;
+}
+
+declare class HTMLRewriter {
+  on(selector: string, handlers: HTMLRewriterHandlers): HTMLRewriter;
+  transform(response: Response): Response;
+}

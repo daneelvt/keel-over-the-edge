@@ -3,7 +3,7 @@
 // The website's Worker, on keelovertheedge.com. The page, its pictures and
 // fonts are static files, served without it; it answers what is live:
 //
-//   /           the page (for now the file as it is)
+//   /           the page, in the hour's light (page.ts)
 //   /live       the game's numbers, JSON, from keel's status
 //   /map.svg    the world's chart now, as the game's chart draws it
 //   /share.png  the share picture: the map, the name and the numbers
@@ -20,6 +20,7 @@
 import { secured } from './headers';
 import { calendar } from './ics';
 import { drawMap, markResting } from './map/draw';
+import { inTheHour, servedHour } from './page';
 import { sharePng } from './share';
 import { isStatus, type Status } from './status';
 
@@ -234,7 +235,7 @@ export async function answer(
   let r: Response;
   switch (url.pathname) {
     case '/':
-      r = await env.ASSETS.fetch(request);
+      r = inTheHour(await env.ASSETS.fetch(request), servedHour(url, out.now()));
       break;
     case '/live':
       r = cacheable(

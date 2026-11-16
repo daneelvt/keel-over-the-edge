@@ -2,8 +2,9 @@
 # Runs only when the website, or what it is built from, changed: its own
 # files, and the chart's painters, fonts and catalog it shares with the
 # game, and the art its pictures are. Biome and tsc over it, its Worker's
-# tests in workerd, its pictures' in Node, and the Worker built as
-# wrangler would deploy it, uploading nothing.
+# tests in workerd, its pictures' and its page's in Node, the page and the
+# Worker built as wrangler would deploy them, uploading nothing, and the
+# page's checks in Chromium, served as production serves it.
 name: pr.website
 
 on:
@@ -43,6 +44,8 @@ jobs:
               - 'client/src/render/machinemark.ts'
               - 'client/src/catalog/catalog.gen.json'
               - 'client/src/fonts/**'
+              - 'client/public/icon-192.png'
+              - 'client/public/apple-touch-icon.png'
               - 'internal/status/testdata/**'
               - 'art/website/**'
               - 'art/glyphs/**'
@@ -73,15 +76,29 @@ jobs:
       - name: tsc
         working-directory: website
         run: npm run typecheck
-      # And the pictures' manifest against the files it names, in Node.
-      - name: The Worker's tests, in workerd, and the pictures'
+      # And the pictures' manifest against the files it names, and the
+      # page's colours, words and build, in Node.
+      - name: The Worker's tests, in workerd, the pictures' and the page's
         working-directory: website
         run: npm test
-      - name: The Worker built as wrangler deploys it, nothing uploaded
+      - name: The page and the Worker built as wrangler deploys them, nothing uploaded
         working-directory: website
         env:
           WRANGLER_SEND_METRICS: "false"
         run: npm run build
+      - name: Chromium's headless shell for Playwright
+        uses: ./.github/actions/install
+        with:
+          working-directory: website
+          command: npx --no-install playwright install --with-deps --only-shell chromium
+      # At four screens and four hours: Set sail in the first screen, the
+      # opening's words readable over its picture, each hour's colours, the
+      # page whole without script, its weight within its budgets.
+      - name: The page's checks, through wrangler dev
+        working-directory: website
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: npm run checks
 
   pr-website:
     name: pr-website

@@ -3,7 +3,7 @@
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env as bindings } from 'cloudflare:workers';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { CSP } from '../src/headers';
+import { CSP, SECURITY } from '../src/headers';
 import { answer, type Env, fetchStatus, KEPT, KEYS, KV, type Outside, refresh } from '../src/index';
 import { RESTING } from '../src/map/draw';
 import type { Status } from '../src/status';
@@ -269,8 +269,21 @@ describe('every answer carries the security headers', () => {
     },
   );
 
-  test('the CSP is the static files’ too', async () => {
-    const file = await import('../../site/_headers?raw');
-    expect(file.default).toContain(`Content-Security-Policy: ${CSP}`);
+  test('the static files’ headers are the Worker’s, the same and no more', async () => {
+    const file = (await import('../../site/public/_headers?raw')).default;
+    // The rules for every file: the block under /*.
+    const block = file.split(/\n(?=\S)/).find((b) => b.startsWith('/*\n')) ?? '';
+    const headers = Object.fromEntries(
+      block
+        .split('\n')
+        .slice(1)
+        .filter((l) => l.trim() !== '')
+        .map((l) => {
+          const at = l.indexOf(':');
+          return [l.slice(0, at).trim(), l.slice(at + 1).trim()];
+        }),
+    );
+    expect(headers).toEqual(SECURITY);
+    expect(headers['Content-Security-Policy']).toBe(CSP);
   });
 });

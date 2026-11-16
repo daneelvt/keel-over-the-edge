@@ -24,7 +24,7 @@ func (f *fakeTofu) npmRan() []call {
 }
 
 // TestApplyDeploysTheWebsite: after the apply, the website's packages are
-// installed from its lockfile, its letters cut and wrangler deploy run in
+// installed from its lockfile, its letters cut, its page built and wrangler deploy run in
 // website/, with the KV namespace's id from OpenTofu and the service
 // token on wrangler's standard input alone, masked before it runs.
 func TestApplyDeploysTheWebsite(t *testing.T) {
@@ -43,6 +43,7 @@ func TestApplyDeploysTheWebsite(t *testing.T) {
 	want := [][]string{
 		{"npm", "ci", "--no-audit", "--no-fund"},
 		{"npm", "run", "glyphs"},
+		{"npm", "run", "site"},
 		{"npx", "--no-install", "wrangler", "deploy", "--config", deployFile, "--secrets-file", "/dev/stdin"},
 	}
 	if len(ran) != len(want) {
@@ -53,7 +54,7 @@ func TestApplyDeploysTheWebsite(t *testing.T) {
 			t.Errorf("step %d ran %v in %s, not %v in website", i, c.argv, c.dir, want[i])
 		}
 	}
-	deploy := ran[2]
+	deploy := ran[3]
 	var secrets map[string]string
 	if err := json.Unmarshal(deploy.stdin, &secrets); err != nil {
 		t.Fatal(err)

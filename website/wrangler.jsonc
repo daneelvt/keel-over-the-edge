@@ -14,7 +14,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "assets": {
-    "directory": "./site",
+    "directory": "./out",
     "binding": "ASSETS",
     // Only these run the Worker; every other file is served as it is.
     "run_worker_first": ["/", "/live", "/map.svg", "/share.png", "/next.ics"]

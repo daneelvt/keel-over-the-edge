@@ -3,12 +3,390 @@
 <html lang="en-GB">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Keel Over the Edge</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Keel Over the Edge: a sailing game on a sea that falls off the world</title>
+    <meta
+      name="description"
+      content="Sail with friends on a flat sea that pours off the edge of the world. Race, crew, chart new islands and ride out the weather. A new world every week. Free, in your browser."
+    />
+    <meta name="theme-color" content="#0d151b" />
+    <link rel="canonical" href="https://keelovertheedge.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Keel Over the Edge" />
+    <meta property="og:url" content="https://keelovertheedge.com/" />
+    <meta property="og:title" content="Keel Over the Edge" />
+    <meta
+      property="og:description"
+      content="A sailing game on a flat sea that pours off the edge of the world. This week’s world, live. Free, in your browser."
+    />
+    <meta property="og:image" content="https://keelovertheedge.com/share.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="This week’s world on the game’s chart, with how many are sailing it now."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Keel Over the Edge" />
+    <meta
+      name="twitter:description"
+      content="A sailing game on a flat sea that pours off the edge of the world. Free, in your browser."
+    />
+    <meta name="twitter:image" content="https://keelovertheedge.com/share.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="../../client/public/icon-192.png" />
+    <link rel="apple-touch-icon" href="../../client/public/apple-touch-icon.png" />
+    <link rel="preload" href="./gen/fonts/fell-sc.woff2" as="font" type="font/woff2" crossorigin />
+    <script type="module" src="./src/page.ts"></script>
   </head>
   <body>
-    <h1>Keel Over the Edge</h1>
-    <p><a href="https://play.keelovertheedge.com/">Set sail</a></p>
-    <p><img src="/map.svg" alt="The world's chart now" width="756" height="521" /></p>
+    <header class="opening">
+      <keel-opening
+        sizes="(min-width: 1312px) 1280px, (min-width: 701px) calc(100vw - 32px), 100vw"
+      ></keel-opening>
+      <div class="opening-words">
+        <p class="eyebrow">Pirate-era sailing</p>
+        <h1>Keel Over <span class="title-tail">the Edge</span></h1>
+        <p class="line">
+          Sail with friends on a flat sea that pours off the edge of the world. Every week, a new
+          world to chart.
+        </p>
+        <p class="go-row">
+          <a class="go" href="https://play.keelovertheedge.com/">
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path d="M10.6 1.6v11.6h6.6z" fill="currentColor" />
+              <path d="M9.2 4.4v8.8H4z" fill="currentColor" opacity=".7" />
+              <path d="M2.2 14.6h15.6l-2.2 3.6H4.4z" fill="currentColor" />
+            </svg>
+            Set sail
+          </a>
+          <span class="go-note">Free, in your browser. Nothing to install.</span>
+        </p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="race" aria-labelledby="race-title">
+        <div class="case words">
+          <h2 id="race-title">Race</h2>
+          <p class="lead">Line up, wait for the gun, and go.</p>
+          <p>
+            Join a harbour race off Port Royal, or lay your own course and send your friends the
+            link.
+          </p>
+          <ul class="stars">
+            <li>A harbour race every three hours</li>
+            <li>Ribbons and rosettes to win</li>
+            <li>The winner flies the pennant all week</li>
+            <li>Anyone with the link can watch and cheer</li>
+          </ul>
+        </div>
+        <figure class="framed chart-frame">
+          <keel-picture name="race" sizes="(min-width: 960px) 60vw, calc(100vw - 32px)"></keel-picture>
+          <figcaption>Every boat’s track, live on the chart</figcaption>
+        </figure>
+      </section>
+
+      <section class="together" aria-labelledby="together-title">
+        <div class="case words">
+          <h2 id="together-title">Sail together</h2>
+          <p class="lead">Bring your friends aboard.</p>
+          <p>
+            Crew for a friend, sit out on the rail, take a turn at the helm and chat as you go. The
+            bigger the boat, the bigger the crew.
+          </p>
+        </div>
+        <figure class="framed together-big">
+          <keel-picture name="together-keelboat" sizes="(min-width: 960px) 60vw, calc(100vw - 32px)"></keel-picture>
+          <figcaption>Five on the rail</figcaption>
+        </figure>
+        <figure class="framed together-small">
+          <keel-picture name="together-yacht" sizes="(min-width: 960px) 20vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+          <figcaption>Eight on a yacht</figcaption>
+        </figure>
+        <figure class="framed together-small">
+          <keel-picture name="together-tall-ship" sizes="(min-width: 960px) 20vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+          <figcaption>Forty on a tall ship</figcaption>
+        </figure>
+      </section>
+
+      <section class="boats" aria-labelledby="boats-title">
+        <div class="head">
+          <h2 id="boats-title">Pick your boat</h2>
+          <p class="lead">Seven boats, from a jolly boat for one to a tall ship for forty.</p>
+        </div>
+        <ul class="fleet">
+          <li class="card">
+            <img src="../../art/glyphs/jolly-boat.webp" alt="" width="96" height="96" />
+            <h3>Jolly boat</h3>
+            <p class="aboard">just you</p>
+          </li>
+          <li class="card">
+            <img src="../../art/glyphs/skiff.webp" alt="" width="96" height="96" />
+            <h3>Skiff</h3>
+            <p class="aboard">up to 2</p>
+          </li>
+          <li class="card">
+            <img src="../../art/glyphs/beach-cat.webp" alt="" width="96" height="96" />
+            <h3>Beach cat</h3>
+            <p class="aboard">up to 2</p>
+          </li>
+          <li class="card">
+            <img src="../../art/glyphs/keelboat.webp" alt="" width="96" height="96" />
+            <h3>Keelboat</h3>
+            <p class="aboard">up to 5</p>
+          </li>
+          <li class="card">
+            <img src="../../art/glyphs/yacht.webp" alt="" width="96" height="96" />
+            <h3>Yacht</h3>
+            <p class="aboard">up to 8</p>
+          </li>
+          <li class="card">
+            <img src="../../art/glyphs/catamaran.webp" alt="" width="96" height="96" />
+            <h3>Catamaran</h3>
+            <p class="aboard">up to 12</p>
+          </li>
+          <li class="card gilt">
+            <img src="../../art/glyphs/tall-ship.webp" alt="" width="96" height="96" />
+            <h3>Tall ship</h3>
+            <p class="aboard">up to 40</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="weather" aria-labelledby="weather-title">
+        <div class="case words">
+          <h2 id="weather-title">Storms, squalls and fog</h2>
+          <p class="lead">The weather is real, and it never sits still.</p>
+          <p>
+            Fronts sweep across the sea, squalls bring sudden gusts and rain, storms build and fog
+            creeps in. Read the forecast on your chart, then choose your moment.
+          </p>
+        </div>
+        <ul class="skies">
+          <li>
+            <figure class="framed">
+              <keel-picture name="lightning" sizes="(min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+              <figcaption>Lightning at night</figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure class="framed">
+              <keel-picture name="storm" sizes="(min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+              <figcaption>A storm builds</figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure class="framed">
+              <keel-picture name="squall" sizes="(min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+              <figcaption>A squall hits</figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure class="framed">
+              <keel-picture name="fog" sizes="(min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+              <figcaption>Fog rolls in</figcaption>
+            </figure>
+          </li>
+        </ul>
+      </section>
+
+      <section class="world" aria-labelledby="world-title">
+        <div class="case bar">
+          <h2 id="world-title">The world now</h2>
+          <p class="as-of" id="as-of" hidden></p>
+        </div>
+        <div class="table">
+          <img
+            src="/map.svg"
+            width="756"
+            height="521"
+            loading="lazy"
+            decoding="async"
+            alt="This week’s world on the game’s chart: the islands charted so far, the wind and weather over the sea, and the boats sailing it now."
+          />
+        </div>
+        <p class="case resting" id="resting" hidden>
+          The sea is resting for a moment. The chart shows it as it was, and the numbers come back
+          with the sea.
+        </p>
+        <dl class="case numbers" id="numbers" hidden>
+          <div>
+            <dt>sailors at sea</dt>
+            <dd id="at-sea">–</dd>
+          </div>
+          <div>
+            <dt>machine sailors</dt>
+            <dd id="machines">–</dd>
+          </div>
+          <div>
+            <dt>places charted</dt>
+            <dd id="charted">–</dd>
+          </div>
+        </dl>
+        <div class="case ends">
+          <div class="ends-head">
+            <h3 id="ends-title">This world ends in</h3>
+            <div class="clock" id="clock" role="timer" aria-labelledby="ends-title" hidden>
+              <p><b id="days">–</b> <span class="unit" id="days-word">days</span></p>
+              <p><b id="hours">–</b> <span class="unit" id="hours-word">hours</span></p>
+              <p><b id="minutes">–</b> <span class="unit" id="minutes-word">minutes</span></p>
+            </div>
+          </div>
+          <p class="when" id="when">Every week the world ends, and a new one, uncharted, takes its place.</p>
+          <p class="keys">
+            <a class="key" id="google" href="https://calendar.google.com/" hidden>
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <rect x="1.5" y="2.5" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" />
+                <path d="M1.5 6h13M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.4" />
+              </svg>
+              Google Calendar
+            </a>
+            <a class="key" href="/next.ics" download="keel-over-the-edge.ics">Apple or Outlook</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="out" aria-labelledby="out-title">
+        <div class="head medal-head">
+          <span class="medal"><img src="../../art/glyphs/magnificent-frigatebird.webp" alt="" width="96" height="96" /></span>
+          <h2 id="out-title">What waits out there</h2>
+        </div>
+        <ul class="tales">
+          <li class="tale">
+            <keel-picture name="out-gale" sizes="(min-width: 980px) 33vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+            <div>
+              <h3>Ride out a gale</h3>
+              <p>Whitecaps, spray and gusts that lay you over. Ease the sheet in time.</p>
+            </div>
+          </li>
+          <li class="tale">
+            <keel-picture name="out-reefs" sizes="(min-width: 980px) 33vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+            <div>
+              <h3>Thread the reefs</h3>
+              <p>Surf breaks white below the cliffs. Read the water before you close the shore.</p>
+            </div>
+          </li>
+          <li class="tale">
+            <keel-picture name="out-land" sizes="(min-width: 980px) 33vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+            <div>
+              <h3>Sight new land</h3>
+              <p>Each week brings islands no one has seen. Sight one first and the chart carries your name.</p>
+            </div>
+          </li>
+          <li class="tale">
+            <keel-picture name="out-lagoon" sizes="(min-width: 980px) 33vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+            <div>
+              <h3>Find the hidden lagoons</h3>
+              <p>Waterfalls, villages and quiet coves, tucked inside the islands for those who look.</p>
+            </div>
+          </li>
+          <li class="tale">
+            <keel-picture name="out-stars" sizes="(min-width: 980px) 33vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+            <div>
+              <h3>Sail by the stars</h3>
+              <p>Nights are dark. Find your way by the stars, the lighthouses and your own reckoning.</p>
+            </div>
+          </li>
+          <li class="tale">
+            <keel-picture name="out-edge" sizes="(min-width: 980px) 33vw, (min-width: 620px) 50vw, calc(100vw - 32px)"></keel-picture>
+            <div>
+              <h3>Skim the edge</h3>
+              <p>Sail close enough to watch the sea pour over. Go too far and you wash up in port.</p>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="log" aria-label="Watch sailors live, or put your AI at the helm">
+        <div class="leaf" id="watch">
+          <div class="leaf-top">
+            <img
+              src="../../art/sailors/buccaneer/female.ink.webp"
+              alt="An inked portrait of a sailor in a wide-brimmed hat."
+              width="512"
+              height="640"
+              loading="lazy"
+              decoding="async"
+            />
+            <div>
+              <h2>Watch sailors live</h2>
+              <p class="kicker">See the sea through another sailor’s eyes.</p>
+            </div>
+          </div>
+          <p>
+            Hop aboard as a guest and watch someone sail, right now. Choose a boat, or let us pick a
+            lively one.
+          </p>
+          <p class="keys">
+            <a class="key" href="https://play.keelovertheedge.com/?watch">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="M1 8c2.5-4.5 11.5-4.5 14 0-2.5 4.5-11.5 4.5-14 0z" fill="none" stroke="currentColor" stroke-width="1.4" />
+                <circle cx="8" cy="8" r="2.3" fill="currentColor" />
+              </svg>
+              Watch sailors live
+            </a>
+            <a class="key" href="https://play.keelovertheedge.com/?watch=pick">Pick one for me</a>
+          </p>
+          <p class="small">All you need is a free sailor of your own.</p>
+        </div>
+        <div class="leaf" id="ai">
+          <div class="leaf-top">
+            <img
+              src="../../art/sailors/machine/female.ink.webp"
+              alt="An inked portrait of a machine sailor."
+              width="512"
+              height="640"
+              loading="lazy"
+              decoding="async"
+            />
+            <div>
+              <h2>Put your AI at the helm</h2>
+              <p class="kicker">Your AI can sail too.</p>
+            </div>
+          </div>
+          <p>
+            Give your AI app this address and it sets sail as a machine sailor. You can watch it any
+            time.
+          </p>
+          <p class="address">
+            <code id="mcp">@MCP@</code>
+            <button class="key" id="copy" type="button" hidden>Copy</button>
+          </p>
+          <p class="keys">
+            <a class="key" data-link="claude" href="https://claude.ai/">Add to Claude</a>
+            <a class="key" data-link="cursor" href="https://cursor.com/">Add to Cursor</a>
+            <a class="key" data-link="vscode" href="https://code.visualstudio.com/">Add to VS Code</a>
+          </p>
+          <p class="small">Works in ChatGPT and other apps that take a custom connector.</p>
+          <details class="small">
+            <summary>Claude Code</summary>
+            <code class="command">claude mcp add --transport http keel @MCP@</code>
+          </details>
+        </div>
+      </section>
+
+      <section class="case closing" aria-label="Set sail">
+        <p>
+          <span class="medal"><img src="../../art/glyphs/sperm-whale.webp" alt="" width="96" height="96" /></span>
+          The sea is open.
+        </p>
+        <a class="go" href="https://play.keelovertheedge.com/">Set sail</a>
+      </section>
+    </main>
+
+    <footer class="wrap foot">
+      <nav class="case foot-links" aria-label="About the game">
+        <a href="https://github.com/daneelvt/keel-over-the-edge">Source on GitHub</a>
+        <a href="#privacy">Privacy</a>
+        <a href="mailto:contact@keelovertheedge.com">Contact</a>
+      </nav>
+      <p class="privacy" id="privacy">
+        This page sets no cookies, keeps nothing on your device and counts no one. Cloudflare serves
+        it; our part keeps no log of your visit, only of its own errors. In the game, the
+        <a href="https://play.keelovertheedge.com/privacy.html">privacy page</a> says what is kept.
+        Write to us at <a href="mailto:contact@keelovertheedge.com">contact@keelovertheedge.com</a>.
+      </p>
+    </footer>
   </body>
 </html>

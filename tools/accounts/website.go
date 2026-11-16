@@ -226,7 +226,8 @@ func (a *accounts) outputs(ctx context.Context, env []string) (kv, id, secret st
 }
 
 // deployWebsite deploys the website after the apply: its packages
-// installed from the lockfile, its letters cut, and wrangler deploy run
+// installed from the lockfile, its letters cut, its page built into its
+// static files (npm run site), and wrangler deploy run
 // with the configuration as kept but for the KV namespace's id, OpenTofu's,
 // and with the Access service token as the Worker's secrets, handed over
 // on wrangler's standard input: never on a command line, in a file or the
@@ -268,6 +269,7 @@ func (a *accounts) deployWebsite(ctx context.Context, env []string) error {
 	steps := []cmd{
 		{argv: []string{"npm", "ci", "--no-audit", "--no-fund"}, dir: dir},
 		{argv: []string{"npm", "run", "glyphs"}, dir: dir},
+		{argv: []string{"npm", "run", "site"}, dir: dir},
 		{
 			argv:  []string{"npx", "--no-install", "wrangler", "deploy", "--config", deployFile, "--secrets-file", "/dev/stdin"},
 			env:   wenv,

@@ -147,7 +147,7 @@ credentials.
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures of the client's packages and the website's | `go tool govulncheck ./...`, `npm audit signatures` in `client/` and `website/` |
-| `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game, and the art its pictures are | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the pictures' manifest against the files it names, in Node; the Worker built by `wrangler deploy --dry-run`, nothing uploaded | in `website/`, `npm test`, `npm run typecheck`, `npm run build` |
+| `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game, and the art its pictures are | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the pictures' manifest against the files it names, and the page's colours, words and build, in Node; the page built by Vite and the Worker by `wrangler deploy --dry-run`, nothing uploaded; the page's checks in Chromium through `wrangler dev` (see [The website](#the-website)) | in `website/`, `npm test`, `npm run typecheck`, `npm run build`, `npm run checks` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
 | `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
@@ -6637,6 +6637,15 @@ found. `GET /api/watch?fleet=<code>` keeps only that fleet's machine
 sailors: the list's "This fleet", first and chosen, on a page opened by a
 fleet's link.
 
+**Links into the list**, as the website gives them, name no one:
+`/?watch` opens Watch a sailor in place of the player's own panel (with
+machine sailors or without), and `/?watch=pick` does what Pick one for
+me does, once the list's first page of everyone at sea is read; with
+fewer than two to watch it leaves the list as it is. Anything else after
+`watch=` is no link. A visitor with no session is told "Make a sailor,
+and you will be watching." first; the link is forgotten once seen, so a
+reload just sails (`listFromQuery`, `listLink` in `watchwords.ts`).
+
 On the phone (`client/src/account/yourlink.tsx`, `ui/sharelink.tsx`),
 "Share a link to watch me" sits under Set sail on "Your sailor" (with "Your
 link shows your boat only on voyages you let others watch." while the box
@@ -8255,12 +8264,13 @@ of `keel-backups`, so no workflow can read, replace or delete a backup.
 
 `keelovertheedge.com` is one Cloudflare Worker with static files
 (`website/`, its own packages and lockfile, pinned as the client's). The
-files in `website/site/` are served as they are, free, without running
-the Worker; it runs first only for what is live:
+page is built by Vite from `website/site/` into `website/out/` (git
+ignores it), whose files are served as they are, free, without running
+the Worker; it runs first only for the page and what is live:
 
 | Path | What | Kept in the data centre's cache |
 |---|---|---|
-| `/` | The page (`site/index.html`), with the security headers | |
+| `/` | The page, in the hour's light (below), with the security headers | Never: each answer its hour's |
 | `/live` | The game's numbers as JSON: `atSea`, `machinesAtSea`, `queued`, `world`, `endsAt`, `closing`, `turn`, `charted`, `hour`, `at`, and `resting`; `{"resting": true}` alone with nothing to tell | 30 s |
 | `/map.svg` | The world's chart now, drawn as the chart screen draws the whole disk | 10 minutes |
 | `/share.png` | The share picture, 1200 × 630: the map, the name, the three numbers | 10 minutes |
@@ -8275,9 +8285,64 @@ most). A request reads KV only when keel does not answer, and serves its
 map marked "The sea is resting", kept a minute; with nothing in KV, a
 map with no world. The compatibility flag `global_fetch_strictly_public`
 sends the Worker's fetch to `play.` the public way, through Access.
-`_headers` gives the static files their security headers; the Worker
-sets the same on its own answers (`worker/src/headers.ts`), which
-`_headers` never reaches.
+`site/public/_headers` gives the static files their security headers
+(and the hashed files a year's cache); the Worker sets the same on its
+own answers (`worker/src/headers.ts`), which `_headers` never reaches. A
+test holds the two the same.
+
+**The page** (`site/index.html`, `site/src/page.css`) is plain HTML and
+CSS in the game's own look: the instruments' lacquer cases in brass, the
+raised keys, the gold Set sail, the log's paper and ink, IM Fell English
+SC, Libre Caslon Text and Alegreya Sans. Its order: the boat at the edge
+with the name, one line and **Set sail** (`https://play.keelovertheedge.com/`)
+in the first screen of a phone and a laptop; Race; Sail together; Pick
+your boat; Storms, squalls and fog; The world now (`<img src="/map.svg">`,
+the numbers from `/live`, the countdown and the calendar); What waits out
+there; Watch sailors live (`/?watch`, `/?watch=pick`) and Put your AI at
+the helm (the MCP address with Copy, Add to Claude, Cursor and VS Code);
+The sea is open; the foot (the source, a short privacy note, the contact
+address). Its one small script (`site/src/page.ts`) does four things the
+page is whole without: the countdown, the numbers, Copy, and Google
+Calendar's link; each is hidden until it has something to show. It keeps
+nothing on the visitor's device: no cookie, no storage, no analytics.
+
+The build (`site/build/site.ts`, a Vite plugin) writes what the page is
+made from elsewhere in the repository:
+
+- **The fonts**, the game's (`client/src/fonts/`, OFL), cut to the
+  page's letters (the titles' and the log's to its own words, Alegreya
+  Sans to whatever the script may write too), with their licences under
+  `/fonts/`; only the titles' font is preloaded.
+- **The pictures**, from `art/website/manifest.json`: each
+  `<keel-picture name=…>` in the page written out as a `<picture>`, AVIF
+  then JPEG at the manifest's widths, lazy, with its words; the opening
+  (`<keel-opening>`) upright on a phone held upright and wide else, never
+  lazy, `fetchpriority="high"`. Their files take their content's hash in
+  their names.
+- **The AI apps' links** (`site/src/words.ts`) into the keys.
+
+**Colours that follow the hour at sea** (`site/src/sky.ts`). The sky's
+hour is the game's, from the clock alone: the catalog's `sky` (its day of
+118 minutes, its first moment noon at the centre). Four palettes (night
+and dawn and dusk in lacquer and brass, warmer at the sun's ends; day the
+log's paper `#EFE4C8` and ink `#2B2118`) blend through the sky's day in
+120 steps, a fifth of a sky's hour each, in Oklab; the build writes each
+distinct step (about 30) as `:root[data-sky="n"]` in the style sheet.
+Every step's words read at 4.5:1 or better on every ground they sit on;
+between the dark palettes and the paper the words' ink changes at one
+moment, the grounds on each side blended toward the other only as far as
+their ink still reads. **The Worker answers `/`** (`worker/src/page.ts`):
+it names the hour's step (`data-sky`) and its opening picture
+(`data-opening`) on the page and changes the opening's sources to that
+hour's, from the data the build wrote into the page (`#openings`), so the
+page arrives in its light with no script and never waits for keel; the
+script moves both on once a minute. `/?hour=8.5` shows the page at
+another hour. The opening's words keep 4.5:1 over every hour's picture
+through a veil, darkest at the day's (`--veil`), measured by the checks.
+
+**Budgets**, held by the checks: the page, its style sheet, script and
+fonts under 150 KB; the opening picture under 120 KB on a phone and 250 KB
+on a desktop; the phone's first screen under 300 KB.
 
 **The map is the chart's own painting.** The Worker runs the chart's
 painters, `paintPaper` and `paintWeather` (`client/src/chart/`), on a
@@ -8304,8 +8369,9 @@ about 20 ms of CPU and 240 KB (66 KB gzipped); the share picture about
 0.4 s and 0.67 MB, so the account is on Workers Paid.
 
 **Deploying.** `accounts`' apply job deploys it after OpenTofu's apply
-(`tools/accounts/website.go`): `npm ci` and `npm run glyphs` in
-`website/`, then `wrangler deploy` with the configuration as kept but for
+(`tools/accounts/website.go`): `npm ci`, `npm run glyphs` and
+`npm run site` (the page into `out/`) in `website/`, then `wrangler
+deploy` with the configuration as kept but for
 the KV namespace's id (OpenTofu's output, written into the git-ignored
 `wrangler.deploy.json`), the service token's ID and secret as the
 Worker's secrets on wrangler's standard input, and the run's Cloudflare
@@ -8316,10 +8382,31 @@ Locally, in `website/`:
 
 ```sh
 npm ci
-npm test            # the Worker's tests, in workerd
+npm test            # the Worker's tests, in workerd; the pictures' and the page's, in Node
 npm run typecheck
-npm run build       # wrangler deploy --dry-run into dist/: nothing uploaded
+npm run build       # the page into out/, then wrangler deploy --dry-run into dist/: nothing uploaded
+npm run page        # Vite's own server, for writing the page (no /live, no map)
+npm run checks      # the page's checks (below), after npm run build
 ```
+
+To see it as production serves it, after `npm run build`:
+`WRANGLER_SEND_METRICS=false npx --no-install wrangler dev --local --port
+5293`, then `http://127.0.0.1:5293/?hour=6` (dawn). Without the service
+token every live answer rests; `npm run checks` starts the same with
+seed 1's recorded status in keel's place (`page/keel.ts`).
+
+**The page's checks** (`page/page.spec.ts`, Playwright, in Chromium;
+locally `PW_CHANNEL=chrome` uses the installed Chrome) serve the built
+page through the Worker under `wrangler dev` on ports 5295 and 5296, and
+take about ten seconds. At 360 × 640, 390 × 844, 1366 × 768 and
+1920 × 1080, at each of the four hours: Set sail wholly in the first
+screen; nothing wider than the screen; the opening's words over its
+picture, measured with the words hidden, at 4.5:1 or better against the
+brightest tenth of what is behind each line. Then: each hour's colours
+as the steps make them, the titles' and the keys' words readable; every
+picture with its words, each loaded once in view; the page whole without
+script but for the four; the countdown, the numbers, Copy and Google
+Calendar from `/live`; the sea resting; the keys' links; the budgets.
 
 Biome checks it from `client/` (`npx biome ci ../website`, and
 `go run ./tools/dev -lint`).
