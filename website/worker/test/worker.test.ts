@@ -54,7 +54,12 @@ beforeEach(async () => {
 
 function envWith(): Env {
   return {
-    ASSETS: { fetch: async () => new Response('<!doctype html><p>The page</p>', { headers: { 'Content-Type': 'text/html' } }) },
+    ASSETS: {
+      fetch: async () =>
+        new Response('<!doctype html><p>The page</p>', {
+          headers: { 'Content-Type': 'text/html' },
+        }),
+    },
     WEBSITE: kv,
     STATUS_URL: 'https://play.keelovertheedge.com/api/status',
     ACCESS_CLIENT_ID: ID,
@@ -69,7 +74,12 @@ function outside(k: ReturnType<typeof keel>): Outside {
 /** Asks the Worker for a path, and waits for what it does after answering (its cache's writes). */
 async function ask(path: string, e: Env, out: Outside, method = 'GET'): Promise<Response> {
   const ctx = createExecutionContext();
-  const r = await answer(new Request(`https://keelovertheedge.com${path}`, { method }), e, ctx, out);
+  const r = await answer(
+    new Request(`https://keelovertheedge.com${path}`, { method }),
+    e,
+    ctx,
+    out,
+  );
   await waitOnExecutionContext(ctx);
   return r;
 }
@@ -85,11 +95,25 @@ describe('keel’s status, through Access', () => {
   });
 
   test('anything but a status taken as no answer', async () => {
-    const odd = { fetch: (async () => Response.json({ error: 'access' }, { status: 403 })) as typeof fetch, now: Date.now, cache: () => cache };
+    const odd = {
+      fetch: (async () => Response.json({ error: 'access' }, { status: 403 })) as typeof fetch,
+      now: Date.now,
+      cache: () => cache,
+    };
     expect(await fetchStatus(envWith(), odd)).toBeNull();
-    const wrong = { fetch: (async () => Response.json({ hello: 1 })) as typeof fetch, now: Date.now, cache: () => cache };
+    const wrong = {
+      fetch: (async () => Response.json({ hello: 1 })) as typeof fetch,
+      now: Date.now,
+      cache: () => cache,
+    };
     expect(await fetchStatus(envWith(), wrong)).toBeNull();
-    const down = { fetch: (async () => { throw new Error('down'); }) as typeof fetch, now: Date.now, cache: () => cache };
+    const down = {
+      fetch: (async () => {
+        throw new Error('down');
+      }) as typeof fetch,
+      now: Date.now,
+      cache: () => cache,
+    };
     expect(await fetchStatus(envWith(), down)).toBeNull();
     const k = keel(seed1());
     expect(await fetchStatus({ ...envWith(), ACCESS_CLIENT_SECRET: '' }, outside(k))).toBeNull();
@@ -102,7 +126,14 @@ describe('/live', () => {
     const k = keel(seed1());
     const r = await ask('/live', envWith(), outside(k));
     expect(r.status).toBe(200);
-    expect(await r.json()).toMatchObject({ atSea: 0, machinesAtSea: 0, world: 7, charted: 368, resting: false, turn: { weekday: 'Sunday', time: '18:00', zone: 'America/New_York' } });
+    expect(await r.json()).toMatchObject({
+      atSea: 0,
+      machinesAtSea: 0,
+      world: 7,
+      charted: 368,
+      resting: false,
+      turn: { weekday: 'Sunday', time: '18:00', zone: 'America/New_York' },
+    });
     const kept = await cache.match(KEYS.status);
     expect(kept?.headers.get('Cache-Control')).toBe(`public, max-age=${KEPT.status}`);
     await ask('/live', envWith(), outside(k));
@@ -112,7 +143,9 @@ describe('/live', () => {
   test('resting when keel does not answer, with nothing kept', async () => {
     const r = await ask('/live', envWith(), outside(keel(null)));
     expect(await r.json()).toEqual({ resting: true });
-    expect((await cache.match(KEYS.status))?.headers.get('Cache-Control')).toBe(`public, max-age=${KEPT.resting}`);
+    expect((await cache.match(KEYS.status))?.headers.get('Cache-Control')).toBe(
+      `public, max-age=${KEPT.resting}`,
+    );
   });
 
   test('resting with the last good numbers when keel does not answer', async () => {
@@ -127,8 +160,10 @@ describe('/map.svg', () => {
     const r = await ask('/map.svg', envWith(), outside(keel(seed1())));
     expect(r.headers.get('Content-Type')).toBe('image/svg+xml; charset=utf-8');
     const svg = await r.text();
-    expect(svg).toContain("<title>The world’s chart now</title>");
-    expect((await cache.match(KEYS.map))?.headers.get('Cache-Control')).toBe(`public, max-age=${KEPT.picture}`);
+    expect(svg).toContain('<title>The world’s chart now</title>');
+    expect((await cache.match(KEYS.map))?.headers.get('Cache-Control')).toBe(
+      `public, max-age=${KEPT.picture}`,
+    );
   });
 
   test('the last good map, marked resting, when keel does not answer', async () => {
@@ -139,7 +174,9 @@ describe('/map.svg', () => {
     // The kept picture itself, from its definitions on.
     const from = (x: string) => x.slice(x.indexOf('<defs>'), x.indexOf('<defs>') + 4000);
     expect(from(svg)).toBe(from(good ?? ''));
-    expect((await cache.match(KEYS.map))?.headers.get('Cache-Control')).toBe(`public, max-age=${KEPT.resting}`);
+    expect((await cache.match(KEYS.map))?.headers.get('Cache-Control')).toBe(
+      `public, max-age=${KEPT.resting}`,
+    );
   });
 
   test('with nothing kept either, a resting map with no world', async () => {
@@ -158,14 +195,18 @@ describe('/share.png', () => {
     const ihdr = new DataView(png.buffer, png.byteOffset + 16, 8);
     expect([ihdr.getUint32(0), ihdr.getUint32(4)]).toEqual([1200, 630]);
     expect(png.length).toBeLessThan(1_000_000);
-    expect((await cache.match(KEYS.share))?.headers.get('Cache-Control')).toBe(`public, max-age=${KEPT.picture}`);
+    expect((await cache.match(KEYS.share))?.headers.get('Cache-Control')).toBe(
+      `public, max-age=${KEPT.picture}`,
+    );
   });
 
   test('resting, when keel does not answer', async () => {
     const r = await ask('/share.png', envWith(), outside(keel(null)));
     const png = new Uint8Array(await r.arrayBuffer());
     expect(png.length).toBeGreaterThan(1000);
-    expect((await cache.match(KEYS.share))?.headers.get('Cache-Control')).toBe(`public, max-age=${KEPT.resting}`);
+    expect((await cache.match(KEYS.share))?.headers.get('Cache-Control')).toBe(
+      `public, max-age=${KEPT.resting}`,
+    );
   });
 });
 
@@ -210,20 +251,23 @@ describe('KV, the last good copy', () => {
 });
 
 describe('every answer carries the security headers', () => {
-  test.each(['/', '/live', '/map.svg', '/share.png', '/next.ics', '/nowhere'])('%s', async (path) => {
-    for (const method of ['GET', 'HEAD', 'POST']) {
-      const r = await ask(path, envWith(), outside(keel(seed1())), method);
-      expect(r.headers.get('Content-Security-Policy')).toBe(CSP);
-      expect(r.headers.get('X-Content-Type-Options')).toBe('nosniff');
-      expect(r.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
-      if (method === 'POST') {
-        expect(r.status).toBe(405);
+  test.each(['/', '/live', '/map.svg', '/share.png', '/next.ics', '/nowhere'])(
+    '%s',
+    async (path) => {
+      for (const method of ['GET', 'HEAD', 'POST']) {
+        const r = await ask(path, envWith(), outside(keel(seed1())), method);
+        expect(r.headers.get('Content-Security-Policy')).toBe(CSP);
+        expect(r.headers.get('X-Content-Type-Options')).toBe('nosniff');
+        expect(r.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+        if (method === 'POST') {
+          expect(r.status).toBe(405);
+        }
+        if (method === 'HEAD') {
+          expect(await r.text()).toBe('');
+        }
       }
-      if (method === 'HEAD') {
-        expect(await r.text()).toBe('');
-      }
-    }
-  });
+    },
+  );
 
   test('the CSP is the static files’ too', async () => {
     const file = await import('../../site/_headers?raw');

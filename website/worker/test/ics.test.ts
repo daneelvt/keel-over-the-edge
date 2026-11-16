@@ -11,7 +11,10 @@ function lines(ics: string): string[] {
   for (const l of ics.split('\r\n')) {
     expect(new TextEncoder().encode(l).length).toBeLessThanOrEqual(75);
   }
-  return ics.replace(/\r\n /g, '').split('\r\n').filter((l) => l !== '');
+  return ics
+    .replace(/\r\n /g, '')
+    .split('\r\n')
+    .filter((l) => l !== '');
 }
 
 /** The lines between BEGIN:name and its END. */

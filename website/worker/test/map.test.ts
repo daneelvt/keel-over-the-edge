@@ -57,7 +57,14 @@ describe('the map holds only what the status holds', () => {
 
   test('with no status, a resting map with no world', () => {
     const { svg, drawn } = drawMapOf({ status: null, resting: true });
-    expect(drawn).toMatchObject({ coasts: [], rocks: [], names: [], boats: 0, systems: 0, fronts: 0 });
+    expect(drawn).toMatchObject({
+      coasts: [],
+      rocks: [],
+      names: [],
+      boats: 0,
+      systems: 0,
+      fronts: 0,
+    });
     expect(svg).toContain(`<title>The world’s chart: ${RESTING.toLowerCase()}</title>`);
   });
 });
@@ -66,12 +73,21 @@ describe('the map as a picture', () => {
   test('an SVG an <img> shows whole: no script, no font or file fetched, nothing to tap', () => {
     const { svg } = drawMapOf({ status: seed1(), resting: false });
     expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" viewBox="')).toBe(true);
-    for (const banned of ['<script', '<a ', '<style', '@font-face', 'url(http', 'href="http', '<image', '<foreignObject']) {
+    for (const banned of [
+      '<script',
+      '<a ',
+      '<style',
+      '@font-face',
+      'url(http',
+      'href="http',
+      '<image',
+      '<foreignObject',
+    ]) {
       expect(svg).not.toContain(banned);
     }
     // Its letters are its own shapes, each used where printed.
     expect(svg).toMatch(/<use href="#g[0-9a-z]+"/);
-    expect(svg).toContain("<title>The world’s chart now</title>");
+    expect(svg).toContain('<title>The world’s chart now</title>');
   });
 
   test('a last good map marked resting keeps its picture and says so', () => {

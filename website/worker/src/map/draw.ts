@@ -642,7 +642,7 @@ function restingOverlay(box: readonly number[]): string {
 
 /** The title a map's picture carries. */
 function titleOf(resting: boolean): string {
-  return resting ? `The world’s chart: ${RESTING.toLowerCase()}` : "The world’s chart now";
+  return resting ? `The world’s chart: ${RESTING.toLowerCase()}` : 'The world’s chart now';
 }
 
 /**
