@@ -18,7 +18,6 @@
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
-import { useLayoutEffect } from 'preact/hooks';
 import type { FullScreen } from '../boot/fullscreen';
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
@@ -29,6 +28,7 @@ import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
 import type { HomeView } from './home';
 import { BACK_TO_PORT_ROYAL } from './homewords';
 import { sailWithMeFor } from './machinewords';
+import { Modal } from './modal';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 import type { RacesView } from './raceslazy';
@@ -72,22 +72,6 @@ function Toggle({
       />
     </label>
   );
-}
-
-/** Takes focus into the menu as it opens, and back to its button as it closes. */
-function FocusIn() {
-  useLayoutEffect(() => {
-    document.querySelector<HTMLElement>('.menu')?.focus();
-    return () => {
-      // Unless the focus has gone elsewhere, as to a panel the menu opened.
-      const a = document.activeElement;
-      const b = document.querySelector<HTMLElement>('.menu-button');
-      if (b !== null && (a === null || a === document.body || a.closest('.menu') !== null)) {
-        b.focus();
-      }
-    };
-  }, []);
-  return null;
 }
 
 /** The night light's value in words, for a screen reader. */
@@ -318,19 +302,15 @@ export function Menu({
   const s = settings.value.value;
   return (
     <>
-      <FocusIn />
+      {/* The focus in as it opens, and back to its button as it closes. */}
+      <Modal of=".menu" close={close} back=".menu-button" />
       <div class="menu-scrim" aria-hidden="true" onClick={close} />
       <section
         class="panel menu"
         role="dialog"
+        aria-modal="true"
         aria-label="Settings"
         tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation();
-            close();
-          }
-        }}
       >
         <header class="menu-head">
           <h2>Settings</h2>
