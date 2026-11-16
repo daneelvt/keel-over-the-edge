@@ -22,6 +22,8 @@ export function HomeOffer({ home }: { home: HomeScreen | null }) {
   if (!home.offered.value) {
     return null;
   }
+  // Seen today: not offered on another day.
+  home.shownNow();
   return (
     <div class="home-offer">
       <p class="start-text">{PLAY_FROM_HOME_SCREEN}</p>

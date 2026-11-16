@@ -9282,14 +9282,17 @@ the API, is silent. There is no setting.
 **The home screen** (`client/src/boot/homescreen.ts`,
 `account/homeoffer.tsx`). A day of play is a Set sail on a local date not
 counted before, kept in `localStorage` as `keel.homeScreen`
-(`{"days":2,"last":"2026-11-16","done":false}`). From the third day, when
+(`{"days":2,"last":"2026-11-16","done":false,"shown":""}`). From the
+third day, when
 the game is not installed and the browser can install it (Chrome has
 fired `beforeinstallprompt`, which the page keeps and whose own banner it
 holds back; or Safari on an iPhone), the player's own panel shows "Play
 from your home screen, without the browser's bars." under Set sail, with
 **Add Keel** (Chrome's own question; on an iPhone, the menu's three
 steps in its place) and **Not now**. Either, or the game installed
-(`appinstalled`), puts it away for good (`done`). In the menu, once
+(`appinstalled`), puts it away for good (`done`). It is offered once:
+the date it is first shown is kept (`shown`), it stays for a reload that
+day, and, left unanswered, it is not shown on a later day. In the menu, once
 Chrome has offered, an **Install** key asks its question; it goes once
 answered, until Chrome offers again. To see the offer, set
 `keel.homeScreen` to two days before today from the browser's console

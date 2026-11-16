@@ -136,6 +136,37 @@ describe('the offer', () => {
     expect(d.visit().offered.value).toBe(false);
   });
 
+  test('offered once: shown and left unanswered, still there on a reload that day, gone the next', () => {
+    const d = days('iphone');
+    for (const date of ['2026-11-01', '2026-11-02']) {
+      d.on(date);
+      d.visit().sailed();
+    }
+    d.on('2026-11-03');
+    const third = d.visit();
+    // Eligible but not yet shown: still offered on a later day.
+    expect(third.offered.value).toBe(true);
+    d.on('2026-11-04');
+    expect(d.visit().offered.value).toBe(true);
+    // Shown on the fourth day, ignored, Set sail.
+    const shown = d.visit();
+    expect(text(expand(HomeOffer({ home: shown })))).toContain(PLAY_FROM_HOME_SCREEN);
+    shown.sailed();
+    // A reload the same day: still there.
+    const reload = d.visit();
+    expect(reload.offered.value).toBe(true);
+    expect(text(expand(HomeOffer({ home: reload })))).toContain(ADD_KEEL);
+    // The next day: gone, though never answered.
+    d.on('2026-11-05');
+    const next = d.visit();
+    expect(next.offered.value).toBe(false);
+    expect(expand(HomeOffer({ home: next }))).toBeNull();
+    expect(JSON.parse(d.store.map.get('keel.homeScreen') ?? '')).toMatchObject({
+      done: false,
+      shown: '2026-11-04',
+    });
+  });
+
   test('never after Not now', () => {
     const d = days('iphone');
     for (const date of ['2026-11-01', '2026-11-02']) {

@@ -7,7 +7,8 @@
 // iPhone (where the menu's three steps do it). A day of play is a Set sail
 // on a date not counted before, kept on the device. Add Keel asks Chrome
 // to install the game, or shows the iPhone's steps; Not now, or the game
-// installed, puts the offer away for good. In the menu, Chrome's own way
+// installed, puts the offer away for good. Shown on one day of play and
+// left unanswered, it is not shown on another: the offer is made once. In the menu, Chrome's own way
 // becomes an Install key once the browser has offered to install it.
 // Never at sea: nothing here is a key on the screen at sea.
 
@@ -27,6 +28,8 @@ interface Kept {
   days: number;
   last: string;
   done: boolean;
+  /** The date the offer was first shown, "" for never. */
+  shown: string;
 }
 
 const KEY = 'keel.homeScreen';
@@ -41,7 +44,7 @@ export function localDate(d: Date): string {
 }
 
 function read(store: Store | null): Kept {
-  const out: Kept = { days: 0, last: '', done: false };
+  const out: Kept = { days: 0, last: '', done: false, shown: '' };
   try {
     const raw: unknown = JSON.parse(store?.getItem(KEY) ?? 'null');
     if (raw !== null && typeof raw === 'object') {
@@ -53,6 +56,9 @@ function read(store: Store | null): Kept {
         out.last = r.last;
       }
       out.done = r.done === true;
+      if (typeof r.shown === 'string') {
+        out.shown = r.shown;
+      }
     }
   } catch {
     // Unreadable: counted afresh.
@@ -75,7 +81,7 @@ export class HomeScreen {
   /** Whether the start screen offers it now. */
   readonly offered: ReadonlySignal<boolean>;
   readonly #env: HomeEnv;
-  readonly #kept = signal<Kept>({ days: 0, last: '', done: false });
+  readonly #kept = signal<Kept>({ days: 0, last: '', done: false, shown: '' });
   readonly #installed = signal(false);
 
   constructor(env: HomeEnv) {
@@ -89,7 +95,8 @@ export class HomeScreen {
         !k.done &&
         !this.#installed.value &&
         (this.prompt.value !== null || iphone) &&
-        this.day() >= OFFER_DAY
+        this.day() >= OFFER_DAY &&
+        (k.shown === '' || k.shown === this.#env.today())
       );
     });
   }
@@ -98,6 +105,18 @@ export class HomeScreen {
   day(): number {
     const k = this.#kept.value;
     return k.days + (k.last === this.#env.today() ? 0 : 1);
+  }
+
+  /**
+   * The offer shown: from now on it is today's alone. Kept on the device
+   * without changing what the screen shows, so a render may say it.
+   */
+  shownNow(): void {
+    const k = this.#kept.peek();
+    if (k.shown === '') {
+      k.shown = this.#env.today();
+      this.#save(k);
+    }
   }
 
   /** Set sail: today is counted, once. */
@@ -159,6 +178,10 @@ export class HomeScreen {
 
   #keep(k: Kept): void {
     this.#kept.value = k;
+    this.#save(k);
+  }
+
+  #save(k: Kept): void {
     try {
       this.#env.store?.setItem(KEY, JSON.stringify(k));
     } catch {
