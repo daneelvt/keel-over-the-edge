@@ -417,7 +417,7 @@ export class SeaScene {
     };
     this.shadows = new Shadows(this.sky.light);
     this.ocean = new Ocean(scene);
-    this.edge = new EdgeScene(scene, this.ocean.uniforms, {
+    this.edge = new EdgeScene(scene, this.ocean.uniforms, this.ocean.pattern, {
       radius: catalog.world.disk.radius,
       mist: catalog.world.disk.mist,
       edge: catalog.world.edge,

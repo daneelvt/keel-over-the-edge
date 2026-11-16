@@ -5,7 +5,7 @@
 // (lines.ts), set up from the catalog and kept in step with the floating
 // origin, the camera, the hour and world time each frame.
 
-import type { Scene, Vector3, Vector4 } from 'three';
+import type { Scene, Texture, Vector3, Vector4 } from 'three';
 import type { BandUniforms } from '../ocean/wave';
 import type { FloatingOrigin } from '../render/coords';
 import { look } from '../render/sky';
@@ -53,7 +53,8 @@ export class EdgeScene {
   /** Beyond this from the centre, m, the camera is near the edge (edgeLook.near). */
   readonly #near: number;
 
-  constructor(scene: Scene, band: BandUniforms, c: EdgeCatalog) {
+  /** pattern is the sea's: the falls' streaks are read from it. */
+  constructor(scene: Scene, band: BandUniforms, pattern: Texture, c: EdgeCatalog) {
     this.lip = c.radius;
     this.band = c.mist * NM;
     this.#range = c.edge.mist.range;
@@ -76,7 +77,7 @@ export class EdgeScene {
     (linesLook.at.value as Vector3).set(at[0], at[1], at[2]);
     (linesLook.speed.value as Vector4).set(speed[0], speed[1], speed[2], this.linesFrom);
     linesLook.apart.value = c.edge.look.lines.apart;
-    this.falls = new Falls(band, this.lip, speed[2], c.edge.look);
+    this.falls = new Falls(band, this.lip, speed[2], c.edge.look, pattern);
     scene.add(this.falls.curtain, this.falls.slabs);
   }
 

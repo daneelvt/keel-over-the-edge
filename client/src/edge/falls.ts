@@ -9,8 +9,13 @@
 // it each point leaves at the height of the waves at the lip, damped,
 // carried out at the drain's speed and curving further out, and falls. A
 // free jet falls as y = ½ g t² from a brink (Rouse 1936); the curtain's
-// gravity is the catalog's, slower than the Earth's, as a look. It whitens
-// to foam, takes the mist's colour and fades out as it falls.
+// gravity is the catalog's, slower than the Earth's, as a look. Before the
+// brink it runs below the last tiles, which tip and sag over it, so what
+// shows of it pours from under their edges. It is lit as the sea's water and
+// foam are, by the hour's light and sky: a thin sheet the light comes through
+// at the brink, it whitens in streaks that ride down with the water and widen
+// until it is white, tears into ribbons, takes the mist's colour and fades
+// out as it falls.
 //
 // The slabs are the sea's tiles breaking off at the brink: from each cell
 // of the lattice just beyond the lip near the camera, a slab rides the
@@ -29,21 +34,24 @@ import {
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   Mesh,
+  type Texture,
   Vector2,
 } from 'three';
 import {
   attribute,
+  cameraPosition,
   clamp,
   cos,
   exp,
   float,
-  fract,
   max,
   mix,
+  normalize,
   positionGeometry,
   select,
   sin,
   smoothstep,
+  texture,
   uniform,
   varying,
   vec2,
@@ -51,7 +59,10 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+import { foamColour } from '../ocean/foam';
 import { type Hex, hexAt, hexCentre, type Point, TILE_ACROSS, TILE_RADIUS } from '../ocean/hex';
+import { FOAM } from '../ocean/look';
+import { water } from '../ocean/seamaterial';
 import { tileGeometry } from '../ocean/tiles';
 import { type BandUniforms, boatBandAt } from '../ocean/wave';
 import { basicMaterial } from '../render/materials';
@@ -100,6 +111,108 @@ export const MAX_SLABS = 640;
 
 /** A slab's thickness, m: the depth of a tile's skirt. */
 const SLAB_THICKNESS = 1.1;
+
+/**
+ * The curtain's look: how far its water goes to the sea's scattered green
+ * at the brink, where it is thinnest; where its white streaks begin, from
+ * the first share of the pattern's range to the second, as it falls from
+ * and to s after the brink, and how much of the water shows through them,
+ * at the least and over that by the pattern; where it tears into ribbons,
+ * from and to s, with gaps of up to the share of the pattern given; and
+ * how soft the streaks' and the tears' edges are.
+ */
+export const CURTAIN_LOOK = {
+  thin: 0.35,
+  foam: [0.62, 0.32, 0.05, 2.5],
+  strokes: [0.45, 0.8],
+  tear: [1.5, 6, 0.5],
+  edge: 0.06,
+} as const;
+
+/**
+ * How far the curtain runs below the sea's surface, m: the last tiles tip
+ * and sag over the brink, their edges up to this below the waves there, so
+ * a curtain that began at the surface would show over them.
+ */
+export const CURTAIN_TUCK = 0.6;
+
+/** The curtain's streaks: the pattern read this many times finer across the lip, and so many repeats a second of water down it. */
+const STREAK_SCALE = 0.8;
+const STREAK_FLOW = 2 / 256;
+
+/** World time is reduced by this, s, for the streaks: their flow repeats a whole number of times in it. */
+const STREAK_PERIOD = 256;
+
+/**
+ * How dense the columns are about the centre, the lip's point nearest the
+ * camera: the share of the even spacing they keep there, growing to
+ * 3 − 2 × that at the ends of the reach.
+ */
+const CENTRE_DENSITY = 0.15;
+
+/** Each column's place along the lip from the centre, m: close by the camera, wider apart far off. */
+export function curtainColumns(reach: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < CURTAIN_COLUMNS; i++) {
+    const x = (2 * i) / (CURTAIN_COLUMNS - 1) - 1;
+    out.push(reach * x * (CENTRE_DENSITY + (1 - CENTRE_DENSITY) * x * x));
+  }
+  return out;
+}
+
+/**
+ * Each row's time since the brink, s: one row at the start before it, if
+ * the curtain starts before it, the rest from the brink on, closer
+ * together near it.
+ */
+export function curtainRows(c: FallsLook['curtain']): number[] {
+  const out: number[] = [];
+  if (c.from < 0) {
+    out.push(c.from);
+  }
+  const start = Math.max(c.from, 0);
+  const left = CURTAIN_ROWS - out.length;
+  for (let j = 0; j < left; j++) {
+    const v = j / (left - 1);
+    out.push(start + (c.to - start) * v * v);
+  }
+  return out;
+}
+
+/** A point of the curtain: how far out of the lip and how high, m, and their rates, m/s. */
+export interface CurtainPoint {
+  out: number;
+  height: number;
+  dOut: number;
+  dHeight: number;
+}
+
+/**
+ * The curtain t seconds after the brink, where the waves stand wave m high
+ * at the lip and the drain runs drain m/s, with the lip's sag of sag m: the
+ * shader's path, op for op.
+ */
+export function curtainAt(
+  c: FallsLook['curtain'],
+  drain: number,
+  wave: number,
+  sag: number,
+  t: number,
+  out: CurtainPoint,
+): CurtainPoint {
+  const fall = Math.max(t, 0);
+  const damped = Math.exp(-c.damping * fall);
+  const before = c.from < 0 ? -c.from : 1;
+  const ramp = Math.min(Math.max(t / before + 1, 0), 1);
+  out.out = drain * t + c.out * fall * fall;
+  out.height = wave * damped - sag * ramp - CURTAIN_TUCK - 0.5 * c.gravity * fall * fall;
+  out.dOut = drain + 2 * c.out * fall;
+  out.dHeight =
+    (t > 0 ? -c.damping * wave * damped : 0) -
+    c.gravity * fall -
+    (t < 0 && t > -before ? sag / before : 0);
+  return out;
+}
 
 /** A hash of two whole numbers into [0, 1): lowbias32. */
 export function hash01(a: number, b: number): number {
@@ -181,24 +294,13 @@ const fallsUniforms = {
   drain: uniform(1),
   /** World time for the curtain's streaks, s, reduced. */
   time: uniform(0),
+  /** Where the curtain's centre lies in its pattern across the lip, reduced. */
+  arc: uniform(0),
 };
 
 /** A point of the lip at angle a clockwise from north, in the scene's (x, z). */
 const lipPoint = (sinA: Node<'float'>, cosA: Node<'float'>, r: Node<'float'>): Node<'vec2'> =>
   vec2(sinA.mul(r).sub(edgeLook.origin.x), cosA.mul(r).sub(edgeLook.origin.y).negate());
-
-/** Value noise of a hash, for the curtain's streaks. */
-const streakNoise = (p: Node<'vec2'>): Node<'float'> => {
-  const h = (q: Node<'vec2'>) => fract(sin(q.x.mul(127.1).add(q.y.mul(311.7))).mul(43758.5453));
-  const i = p.floor();
-  const f = fract(p);
-  const u = f.mul(f).mul(float(3).sub(f.mul(2)));
-  return mix(
-    mix(h(i), h(i.add(vec2(1, 0))), u.x),
-    mix(h(i.add(vec2(0, 1))), h(i.add(vec2(1, 1))), u.x),
-    u.y,
-  );
-};
 
 export class Falls {
   readonly curtain: Mesh;
@@ -215,11 +317,11 @@ export class Falls {
   readonly #life: InstancedBufferAttribute;
   readonly #slabGeometry: InstancedBufferGeometry;
 
-  constructor(band: BandUniforms, lip: number, drain: number, falls: FallsLook) {
+  constructor(band: BandUniforms, lip: number, drain: number, falls: FallsLook, pattern: Texture) {
     this.look = falls;
     this.#lip = lip;
     fallsUniforms.drain.value = drain;
-    this.curtain = this.#makeCurtain(band, falls.curtain);
+    this.curtain = this.#makeCurtain(band, falls.curtain, pattern);
     const slabs = this.#makeSlabs(falls);
     this.slabs = slabs.mesh;
     this.#place = slabs.place;
@@ -227,18 +329,16 @@ export class Falls {
     this.#slabGeometry = slabs.geometry;
   }
 
-  #makeCurtain(band: BandUniforms, c: FallsLook['curtain']): Mesh {
+  #makeCurtain(band: BandUniforms, c: FallsLook['curtain'], pattern: Texture): Mesh {
     const n = CURTAIN_COLUMNS * CURTAIN_ROWS;
     const grid = new Float32Array(n * 3);
+    const columns = curtainColumns(c.reach);
+    const rows = curtainRows(c);
     for (let i = 0; i < CURTAIN_COLUMNS; i++) {
       for (let j = 0; j < CURTAIN_ROWS; j++) {
         const k = (i * CURTAIN_ROWS + j) * 3;
-        // Columns from −1 to 1 across the reach; rows closer near the brink.
-        grid[k] = (2 * i) / (CURTAIN_COLUMNS - 1) - 1;
-        const u = j / (CURTAIN_ROWS - 1);
-        const t0 = (-c.from / (c.to - c.from)) ** 0.5;
-        const v = u < t0 ? u / t0 : (u - t0) / (1 - t0);
-        grid[k + 1] = u < t0 ? c.from * (1 - v) : c.to * v * v;
+        grid[k] = (columns[i] ?? 0) / c.reach;
+        grid[k + 1] = rows[j] ?? 0;
       }
     }
     const index: number[] = [];
@@ -263,32 +363,82 @@ export class Falls {
     const cosA = u.centre.y.mul(cos(a)).sub(u.centre.x.mul(sin(a)));
     const atBrink = lipPoint(sinA, cosA, edgeLook.lip);
     const wave = boatBandAt(band)(atBrink).x;
+    // The path, as curtainAt works it out on the CPU.
     const out = u.drain.mul(t).add(fall.mul(fall).mul(c.out));
     const where = lipPoint(sinA, cosA, edgeLook.lip.add(out));
-    // Under the last tiles before the brink, sagging as they do.
-    const sag = edgeLook.sag.mul(clamp(t.div(-c.from).add(1), 0, 1));
+    const damped = exp(fall.mul(-c.damping));
+    const before = c.from < 0 ? -c.from : 1;
+    const ramp = clamp(t.div(before).add(1), 0, 1);
     const height = wave
-      .mul(exp(fall.mul(-c.damping)))
-      .sub(sag)
-      .sub(fall.mul(fall).mul(0.5 * c.gravity))
-      .sub(select(t.lessThan(0), float(0.05), float(0)));
+      .mul(damped)
+      .sub(edgeLook.sag.mul(ramp))
+      .sub(CURTAIN_TUCK)
+      .sub(fall.mul(fall).mul(0.5 * c.gravity));
     const vertex = vec3(where.x, height, where.y);
+    // Its normal: across the path's direction in the plane of the fall,
+    // upward and outward; turned toward the eye in the fragment.
+    const falling = select(t.greaterThan(0), float(1), float(0));
+    const rising = select(t.lessThan(0).and(t.greaterThan(-before)), float(1), float(0));
+    const dOut = u.drain.add(fall.mul(2 * c.out));
+    const dHeight = wave
+      .mul(damped)
+      .mul(-c.damping)
+      .mul(falling)
+      .sub(fall.mul(c.gravity))
+      .sub(edgeLook.sag.mul(rising).div(before));
+    const normal = normalize(vec3(sinA.mul(dHeight.negate()), dOut, cosA.mul(dHeight)));
+    // Lit once a vertex, as the sea's water and its foam are, on the side
+    // the eye sees: the rows lie close near the brink and the columns near
+    // the eye, and at the turn from one side to the other both read the
+    // sky's reflection, so the light changes smoothly between them.
+    const toEye = normalize(cameraPosition.sub(vertex));
+    const N = select(normal.dot(toEye).lessThan(0), normal.negate(), normal);
+    // The sea's own water, thin at the brink and the light through it; and
+    // white water.
+    // At the brink the sheet is thin and the light comes through it in the
+    // sea's own green, as through a crest.
+    const sea = water({ normal: N, crest: float(1), glint: 0 }, toEye);
+    const body = varying(
+      mix(sea, look.scatter, smoothstep(1.5, 0, t).mul(CURTAIN_LOOK.thin)),
+    ) as unknown as Node<'vec3'>;
+    const foamLit = varying(foamColour(N)) as unknown as Node<'vec3'>;
+    // By the time since the brink, once a vertex: where the white streaks
+    // begin, where it tears, how much is left before it fades, and how far
+    // it has gone to the mist's colour.
+    const [w0, w1, f0, f1] = CURTAIN_LOOK.foam;
+    const [t0, t1, most] = CURTAIN_LOOK.tear;
+    const row = varying(
+      vec4(
+        mix(float(w0), float(w1), smoothstep(f0, f1, t)),
+        smoothstep(t0, t1, t).mul(most),
+        float(1)
+          .sub(smoothstep(c.fade[0] ?? 6, c.fade[1] ?? 10, t))
+          .mul(edgeLook.on),
+        smoothstep(c.mist[0] ?? 5, c.mist[1] ?? 10, t),
+      ),
+    ) as unknown as Node<'vec4'>;
     const tv = varying(t);
     const along = varying(across.mul(c.reach));
     const m = basicMaterial({ transparent: true, depthWrite: false, side: DoubleSide }, vertex);
-    const streak = streakNoise(vec2(along.div(2.5), tv.mul(1.6).sub(u.time.mul(0.8))));
-    // A thin sheet of the sea's water at the brink, the light through it;
-    // whitening in streaks from the brink on as it falls.
-    const water = mix(look.deep, look.scatter, 0.5);
-    const foamy = clamp(tv.div(c.foam), 0, 1).sqrt().mul(streak.mul(0.7).add(0.3));
-    const misted = smoothstep(c.mist[0] ?? 5, c.mist[1] ?? 10, tv);
-    const colour = mix(mix(water, look.cloud, foamy), edgeLook.colour, misted);
-    // Whole at the brink; torn by the streaks as it falls; then faded out.
-    const torn = mix(float(1), streak.mul(0.5).add(0.5), smoothstep(0, 2, tv));
-    const alpha = float(1)
-      .sub(smoothstep(c.fade[0] ?? 6, c.fade[1] ?? 10, tv))
-      .mul(torn)
-      .mul(edgeLook.on);
+
+    // The sheet's own pattern: the sea's noise read across the lip and with
+    // the water, so the streaks ride down with it and stretch as it speeds up.
+    const p = texture(
+      pattern,
+      vec2(u.arc.add(along.mul(STREAK_SCALE / FOAM.patternSpan)), tv.sub(u.time).mul(STREAK_FLOW)),
+    );
+    // Fine streaks for the white water, broad ones for where it tears.
+    const streak = p.y.mul(0.75).add(p.z.mul(0.25));
+    const broad = p.z;
+    // White in streaks that widen as it falls until the sheet is white, in
+    // strokes down the fall with the water showing through between them.
+    const foamy = smoothstep(row.x, row.x.add(CURTAIN_LOOK.edge), streak);
+    const [s0, s1] = CURTAIN_LOOK.strokes;
+    const white = mix(body, foamLit, clamp(p.w.mul(s1).add(s0), 0, 1));
+    const colour = mix(mix(body, white, foamy), edgeLook.colour, row.w);
+    // Whole at the brink; torn into ribbons as it falls; then faded out.
+    const torn = smoothstep(row.y, row.y.add(CURTAIN_LOOK.edge), broad);
+    const alpha = row.z.mul(torn);
     m.colorNode = vec4(toLinear(colour), 1);
     m.opacityNode = alpha;
     const mesh = new Mesh(g, m);
@@ -401,8 +551,11 @@ export class Falls {
     const theta = Math.atan2(east, north);
     (fallsUniforms.centre.value as Vector2).set(Math.sin(theta), Math.cos(theta));
     // The streaks repeat every 256 s: float32 holds that finely.
-    fallsUniforms.time.value = time - 256 * Math.floor(time / 256);
+    fallsUniforms.time.value = time - STREAK_PERIOD * Math.floor(time / STREAK_PERIOD);
+    // And across the lip every pattern's span: the centre's place in it.
     const lip = this.#lip;
+    const arc = (lip * theta * STREAK_SCALE) / FOAM.patternSpan;
+    fallsUniforms.arc.value = arc - Math.floor(arc);
     if (!(Math.abs(lip * (theta - this.#cellsAt)) < TILE_ACROSS)) {
       cellsBeyondLip(lip, theta, SLAB_REACH, this.#cells);
       this.#cellsAt = theta;
