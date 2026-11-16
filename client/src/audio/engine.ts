@@ -86,7 +86,7 @@ const GLIDE = 0.08;
 const NOISE_SECONDS = 2;
 
 interface Graph {
-  ctx: AudioContext;
+  ctx: BaseAudioContext;
   master: GainNode;
   noise: AudioBuffer;
   windBand: BiquadFilterNode;
@@ -114,7 +114,7 @@ interface Graph {
 }
 
 /** A white-noise buffer, from a fixed sequence so every page sounds alike. */
-function noise(ctx: AudioContext): AudioBuffer {
+function noise(ctx: BaseAudioContext): AudioBuffer {
   const n = Math.floor(ctx.sampleRate * NOISE_SECONDS);
   const buffer = ctx.createBuffer(1, n, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -126,10 +126,10 @@ function noise(ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
-function build(ctx: AudioContext, r: Recipes): Graph {
+function build(ctx: BaseAudioContext, r: Recipes, destination: AudioNode): Graph {
   const master = ctx.createGain();
   master.gain.value = 0.8;
-  master.connect(ctx.destination);
+  master.connect(destination);
   const source = ctx.createBufferSource();
   const buffer = noise(ctx);
   source.buffer = buffer;
@@ -260,6 +260,25 @@ export class SoundEngine {
     return this.#graph?.ctx.state ?? 'none';
   }
 
+  /** Whether the graph was built on a context rendered offline (attach). */
+  #offline = false;
+
+  /**
+   * Builds the graph on a context of the caller's, into destination: an
+   * OfflineAudioContext renders what the engine plays faster than it
+   * would be heard, the caller setting the voices between its suspends.
+   * Its state is then no matter: the voices are set while it is suspended.
+   */
+  attach(ctx: BaseAudioContext, destination: AudioNode = ctx.destination): void {
+    this.#offline = !(typeof AudioContext !== 'undefined' && ctx instanceof AudioContext);
+    this.#graph = build(ctx, this.#recipes, destination);
+  }
+
+  /** Whether the graph plays: its context runs, or renders offline. */
+  #live(g: Graph): boolean {
+    return this.#offline || g.ctx.state === 'running';
+  }
+
   /** Listens for the gestures that may start audio, and for the page being hidden. */
   listen(doc: Document): void {
     const gesture = (e: Event): void => {
@@ -290,14 +309,16 @@ export class SoundEngine {
     }
     if (this.#graph === null) {
       try {
-        this.#graph = build(new AudioContext({ latencyHint: 'playback' }), this.#recipes);
+        const ctx = new AudioContext({ latencyHint: 'playback' });
+        this.#graph = build(ctx, this.#recipes, ctx.destination);
       } catch (err) {
         console.warn('sound could not start', err);
         return;
       }
     }
-    if (this.#graph.ctx.state !== 'running') {
-      void this.#graph.ctx.resume().catch(() => {});
+    const ctx = this.#graph.ctx;
+    if (ctx instanceof AudioContext && ctx.state !== 'running') {
+      void ctx.resume().catch(() => {});
     }
   }
 
@@ -318,7 +339,7 @@ export class SoundEngine {
   /** Sets the voices for the boat as it is now (ms), at most every 50 ms. */
   update(now: number, input: SoundInput): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !this.#throttle.due(now)) {
+    if (g === null || !this.#live(g) || !this.#throttle.due(now)) {
       return;
     }
     this.updates++;
@@ -356,7 +377,7 @@ export class SoundEngine {
    */
   harbour(now: number, x: HarbourInput, secondsPerHour: number): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !this.#harbourThrottle.due(now)) {
+    if (g === null || !this.#live(g) || !this.#harbourThrottle.due(now)) {
       return;
     }
     const at = g.ctx.currentTime;
@@ -387,7 +408,7 @@ export class SoundEngine {
    */
   features(now: number, x: FeaturesInput): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !this.#featuresThrottle.due(now)) {
+    if (g === null || !this.#live(g) || !this.#featuresThrottle.due(now)) {
       return;
     }
     const at = g.ctx.currentTime;
@@ -513,7 +534,7 @@ export class SoundEngine {
    */
   life(now: number, x: LifeInput): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !this.#lifeThrottle.due(now)) {
+    if (g === null || !this.#live(g) || !this.#lifeThrottle.due(now)) {
       return;
     }
     if (!(x.seconds - this.#lifeTo < 2) || x.seconds < this.#lifeTo) {
@@ -534,7 +555,7 @@ export class SoundEngine {
   /** Plays the life in the water's splashes and breaths of a frame, each once, now. */
   water(sounds: readonly WaterSound[]): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running') {
+    if (g === null || !this.#live(g)) {
       return;
     }
     for (const s of sounds) {
@@ -783,7 +804,7 @@ export class SoundEngine {
    */
   fogSignals(now: number, x: FogSignalsInput): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !this.#fogThrottle.due(now)) {
+    if (g === null || !this.#live(g) || !this.#fogThrottle.due(now)) {
       return;
     }
     if (!(x.seconds - this.#fogTo < 2) || x.seconds < this.#fogTo) {
@@ -916,7 +937,7 @@ export class SoundEngine {
   /** Plays the thunder first heard by the listener since the last time (ms), each once. */
   thunder(now: number, x: ThunderInput): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !this.#thunderThrottle.due(now)) {
+    if (g === null || !this.#live(g) || !this.#thunderThrottle.due(now)) {
       return;
     }
     if (!(x.seconds - this.#thunderTo < 2) || x.seconds < this.#thunderTo) {
@@ -1042,7 +1063,7 @@ export class SoundEngine {
   /** Plays a hull's scrape on the bottom once: band-passed noise swelling and dying away. */
   scrape(sc: Scrape): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !(sc.level > 0)) {
+    if (g === null || !this.#live(g) || !(sc.level > 0)) {
       return;
     }
     this.scrapes++;
@@ -1073,7 +1094,7 @@ export class SoundEngine {
 
   knock(k: Knock): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !(k.level > 0)) {
+    if (g === null || !this.#live(g) || !(k.level > 0)) {
       return;
     }
     this.knocks++;
@@ -1131,7 +1152,7 @@ export class SoundEngine {
    */
   bell(strokes: number): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || strokes < 1) {
+    if (g === null || !this.#live(g) || strokes < 1) {
       return;
     }
     this.bells++;
@@ -1153,7 +1174,7 @@ export class SoundEngine {
    */
   gun(g0: GunReport): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !(g0.level > 0)) {
+    if (g === null || !this.#live(g) || !(g0.level > 0)) {
       return;
     }
     this.guns++;
@@ -1243,7 +1264,7 @@ export class SoundEngine {
    */
   cheer(c: CheerSound): void {
     const g = this.#graph;
-    if (g === null || g.ctx.state !== 'running' || !(c.level > 0)) {
+    if (g === null || !this.#live(g) || !(c.level > 0)) {
       return;
     }
     this.cheers++;
@@ -1380,7 +1401,7 @@ export class SoundEngine {
 
   #apply(): void {
     const ctx = this.#graph?.ctx;
-    if (ctx === undefined) {
+    if (ctx === undefined || !(ctx instanceof AudioContext)) {
       return;
     }
     if (!this.#enabled || this.#hidden) {
