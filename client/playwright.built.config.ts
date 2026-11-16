@@ -19,7 +19,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { chromiumArgs, chromiumEnv } from './e2e/gpu';
 
 /** The built page's spec files: the main config's projects leave them out. */
-export const builtFiles = ['critical'].map((n) => `${n}.spec.ts`);
+export const builtFiles = ['critical', 'kept'].map((n) => `${n}.spec.ts`);
 
 const linux = process.platform === 'linux';
 

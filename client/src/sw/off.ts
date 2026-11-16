@@ -3,9 +3,9 @@
 // The service worker switched off (a build with KEEL_SW=off): built to
 // /sw.js in place of sw.ts. The browser checks /sw.js at every visit, so
 // this one reaches every phone that has the worker: it takes over at once,
-// deletes every cache the worker kept, and unregisters itself. It answers
-// nothing, so the page comes from the network, and the page built with it
-// registers no worker.
+// every page with it, deletes every cache the worker kept, and unregisters
+// itself. It answers nothing, so the page comes from the network, and the
+// page built with it registers no worker.
 
 import { clear } from './worker';
 
@@ -15,9 +15,19 @@ scope.addEventListener('install', () => {
   void scope.skipWaiting();
 });
 
+/** How long the worker before may still be finishing what it was answering, ms. */
+const SETTLE = 3000;
+
 scope.addEventListener('activate', (e) => {
+  // Every page taken over first, so the worker before answers nothing
+  // more; its caches deleted, and again once what it was answering when
+  // taken over is done, in case it kept a file as they went.
   e.waitUntil(
-    clear(scope.caches)
+    scope.clients
+      .claim()
+      .then(() => clear(scope.caches))
+      .then(() => new Promise((resolve) => scope.setTimeout(resolve, SETTLE)))
+      .then(() => clear(scope.caches))
       .then(() => scope.registration.unregister())
       .then(() => undefined),
   );

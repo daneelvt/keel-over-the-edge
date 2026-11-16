@@ -107,10 +107,21 @@ async function registerAndKeep(): Promise<void> {
   await keepStorage(navigator.storage, installed(browserEnv()), localMarks());
 }
 
-/** The worker switched off: any worker unregistered, and the caches it kept deleted. */
+/**
+ * The worker switched off. A page still under a worker asks the browser
+ * to check it now: the worker it finds (off.ts) takes over, deletes its
+ * caches and unregisters itself, and the worker before answers nothing
+ * more. A page under none takes away any worker and caches left.
+ */
 async function switchOff(): Promise<void> {
   try {
-    for (const reg of await navigator.serviceWorker.getRegistrations()) {
+    const sw = navigator.serviceWorker;
+    const regs = await sw.getRegistrations();
+    if (sw.controller !== null) {
+      await Promise.all(regs.map((r) => r.update().catch(() => {})));
+      return;
+    }
+    for (const reg of regs) {
       await reg.unregister();
     }
     for (const name of await caches.keys()) {

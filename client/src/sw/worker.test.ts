@@ -120,6 +120,8 @@ function setUp(p: Plan, waits: (ms: number) => Promise<void> = () => new Promise
   return { caches, server, deps };
 }
 
+const req = (path: string) => new Request(new URL(path, ORIGIN));
+
 describe('what the worker answers', () => {
   const ask = (
     path: string,
@@ -269,7 +271,12 @@ describe('activating a build', () => {
     caches.fill('chunks-world-9', ['/w/1/2/3']);
     caches.fill(codeCache('b3'), ['/assets/main-3.js']);
     await activate(deps);
-    expect(await caches.keys()).toEqual([codeCache('b2'), 'chunks-world-9', codeCache('b3')]);
+    expect(await caches.keys()).toEqual([
+      codeCache('b2'),
+      'chunks-world-9',
+      codeCache('b3'),
+      ART_CACHE,
+    ]);
   });
 
   test('a build back again keeps the build it follows', async () => {
@@ -280,7 +287,7 @@ describe('activating a build', () => {
     caches.fill(codeCache('b1'), ['/assets/main-1.js']);
     caches.fill(codeCache('b2'), ['/assets/main-2.js']);
     await activate(deps);
-    expect(await caches.keys()).toEqual([codeCache('b1'), codeCache('b2')]);
+    expect(await caches.keys()).toEqual([codeCache('b1'), codeCache('b2'), ART_CACHE]);
   });
 
   test('the art no longer named by the build is dropped', async () => {
@@ -296,8 +303,6 @@ describe('activating a build', () => {
 });
 
 describe('answering', () => {
-  const req = (path: string) => new Request(new URL(path, ORIGIN));
-
   test('a file of this build, from its cache, with no network', async () => {
     const p = plan('b2', ['/assets/main-2.js']);
     const { caches, server, deps } = setUp(p);
@@ -324,6 +329,8 @@ describe('answering', () => {
   test('a file not kept is fetched, and kept: code with its build, art with the art', async () => {
     const p = plan('b2', ['/assets/main-2.js', '/assets/news-2.js'], ['/assets/look-4.glb']);
     const { caches, deps } = setUp(p);
+    caches.fill(codeCache('b2'), []);
+    await activate(deps);
     await asset(deps, req('/assets/news-2.js'));
     await asset(deps, req('/assets/look-4.glb'));
     expect(caches.caches.get(codeCache('b2'))?.paths()).toEqual(['/assets/news-2.js']);
@@ -400,6 +407,19 @@ describe('answering', () => {
     await Promise.all(later);
     const kept = await caches.caches.get(codeCache('b2'))?.match('/icon-192.png');
     expect(await kept?.text()).toBe('new icon');
+  });
+});
+
+describe('caches taken away', () => {
+  test('are never made again by a worker still answering', async () => {
+    const p = plan('b2', ['/assets/main-2.js', '/assets/news-2.js'], ['/assets/look-4.glb']);
+    const { caches, server, deps } = setUp(p);
+    server.files.set('/', { body: 'fresh page' });
+    await asset(deps, req('/assets/news-2.js'));
+    await asset(deps, req('/assets/look-4.glb'));
+    await top(deps, req('/icon-192.png'), () => {});
+    expect(await (await page(deps, req('/'))).text()).toBe('fresh page');
+    expect(await caches.keys()).toEqual([]);
   });
 });
 

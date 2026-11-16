@@ -11,7 +11,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { build, type Plugin, type ResolvedConfig } from 'vite';
 
 /** One entry of Vite's build manifest: a chunk and what it brings. */
@@ -103,7 +103,7 @@ export function serviceWorker(): Plugin {
       config = c;
     },
     async closeBundle() {
-      const outDir = join(config.root, config.build.outDir);
+      const outDir = resolve(config.root, config.build.outDir);
       const on = workerOn();
       const l = lists(
         JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Record<

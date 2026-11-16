@@ -129,6 +129,15 @@ function pathOf(request: RequestInfo, origin: string): string {
   return new URL(typeof request === 'string' ? request : request.url, origin).pathname;
 }
 
+/**
+ * A cache the worker made, or null: only install and activate make them,
+ * so caches taken away (the off switch, or the browser) are never made
+ * again by a worker still answering.
+ */
+async function made(d: Deps, name: string): Promise<Store | null> {
+  return (await d.caches.has(name)) ? d.caches.open(name) : null;
+}
+
 /** The worker's caches, in the order they were made: the code caches, then the art's. */
 async function ours(c: Stores): Promise<string[]> {
   const names = await c.keys();
@@ -162,7 +171,6 @@ async function kept(d: Deps, request: RequestInfo): Promise<Response | undefined
  * page too, which shows "Back soon" itself until the server is back.
  */
 export async function page(d: Deps, request: Request): Promise<Response> {
-  const store = await d.caches.open(codeCache(d.plan.build));
   const net = d.fetch(request);
   const late = d.wait(SHELL_WAIT).then(() => 'late' as const);
   const first = await Promise.race([
@@ -175,7 +183,7 @@ export async function page(d: Deps, request: Request): Promise<Response> {
   if (first !== 'late' && first !== 'failed' && first.status < 500) {
     return first;
   }
-  const shell = await store.match('/');
+  const shell = await (await made(d, codeCache(d.plan.build)))?.match('/');
   if (shell !== undefined) {
     return shell;
   }
@@ -196,7 +204,7 @@ export async function asset(d: Deps, request: Request): Promise<Response> {
       : ART_CACHE;
     const copy = res.clone();
     try {
-      await (await d.caches.open(name)).put(request, copy);
+      await (await made(d, name))?.put(request, copy);
     } catch {
       // Storage full or refused: answered all the same.
     }
@@ -214,10 +222,10 @@ export async function top(
   later: (p: Promise<unknown>) => void,
 ): Promise<Response> {
   const hit = await kept(d, request);
-  const store = await d.caches.open(codeCache(d.plan.build));
+  const store = await made(d, codeCache(d.plan.build));
   const fresh = d.fetch(request).then(async (res) => {
     if (keepable(res)) {
-      await store.put(request, res.clone());
+      await store?.put(request, res.clone());
     }
     return res;
   });
@@ -300,7 +308,7 @@ export async function install(d: Deps): Promise<void> {
 /**
  * Activates the build: its code cache and the previous build's (the one
  * made last before it) are kept, every older one deleted; the art cache
- * keeps only what this build names.
+ * is made, or keeps only what this build names.
  */
 export async function activate(d: Deps): Promise<void> {
   const current = codeCache(d.plan.build);
@@ -312,9 +320,7 @@ export async function activate(d: Deps): Promise<void> {
       await d.caches.delete(n);
     }
   }
-  if (!names.includes(ART_CACHE)) {
-    return;
-  }
+  // Made here if it was not: the one place the art cache is made.
   const named = new Set([...d.plan.code, ...d.plan.art]);
   const art = await d.caches.open(ART_CACHE);
   for (const req of await art.keys()) {

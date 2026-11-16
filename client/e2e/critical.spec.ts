@@ -23,143 +23,24 @@
 // job's summary.
 
 import { appendFileSync } from 'node:fs';
-import { type BrowserContext, expect, type Request, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { answerBorn, stamp } from './helpers';
+import {
+  kb,
+  markPage,
+  mb,
+  measure,
+  NETWORKS,
+  type Response,
+  readMarks,
+  record,
+  revealed,
+  s,
+  throttle,
+} from './wire';
 
 /** The critical download's budget, bytes on the wire to the reveal. */
 const BUDGET = 4 * 1024 * 1024;
-
-/** DevTools' network presets: latency in ms, throughput in bytes a second. */
-const NETWORKS = {
-  fast4g: {
-    name: 'Fast 4G',
-    latency: 165,
-    downloadThroughput: (9_000_000 / 8) * 0.9,
-    uploadThroughput: (1_500_000 / 8) * 0.9,
-  },
-  slow4g: {
-    name: 'Slow 4G',
-    latency: 562.5,
-    downloadThroughput: (1_600_000 / 8) * 0.9,
-    uploadThroughput: (750_000 / 8) * 0.9,
-  },
-} as const;
-
-/** What the zone's Compression Rule adds: these types, under /assets/. */
-const RULE_COMPRESSES = new Set(['model/gltf-binary', 'application/octet-stream']);
-
-interface Response {
-  path: string;
-  kind: string;
-  /** Bytes as keel sent them, uncompressed: headers and body. */
-  raw: number;
-  /** As Cloudflare sends it with the rule, and as it did without. */
-  sent: number;
-  before: number;
-  /** When it was asked for and when it ended, ms from the navigation's start. */
-  start: number;
-  end: number;
-}
-
-/** What a response is, for the table, by its path and type. */
-function kindOf(path: string, type: string): string {
-  if (path.startsWith('/w/')) {
-    return 'land';
-  }
-  if (path.startsWith('/api/')) {
-    return 'API';
-  }
-  const ext = /\.([a-z0-9]+)$/.exec(path)?.[1] ?? '';
-  if (type === 'text/html') {
-    return 'page';
-  }
-  const kinds: Record<string, string> = {
-    js: 'scripts',
-    css: 'styles',
-    wasm: 'WebAssembly',
-    woff2: 'fonts',
-    woff: 'fonts',
-    glb: 'models',
-    bin: 'sky and terrain',
-    terrain: 'sky and terrain',
-    avif: 'pictures',
-    webp: 'pictures',
-    png: 'pictures',
-    svg: 'pictures',
-    webmanifest: 'manifest',
-    m4a: 'sounds',
-    webm: 'sounds',
-    ogg: 'sounds',
-  };
-  return kinds[ext] ?? 'other';
-}
-
-/** The passkey's own requests and the game's connection: not counted. */
-function counted(path: string, type: string): boolean {
-  return (
-    type !== 'websocket' &&
-    !path.startsWith('/account/') &&
-    !path.startsWith('/signin/') &&
-    path !== '/ws'
-  );
-}
-
-/**
- * A finished request: as the wire carried it, as it would have without the
- * rule, and uncompressed.
- */
-async function measure(req: Request, origin: number): Promise<Response | null> {
-  const res = await req.response();
-  if (res === null) {
-    return null;
-  }
-  const url = new URL(req.url());
-  // A blob or data URL is the page's own, made in memory.
-  if (!url.protocol.startsWith('http') || !counted(url.pathname, req.resourceType())) {
-    return null;
-  }
-  const sizes = await req.sizes();
-  const headers = await res.allHeaders();
-  const type = (headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
-  const sent = sizes.responseHeadersSize + sizes.responseBodySize;
-  const encoded = (headers['content-encoding'] ?? '') !== '';
-  const raw = encoded ? sizes.responseHeadersSize + (await res.body().then((b) => b.length)) : sent;
-  const byRule = encoded && RULE_COMPRESSES.has(type) && url.pathname.startsWith('/assets/');
-  const before = byRule ? raw : sent;
-  const t = req.timing();
-  return {
-    path: url.pathname,
-    kind: kindOf(url.pathname, type),
-    raw,
-    sent,
-    before,
-    start: t.startTime - origin,
-    end: t.startTime + t.responseEnd - origin,
-  };
-}
-
-/** Every request the context makes, kept to be measured once it is over. */
-function record(context: BrowserContext): Request[] {
-  const finished: Request[] = [];
-  context.on('requestfinished', (r) => finished.push(r));
-  return finished;
-}
-
-const kb = (n: number): string => `${(n / 1024).toFixed(1)} KB`;
-const mb = (n: number): string => `${(n / 1024 / 1024).toFixed(2)} MB`;
-const s = (ms: number | null): string => (ms === null ? '–' : `${(ms / 1000).toFixed(2)} s`);
-
-/** What the page marks as it goes, from the navigation's start, ms. */
-interface Marks {
-  /** The start screen's name field. */
-  start: number | null;
-  /** Each Set sail tapped: the first makes the sailor, the last sets sail. */
-  taps: number[];
-  /** The recovery code shown: the sailor made, the passkey's part over. */
-  made: number | null;
-  /** The cover lifted off the world. */
-  reveal: number | null;
-}
 
 test('a new sailor’s download to the reveal is under 4 MB on the wire', async ({
   context,
@@ -169,53 +50,9 @@ test('a new sailor’s download to the reveal is under 4 MB on the wire', async 
   expect(network, 'CRITICAL_NETWORK is fast4g or slow4g').toBeDefined();
   // The browser's prompt, answered by Playwright: it holds no passkey yet.
   await context.credentials.install();
-  // The page's own marks, with no hooks of its own: its start screen's
-  // field, the taps, and the cover's lifting, the html element's class
-  // "covered" going at the reveal (boot/cover.ts) and nowhere before.
-  await page.addInitScript(() => {
-    const marks: Marks = { start: null, taps: [], made: null, reveal: null };
-    Object.assign(globalThis, { criticalMarks: marks });
-    const look = () => {
-      const now = performance.now();
-      if (marks.start === null && document.getElementById('start-name') !== null) {
-        marks.start = now;
-      }
-      if (marks.made === null && document.querySelector('.recovery-code') !== null) {
-        marks.made = now;
-      }
-      if (
-        marks.reveal === null &&
-        marks.taps.length > 0 &&
-        !document.documentElement.classList.contains('covered')
-      ) {
-        marks.reveal = now;
-      }
-    };
-    new MutationObserver(look).observe(document, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ['class'],
-    });
-    document.addEventListener(
-      'click',
-      (e) => {
-        const b = (e.target as Element | null)?.closest?.('button');
-        if (b && /^Set sail/.test(b.textContent ?? '')) {
-          marks.taps.push(performance.now());
-        }
-      },
-      true,
-    );
-  });
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Network.enable');
-  await cdp.send('Network.emulateNetworkConditions', {
-    offline: false,
-    latency: network.latency,
-    downloadThroughput: network.downloadThroughput,
-    uploadThroughput: network.uploadThroughput,
-  });
+  // The page's own marks, with no hooks of its own.
+  await markPage(page);
+  await throttle(context, page, network);
   const finished = record(context);
 
   await page.goto('/');
@@ -227,15 +64,8 @@ test('a new sailor’s download to the reveal is under 4 MB on the wire', async 
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 60_000 });
   await page.getByRole('button', { name: /^Set sail/ }).click({ timeout: 60_000 });
-  await page.waitForFunction(
-    () => (globalThis as unknown as { criticalMarks: Marks }).criticalMarks.reveal !== null,
-    null,
-    { timeout: 90_000 },
-  );
-  const { marks, origin } = await page.evaluate(() => ({
-    marks: (globalThis as unknown as { criticalMarks: Marks }).criticalMarks,
-    origin: performance.timeOrigin,
-  }));
+  await revealed(page);
+  const { marks, origin } = await readMarks(page);
   // Let the requests that ended before the reveal be told.
   await page.waitForTimeout(1000);
 

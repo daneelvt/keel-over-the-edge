@@ -9288,9 +9288,12 @@ says nothing, and the screen asks again when next opened.
 **The off switch.** A broken worker stands between players and the fix,
 so it can be switched off by a build: `KEEL_SW=off` (the image's build
 argument `SW=off`: change its default in the `Dockerfile` to release one)
-builds a `sw.js` that takes over at once, deletes every `keel-` cache and
-unregisters itself, and a page that registers nothing (and takes away any
-worker and caches it finds). Browsers check `/sw.js` at every visit,
+builds a `sw.js` that takes over at once, every open page with it (so the
+worker before answers nothing more), deletes every `keel-` cache (again
+3 s later, after what the worker before was answering), and unregisters
+itself; and a page that registers nothing, asks the browser to
+check a worker it is still under at once, and takes away any worker and
+caches left once under none. Browsers check `/sw.js` at every visit,
 past their HTTP cache (`updateViaCache: 'none'`), so it reaches every phone
 that comes back. Building with the worker again later turns it back on.
 
@@ -9301,6 +9304,26 @@ second visit's Network panel shows the page's files "(ServiceWorker)".
 Safari deletes a site's workers and caches after seven days without a
 visit (apps on the Home Screen keep theirs), so a weekly player may
 download the game again.
+
+**Testing it.** Vitest holds the worker's routing table (a skipper's link
+never from the cache, `/api/` and the rest never touched), its install,
+its answers and the clean-up keeping the previous build, against a fake
+CacheStorage and `fetch` (`client/src/sw/worker.test.ts`); the lists the
+build writes in (`client/build/sw.test.ts`); and the update line. In the
+browser, only a built page has the worker: `kept.spec.ts` in the `built`
+project (see [The built page and its first download](#the-built-page-and-its-first-download))
+sails one sailor through a return visit (served through the worker, under
+100 KB on the wire before the reveal, the land's chunks and the game's
+connection apart; both visits' tables in the job's summary), a deploy
+(keel restarted on the next build, `e2e/nextbuild.ts`: a copy of `dist/`
+with every asset renamed and the build's id changed, since a second build
+of the same tree names most files as the first did; the open page opens
+the log and the news from the worker, and its reload runs the next build
+with the first's code kept) and the off switch (keel restarted on a build
+made with `KEEL_SW=off`: after a navigation no worker and no `keel-`
+caches). By hand: `npx vite build`, then `go run ./tools/e2e -client
+client/dist` and `http://localhost:18088/` in Chrome, DevTools open as
+above.
 
 ## Art
 

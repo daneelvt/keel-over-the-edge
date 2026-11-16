@@ -27,10 +27,10 @@ export function nextName(name: string): string {
  * and every build id from to to.
  */
 export function renameIn(text: string, names: readonly string[], from: string, to: string): string {
-  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // The longest first, so that a name another begins with is not taken
   // for it.
-  const alts = [...names].sort((a, b) => b.length - a.length).map(escape);
+  const alts = [...names].sort((a, b) => b.length - a.length).map(literal);
   let out =
     alts.length === 0
       ? text
