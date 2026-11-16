@@ -18,11 +18,14 @@
   overscroll-behavior: contain;
   text-align: center;
   pointer-events: auto;
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
+  font-size: 0.9375rem;
 }
 
 .hud .home-question h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 .home-keys {

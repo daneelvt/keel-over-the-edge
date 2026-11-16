@@ -84,7 +84,7 @@
 
 .machine-faint {
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .machine-list {
@@ -116,7 +116,7 @@
   border-radius: 8px;
   background: rgb(255 255 255 / 10%);
   font:
-    600 14px / 1.3 ui-monospace,
+    600 0.875rem / 1.3 ui-monospace,
     "SF Mono",
     Menlo,
     monospace;
@@ -127,7 +127,7 @@
 
 .machine-address {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 14px;
+  font-size: 0.875rem;
   overflow-wrap: anywhere;
   -webkit-user-select: text;
   user-select: text;
@@ -144,20 +144,20 @@
 
 .connect-recipes h3 {
   margin: 0 0 2px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--gold);
 }
 
 .connect-recipes p {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.4;
 }
 
 .connect-recipes code {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
 
@@ -173,7 +173,7 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .ai-panel h2 {
@@ -197,7 +197,7 @@
   border: 1px solid rgb(168 195 212 / 60%);
   background: transparent;
   color: var(--ink);
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .ai-panel .connect-recipes h3 {

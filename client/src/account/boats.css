@@ -46,7 +46,7 @@
   margin: 0;
 }
 .your-boat-name {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   line-height: 1.2;
   overflow-wrap: anywhere;
@@ -100,7 +100,7 @@
 }
 .boat-faint {
   color: rgb(242 239 231 / 66%);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* The fleet's boats to choose from: a row each, the player's ringed. */
@@ -150,7 +150,7 @@
 }
 .change-boat-faint {
   color: rgb(242 239 231 / 66%);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* On the start screen, alone on it: the panel scrolls within the screen. */
@@ -161,7 +161,7 @@
 }
 .start > .start-panel:is(.boat-look, .change-boat) h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 /* Why it was refused, and Cancel and Save, at the panel's foot, in view as
@@ -186,7 +186,7 @@
 .boat-look-problem {
   margin: 0;
   color: #f3b3a6;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .boat-look-problem:empty {
   display: none;

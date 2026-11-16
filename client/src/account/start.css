@@ -17,9 +17,11 @@
     max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   color: var(--ink);
   font:
-    16px / 1.35 "Alegreya Sans",
+    1rem / 1.35 "Alegreya Sans",
     system-ui,
     sans-serif;
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
 }
 
 /* Its padding inside its width, so that it fits a phone's. */
@@ -37,10 +39,13 @@
   box-shadow: 0 4px 18px rgb(0 0 0 / 25%);
 }
 
+/* A panel's title, the game's name on most: with larger text it grows
+   only as far as the screen's width keeps the name on one line, and never
+   under its own 30 px, so the panel's keys stay in view. */
 .start-panel h1 {
   margin: 0 0 8px;
   font:
-    30px / 1.1 "IM Fell English SC",
+    max(30px, min(1.875rem, 9vw)) / 1.1 "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
@@ -51,7 +56,7 @@
 .start-panel h2 {
   margin: 8px 0 4px;
   font:
-    20px "IM Fell English SC",
+    1.25rem "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
@@ -101,7 +106,7 @@
 
   .start-pair .start-panel h1 {
     margin-bottom: 0;
-    font-size: 24px;
+    font-size: 1.5rem;
   }
 
   .start-pair .start-panel h2 {
@@ -115,7 +120,7 @@
 
 .your-sailor-name {
   margin: 0;
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.2;
   overflow-wrap: anywhere;
@@ -147,7 +152,7 @@
 
 .start-label {
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* 16px or more, so iOS does not zoom into the field. */
@@ -159,7 +164,7 @@
   background: rgb(255 255 255 / 10%);
   color: var(--ink);
   font:
-    18px "Alegreya Sans",
+    1.125rem "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -173,7 +178,7 @@
   min-height: 1.35em;
   margin: 0;
   color: var(--warn);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .start-look {
@@ -201,7 +206,7 @@
 .start-shuffle {
   min-width: 44px;
   background: rgb(255 255 255 / 12%);
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 .start-go {
@@ -209,7 +214,7 @@
   background: var(--gold);
   color: #241a0e;
   font-weight: 500;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .start-go:disabled {
@@ -218,12 +223,12 @@
 
 .start-text {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .start-faint {
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .start-warning {
@@ -231,7 +236,7 @@
   padding: 8px 10px;
   border-radius: 8px;
   background: rgb(232 180 80 / 18%);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .start-address {
@@ -247,7 +252,7 @@
   padding-top: 12px;
   border-top: 1px solid rgb(242 239 231 / 20%);
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .start-sign-in {
@@ -272,7 +277,7 @@
   background: none;
   color: var(--faint);
   font: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -284,7 +289,7 @@
   border-radius: 8px;
   background: rgb(255 255 255 / 10%);
   font:
-    600 19px / 1.3 ui-monospace,
+    600 1.1875rem / 1.3 ui-monospace,
     "SF Mono",
     Menlo,
     monospace;
@@ -312,7 +317,7 @@
   background: rgb(26 36 44 / 85%);
   color: #f2efe7;
   font:
-    15px / 1.3 "Alegreya Sans",
+    0.9375rem / 1.3 "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -330,7 +335,7 @@
   color: #f2efe7;
   text-align: center;
   font:
-    17px / 1.35 "Alegreya Sans",
+    1.0625rem / 1.35 "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -342,7 +347,7 @@
 .queue p.queue-waiting {
   margin-top: 6px;
   opacity: 0.75;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 /* With no stage, the form scrolls the screen: Set sail's row stays at the
@@ -356,7 +361,7 @@
 }
 
 .start.picking > .your-sailor h1 {
-  font-size: 22px;
+  font-size: 1.375rem;
   margin: 0;
 }
 
@@ -557,20 +562,20 @@
   }
   .start-panel.your-sailor h1 {
     margin: 0;
-    font-size: 24px;
+    font-size: 1.5rem;
   }
   .start-panel.your-sailor h2 {
     margin: 2px 0 0;
   }
   .your-sailor-name {
-    font-size: 20px;
+    font-size: 1.25rem;
   }
   /* The boat's words alone, its keys side by side under them. */
   .your-boat .boat-picture {
     display: none;
   }
   .your-boat-name {
-    font-size: 16px;
+    font-size: 1rem;
   }
   /* How many it takes is the chooser's to say; and a boat in the water,
      which is not changed from here, gives its room to the sailor's name. */

@@ -51,6 +51,12 @@
   --edge-left: max(12px, env(safe-area-inset-left));
   /* The sheet's height: shorter on short screens and small phones upright. */
   --sheet-height: 196px;
+  /* A pixel of words: a pixel among the instruments, which keep their
+     size; a sixteenth of the reader's text size on the screens for
+     reading (the menu, the windows, the questions and the notices), set
+     on each, where their words follow the browser's text size. Rules
+     shared by both write their sizes in it. */
+  --text: 1px;
   position: fixed;
   inset: 0;
   height: 100dvh;
@@ -117,7 +123,7 @@
   min-height: 44px;
   padding: 0 12px;
   font:
-    500 15px / 1.2 "Alegreya Sans",
+    500 calc(15 * var(--text, 1px)) / 1.2 "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -994,6 +1000,9 @@
   overscroll-behavior: contain;
   padding: 0;
   outline: none;
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
+  font-size: 0.9375rem;
 }
 
 @media (orientation: portrait) {
@@ -1020,7 +1029,7 @@
 }
 
 .hud .menu-x {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .menu-body {
@@ -1030,7 +1039,7 @@
 .menu h3 {
   margin: 10px 0 4px;
   font:
-    17px "IM Fell English SC",
+    1.0625rem "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
@@ -1047,7 +1056,7 @@
   align-items: center;
   gap: 8px;
   color: var(--faint);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .menu-sound {
@@ -1129,7 +1138,7 @@
 .menu h2 {
   margin: 0;
   font:
-    20px "IM Fell English SC",
+    1.25rem "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
@@ -1154,7 +1163,7 @@
 .menu-note {
   margin: -4px 0 8px;
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.35;
 }
 
@@ -1168,7 +1177,7 @@
 }
 
 .menu-steps-mark {
-  font-size: 20px;
+  font-size: 1.25rem;
   transition: rotate 0.15s;
 }
 
@@ -1208,7 +1217,7 @@
     0 1px 2px rgb(0 0 0 / 55%);
   color: var(--ink);
   font:
-    500 14px / 1 "Alegreya Sans",
+    500 0.875rem / 1 "Alegreya Sans",
     system-ui,
     sans-serif;
   cursor: pointer;

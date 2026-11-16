@@ -597,6 +597,12 @@
 }
 
 /* The notices. */
+.notice-line {
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
+  font-size: 0.9375rem;
+}
+
 .notice-line:empty {
   display: none;
 }
@@ -628,7 +634,7 @@
   border: 0;
   background: none;
   color: var(--ink);
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 /* A notice's key, as Enter on a harbour race's: the head keys' size. */
@@ -646,7 +652,7 @@
     0 1px 2px rgb(0 0 0 / 55%);
   color: #1a242c;
   font:
-    500 14px / 1 "Alegreya Sans",
+    500 0.875rem / 1 "Alegreya Sans",
     system-ui,
     sans-serif;
   cursor: pointer;
