@@ -35,6 +35,11 @@ COPY . .
 # The build ID, which the page sends with its hello and names its caches by.
 ARG BUILD=dev
 ENV KEEL_BUILD=$BUILD
+# The service worker: off builds the worker that takes itself and its
+# caches away, and a page that registers none (docs/development.md, "The
+# service worker").
+ARG SW=on
+ENV KEEL_SW=$SW
 # TinyGo is downloaded into .dev once and kept in the cache.
 RUN --mount=type=cache,id=keel-gomod,target=/root/go/pkg/mod \
     --mount=type=cache,id=keel-gobuild-client,target=/root/.cache/go-build \
