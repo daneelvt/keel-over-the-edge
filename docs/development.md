@@ -5647,7 +5647,7 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | `POST /api/account/recovery` | Confirmed: 200 `{"recoveryCode", "recoveryMade"}`, the old code void |
 | `POST /api/account/logout-others` | 200 `{"ended": n}` |
 | `POST /api/account/delete` | `{"name"}`, confirmed: 200 `{"unknown": [...]}`, every passkey for the browser to forget; 422 `name` |
-| `GET /`, `GET /{file}`, `GET /assets/{file}` | With `KEEL_CLIENT_DIR`, the built page, read into memory at start: `index.html` at `/`, the other files of the directory's top level (`dev.html`, the licences notice) by name, and the hashed files in `assets/`. Assets are cached for a year as `immutable`, the rest `no-cache`. No listings, no other folders, no hidden files; types from a table of the build's extensions (`.wasm` as `application/wasm`, `.glb` as `model/gltf-binary`); `HEAD` too. These routes need no session, so the page loads while the database cannot be asked |
+| `GET /`, `GET /{file}`, `GET /assets/{file}` | With `KEEL_CLIENT_DIR`, the built page, read into memory at start: `index.html` at `/`, the other files of the directory's top level (`dev.html`, the licences notice) by name, and the hashed files in `assets/`. Assets are cached for a year as `immutable`, the rest `no-cache` (the service worker, `/sw.js`, among them, so a browser checks it at every visit). No listings, no other folders, no hidden files (so never the build's manifest, `.vite/manifest.json`); types from a table of the build's extensions (`.wasm` as `application/wasm`, `.glb` as `model/gltf-binary`); `HEAD` too. These routes need no session, so the page loads while the database cannot be asked |
 
 **Nothing is served without a session unless there is a reason it must
 be.** The routes that answer without one are listed in `openRoutes`
@@ -9223,6 +9223,84 @@ deliberate change to the physics).
 | `client/src/ocean/hulls.ts` | No water inside a hull: the sea's fragments within a hull's volume are left out |
 | `client/src/game/float.ts` | The other boats' heave and pitch, from the sea drawn under them |
 | `client/src/render/boat.ts` | Loads a boat's model and its sailor from the catalog's art, replaces their materials with the factory's |
+
+### The build's id
+
+The image's `BUILD` (the commit's first 12 characters, `release.yaml`)
+reaches the page: the `Dockerfile`'s client stage sets `KEEL_BUILD` from
+it, and Vite defines it in the page (`client/src/boot/build.ts`, `"dev"`
+from the development server or a build without it). The page's hello sends
+it, so keel's logs name the page's build, and the service worker names its
+caches by it. `GET /api/version` answers the server's.
+
+### The service worker
+
+A built page keeps the game on the phone with a small service worker of
+its own, `client/src/sw/` (no library), built by Vite to `dist/sw.js` by
+`client/build/sw.ts`. The build writes in its build's id and the files
+the page can reach from `index.html`, lazy ones too, read from Vite's
+manifest (`build.manifest`, written to `dist/.vite/`, which keel never
+serves): the **code** (scripts, workers, WebAssembly, style sheets and
+fonts, about 320 files and 1.7 MB gzipped) and the **art** (models,
+portraits, images, sounds).
+
+It answers only what it knows:
+
+| Request | Answer |
+|---------|--------|
+| A navigation to `/`, with any query but `s` | The network first; after 3 s, a failure or a server error (5xx), the page this build kept, which says "Back soon" itself until the server answers |
+| A navigation to `/?s=…` (a skipper's link) | Never from the worker: the server's own answer, with its `no-referrer` header |
+| `GET /assets/*` | The caches first (this build's code, the previous build's, the art), else the network, and kept: a file of the build's code with its build, anything else in the art cache. A request for a range goes to the network |
+| The icons and `manifest.webmanifest` | The kept copy at once, a fresh one fetched and kept for next time |
+| Everything else | Untouched, as if there were no worker: `/api/`, `/ws`, `/w/` (the mesh worker keeps the land's chunks itself, `chunks-<world>`), `/oauth/`, `/passkey/`, `/account/`, `/signin/`, `/mcp`, `/report`, `/sw.js`, the other pages, other sites, anything but `GET` |
+
+Its caches:
+
+| Cache | Holds |
+|-------|-------|
+| `keel-code-<build>` | The page at `/`, its icons and manifest, and every file of the build's code, fetched when the worker installs, at low priority (most from the browser's own cache, since the page has just loaded them). A file the previous build kept under the same name is copied, not fetched. The page at `/` must name the build's entry script, or a deploy is under way and the install fails, leaving no cache, to be tried at the next visit |
+| `keel-art` | The art, as it is used, for every build |
+
+**When.** The page registers `/sw.js` once the world is revealed, or after
+20 s on the start screen, whichever comes first, so it never competes with
+the first download; only in a built page, never under Vite, `?test` or
+`?sandbox` (`client/src/boot/sw.ts`, one function, `register()`, for a
+policy on script addresses to cover). Where the game runs installed (from
+its icon), the page asks once for persistent storage
+(`navigator.storage.persist()`), granted there without a question.
+
+**Updates.** A new build's worker installs at the next visit, takes over
+at once (`skipWaiting`, `clients.claim`) and, as it activates, keeps the
+previous build's code cache (the one made last before its own) and
+deletes older ones; the art cache drops what the new build does not name.
+So a page open across a deploy keeps opening its lazy screens from the
+previous build's cache, and its next load is the new build. A page closed
+with 4002 (an older protocol, catalog or physics) tells a waiting worker
+to take over before it reloads. A page with no worker, or two deploys old,
+whose lazy screen (the log, the news, a race's window, a sailor's look, a
+watch) fails to load asks `/api/version`: if the server's build is not its
+own, it shows **"The game was updated. Reload to carry on."** with
+**Reload**, where the notices are at sea and at the top of the start
+screen (`client/src/ui/updateline.tsx`, its words in `updatewords.ts`). It
+never reloads by itself while the player sails. With the network down it
+says nothing, and the screen asks again when next opened.
+
+**The off switch.** A broken worker stands between players and the fix,
+so it can be switched off by a build: `KEEL_SW=off` (the image's build
+argument `SW=off`: change its default in the `Dockerfile` to release one)
+builds a `sw.js` that takes over at once, deletes every `keel-` cache and
+unregisters itself, and a page that registers nothing (and takes away any
+worker and caches it finds). Browsers check `/sw.js` at every visit,
+past their HTTP cache (`updateViaCache: 'none'`), so it reaches every phone
+that comes back. Building with the worker again later turns it back on.
+
+**Seeing it.** In Chrome, DevTools' Application panel: Service workers (the
+worker and its state; "Update on reload" for trying changes) and Cache
+storage (the `keel-` caches). On a built page served by keel (below), a
+second visit's Network panel shows the page's files "(ServiceWorker)".
+Safari deletes a site's workers and caches after seven days without a
+visit (apps on the Home Screen keep theirs), so a weekly player may
+download the game again.
 
 ## Art
 
