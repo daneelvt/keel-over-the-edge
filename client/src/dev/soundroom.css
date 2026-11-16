@@ -1,0 +1,141 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* The sound room: a column of plain controls, as wide as a phone allows. */
+
+:root {
+  color-scheme: light;
+  --room-ink: #2b2118;
+  --room-paper: #efe4c8;
+  --room-line: #b9a77f;
+  --room-on: #3d6b4f;
+}
+
+body {
+  margin: 0;
+  background: var(--room-paper);
+  color: var(--room-ink);
+  font:
+    15px / 1.4 system-ui,
+    sans-serif;
+}
+
+.room {
+  box-sizing: border-box;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.room h1 {
+  font-size: 1.4rem;
+  margin: 0 0 0.25rem;
+}
+
+.room h2 {
+  font-size: 1.05rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.room-note {
+  margin: 0 0 0.75rem;
+}
+
+.room button,
+.room select,
+.room input[type="number"] {
+  font: inherit;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--room-line);
+  border-radius: 6px;
+  background: #fffaf0;
+  color: inherit;
+}
+
+.room-play {
+  position: sticky;
+  top: 8px;
+  z-index: 1;
+  width: 100%;
+  font-weight: 600;
+}
+
+.room .room-on {
+  background: var(--room-on);
+  color: #fff;
+}
+
+.room-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr 6rem;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.room-row.room-switch {
+  grid-template-columns: auto 1fr;
+}
+
+.room-value {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.room-voices {
+  display: grid;
+  gap: 8px;
+}
+
+.room-voice {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 4.5rem auto auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-voice .room-value {
+  grid-column: 2 / -1;
+  font-size: 0.85rem;
+}
+
+.room-voice select {
+  min-width: 0;
+}
+
+.room-meter {
+  margin: 0 0 0.5rem;
+  padding: 12px;
+  border: 1px solid var(--room-line);
+  border-radius: 6px;
+  background: #fffaf0;
+  font:
+    13px / 1.5 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 480px) {
+  .room-row:not(.room-switch) {
+    grid-template-columns: 6.5rem 1fr 4.5rem;
+  }
+
+  .room-voice {
+    grid-template-columns: minmax(0, 1fr) 4rem auto auto;
+  }
+
+  .room-voice .room-name {
+    grid-column: 1 / -1;
+    font-weight: 600;
+  }
+
+  .room-voice .room-value {
+    grid-column: 1 / -1;
+  }
+}

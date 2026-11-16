@@ -17,7 +17,8 @@
 // both formats as long as their numbers say; a file not there, or not
 // sound, leaves its voice synthesised while the rest load; and played in
 // every bed's voice in place of its synthesis, a recording takes over at
-// its synthesis's loudness, the budget holding.
+// its synthesis's loudness, the budget holding. The sound room plays, lists
+// every voice, plays a recording in one at B, and reads the meter.
 //
 // And the controls on the game's page: no audio context while the sound
 // is off, the M key's mute held through the page hidden and shown, and
@@ -292,6 +293,26 @@ test.describe('the recordings', () => {
       expect(rec.bedAbove, name).toBeLessThanOrEqual(SCENES[name] === 'storm' ? 0.3 : 0.15);
     }
   });
+});
+
+test('the sound room plays every voice, a file in one at B, and reads the meter', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto('/sounds.html');
+  await page.getByRole('button', { name: 'Play' }).click();
+  await expect(page.locator('.room-voice')).toHaveCount(19);
+  const sea = page.locator('.room-voice', { hasText: 'sea.moderate' });
+  await sea.getByRole('combobox').selectOption({ label: 'recording: test-sea.webm' });
+  await sea.getByRole('button', { name: 'B' }).click();
+  await expect(sea).toContainText('2.0 s, 1 ch');
+  await expect(page.locator('.room-meter')).toContainText(/Recorded +sea \d+%/);
+  await expect(page.locator('.room-meter')).toContainText(/Integrated +-\d+\.\d LUFS/);
+  await sea.getByRole('button', { name: 'A' }).click();
+  await expect(page.locator('.room-meter')).toContainText(/Recorded +none/);
+  // Laid out within a phone's width.
+  const width = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(width).toBeLessThanOrEqual(360);
 });
 
 test.describe('the sound’s controls', () => {

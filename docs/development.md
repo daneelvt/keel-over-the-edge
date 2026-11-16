@@ -9339,6 +9339,49 @@ at most 1 dB in typical weather, and at most 15% of the bed's energy above
 2 kHz. `KEEL_AUDIO_OUT=<folder> KEEL_AUDIO_SECONDS=120` writes each scene's
 rendering there to listen to, with the table.
 
+**The bed as layers, and the recordings.** Each family of the bed (the
+wind, the hull's water, the sea, rain, the flogging sail, the lapping, the
+halyards in port, the surf near a shore) is a set of layers crossfaded at
+equal power by the physics (`audio/layers.ts`, the numbers in `mix.json`'s
+`layers`): the wind's light, moderate, strong and gale by the apparent
+wind; the hull's chuckle, wash and bow wave by the speed over the hull
+speed; the sea's calm, moderate and rough by its height and whitecaps;
+rain's light and heavy by its rate. A layer plays its recording once one
+has loaded, as two copies half its length apart whose gains are arches at
+equal power (no seam is heard), taking over from the synthesis over 3 s;
+the synthesis plays the share the recordings leave. Each family's `match`
+puts a recording normalised to −23 LUFS at its synthesis's loudness, as
+`audio.spec.ts` measures. The boat's motion plays once (`audio/motion.ts`):
+a slap as the bow turns up from a fast fall (its pitch rate, weighed by the
+hull's heave rate), the sheet running in a tack and the boom's thump in a
+gybe as the boom crosses; synthesised until recorded.
+
+The recordings (`audio/recorded.ts`) are listed by their numbers' files,
+`art/sound/recorded/*.json`; none is listed yet, so nothing is fetched.
+Once the game is under way (never in its first download) a probe of a
+twentieth of a second chooses WebM (Opus) or `.m4a` (AAC) by decoding, then
+the recordings are fetched one at a time, beds before shots and what is
+heard most first, each decoded between frames; one missing or refused
+leaves its synthesis. `art/sound/SOURCES.md` lists every master (CC0 or the
+owner's own) and says how to add one; `go run ./tools/sounds -check` (in
+lint) checks the list, the files and the budgets (3 MB fetched, 40 MB
+decoded, 25 MB of masters), and `cd client && npm run sounds` encodes the
+masters with ffmpeg.
+
+**The sound room** (`client/sounds.html`, `dev.html#sounds`, built apart
+by `vite.sounds.config.ts`) plays the engine with sliders for the apparent
+wind, the speed, the sea, rain, the distance and the hour, switches for
+port, a shore, a luffing sail and fog, keys for a tack, a gybe, a knock,
+the bell, the gun, the cheer and thunder, and A and B for every recorded
+voice between its synthesis and a file: the game's recordings, the
+masters, or anything dropped into `art/sound/candidates/` (not committed;
+the development server lists it). Its meter reads the integrated,
+short-term and momentary loudness, the true peak, the share above 2 kHz of
+the mix and of the bed, and the limiter. Open it at `/sounds.html` on the
+development server: `go run ./tools/dev`, then on the Mac
+`https://localhost:5173/sounds.html`, and on a phone on the same network
+`https://<this Mac's name>.local:5173/sounds.html`.
+
 ## Browser tests
 
 `client/e2e` holds Playwright tests that run the game in Chromium, on the

@@ -231,7 +231,7 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   harbour: {
-    weather: { wind: 4, gusts: 0.12, speed: 1, sea: 0.2, whitecaps: 0 },
+    weather: { wind: 3, gusts: 0.12, speed: 1, sea: 0.2, whitecaps: 0 },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);
       harbour.seconds = START + t;

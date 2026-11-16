@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import { build, type Plugin, type ServerOptions, searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { licences } from './build/licences.ts';
@@ -126,6 +127,68 @@ const dressingRoom: Plugin = {
   },
 };
 
+// The sound room, built apart in the same way (vite.sounds.config.ts).
+const soundRoom: Plugin = {
+  name: 'sound-room',
+  apply: 'build',
+  async closeBundle() {
+    await build({ configFile: 'vite.sounds.config.ts', logLevel: 'warn' });
+  },
+};
+
+// For the sound room, by the development server alone: the recordings
+// dropped into art/sound/candidates (not committed) and the masters, listed
+// at /sound-candidates/ and each served at /sound-candidates/<name> and
+// /sound-candidates/masters/<name>.
+const soundTypes: Record<string, string> = {
+  '.wav': 'audio/wav',
+  '.flac': 'audio/flac',
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.webm': 'audio/webm',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+};
+const soundCandidates: Plugin = {
+  name: 'sound-candidates',
+  apply: 'serve',
+  configureServer(s) {
+    const dirs = {
+      candidates: '../art/sound/candidates',
+      masters: '../art/sound/recorded/masters',
+    };
+    const list = (dir: string): string[] =>
+      existsSync(dir)
+        ? readdirSync(dir)
+            .filter((f) => extname(f).toLowerCase() in soundTypes)
+            .sort()
+        : [];
+    s.middlewares.use('/sound-candidates', (req, res, next) => {
+      const url = decodeURIComponent((req.url ?? '').split('?')[0] ?? '');
+      if (url === '/' || url === '') {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify({ candidates: list(dirs.candidates), masters: list(dirs.masters) }));
+        return;
+      }
+      const m = /^\/(masters\/)?([^/]+)$/.exec(url);
+      const name = m?.[2] ?? '';
+      const dir = m?.[1] === undefined ? dirs.candidates : dirs.masters;
+      if (m === null || !list(dir).includes(name)) {
+        next();
+        return;
+      }
+      res.setHeader(
+        'Content-Type',
+        soundTypes[extname(name).toLowerCase()] ?? 'application/octet-stream',
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(readFileSync(`${dir}/${name}`));
+    });
+  },
+};
+
 export default defineConfig({
   server,
   // The net worker's packages, bundled for the development server from the
@@ -159,6 +222,8 @@ export default defineConfig({
     devWorlds,
     approvePage,
     dressingRoom,
+    soundRoom,
+    soundCandidates,
     licences({
       allowedFile,
       shared: workerPackages,
