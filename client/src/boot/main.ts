@@ -160,6 +160,7 @@ import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
 import { FLEET_PARAM, linkFromQuery, SAILOR_PARAM } from '../ui/watchwords';
+import { BUILD } from './build';
 import { takeCover } from './cover';
 import { browserEnv, fullScreen } from './fullscreen';
 import { Gate, type Revealed } from './gate';
@@ -1575,7 +1576,7 @@ function gameURL(): string {
  * at most.
  */
 function connect(online: Online): void {
-  const versions = { catalog: CATALOG_VERSION, physicsLayout: LAYOUT_VERSION, build: 'web' };
+  const versions = { catalog: CATALOG_VERSION, physicsLayout: LAYOUT_VERSION, build: BUILD };
   online.start(gameURL(), versions);
   if (document.visibilityState === 'hidden') {
     // Opened behind another tab: one snapshot kept until it is shown.

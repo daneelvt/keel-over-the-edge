@@ -191,6 +191,9 @@ const soundCandidates: Plugin = {
 
 export default defineConfig({
   server,
+  // The build's ID, as the image is built with it (BUILD in the
+  // Dockerfile); "dev" for the development server and the tests.
+  define: { __KEEL_BUILD__: JSON.stringify(process.env.KEEL_BUILD ?? 'dev') },
   // The net worker's packages, bundled for the development server from the
   // start: found only when a page first starts the worker, they would be
   // bundled then, and every page open at that moment reloaded.

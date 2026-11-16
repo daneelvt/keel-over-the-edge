@@ -32,6 +32,9 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,id=keel-gomod,target=/root/go/pkg/mod \
     go mod download
 COPY . .
+# The build ID, which the page sends with its hello and names its caches by.
+ARG BUILD=dev
+ENV KEEL_BUILD=$BUILD
 # TinyGo is downloaded into .dev once and kept in the cache.
 RUN --mount=type=cache,id=keel-gomod,target=/root/go/pkg/mod \
     --mount=type=cache,id=keel-gobuild-client,target=/root/.cache/go-build \
