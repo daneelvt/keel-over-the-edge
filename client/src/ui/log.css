@@ -482,6 +482,26 @@
 
 /* Held sideways: the head and the abstract on the left, fixed; the rest
    beside them, scrolled. */
+/* With the reader's text larger than the browser's own, on an upright
+   phone, the name goes under the portrait, as on a short screen, so it
+   keeps its whole words. A media query's em is the browser's own text
+   size: 20em is 320 px at its default 16, so this never applies there. */
+@media (orientation: portrait) and (min-width: 321px) and (max-width: 20em) {
+  .log-id {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .log-name {
+    flex-basis: 100%;
+    order: 2;
+  }
+
+  .log-more {
+    margin-left: auto;
+  }
+}
+
 @media (orientation: landscape) {
   .log-sheet:not(.log-alone) {
     display: grid;

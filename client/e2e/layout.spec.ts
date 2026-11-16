@@ -3527,6 +3527,33 @@ async function logFaults(page: Page, collection: boolean): Promise<string[]> {
         `the strip is ${Math.round(strip.width)} × ${Math.round(strip.height)} at ${Math.round(strip.left)}`,
       );
     }
+    // The sailor's name keeps its words whole: only a word wider than the
+    // log's whole head, portrait and all, may break.
+    const name = document.querySelector<HTMLElement>('.log-name h2');
+    const head = name?.closest<HTMLElement>('.log-id') ?? null;
+    if (name !== null && head !== null) {
+      const walk = document.createTreeWalker(name, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+        for (const m of (n.textContent ?? '').matchAll(/\S+/g)) {
+          const range = document.createRange();
+          range.setStart(n, m.index);
+          range.setEnd(n, m.index + m[0].length);
+          const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+          if (tops.size < 2) {
+            continue;
+          }
+          const whole = document.createElement('span');
+          whole.style.whiteSpace = 'nowrap';
+          whole.textContent = m[0];
+          name.append(whole);
+          const width = whole.getBoundingClientRect().width;
+          whole.remove();
+          if (width <= head.clientWidth) {
+            out.push(`the name breaks inside “${m[0]}”`);
+          }
+        }
+      }
+    }
     const tabs = [...document.querySelectorAll('.chart-tab')].map((t) => t.textContent);
     if (tabs.join(' ') !== 'Chart List News Log') {
       out.push(`the tabs are ${tabs.join(', ')}`);
