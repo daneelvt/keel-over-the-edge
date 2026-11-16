@@ -37,6 +37,8 @@ jobs:
               - '**/*.go'
               - 'client/package.json'
               - 'client/package-lock.json'
+              - 'website/package.json'
+              - 'website/package-lock.json'
 
   dependencies:
     name: dependencies
@@ -63,6 +65,11 @@ jobs:
       - name: Registry signatures of client packages
         working-directory: client
         run: npm audit signatures
+      - name: Registry signatures of the website's packages
+        working-directory: website
+        run: |
+          npm ci --no-audit --no-fund
+          npm audit signatures
 
   pr-dependencies:
     name: pr-dependencies

@@ -881,11 +881,19 @@ what follows.
 2. **Zero Trust → Settings → Team name and domain**: note the team domain
    (`<team>.cloudflareaccess.com`) in the pull request that first applies
    `access.tf`. OpenTofu reads it itself; the note is for checking.
-3. Run **`accounts`** with `plan`, then `apply`. Its summary makes the
+3. The account is on **Workers Paid** (Workers & Pages → Plans): the
+   share picture takes about half a second of CPU to draw, past the free
+   plan's 10 ms.
+4. Run **`accounts`** with `plan`, then `apply`. Its summary makes the
    application, the policy, the token, the KV namespace, the redirects,
    `www.`'s record, the token's expiry e-mail and `/keel-access/`'s two
    values.
-4. keel reads its settings when it starts: once `/keel-access/` holds both
+   The same apply job then deploys the website (`website/`): the Worker,
+   its static files, its cron, the apex as its custom domain (which makes
+   the apex's DNS record), the KV namespace's id and the service token's
+   ID and secret as the Worker's secrets, all from OpenTofu's outputs. Its
+   summary ends with a **Website** section saying so.
+5. keel reads its settings when it starts: once `/keel-access/` holds both
    (at once: `kubectl -n keel annotate externalsecret keel-access
    force-sync=$(date +%s) --overwrite`), restart it
    (`kubectl -n keel rollout restart deployment/keel`) in a quiet hour.
@@ -900,6 +908,13 @@ Check:
       `Cf-Access-Jwt-Assertion` is refused by keel, 403 `access`: from the
       machine, `curl -s -H 'Cf-Access-Jwt-Assertion: x' http://<keel's pod
       IP>:8080/api/status`.
+- [ ] `https://keelovertheedge.com/live` answers the game's numbers with
+      `"resting": false` once keel serves its status (before that, `{"resting":
+      true}`), and `/map.svg` the world's chart.
+- [ ] Workers & Pages → `keel-website` → Settings lists the custom domain
+      `keelovertheedge.com`, the cron `*/10 * * * *`, the KV binding
+      `WEBSITE` and the secrets `ACCESS_CLIENT_ID` and
+      `ACCESS_CLIENT_SECRET`, and no `workers.dev` route.
 
 ### Renewing the website's token, every year
 

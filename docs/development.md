@@ -142,17 +142,18 @@ credentials.
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's and the sea's life's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, each boat's trimmed sails against ORC's mainsail and jib, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
-| `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
+| `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `website/wrangler.jsonc` what the website's deploy needs; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
 | `pr.worldgen.yaml` | Pull requests labelled `worldgen` (each push while the label stays), and by hand; not a required check | The world generator over a hundred seeds: each world passes the validator's rules within its attempts; how long they took, their attempts, land and islands, in the log (see [The world](#the-world)) | `go test ./internal/worldgen -run '^TestSeeds$' -seeds 100 -v` |
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
-| `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
+| `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures of the client's packages and the website's | `go tool govulncheck ./...`, `npm audit signatures` in `client/` and `website/` |
+| `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the Worker built by `wrangler deploy --dry-run`, nothing uploaded | in `website/`, `npm test`, `npm run typecheck`, `npm run build` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
 | `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
 | `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
 | `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`; with **rebuild**, on a machine reinstalled from nothing), or `audit` (see [The machine](#the-machine)) | |
-| `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read (see [Online](#online)) | `go run ./tools/accounts -check` |
+| `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read, then the website deployed (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
 | `security.yaml` | Weekly | govulncheck and npm signatures on `main` | |
@@ -8194,7 +8195,7 @@ secrets are made from:
 | Mode | What |
 |------|------|
 | `plan` | One job, approved: what `apply` would change. Changes nothing |
-| `apply` | The same plan job, approved; then an `apply` job, **approved again once you have read the plan's summary**, applies that plan and nothing else |
+| `apply` | The same plan job, approved; then an `apply` job, **approved again once you have read the plan's summary**, applies that plan and nothing else, then deploys the website ([The website](#the-website)) |
 
 Each job signs in to Infisical as `gha-accounts` with its own OIDC token
 (only `accounts.yaml` on `main`, in `production`, may), reads
@@ -8219,7 +8220,7 @@ Offline, on any computer, and as `pr.accounts` does on every pull request
 that touches it:
 
 ```sh
-go run ./tools/accounts -check   # fmt, init without the backend, validate, the lock file for every platform
+go run ./tools/accounts -check   # fmt, init without the backend, validate, the lock file for every platform, website/wrangler.jsonc
 go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changing a provider
 ```
 
@@ -8243,11 +8244,85 @@ go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changi
 | The B2 key that writes the dumps | The owner | `keel-backups` `/keel/B2_DUMPS_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-dumps` | No |
 | The B2 key that reads the backups | The owner | `keel-backups` `/keel-restore/B2_RESTORE_KEY_ID`, `…_KEY` | External Secrets → `keel-restore/keel-b2-read` | No |
 | The local bucket's B2 key | The owner | `keel-backups` `/local/B2_KEY_ID`, `…_KEY`; copied to `.dev/backups.env` | `tools/cluster`, on the owner's Mac | No |
+| The website's Access service token, its ID and secret | Cloudflare, for OpenTofu | OpenTofu's state, as sensitive outputs; the Worker's secrets `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET` | `accounts`' apply, which hands them to `wrangler deploy` on its standard input; the Worker, calling `/api/status` | Yes, encrypted |
 
 The backups' keys are in a project of their own because the `accounts`
 workflow's identity may read `keel-cluster`'s values, and a project is the
 only fence Infisical's free plan has: no workflow's identity is a member
 of `keel-backups`, so no workflow can read, replace or delete a backup.
+
+### The website
+
+`keelovertheedge.com` is one Cloudflare Worker with static files
+(`website/`, its own packages and lockfile, pinned as the client's). The
+files in `website/site/` are served as they are, free, without running
+the Worker; it runs first only for what is live:
+
+| Path | What | Kept in the data centre's cache |
+|---|---|---|
+| `/` | The page (`site/index.html`), with the security headers | |
+| `/live` | The game's numbers as JSON: `atSea`, `machinesAtSea`, `queued`, `world`, `endsAt`, `closing`, `turn`, `charted`, `hour`, `at`, and `resting`; `{"resting": true}` alone with nothing to tell | 30 s |
+| `/map.svg` | The world's chart now, drawn as the chart screen draws the whole disk | 10 minutes |
+| `/share.png` | The share picture, 1200 × 630: the map, the name, the three numbers | 10 minutes |
+| `/next.ics` | The world's end every week, in the schedule's zone, an alarm an hour before | |
+
+It reads keel's [`/api/status`](#apistatus) through Access with the
+service token, kept 30 s under the apex's keys (the Cache API, one copy a
+data centre), and draws the pictures when their 10 minutes run out. A
+cron every 10 minutes fetches the status and draws the map into KV: the
+last good copy, and its only writer (KV takes a write a key a second at
+most). A request reads KV only when keel does not answer, and serves its
+map marked "The sea is resting", kept a minute; with nothing in KV, a
+map with no world. The compatibility flag `global_fetch_strictly_public`
+sends the Worker's fetch to `play.` the public way, through Access.
+`_headers` gives the static files their security headers; the Worker
+sets the same on its own answers (`worker/src/headers.ts`), which
+`_headers` never reaches.
+
+**The map is the chart's own painting.** The Worker runs the chart's
+painters, `paintPaper` and `paintWeather` (`client/src/chart/`), on a
+2D context of its own (`worker/src/map/canvas.ts`) that writes SVG: each
+canvas point carried to the paper and through the chart's camera
+(`camera.ts`, the whole-disk view of `view.ts`), a straight line by its
+ends, a circle as the ellipse the camera sees, text laid on the paper
+foreshortened as the chart's texture lays it. The weather sheet is blended
+as the GPU blends it over the paper, in linear light, so its washes and
+thin lines are as pale as on the screen. Three things are the Worker's
+own, each with a comment in the chart's code pointing here: the islands
+lie flat, inked round the coasts keel traces (no heights are sent); the
+wind's and the fog's washes are traced as shapes rather than painted as
+pictures of the grid; and the boats, which the chart does not show but
+for the sailor's own, are small inked boats by their class, a machine
+sailor's sail with the cog. The names are lettered as `#placeLabels`
+letters them, the whole disk naming rank 3 and up. Its letters are the
+game's fonts' outlines (`npm run glyphs` cuts them from
+`client/src/fonts/` into `worker/gen/`), so an SVG shown by `<img>` needs
+no font and resvg, which draws the share picture, needs none either.
+
+On a laptop (M5, Node, the recorded seed 1 at a busy moment): the map
+about 20 ms of CPU and 240 KB (66 KB gzipped); the share picture about
+0.4 s and 0.67 MB, so the account is on Workers Paid.
+
+**Deploying.** `accounts`' apply job deploys it after OpenTofu's apply
+(`tools/accounts/website.go`): `npm ci` and `npm run glyphs` in
+`website/`, then `wrangler deploy` with the configuration as kept but for
+the KV namespace's id (OpenTofu's output, written into the git-ignored
+`wrangler.deploy.json`), the service token's ID and secret as the
+Worker's secrets on wrangler's standard input, and the run's Cloudflare
+token. No workflow of its own and no identity of its own: the website
+changes when the owner runs `accounts` with `apply`.
+
+Locally, in `website/`:
+
+```sh
+npm ci
+npm test            # the Worker's tests, in workerd
+npm run typecheck
+npm run build       # wrangler deploy --dry-run into dist/: nothing uploaded
+```
+
+Biome checks it from `client/` (`npx biome ci ../website`, and
+`go run ./tools/dev -lint`).
 
 ### External Secrets
 

@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Runs only when what the accounts workflow runs changed: infra/tofu, and
-# the tools that run it. No credential: OpenTofu formats, initialises
-# without a backend and validates, the lock file is checked for every
-# platform, and the tools are tested against fakes. The real plan runs in
-# accounts.yaml, approved.
+# Runs only when what the accounts workflow runs changed: infra/tofu, the
+# website's wrangler.jsonc, and the tools that run them. No credential:
+# OpenTofu formats, initialises without a backend and validates, the lock
+# file is checked for every platform, wrangler.jsonc is checked for what
+# the deploy needs, and the tools are tested against fakes. The real plan
+# runs in accounts.yaml, approved.
 name: pr.accounts
 
 on:
@@ -40,6 +41,7 @@ jobs:
               - 'infra/production.yaml'
               - 'tools/accounts/**'
               - 'tools/internal/**'
+              - 'website/wrangler.jsonc'
 
   check:
     name: check
