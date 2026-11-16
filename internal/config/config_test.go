@@ -42,6 +42,7 @@ func TestLoadValid(t *testing.T) {
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://keel.local:5173", PasskeyRPID: "keel.local", PasskeyOrigins: []string{"https://keel.local:5173"},
 		AgentsAddr: "127.0.0.1:8081", AgentsURL: "https://keel.local:5173/mcp", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
 		BoatLimit: DefaultBoatLimit, SpectatorLimit: DefaultSpectatorLimit, CrewLimit: DefaultCrewLimit, AISilence: DefaultAISilence, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
+		StatusBoats: DefaultStatusBoats,
 		// A zone loaded is a pointer of its own: the schedule is compared
 		// by what it says.
 		Schedule: c.Schedule,
@@ -85,6 +86,9 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_WORLD_KEEP":      "2h",
 		"KEEL_PASSKEY_RP_ID":   "keelovertheedge.com",
 		"KEEL_AGENTS_URL":      "https://agents.keelovertheedge.com/mcp",
+		"KEEL_ACCESS_TEAM":     "keel.cloudflareaccess.com",
+		"KEEL_ACCESS_AUD":      "4714c1358e65fe4b408ad6d432a5f878f08194bdb4752441fd56faefa9b2b6f2",
+		"KEEL_STATUS_BOATS":    "0",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +100,7 @@ func TestLoadValid(t *testing.T) {
 		MetricsAddr: "0.0.0.0:9091", LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
 		BoatLimit: 2, SpectatorLimit: 1, CrewLimit: DefaultCrewLimit, AISilence: 90 * time.Second, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
 		Schedule: c.Schedule, WorldKeep: 2 * time.Hour,
+		AccessTeam: "keel.cloudflareaccess.com", AccessAUD: "4714c1358e65fe4b408ad6d432a5f878f08194bdb4752441fd56faefa9b2b6f2",
 	}
 	if c.Schedule.Every != 10*time.Minute {
 		t.Errorf("the schedule %v", c.Schedule)
@@ -187,6 +192,10 @@ func TestLoadRejects(t *testing.T) {
 		"silence not a duration": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AI_SILENCE": "3"}, []string{"KEEL_AI_SILENCE"}},
 		"too many boats":         {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "4097"}, []string{"KEEL_BOAT_LIMIT"}},
 		"boats not number":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "lots"}, []string{"KEEL_BOAT_LIMIT"}},
+		"access team a url":      {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_ACCESS_TEAM": "https://keel.cloudflareaccess.com"}, []string{"KEEL_ACCESS_TEAM"}},
+		"access team one label":  {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_ACCESS_TEAM": "keel"}, []string{"KEEL_ACCESS_TEAM"}},
+		"access aud":             {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_ACCESS_AUD": "a b"}, []string{"KEEL_ACCESS_AUD"}},
+		"status boats":           {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_STATUS_BOATS": "101"}, []string{"KEEL_STATUS_BOATS", "from 0 to 100"}},
 		"everything wrong": {
 			map[string]string{
 				"KEEL_PLAY_ADDR": "x", "KEEL_AGENTS_ADDR": "y", "KEEL_INTERNAL_ADDR": "z",
@@ -210,5 +219,19 @@ func TestLoadRejects(t *testing.T) {
 				t.Errorf("error %q shows the password", err)
 			}
 		})
+	}
+}
+
+// TestAccess: the website's status is behind Access only with both its
+// settings; with either alone, it is not.
+func TestAccess(t *testing.T) {
+	for vars, want := range map[[2]string]bool{
+		{"", ""}: false, {"keel.cloudflareaccess.com", ""}: false, {"", "abc123"}: false,
+		{"keel.cloudflareaccess.com", "abc123"}: true,
+	} {
+		c, err := Load(env(map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_ACCESS_TEAM": vars[0], "KEEL_ACCESS_AUD": vars[1]}))
+		if err != nil || c.Access() != want {
+			t.Errorf("%q: %v, %v", vars, c.Access(), err)
+		}
 	}
 }
