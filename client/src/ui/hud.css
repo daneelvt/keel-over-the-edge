@@ -2408,3 +2408,18 @@
   color: var(--faint);
   cursor: pointer;
 }
+
+/* Less motion asked for: the pushers, keys and controls change at once,
+   without turning or fading. */
+@media (prefers-reduced-motion: reduce) {
+  .pusher-face,
+  .pusher-stem,
+  .hud .sea-key,
+  .menu-steps-mark,
+  .hud .fly-back,
+  .hud .fly-back.shown,
+  .control,
+  .reef-keys {
+    transition: none;
+  }
+}

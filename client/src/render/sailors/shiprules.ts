@@ -804,8 +804,8 @@ export class ShipRules {
 
   constructor(
     readonly plan: { stations: readonly BoatStation[]; ship: ShipPlan },
-    /** Under reduced motion: every walk a cut. */
-    readonly still = false,
+    /** Under reduced motion: every walk a cut. Set again each frame, as the setting may change. */
+    public still = false,
   ) {
     this.graph = new ShipWayGraph(plan.ship.ways);
     this.#keep = keepers(plan.stations);
