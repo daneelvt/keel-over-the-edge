@@ -51,6 +51,7 @@ import {
   OVER_THE_FALLS,
   overhang,
 } from '../edge/over';
+import { keysGo } from '../input/focused';
 import { HelmInput } from '../input/helm';
 import { KeyInput } from '../input/keys';
 import {
@@ -271,17 +272,16 @@ export class Game implements PilotActions {
 
   /** Listens to the keyboard, the camera's pointers and the page's visibility. */
   listen(doc: Document, surface: HTMLElement): void {
-    const typing = (e: Event): boolean => {
-      const t = e.target;
-      return (
-        t instanceof HTMLInputElement ||
-        t instanceof HTMLSelectElement ||
-        t instanceof HTMLTextAreaElement
-      );
-    };
     const free = this.world.freeCam;
     doc.addEventListener('keydown', (e) => {
-      if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) {
+      // Keys go to what has the focus: a field types, a focused key, list
+      // or window has its own (all but Escape), the helm and the sheet
+      // their arrows.
+      const go = keysGo(e.target);
+      if (go === 'typing' || e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+      if (go === 'aside' && e.code !== 'Escape') {
         return;
       }
       if (e.code === 'KeyM' && !e.repeat) {
@@ -307,7 +307,7 @@ export class Game implements PilotActions {
         this.keys.release();
         return;
       }
-      if (this.keys.down(e.code, e.shiftKey)) {
+      if (this.keys.down(e.code, e.shiftKey, go === 'aside' ? 'page' : go)) {
         e.preventDefault();
       }
     });

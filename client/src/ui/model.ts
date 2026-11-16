@@ -257,6 +257,54 @@ export class SheetText {
   }
 }
 
+/** The rudder's greatest angle, degrees, until a kind of boat is known: the Jolly boat's. */
+export const RUDDER_ANGLE = 40;
+
+/**
+ * The helm's words for assistive technology: the rudder's angle the helm
+ * asks for, in whole degrees, and to which side; helm is −1 hard to port
+ * … 1 hard to starboard, rudder the boat's greatest angle in degrees.
+ */
+export function helmText(helm: number, rudder = RUDDER_ANGLE): string {
+  const deg = Math.round(Math.abs(helm) * rudder);
+  if (deg === 0) {
+    return 'Helm amidships';
+  }
+  return `Helm ${deg}° to ${helm < 0 ? 'port' : 'starboard'}`;
+}
+
+/** The helm's aria-valuetext, written only when the whole degree or its side changes. */
+export class HelmText {
+  el: HTMLElement | SVGElement | null = null;
+  #said = '';
+  /** The boat's greatest rudder angle, degrees. */
+  #rudder = RUDDER_ANGLE;
+
+  set(helm: number): void {
+    if (this.el === null) {
+      return;
+    }
+    const text = helmText(helm, this.#rudder);
+    if (text === this.#said) {
+      return;
+    }
+    this.#said = text;
+    this.el.setAttribute('aria-valuetext', text);
+  }
+
+  /** The boat's greatest rudder angle: written afresh at the next setting. */
+  rudder(deg: number): void {
+    this.#rudder = deg;
+    this.#said = '';
+  }
+
+  /** Forgets what was written (a new element was attached). */
+  attach(el: HTMLElement | SVGElement | null): void {
+    this.el = el;
+    this.#said = '';
+  }
+}
+
 /** What the controls are called on a kind of boat, and whether it reefs: the catalog's controls and its sails' reefs. */
 export interface HudControls {
   sheet: { name: string; trim: string; ease: string };
@@ -278,6 +326,8 @@ export interface HudKind {
   controls: { sheet: HudControls['sheet']; reef: readonly string[] };
   physics: {
     rig: { reefs: readonly number[] };
+    /** The rudder's greatest angle, degrees, for the helm's words. */
+    foils?: { rudderAngle: number };
     headsails?: { headsailReefs: readonly number[] };
     square?: { squareForeArea: number; squareAfterArea: number; squareReefs: readonly number[] };
     downwind?: { downwindArea: number };
@@ -422,6 +472,7 @@ export class HudModel {
   readonly helmValue = new Moved((el, v) => el.setAttribute('aria-valuenow', v.toFixed(2)), 0.01);
   readonly sheetValue = new Moved((el, v) => el.setAttribute('aria-valuenow', v.toFixed(2)), 0.01);
   readonly sheetText = new SheetText();
+  readonly helmText = new HelmText();
   /** The clinometer's needle. */
   readonly clinometer = new Moved(rotate, 0.1);
 
@@ -431,6 +482,7 @@ export class HudModel {
   setKind(kind: HudKind): void {
     this.controls.value = controlsOf(kind);
     this.sheetText.words(this.controls.value.sheet);
+    this.helmText.rudder(kind.physics.foils?.rudderAngle ?? RUDDER_ANGLE);
   }
 
   /** Shows a bump's line from now (ms) for BUMP_LINE. */
@@ -490,6 +542,7 @@ export class HudModel {
     // The sail by world time, so a frame's length makes no difference.
     this.sailHold.add(time, out, pose.sailorMode === 0);
     this.sheetText.set(sheet, this.sail.peek());
+    this.helmText.set(helm);
     this.clinometer.set((pose.heel * 180) / Math.PI);
     if (this.held || now - this.#lastWrite < SIGNAL_INTERVAL) {
       return;
