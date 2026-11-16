@@ -411,8 +411,8 @@ describe('the boat’s motion', () => {
     let now = 0;
     for (let t = 0; t < 12; t += 0.05) {
       now += 50;
-      // 6° every 3 s.
-      x.pitchRate = 0.22 * Math.cos(((2 * Math.PI) / 3) * t);
+      // 12° every 3 s.
+      x.pitchRate = 0.44 * Math.cos(((2 * Math.PI) / 3) * t);
       x.heaveRate = 0.5 * Math.cos(((2 * Math.PI) / 3) * t - 0.4);
       x.time = 1000 + t;
       e.update(now, x);

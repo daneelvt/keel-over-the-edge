@@ -6,8 +6,9 @@
 // from the sound's own schedules (the harbour's bell, gulls and mallets,
 // the sea's life's calls, a lighthouse's fog signal, thunder after its
 // flashes, a race's guns and cheers); the boat pitching and heaving in the
-// waves as the sea makes it, so the bow slaps, and its boom crossing in a
-// tack and a gybe. Each repeats every CYCLE seconds, so
+// waves as the sea makes it (as fast and as far as a small boat pitches in
+// the sandbox's seas), so the bow slaps, and its boom crossing in a tack and
+// a gybe. Each repeats every CYCLE seconds, so
 // a scene rendered short measures as one rendered long. The listener sits
 // at the origin looking north.
 
@@ -218,9 +219,9 @@ const fresh: Weather = {
   speed: 3.2,
   sea: 1.2,
   whitecaps: 0.3,
-  pitch: 5,
-  period: 3.5,
-  heave: 0.35,
+  pitch: 5.5,
+  period: 2,
+  heave: 0.2,
 };
 
 export const SCENES: Record<string, Scene> = {
@@ -240,7 +241,16 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   gentle: {
-    weather: { wind: 5, gusts: 0.12, speed: 2, sea: 0.4, whitecaps: 0.05, pitch: 2.5, period: 3 },
+    weather: {
+      wind: 5,
+      gusts: 0.12,
+      speed: 2,
+      sea: 0.4,
+      whitecaps: 0.05,
+      pitch: 2.6,
+      period: 1.6,
+      heave: 0.1,
+    },
     step(engine, t, now) {
       // A gybe.
       bed(engine, this.weather, t, now, 0, crossing('gybe', 19, 21, t));
@@ -263,9 +273,9 @@ export const SCENES: Record<string, Scene> = {
       speed: 4.4,
       sea: 2.6,
       whitecaps: 0.8,
-      pitch: 8,
-      period: 5,
-      heave: 0.9,
+      pitch: 7.2,
+      period: 2.4,
+      heave: 0.4,
     },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);
@@ -293,8 +303,8 @@ export const SCENES: Record<string, Scene> = {
       whitecaps: 0.6,
       rain: 20,
       pitch: 6,
-      period: 4,
-      heave: 0.5,
+      period: 2.2,
+      heave: 0.3,
     },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);

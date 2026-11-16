@@ -2,8 +2,9 @@
 
 // The boat's motion's sounds, from scripted physics: a slap each time the
 // bow, having fallen fast enough, turns and rises, louder the harder it
-// fell and the faster the hull dropped, and none in a gentle swell or more
-// often than the least gap; the sheet in a tack and the boom in a gybe as
+// fell and the faster the hull dropped, and none in a gentle swell, none in
+// a light breeze's short sea (as the boats pitch in the sandbox's), and
+// none more often than the least gap; the sheet in a tack and the boom in a gybe as
 // the boom crosses the centreline, and nothing while it hangs there.
 
 import { describe, expect, test } from 'vitest';
@@ -30,8 +31,8 @@ function slapsOf(a: number, T: number, h: number, seconds: number): { at: number
 
 describe('the slaps', () => {
   test('one each time the bow turns from falling to rising, in a sea that makes it fall fast', () => {
-    // 6° of pitch every 3 s: a peak rate of 0.22 rad/s.
-    const s = slapsOf((6 * Math.PI) / 180, 3, 0.4, 30);
+    // 12° of pitch every 3 s: a peak rate of 0.44 rad/s.
+    const s = slapsOf((12 * Math.PI) / 180, 3, 0.4, 30);
     expect(s.length).toBeGreaterThanOrEqual(9);
     expect(s.length).toBeLessThanOrEqual(10);
     // Each where the bow turns up: at the troughs, ¾ of a period in.
@@ -46,14 +47,19 @@ describe('the slaps', () => {
     expect(slapsOf(Math.PI / 180, 6, 0.3, 60)).toHaveLength(0);
   });
 
+  test('none in a light breeze’s short sea, where a small boat pitches fast but little', () => {
+    // 2° every 1.5 s: 0.15 rad/s at most, as a skiff pitches at 12 knots.
+    expect(slapsOf((2 * Math.PI) / 180, 1.5, 0.1, 60)).toHaveLength(0);
+  });
+
   test('louder the harder the bow fell, and the faster the hull dropped', () => {
     const level = (a: number, h: number): number => slapsOf(a, 3, h, 10)[0]?.slap.level ?? 0;
-    const small = level((3 * Math.PI) / 180, 0.4);
-    const big = level((8 * Math.PI) / 180, 0.4);
+    const small = level((8 * Math.PI) / 180, 0.4);
+    const big = level((14 * Math.PI) / 180, 0.4);
     expect(small).toBeGreaterThan(0);
     expect(big).toBeGreaterThan(small);
-    const still = level((8 * Math.PI) / 180, 0);
-    const dropping = level((8 * Math.PI) / 180, 1);
+    const still = level((14 * Math.PI) / 180, 0);
+    const dropping = level((14 * Math.PI) / 180, 1);
     expect(dropping).toBeGreaterThan(still);
     expect(still).toBeCloseTo(dropping * (1 - MIX.slaps.heave), 6);
     expect(dropping).toBeLessThanOrEqual(MIX.slaps.level);
@@ -67,7 +73,7 @@ describe('the slaps', () => {
   });
 
   test('each slap its own seed', () => {
-    const s = slapsOf((6 * Math.PI) / 180, 3, 0.4, 12);
+    const s = slapsOf((12 * Math.PI) / 180, 3, 0.4, 12);
     expect(new Set(s.map((x) => x.slap.seed)).size).toBe(s.length);
   });
 });
