@@ -86,9 +86,22 @@ export function counted(path: string, type: string): boolean {
 
 /**
  * A finished request: as the wire carried it, as it would have without the
- * rule, and uncompressed.
+ * rule, and uncompressed; its times from the navigation's start.
  */
-export async function measure(req: Request, origin: number): Promise<Response | null> {
+export async function measure(
+  taken: Promise<Response | null>,
+  origin: number,
+): Promise<Response | null> {
+  const r = await taken;
+  return r === null ? null : { ...r, start: r.start - origin, end: r.end - origin };
+}
+
+/**
+ * A request read as it finishes, its times from the clock's zero: a
+ * service worker's request can be read only while the worker runs, and
+ * the browser stops an idle worker soon after.
+ */
+async function take(req: Request): Promise<Response | null> {
   const res = await req.response();
   // A page's request the service worker answered: what it fetched from the
   // network, if anything, is the worker's own request, counted as such.
@@ -115,15 +128,20 @@ export async function measure(req: Request, origin: number): Promise<Response | 
     raw,
     sent,
     before,
-    start: t.startTime - origin,
-    end: t.startTime + t.responseEnd - origin,
+    start: t.startTime,
+    end: t.startTime + t.responseEnd,
   };
 }
 
-/** Every request the context makes, kept to be measured once it is over. */
-export function record(context: BrowserContext): Request[] {
-  const finished: Request[] = [];
-  context.on('requestfinished', (r) => finished.push(r));
+/** Every request the context makes, read as it finishes, to be measured. */
+export function record(context: BrowserContext): Promise<Response | null>[] {
+  const finished: Promise<Response | null>[] = [];
+  context.on('requestfinished', (r) => {
+    const taken = take(r);
+    // A tally that drops it is no failure; one that awaits it still fails.
+    taken.catch(() => {});
+    finished.push(taken);
+  });
   return finished;
 }
 
