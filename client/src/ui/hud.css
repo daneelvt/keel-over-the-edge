@@ -1050,6 +1050,18 @@
   font-size: 13px;
 }
 
+.menu-sound {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.menu-range-value {
+  min-width: 4ch;
+  text-align: right;
+}
+
 .menu-range input {
   flex: 1;
   min-width: 0;

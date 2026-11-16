@@ -18,6 +18,8 @@
 //
 // Watching another sailor's boat, nothing the player holds steers it: the
 // keys move no control, and the free camera is not offered.
+//
+// M turns the sound off and on, saying so under the readout.
 
 import { effect, signal } from '@preact/signals';
 import { CHEER, type CheerSound, cheerOf } from '../audio/cheer';
@@ -72,6 +74,7 @@ import type { SeaScene } from '../render/scene';
 import { HOURS, hourAt, skyPeriods } from '../sky/skytime';
 import { HudModel, PUSHED_OFF } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
+import { soundNotice } from '../ui/soundwords';
 import { bumpLine } from '../ui/verdict';
 import { bumpedLine } from '../ui/watchwords';
 import { STEPS_PER_SECOND, WorldClock } from './clock';
@@ -218,6 +221,7 @@ export class Game implements PilotActions {
       world.stage.cap.limit = s.frameRate;
       world.setDetail(s.detail);
       world.sky.nightLight = s.nightLight;
+      this.sound.volumes(s.volume, s.seaVolume, s.soundsVolume);
       this.sound.enabled = s.sound;
       this.helm.centreOnRelease = s.centreHelm;
       world.overlays.set(s.windOverlay, s.forcesOverlay);
@@ -256,6 +260,13 @@ export class Game implements PilotActions {
     this.loop.accumulator = 0;
   }
 
+  /** Turns the sound off or on, as the M key does, saying so under the readout from now (ms). */
+  toggleSound(now: number): void {
+    const on = !this.settings.value.value.sound;
+    this.settings.set({ sound: on });
+    this.hud.showBump(soundNotice(on), now);
+  }
+
   /** Listens to the keyboard, the camera's pointers and the page's visibility. */
   listen(doc: Document, surface: HTMLElement): void {
     const typing = (e: Event): boolean => {
@@ -269,6 +280,11 @@ export class Game implements PilotActions {
     const free = this.world.freeCam;
     doc.addEventListener('keydown', (e) => {
       if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+      if (e.code === 'KeyM' && !e.repeat) {
+        this.toggleSound(e.timeStamp);
+        e.preventDefault();
         return;
       }
       if (e.code === 'KeyF' && !e.repeat && this.canFly()) {

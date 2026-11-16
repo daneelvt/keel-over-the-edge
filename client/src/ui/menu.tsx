@@ -4,7 +4,8 @@
 // device's settings. How light the night is drawn, first, the sea showing
 // the change behind the menu as the slider moves; the frame rate (60, or 30
 // to save battery), how much the sea is drawn with (as much as the device
-// runs well, or the least), sound, the beginners' overlays, whether
+// runs well, or the least), the sound (its switch, and how loud it all is,
+// the sea and wind, and every other sound), the beginners' overlays, whether
 // the helm returns to the centre when let go, and whether the camera comes
 // back behind the boat by itself. The full screen where the
 // page can take it, with how to install the game where that gives more of
@@ -34,6 +35,7 @@ import type { RacesView } from './raceslazy';
 import { MAKE_A_RACE, whenLine } from './racewords';
 import type { SettingsSignal } from './settings';
 import { SHIPMATES } from './shipmatewords';
+import { percentText, SEA_AND_WIND, SOUND, SOUNDS, VOLUME } from './soundwords';
 import { useWatch, type WatchView } from './watchlazy';
 import { STOP_WATCHING, WATCH_A_SAILOR } from './watchwords';
 
@@ -121,6 +123,69 @@ function NightLight({ settings }: { settings: SettingsSignal }) {
         <span aria-hidden="true">Light</span>
       </div>
     </div>
+  );
+}
+
+/** A slider of the Sound block, as Night light's, its value shown as a percentage, applied as it moves. */
+function SoundSlider({
+  id,
+  label,
+  value,
+  set,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  set: (v: number) => void;
+}) {
+  return (
+    <div class="menu-range">
+      <label for={id}>{label}</label>
+      <div class="menu-range-row">
+        <input
+          id={id}
+          type="range"
+          name={id}
+          min={0}
+          max={1}
+          step={0.05}
+          value={value}
+          aria-valuetext={percentText(value)}
+          onInput={(e) => set(Number(e.currentTarget.value))}
+        />
+        <span class="menu-range-value" aria-hidden="true">
+          {percentText(value)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** The sound: its switch, the mute, and how loud it all is, the sea and wind, and every other sound. */
+function SoundBlock({ settings }: { settings: SettingsSignal }) {
+  const s = settings.value.value;
+  return (
+    <fieldset class="menu-sound" aria-label={SOUND}>
+      <Toggle name="sound" label={SOUND} on={s.sound} set={(sound) => settings.set({ sound })} />
+      <SoundSlider
+        id="volume"
+        label={VOLUME}
+        value={s.volume}
+        set={(volume) => settings.set({ volume })}
+      />
+      <SoundSlider
+        id="sea-volume"
+        label={SEA_AND_WIND}
+        value={s.seaVolume}
+        set={(seaVolume) => settings.set({ seaVolume })}
+      />
+      <SoundSlider
+        id="sounds-volume"
+        label={SOUNDS}
+        value={s.soundsVolume}
+        set={(soundsVolume) => settings.set({ soundsVolume })}
+      />
+    </fieldset>
   );
 }
 
@@ -417,12 +482,7 @@ export function Menu({
               <option value="low">Low</option>
             </select>
           </label>
-          <Toggle
-            name="sound"
-            label="Sound"
-            on={s.sound}
-            set={(sound) => settings.set({ sound })}
-          />
+          <SoundBlock settings={settings} />
           <Toggle
             name="show-cheers"
             label="Show cheers in a race"
