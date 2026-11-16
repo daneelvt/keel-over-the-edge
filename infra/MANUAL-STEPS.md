@@ -402,6 +402,13 @@ Check:
      | Zone | Zone WAF Rules | Edit |
      | Zone | Bot Management | Edit |
      | Zone | Cache Settings | Edit |
+     | Account | Access: Apps and Policies | Edit |
+     | Account | Access: Service Tokens | Edit |
+     | Account | Access: Organizations, Identity Providers, and Groups | Read |
+     | Account | Workers Scripts | Edit |
+     | Account | Workers KV Storage | Edit |
+     | Zone | Workers Routes | Edit |
+     | Zone | Single Redirect | Edit |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
      zone, `keelovertheedge.com`.
@@ -416,6 +423,13 @@ Check:
    This is where the list starts: the first `plan` and `apply` show what is
    missing (an error naming the endpoint refused) or unused, and this table
    is corrected to the final list.
+
+   The last seven are the website's (section 16): the Access application,
+   its policy and service token in front of the game's status, and reading
+   the Zero Trust organisation's team domain; the Worker, its KV namespace
+   and its custom domain at the apex; and the redirects (www. to the apex,
+   the apex's `/play` to the game). A token made before them is **edited** to add them (Account API
+   Tokens → `accounts` → Edit): its value stays the same.
 3. Cloudflare shows the token once. In `keel-accounts`, Production,
    `accounts`, **Add Secret** `CLOUDFLARE_API_TOKEN`.
 4. On the zone's **Overview**, copy the **Account ID** and **Zone ID** as
@@ -849,6 +863,57 @@ Check:
 - **The client secret**: GitHub keeps two at once. Generate a new one,
   paste it over `GITHUB_APP_CLIENT_SECRET`, force the sync, restart the
   keeper, sign in on the page once, then delete the old one.
+
+## 16. Cloudflare: the website's Access and its token
+
+The game's status, `GET /api/status` on `play.`, is the website's alone:
+an Access application in front of that one path lets through the
+website's Worker's service token and nothing else, and keel checks the
+token Access signs every request with (`infra/tofu/access.tf`,
+docs/development.md, "`/api/status`"). OpenTofu makes the application, its
+policy and the token; it reads the team's domain and the application's
+audience tag from Cloudflare and writes both to `keel-cluster`'s
+`/keel-access/`, which the cluster reads into keel's settings
+(`KEEL_ACCESS_TEAM`, `KEEL_ACCESS_AUD`). Nothing is copied by hand but
+what follows.
+
+1. The `accounts` token has the website's permissions (section 11).
+2. **Zero Trust → Settings → Team name and domain**: note the team domain
+   (`<team>.cloudflareaccess.com`) in the pull request that first applies
+   `access.tf`. OpenTofu reads it itself; the note is for checking.
+3. Run **`accounts`** with `plan`, then `apply`. Its summary makes the
+   application, the policy, the token, the KV namespace, the redirects,
+   `www.`'s record, the token's expiry e-mail and `/keel-access/`'s two
+   values.
+4. keel reads its settings when it starts: once `/keel-access/` holds both
+   (at once: `kubectl -n keel annotate externalsecret keel-access
+   force-sync=$(date +%s) --overwrite`), restart it
+   (`kubectl -n keel rollout restart deployment/keel`) in a quiet hour.
+   Until then it serves no status at all, which is safe: the website rests.
+
+Check:
+
+- [ ] `curl -sI https://play.keelovertheedge.com/api/status` answers 401
+      or 403 from Cloudflare, with no `cf-cache-status: HIT`.
+- [ ] keel's log at start has no "the website's status is not served".
+- [ ] A request through Access with the token but a forged
+      `Cf-Access-Jwt-Assertion` is refused by keel, 403 `access`: from the
+      machine, `curl -s -H 'Cf-Access-Jwt-Assertion: x' http://<keel's pod
+      IP>:8080/api/status`.
+
+### Renewing the website's token, every year
+
+The service token lasts a year. Cloudflare e-mails the owner a week before
+it ends ("Access service token expiring"); put the date in your calendar
+too, a fortnight before. To renew it: in `infra/tofu/access.tf`, raise
+`website_token_term` by one, by a pull request, and run `accounts` with
+`apply`. The token is replaced, a new one for a year from then, and the
+same run's deploy hands the Worker its new ID and secret. Between the two
+the map rests on its last good copy.
+
+To rotate only its secret (one that may have leaked): raise
+`website_token_generation` and set `website_token_old_until` an hour
+after you will apply; the old secret is let through until then.
 
 ## If something fails
 

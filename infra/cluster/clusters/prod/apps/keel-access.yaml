@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# keel's settings for the website's status, behind Cloudflare Access: the
+# team's domain and the Access application's audience tag, which the
+# accounts workflow's OpenTofu writes to keel-cluster's folder
+# /keel-access/ from Cloudflare itself (infra/tofu/access.tf). Neither is
+# a secret, but this is how a value OpenTofu learns reaches the cluster.
+#
+# Until they are there, a missing value leaves its key out rather than
+# failing (deletionPolicy Merge, as for keel-agreement), and keel, which
+# names both keys optional, starts without them: the status is then not
+# served at all. keel reads them when it starts: after a change, restart
+# it.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keel-access
+  namespace: keel
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical
+  target:
+    name: keel-access
+    creationPolicy: Owner
+    deletionPolicy: Merge
+  data:
+    - secretKey: KEEL_ACCESS_TEAM
+      remoteRef:
+        key: /keel-access/KEEL_ACCESS_TEAM
+    - secretKey: KEEL_ACCESS_AUD
+      remoteRef:
+        key: /keel-access/KEEL_ACCESS_AUD

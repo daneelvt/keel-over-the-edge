@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The zone's records: play., agents., and what keeps certificates and
-# e-mail from being issued or sent in the domain's name. Nothing else: no
-# apex or www record yet.
+# e-mail from being issued or sent in the domain's name. The apex's record
+# is the website's Worker's, made by its custom domain; www.'s placeholder
+# is with the website's redirects (website.tf).
 
 # play. through Cloudflare to the tunnel.
 resource "cloudflare_dns_record" "play" {

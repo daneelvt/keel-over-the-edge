@@ -8,10 +8,9 @@
 # addresses under /w/ (public, a year, immutable; any other address there is
 # a 404 the game marks no-store). Cloudflare would cache .bin files by
 # their extension alone, but the rule says so whatever its default list
-# becomes. The game's status, which the website reads, is cached as the
-# game says (30 s), so the website's readers never reach the game. The page
-# and the rest of the API are not cached: Cloudflare caches neither by
-# default, and the page says no-cache.
+# becomes. The page and the rest of the API are not cached: Cloudflare
+# caches neither by default, and the page says no-cache. The game's status
+# is never cached: it is behind Access (access.tf), and says no-store.
 resource "cloudflare_ruleset" "cache" {
   zone_id = var.cloudflare_zone_id
   name    = "cache"
@@ -33,17 +32,6 @@ resource "cloudflare_ruleset" "cache" {
       ref         = "chunks"
       description = "The world's chunks, as long as the origin says"
       expression  = "(http.host eq \"${local.play}\" and starts_with(http.request.uri.path, \"/w/\"))"
-      action      = "set_cache_settings"
-      action_parameters = {
-        cache       = true
-        edge_ttl    = { mode = "respect_origin" }
-        browser_ttl = { mode = "respect_origin" }
-      }
-    },
-    {
-      ref         = "status"
-      description = "The game's status, as long as the origin says"
-      expression  = "(http.host eq \"${local.play}\" and http.request.uri.path eq \"/api/status\")"
       action      = "set_cache_settings"
       action_parameters = {
         cache       = true
@@ -105,7 +93,9 @@ resource "cloudflare_ruleset" "firewall" {
 
 # Accounts are made with no human check yet: a burst of them from one
 # address is stopped at the edge. Signing in is never limited. The free plan's one rate rule: its expression may
-# name the path alone, counting is per address (and per Cloudflare data
+# name the path alone, not the host, so it counts the path on every host:
+# only play. answers it, and the website's /account/begin is a page not
+# found anyway. Counting is per address (and per Cloudflare data
 # centre, which every rule counts by), over 10 s, blocking for 10 s
 # (Cloudflare's rate limiting rules, availability).
 resource "cloudflare_ruleset" "rate" {
@@ -129,16 +119,20 @@ resource "cloudflare_ruleset" "rate" {
   ]
 }
 
-# Nothing added to the game's page: Cloudflare puts its Web Analytics
-# beacon (Real User Monitoring, a script from static.cloudflareinsights.com)
-# into every HTML answer of a proxied zone unless told not to, and Zaraz
-# would add its own. The page loads its own scripts alone.
+# Nothing added to the game's page or the website's: Cloudflare puts its
+# Web Analytics beacon (Real User Monitoring, a script from
+# static.cloudflareinsights.com) into every HTML answer of a proxied zone
+# unless told not to, and Zaraz would add its own. Each page loads its own
+# scripts alone, and the website counts no one.
 #
 # AI apps call the MCP address and the token addresses from their servers,
 # in data centres whose addresses Cloudflare's Security Level scores as
 # threats, and with no browser's headers, which Browser Integrity Check
 # refuses: neither is a challenge they can answer, so both are off there.
 # The game's own checks and limits hold the line, as for every player.
+# The website's Worker reads the game's status the same way, from
+# Cloudflare's own servers with no browser's headers: both are off at that
+# one address too, where Access lets through its token alone.
 # GitHub's deliveries to the contributor agreement keeper's webhook are
 # the same, from GitHub's servers with no browser's headers: both are off
 # at that one address, where the keeper checks each delivery's signature
@@ -151,8 +145,8 @@ resource "cloudflare_ruleset" "config" {
   rules = [
     {
       ref         = "nothing-injected"
-      description = "No script of Cloudflare's in the game's page"
-      expression  = "(http.host eq \"${local.play}\")"
+      description = "No script of Cloudflare's in the game's page or the website's"
+      expression  = "(http.host in {\"${local.play}\" \"${local.domain}\"})"
       action      = "set_config"
       action_parameters = {
         disable_rum   = true
@@ -163,6 +157,16 @@ resource "cloudflare_ruleset" "config" {
       ref         = "ai-apps"
       description = "No challenge for AI apps' servers at the MCP address and the token addresses"
       expression  = "(http.host eq \"${local.agents}\" or (http.host eq \"${local.play}\" and http.request.uri.path in ${local.oauth_path_set}))"
+      action      = "set_config"
+      action_parameters = {
+        security_level = "essentially_off"
+        bic            = false
+      }
+    },
+    {
+      ref         = "website-status"
+      description = "No challenge for the website's Worker at the game's status, behind Access"
+      expression  = "(http.host eq \"${local.play}\" and http.request.uri.path eq \"/api/status\")"
       action      = "set_config"
       action_parameters = {
         security_level = "essentially_off"
