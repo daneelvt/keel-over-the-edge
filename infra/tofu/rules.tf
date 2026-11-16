@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The zone's rules: what Cloudflare caches, what it refuses, and how fast
-# one address may make accounts. Each phase has one ruleset per zone, its
+# The zone's rules: what Cloudflare caches, compresses and refuses, and how
+# fast one address may make accounts. Each phase has one ruleset per zone, its
 # entry point, so each ruleset here holds every rule of its phase.
 
 # The page's hashed assets are cached at the edge for as long as the game
@@ -49,6 +49,34 @@ resource "cloudflare_ruleset" "cache" {
         cache       = true
         edge_ttl    = { mode = "respect_origin" }
         browser_ttl = { mode = "respect_origin" }
+      }
+    },
+  ]
+}
+
+# The page's models, its sky and its terrain compressed on the way to the
+# player. Cloudflare compresses only the types on its own list, which has
+# the scripts, styles, fonts and WebAssembly, but neither the models
+# (model/gltf-binary) nor the other binary assets (application/octet-stream):
+# they went out as the game sent them, twice their gzipped size, on every
+# new player's first download. A Compression Rule sets the algorithms for a
+# response it matches, a type off the list too (Cloudflare's own example
+# does so for CSV files), by the response's media type. Zstandard first, as
+# the zone's default compression is, then Brotli and gzip, then whatever
+# the browser takes. One of the free plan's ten.
+resource "cloudflare_ruleset" "compression" {
+  zone_id = var.cloudflare_zone_id
+  name    = "compression"
+  kind    = "zone"
+  phase   = "http_response_compression"
+  rules = [
+    {
+      ref         = "binary-assets"
+      description = "The page's models and binary assets, compressed"
+      expression  = "(http.host eq \"${local.play}\" and starts_with(http.request.uri.path, \"/assets/\") and http.response.content_type.media_type in {\"model/gltf-binary\" \"application/octet-stream\"})"
+      action      = "compress_response"
+      action_parameters = {
+        algorithms = [{ name = "zstd" }, { name = "brotli" }, { name = "gzip" }, { name = "auto" }]
       }
     },
   ]
