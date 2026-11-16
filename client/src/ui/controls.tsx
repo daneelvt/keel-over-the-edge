@@ -198,8 +198,7 @@ export function Reef({ actions, model }: { actions: ReefActions; model: HudModel
         disabled={level >= REEFS}
         onClick={() => actions.setReef(level + 1)}
       >
-        <span class="reef-name">Reef</span>
-        <span class="reef-level">{words}</span>
+        <span class="reef-name">Reef</span> <span class="reef-level">{words}</span>
       </button>
       {level > 0 ? (
         <button

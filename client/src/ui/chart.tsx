@@ -1129,15 +1129,16 @@ export function PocketChart({
                 {z}
               </span>
             ))}
-            {caption.lines.map((l, i) => (
+            {caption.lines.map((l, i) => [
+              i > 0 ? ' ' : null,
               <span
                 key={i}
                 class={`pocket-line${i > 0 ? ` pocket-left${closing ? ' closing' : ''}` : ''}`}
                 data-readout={i > 0 ? 'falls' : undefined}
               >
                 {l}
-              </span>
-            ))}
+              </span>,
+            ])}
           </span>
         </button>
         {pusher ? (
