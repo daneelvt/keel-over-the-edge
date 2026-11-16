@@ -26,7 +26,7 @@ import { drawLook, type Looks } from '../catalog/looks';
 import { loadRaces, type RacesView } from '../ui/raceslazy';
 import { MAKE_TO_RACE } from '../ui/racewords';
 import { useWatch } from '../ui/watchlazy';
-import { MAKE_TO_WATCH } from '../ui/watchwords';
+import { type ListLink, MAKE_TO_WATCH } from '../ui/watchwords';
 import { BoatChooser } from './boatchooser';
 import { LookChooser } from './chooser';
 import { AgeQuestion, BornFields } from './firstasks';
@@ -594,6 +594,7 @@ function Sailor({
   boats: cat,
   fetcher,
   races,
+  opening,
 }: {
   first: boolean;
   me: Me;
@@ -605,12 +606,14 @@ function Sailor({
   fetcher?: Fetch | undefined;
   /** Races ashore, Make a race offered beside Set sail; none for no key. */
   races?: RacesView | undefined;
+  /** Opened by a link into the list of sailors to watch: the list, or one picked from it. */
+  opening?: ListLink | undefined;
 }) {
   const [asking, setAsking] = useState(() => given.born === false && !askedAge);
   askedAge ||= asking;
   const machines = first || (given.machines ?? 0) > 0;
   const m = useMachines(machines);
-  const [listing, setListing] = useState(false);
+  const [listing, setListing] = useState(opening !== undefined);
   const w = useWatch(listing);
   // The player's look, changed here before setting sail.
   const chooser = useMemo(
@@ -673,6 +676,7 @@ function Sailor({
       ) : m !== null ? (
         <m.MachineStart
           first={first}
+          opening={opening}
           done={go}
           me={me}
           voyage={v}
@@ -687,6 +691,7 @@ function Sailor({
             ask={() => false}
             close={() => setListing(false)}
             className="start-panel watch-list-start"
+            pick={opening === 'pick'}
           />
         )
       ) : machines ? (
@@ -770,7 +775,8 @@ export function showStartScreen(parent: HTMLElement, props: Omit<StartProps, 'do
  * chosen to watch, then removes it; with the catalog's looks, the player
  * may change theirs there, on the picker's stage if there is one; with its
  * boats, choose their boat from the fleet and set its look; with races,
- * make a race before setting sail.
+ * make a race before setting sail; opened by a link into the list of
+ * sailors to watch, the list in its place, or one picked from it.
  */
 export function showSailor(
   parent: HTMLElement,
@@ -779,10 +785,12 @@ export function showSailor(
   stage?: LookStage,
   boats?: BoatCatalog,
   races?: RacesView,
+  opening?: ListLink,
 ): Promise<Me> {
   return mount(parent, (done) => (
     <Sailor
       first={false}
+      opening={opening}
       me={me}
       voyage={voyage(me)}
       done={done}

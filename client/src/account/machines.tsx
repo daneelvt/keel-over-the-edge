@@ -37,6 +37,7 @@ import {
   FLEET_DETAIL,
   fleetLink,
   fleetShareText,
+  type ListLink,
   MAKE_NEW_LINK,
   SHARE_FLEET,
   SHARE_SAILOR,
@@ -506,7 +507,16 @@ function MachinesBody({
 }
 
 /** The list of every sailor one may watch, once its module is loaded. */
-function StartWatchList({ choose, close }: { choose: (name: string) => void; close: () => void }) {
+function StartWatchList({
+  choose,
+  close,
+  pick = false,
+}: {
+  choose: (name: string) => void;
+  close: () => void;
+  /** One picked at once, as Pick one for me does. */
+  pick?: boolean;
+}) {
   const m = useWatch();
   return m === null ? null : (
     <m.WatchList
@@ -514,6 +524,7 @@ function StartWatchList({ choose, close }: { choose: (name: string) => void; clo
       ask={() => false}
       close={close}
       className="start-panel watch-list-start"
+      pick={pick}
     />
   );
 }
@@ -587,6 +598,7 @@ export function MachineStart({
   chooser,
   boats,
   out,
+  opening,
 }: {
   first: boolean;
   done: (watch?: string) => void;
@@ -598,11 +610,19 @@ export function MachineStart({
   boats?: BoatChooser | undefined;
   /** The boat still in the water, and the question before it is taken out. */
   out?: TakeOut | undefined;
+  /** Opened by a link into the list of sailors to watch: the list, or one picked from it. */
+  opening?: ListLink | undefined;
 }) {
   const { page, setPage, problem, fleet } = usePage(boats?.fleet.value);
-  const [listing, setListing] = useState(false);
+  const [listing, setListing] = useState(opening !== undefined);
   if (listing) {
-    return <StartWatchList choose={(name) => done(name)} close={() => setListing(false)} />;
+    return (
+      <StartWatchList
+        choose={(name) => done(name)}
+        close={() => setListing(false)}
+        pick={opening === 'pick'}
+      />
+    );
   }
   return (
     <StartPair

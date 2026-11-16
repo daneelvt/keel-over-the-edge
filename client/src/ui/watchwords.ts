@@ -150,6 +150,28 @@ export function linkFromQuery(query: URLSearchParams): WatchLink | null {
   return CODE.test(f) ? { kind: 'fleet', code: f } : null;
 }
 
+/**
+ * The query of the links into the list of sailors to watch, as the website
+ * gives them: ?watch opens the list, ?watch=pick picks one at once, as Pick
+ * one for me does. Neither names a sailor.
+ */
+export const LIST_PARAM = 'watch';
+const PICK = 'pick';
+
+/** What a link into the list asks: the list, or one picked from it. */
+export type ListLink = 'list' | 'pick';
+
+/** The address that opens the list of sailors to watch, or picks one from it, on this origin. */
+export function listLink(origin: string, ask: ListLink): string {
+  return ask === 'pick' ? `${origin}/?${LIST_PARAM}=${PICK}` : `${origin}/?${LIST_PARAM}`;
+}
+
+/** The link into the list a page was opened at, from its query; null for none, or for anything but the two. */
+export function listFromQuery(query: URLSearchParams): ListLink | null {
+  const v = query.get(LIST_PARAM);
+  return v === '' ? 'list' : v === PICK ? 'pick' : null;
+}
+
 /** The share of the player's own link, of a machine sailor's, and of their fleet's. */
 export const SHARE_ME = 'Share a link to watch me';
 export const SHARE_SAILOR = 'Share a link to watch';

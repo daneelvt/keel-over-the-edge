@@ -67,6 +67,8 @@ import {
   type LinkRefusal,
   linkFromQuery,
   linkRefusedText,
+  listFromQuery,
+  listLink,
   NEWS,
   nowWatchableText,
   SAIL,
@@ -140,6 +142,25 @@ describe('watching’s words', () => {
     expect(linkFromQuery(new URLSearchParams('w=Iron%20Mary'))).toBeNull();
     expect(linkFromQuery(new URLSearchParams('w='))).toBeNull();
     expect(linkFromQuery(new URLSearchParams(`w=${'a'.repeat(33)}`))).toBeNull();
+  });
+
+  test('the links into the list, the list or one picked, and never a name', () => {
+    const list = listLink('https://play.keelovertheedge.com', 'list');
+    expect(list).toBe('https://play.keelovertheedge.com/?watch');
+    expect(listFromQuery(new URL(list).searchParams)).toBe('list');
+    const pick = listLink('https://play.keelovertheedge.com', 'pick');
+    expect(pick).toBe('https://play.keelovertheedge.com/?watch=pick');
+    expect(listFromQuery(new URL(pick).searchParams)).toBe('pick');
+    expect(listFromQuery(new URLSearchParams('test&watch='))).toBe('list');
+    expect(listFromQuery(new URLSearchParams('test&watch=pick'))).toBe('pick');
+    // Neither is a link to watch a sailor.
+    expect(linkFromQuery(new URL(list).searchParams)).toBeNull();
+    expect(linkFromQuery(new URL(pick).searchParams)).toBeNull();
+    // None, and a name or anything else is no link at all.
+    expect(listFromQuery(new URLSearchParams('test'))).toBeNull();
+    expect(listFromQuery(new URLSearchParams('watch=Iron%20Mary'))).toBeNull();
+    expect(listFromQuery(new URLSearchParams('watch=PICK'))).toBeNull();
+    expect(listFromQuery(new URLSearchParams('w=pick'))).toBeNull();
   });
 
   test('a link shared: its text, the link last; and a picture’s words', () => {

@@ -22,7 +22,9 @@
 // Set sail with why and ☆ Follow, they follow, and are told there once the
 // sailor lets others watch, and a reload watches. A fleet's link watches
 // its machine sailor without saying whose, This fleet in the list; Make a
-// new link stops the old one.
+// new link stops the old one. The website's links into the list: ?watch
+// opens it once the visitor has made a sailor, and ?watch=pick watches
+// one of those at sea at once.
 //
 // Then a hidden tab: the page put behind another for a while and brought
 // back, watching and then sailing, snaps to where the boat is now under
@@ -482,6 +484,57 @@ test('a stranger opens a sailor’s link: refused while unticked, follows, is to
     expect(errors).toEqual([]);
   } finally {
     await strangers.close();
+  }
+});
+
+test('the website’s links into the list: ?watch opens it once a sailor is made, ?watch=pick watches one at once', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  // Two machine sailors at sea, so that one can be picked.
+  const digits = stamp();
+  for (const n of [`Picked ${digits}`, `Passed ${digits}`]) {
+    const owner = await browser.newContext();
+    try {
+      await toSea(owner, await sailor(owner, 'Owner'), n);
+    } finally {
+      await owner.close();
+    }
+  }
+  // A visitor from the website, no account: told they will be watching,
+  // makes a sailor, and the list is open in place of their own panel.
+  const visitors = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  try {
+    await visitors.credentials.install();
+    const v = await visitors.newPage();
+    const errors: string[] = [];
+    v.on('pageerror', (e) => errors.push(e.message));
+    await v.goto(`${GAME}&watch`);
+    await expect(v.locator('[data-readout="make-to-watch"]')).toHaveText(
+      'Make a sailor, and you will be watching.',
+      { timeout: 90_000 },
+    );
+    await v.getByLabel('Your sailor’s name').fill(`Visitor ${stamp()}`);
+    await answerBorn(v);
+    await v.getByRole('button', { name: 'Set sail' }).click();
+    await v.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 60_000 });
+    await expect(v.getByRole('heading', { name: 'Watch a sailor' })).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(v.locator('.watch-row').first()).toBeVisible({ timeout: 30_000 });
+    // Seen: the link is gone from the address, so a reload just sails.
+    expect(new URL(v.url()).searchParams.has('watch')).toBe(false);
+
+    // Signed in, Pick one for me's link: straight to a watch.
+    await v.goto(`${GAME}&watch=pick`);
+    await v.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
+    await v.waitForFunction(() => (globalThis.keel.watch().watching?.sailor ?? '') !== '', null, {
+      timeout: 60_000,
+    });
+    expect(new URL(v.url()).searchParams.has('watch')).toBe(false);
+    expect(errors).toEqual([]);
+  } finally {
+    await visitors.close();
   }
 });
 
