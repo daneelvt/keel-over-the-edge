@@ -147,7 +147,7 @@ credentials.
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures of the client's packages and the website's | `go tool govulncheck ./...`, `npm audit signatures` in `client/` and `website/` |
-| `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the Worker built by `wrangler deploy --dry-run`, nothing uploaded | in `website/`, `npm test`, `npm run typecheck`, `npm run build` |
+| `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game, and the art its pictures are | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the pictures' manifest against the files it names, in Node; the Worker built by `wrangler deploy --dry-run`, nothing uploaded | in `website/`, `npm test`, `npm run typecheck`, `npm run build` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
 | `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
@@ -8323,6 +8323,38 @@ npm run build       # wrangler deploy --dry-run into dist/: nothing uploaded
 
 Biome checks it from `client/` (`npx biome ci ../website`, and
 `go run ./tools/dev -lint`).
+
+**The pictures** are the game's own, taken by a script from the sandbox
+(`website/pictures/`), by hand on a Mac with Chrome, never on CI (CI
+draws on a software GPU at the lowest rung). Each picture the page shows
+is one of several takes, and each take is its staging: the sandbox's
+query, the size, the world time frozen at, and a function the page runs
+with the test hooks as the browser tests write them (`takes.ts`).
+`pictures.ts` names each picture's pick, its words for those who cannot
+see it and its widths; the takes it does not pick stay, so any can be
+swapped in. The script starts the client's Vite on a free port from 5290
+to 5299 and stops it after, opens every take in Chrome on WebGPU at the
+best rung, and screenshots it into `website/pictures/raw/` (git ignores
+it); then it encodes the picks to `art/website/`, AVIF and JPEG at their
+widths (an AVIF's quality lowered until it fits its picture's budget:
+the opening's upright frame 120 KB, its wide one 250 KB), and writes
+`art/website/manifest.json`, which the page reads: each picture's words,
+files and sizes, the boat at the edge for each hour at sea (wide, and
+upright for a phone held upright), the title's contrast over the wide
+frames' lower left, and the game's art the page shows as it is (the
+inked portraits, the boats' glyphs with how many each takes aboard). The
+world's pictures need seed 1's world file (`go run ./tools/dev -world 1`).
+
+```sh
+cd website
+npm run pictures                          # every take, then encode the picks
+npm run pictures -- --only edge-dusk,race # the takes whose id starts so
+npm run pictures -- --encode              # encode the raw takes only
+npm run pictures -- --takes               # list the takes
+```
+
+Take them again when the game's look changes: they are the game's, not a
+style of their own.
 
 ### External Secrets
 

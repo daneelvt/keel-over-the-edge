@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Runs only when the website, or what it is built from, changed: its own
 # files, and the chart's painters, fonts and catalog it shares with the
-# game. Biome and tsc over it, its Worker's tests in workerd, and the
-# Worker built as wrangler would deploy it, uploading nothing.
+# game, and the art its pictures are. Biome and tsc over it, its Worker's
+# tests in workerd, its pictures' in Node, and the Worker built as
+# wrangler would deploy it, uploading nothing.
 name: pr.website
 
 on:
@@ -43,6 +44,9 @@ jobs:
               - 'client/src/catalog/catalog.gen.json'
               - 'client/src/fonts/**'
               - 'internal/status/testdata/**'
+              - 'art/website/**'
+              - 'art/glyphs/**'
+              - 'art/sailors/*/*.ink.webp'
 
   website:
     name: website
@@ -69,7 +73,8 @@ jobs:
       - name: tsc
         working-directory: website
         run: npm run typecheck
-      - name: The Worker's tests, in workerd
+      # And the pictures' manifest against the files it names, in Node.
+      - name: The Worker's tests, in workerd, and the pictures'
         working-directory: website
         run: npm test
       - name: The Worker built as wrangler deploys it, nothing uploaded

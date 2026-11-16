@@ -19,5 +19,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "include": ["worker", "vitest.config.ts"]
+  "include": ["worker", "pictures", "vitest.config.ts", "vitest.pictures.config.ts"]
 }
