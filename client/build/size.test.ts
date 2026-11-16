@@ -4,26 +4,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../src/catalog';
-import {
-  eagerAssets,
-  eagerModels,
-  logAsset,
-  newsAsset,
-  SAILOR_BUDGETS,
-  transcoderAsset,
-} from './size';
+import { eagerAssets, logAsset, newsAsset, SAILOR_BUDGETS } from './size';
 
-test('the first download is the page’s scripts, preloaded modules and styles', () => {
+test('a page loads its scripts, preloaded modules and styles before it runs', () => {
   const html = `<script type="module" crossorigin src="/assets/main-1.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/a-2.js">
     <link rel="stylesheet" crossorigin href="/assets/main-3.css">
     <link rel="icon" href="/favicon.png">`;
   expect(eagerAssets(html)).toEqual(['assets/main-1.js', 'assets/a-2.js', 'assets/main-3.css']);
-});
-
-test('the models counted are those the first download names', () => {
-  const scripts = ['const MODELS={"../../../art/boats/jolly.glb":"/assets/jolly-1a.glb"}'];
-  expect(eagerModels(['jolly-1a.glb', 'female-2b.glb'], scripts)).toEqual(['jolly-1a.glb']);
 });
 
 test('the log’s chunk is told from the game’s other chunks', () => {
@@ -121,13 +109,10 @@ test('any person’s look, the player’s own, keeps to the first download’s s
   }
 });
 
-test('the texture transcoder keeps to its budget, and the build names it', () => {
+test('the texture transcoder keeps to its budget', () => {
   const lib = new URL('../node_modules/three/examples/jsm/libs/basis/', import.meta.url);
   const size = ['basis_transcoder.js', 'basis_transcoder.wasm']
     .map((f) => gzipSync(readFileSync(new URL(f, lib)), { level: 9 }).length)
     .reduce((a, b) => a + b, 0);
   expect(size).toBeLessThanOrEqual(SAILOR_BUDGETS.transcoder);
-  expect(transcoderAsset('basis_transcoder-Ab12Cd.wasm')).toBe(true);
-  expect(transcoderAsset('basis_transcoder.js')).toBe(true);
-  expect(transcoderAsset('main-1.js')).toBe(false);
 });

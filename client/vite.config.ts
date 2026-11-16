@@ -200,7 +200,8 @@ export default defineConfig({
   optimizeDeps: { include: ['@bufbuild/protobuf', '@bufbuild/protobuf/codegenv2'] },
   build: {
     // three.js with its WebGPU renderer is most of the game's first chunk;
-    // its size is reported by build/size.ts against the 4 MB critical set.
+    // the first download, it with the rest, is held to 4 MB on the wire by
+    // e2e/critical.spec.ts.
     chunkSizeWarningLimit: 1500,
     rolldownOptions: {
       // The game, the developer page with its physics check, and the
