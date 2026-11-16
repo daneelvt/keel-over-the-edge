@@ -28,6 +28,7 @@
     "vite.config.ts",
     "vite.owner.config.ts",
     "vite.approve.config.ts",
+    "vite.sounds.config.ts",
     "../art"
   ]
 }

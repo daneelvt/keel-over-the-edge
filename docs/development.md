@@ -9299,16 +9299,121 @@ howls, its centre rising by a third from 23 to 39 knots; **rigging**, a narrow b
 the sheet's Aeolian tone, 0.2 × apparent wind ÷ its diameter, 10 mm on a
 main of 7 m² and thicker as the fourth root of the main's area (12 mm on
 the keelboat); **flogging**, the
-cloth's band beaten at a flap rate, only while a sail strip luffs;
+cloth's band beaten softly at a flap rate, only while a sail strip luffs;
 **water**, low-passed noise rising with speed and a bow wave's hiss past the
 hull speed, 2.4 m/s on the Jolly boat's waterline and faster as the square
 root of a longer one's; **sea**, a wide, low band that rises and brightens with the
 significant height of the waves under the boat, louder with its whitecaps
 and with the boat's speed through the water, and silent on flat water. `client/src/audio/voices.ts` maps them onto the physics;
-`engine.ts` plays them, setting parameters at most every 50 ms. Audio starts
-on the first tap (a touch's `pointerup`, a mouse's `pointerdown`, a key) and
-is suspended while the page is hidden. On an iPhone with the silent switch
-on, the page plays no sound.
+`engine.ts` plays them, setting parameters at most every 50 ms, each voice
+reading its own long noise (`audio/noise.ts`: pink for the wind, brown for
+the water and the sea). Audio starts on the first tap (a touch's
+`pointerup`, a mouse's `pointerdown`, a key), never while the sound is off,
+and fades in; it fades out and is suspended while the page is hidden or
+the sound is muted. The page's audio session is set to ambient first, so
+the game mixes with the player's own music, and on an iPhone with the
+silent switch on the page plays no sound.
+
+**The mix** (`client/src/audio/mix.ts`, its numbers in
+`art/sound/mix.json`, which the page alone reads): every voice plays into
+its family's bus (the sea, the world, the boat, the races, notices), each
+bus balanced against the others, into the master (the mix's own level,
+`master`, under the player's volume), a fade and a safety limiter (−6 dB,
+20:1, staged to stay idle). The bed's levels as the recipes give them,
+which the server's lookout tells machine sailors in words, are played on a
+curve that brings a calm, a breeze and a gale nearer; above a fresh breeze
+a storm's weight, a deep roar under the wind (`storm`), makes a gale stand
+over it, heavier rather than brighter; and a drifting boat hears the
+calm's lapping at her hull. The menu's Sound block
+holds the switch (the mute; M on a keyboard), **Volume**, **Sea and wind**
+and **Sounds**, each heard as its cube and kept in `keel.settings`; Volume
+starts at 70%, 9.3 dB down.
+
+**The loudness budget** is a test: `e2e/audio.spec.ts` renders the real
+engine offline (`e2e/audio.html`, an `OfflineAudioContext`, no GPU) at the
+scripted scenes of `e2e/audioscenes.ts` (a calm, the harbour, a gentle and
+a fresh breeze, a gale, fog with a horn, a squall with thunder and rain,
+near the edge, a race's guns and cheers) and measures each with
+`audio/loudness.ts`, a meter after ITU-R BS.1770-4 tested against EBU Tech
+3341's cases: typical sailing at −26 ±2 LUFS at full volume, each step of
+weather at most 6 LU louder and a gale at most −22 yet at least 3 LU over
+a fresh breeze from its first seconds, a calm at least −42 and the harbour
+at most −30, every true peak at most −1 dBTP, the limiter at most 1 dB in
+typical weather, at most 15% of the bed's energy above 2 kHz, and in a
+tack the luffing sail and the sheet well under the bed, the sail beating
+without a buzz. `KEEL_AUDIO_OUT=<folder> KEEL_AUDIO_SECONDS=120` writes each scene's
+rendering there to listen to, with the table.
+
+**The bed as layers, and the recordings.** Each family of the bed (the
+wind, the hull's water, the sea, rain, the flogging sail, the lapping, the
+halyards in port, the surf near a shore) is a set of layers crossfaded at
+equal power by the physics (`audio/layers.ts`, the numbers in `mix.json`'s
+`layers`): the wind's light, moderate, strong and gale by the apparent
+wind; the hull's chuckle, wash and bow wave by the speed over the hull
+speed; the sea's calm, moderate and rough by its height and whitecaps;
+rain's light and heavy by its rate. A layer plays its recording once one
+has loaded, as two copies half its length apart whose gains are arches at
+equal power (no seam is heard), taking over from the synthesis over 3 s;
+the synthesis plays the share the recordings leave. Each family's `match`
+puts a recording normalised to −23 LUFS at its synthesis's loudness, as
+`audio.spec.ts` measures. The boat's motion plays once (`audio/motion.ts`):
+a slap as the bow turns up from a fast fall (its pitch rate, weighed by the
+hull's heave rate), the sheet running out through its block in a tack (a
+soft, short, low rush and the block's knock) and the boom's thump in a
+gybe as the boom crosses; synthesised until recorded. The slap's threshold
+is set from the boats' own pitch in the sandbox's seas: none in a light
+air, a few a minute for the small boats at 12 knots, about one a wave in
+four or five at 20 knots, and never closer than 2 s in a gale; the yacht,
+the catamaran and the tall ship, slower to pitch, seldom or never.
+
+**The sounds played once** (`audio/oneshots.ts`): the gulls, the sea's
+birds and the colonies, the bell, the fog signals, thunder near and far,
+splashes, a dolphin's breath and a whale's blow, knocks and the scrape,
+the gun and the crowd each play one of their recordings where they have
+some, else their synthesis. Several recordings of one voice are its takes:
+the event's own seed (which every phone hearing it has alike) picks one,
+never the one played last, and varies it, by up to a semitone for knocks,
+slaps and splashes, two for birds, and 2 dB, the synthesis too; the
+signals (the fog signals, the gun, the bell) are never varied. At most 24
+play at once, and of a family at most its number (`mix.json`'s `voices`:
+gulls 3, seabirds 3, knocks 4, splashes and slaps 4, fog signals 2,
+thunder 2); one more lets the quietest go, faded out fast. The gun, a fog
+signal within 1,000 m and the crowd's cheer dip the sea's bus 4 dB for
+1.5 s (`duck`). A fog signal is its device's own recording, or one horn's
+recording played at each device's note as its pitch moves (its numbers'
+`note`, and the `loop` it holds to sound as long as the blast). The
+crowd's small, medium and large recordings are crossfaded by the number of
+cheers and low-passed from the quay; the player's own cheer is its own.
+
+The recordings (`audio/recorded.ts`) are listed by their numbers' files,
+`art/sound/recorded/*.json`; none is listed yet, so nothing is fetched.
+Once the game is under way (never in its first download) a probe of a
+twentieth of a second chooses WebM (Opus) or `.m4a` (AAC) by decoding, then
+the recordings are fetched one at a time, beds before shots and what is
+heard most first, each decoded between frames; one missing or refused
+leaves its synthesis. `art/sound/SOURCES.md` lists every master (CC0 or the
+owner's own) and says how to add one; `go run ./tools/sounds -check` (in
+lint) checks the list, the files and the budgets (3 MB fetched, 40 MB
+decoded, 25 MB of masters), and `cd client && npm run sounds` encodes the
+masters with ffmpeg.
+
+**The sound room** (`client/sounds.html`, `dev.html#sounds`, built apart
+by `vite.sounds.config.ts`) plays the engine with sliders for the apparent
+wind, the speed, the sea, rain, the distance and the hour, switches for
+port (with its gulls), a shore, a luffing sail, fog (a horn of the device
+chosen) and the sea's birds and a colony, keys for a tack, a gybe and each
+sound played once (a new seed each time, so its variation is heard), a
+race's guns and cheers and a storm's thunder played through, and A and B
+for every recorded voice between its synthesis and a file: the game's
+recordings, the masters, or anything dropped into `art/sound/candidates/`
+(not committed; the development server lists it). A sound played once
+takes more files as more takes (+), and the horn's `fog` voice a note. Its meter reads the integrated,
+short-term and momentary loudness, the true peak, the share above 2 kHz of
+the mix and of the bed, the limiter, the sounds played once and let go,
+the dips, and the last take played. It needs no game server, only Vite:
+`cd client && npx vite`, then on the Mac
+`http://localhost:5173/sounds.html`, and on a phone on the same network
+the Network address Vite prints, with `/sounds.html`.
 
 ## Browser tests
 

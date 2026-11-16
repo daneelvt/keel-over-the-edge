@@ -602,6 +602,25 @@ bands, levels and curves for the wind, the rigging, the flogging sail, the
 water on the hull and the sea about the boat. They are art like the models. Each names the art licence
 in its first field, `licence`.
 
+`sound/mix.json` is the mix, which only the page reads: each bus's
+balance, the limiter, the fades, the curve the bed's levels are played on
+and each voice's trim, the calm's lapping, and the tones that make the
+synthesis gentle. The other recipes' numbers are what the server's lookout
+hears too, so how loud a sound is in the mix is changed here, not there.
+It also holds the bed's families as layers, each matched in loudness to its
+synthesis, and the sounds only the page plays: the bow's slaps, the sheet
+and the boom, the halyards in port, the surf.
+
+`sound/recorded/` holds the recordings: masters under `masters/` as FLAC
+at 48 kHz, and beside them what is built from each, `<name>.webm` (Opus),
+`<name>.m4a` (AAC) and `<name>.json`, its numbers: which voice plays it
+and at what gain. `sound/SOURCES.md` lists each master's original, its
+licence (CC0, or the owner's own) and SHA-256; `go run ./tools/sounds
+-check` checks them and their sizes, and `cd client && npm run sounds`
+encodes the masters. The steps to add one are in `SOURCES.md`. Until a
+voice has a recording, its synthesis plays. `sound/candidates/` is not
+committed: recordings dropped there are heard in the sound room.
+
 The race committee's signal gun is played from `gun.json`: the crack of
 its blast, a thump falling in pitch, the boom of low-passed noise, and the
 boom's echoes off the water, each later, fainter and duller.

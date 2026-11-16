@@ -42,6 +42,10 @@ infra/tofu/.terraform/
 /testsea
 /vendored
 
+# Recordings to listen to in the sound room before any is chosen (the
+# development server serves them at /sound-candidates/)
+art/sound/candidates/
+
 # Python's compiled modules, which Blender leaves beside the sailors' build
 __pycache__/
 

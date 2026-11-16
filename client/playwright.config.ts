@@ -54,6 +54,7 @@ const linux = process.platform === 'linux';
 export const pageFiles = [
   'connect',
   'aboard',
+  'audio',
   'boats',
   'discover',
   'lag',

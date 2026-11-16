@@ -1,0 +1,369 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The mix, read by the page alone: how loud each family of sounds is heard against the others, and how the bed is made gentle. master is the whole mix's level, dB, under the player's volume; each bus's level is in dB, under the player's slider; the sea bus is shelved down above shelf.frequency by shelf.gain dB. The master runs into a safety limiter (threshold dB, knee dB, ratio, attack and release s) that the mix is staged to keep away from. fades: s to fade in at the start, out on mute or hide, in on unmute or show, a slider's glide and the voices' glide (a time constant). bed: the sea's voices' levels as the recipes give them are played as most times (level / most) to the power curve, so a breeze and a gale are nearer than the recipes have them; trims are each voice's dB in the mix. storm: a storm's weight, a deep roar under the wind (a band of centre Hz at q), from nothing at wind[0] m/s of apparent wind to level at wind[1]; recordings of the wind take it over with the wind's own. calm: a quiet lapping at the hull while the boat drifts, its band (Hz, q) and level falling away over speed m/s, swelling every period s, each lap from rest to most. tone: the bow wave's hiss's band, Hz; the flogging sail's band, centre Hz, beaten by a soft flap that dips it by depth (a share of its level) at the recipe's rate; the rigging sings only in gusts, from gust.from to gust.full of the wind's gust factor, its band's q; the gun's crack is low-passed at gunCrack Hz; birds' and colonies' harmonic calls are low-passed at birds.lowpass times their pitch and swell in over birds.attack s. noise: the seconds of each of the white, pink and brown noises the voices read, each at its own offset. layers: the bed's families, each played by its recordings where they have loaded (recorded/*.json) and by its synthesis the share they leave, a recording taking over over crossfade s; a family of several layers crossfades them at equal power between their centres at, on its scale: the apparent wind, m/s (the wind, whose recordings' low-pass opens from lowpass[0] to lowpass[1] Hz and gain rises by gust.gain dB from gust.from to gust.full of the gust factor); the speed as a share of the hull speed (the hull); the sea's height, m, with whitecaps times its whitecaps (the sea); the rain, mm an hour. match is the dB a recording at -23 LUFS plays at over its family's level to be as loud as the synthesis, as the tests measure it. shots: each voice played once: gain, the dB its recordings (each at a true peak of -1 dBTP) play at over the level its synthesis is given; family, the family whose limit it counts in (none where null); and how far each play is varied, by its event's seed, pitch semitones and level dB either way (0 for a signal, never varied). voices: at most most sounds played once at a time, and in each family its number; when one more would pass a limit the quietest is let go, faded over release s. duck: under the gun (heard at gun of its full level or more, as every racer hears it), a fog signal within fog m and the crowd's cheer, the sea's bus dips depth dB for hold s, over attack s and back over release s. crowd: the small, medium and large crowds' recordings are crossfaded by the number of cheers, each heard alone at its number in at. A gun's recording is shelved by tone.gunShelf dB above tone.gunCrack Hz: no harsh crack. slaps: the bow meeting a wave, from a pitch rate (rad/s) falling past pitchRate[0] and full at pitchRate[1], heave of it from the hull dropping (heaveRate, m/s), at most every least s, at level; synthesised as a burst through a band falling from band[1] to band[0] Hz at q dying over decay s, and a thump Hz at thumpLevel. sail: the boom past side rad of the centreline crossing; a tack where the apparent wind is within tack degrees of the bow, the sheet running out through its block, soft, short and low (level, rising with the apparent wind over wind m/s; a band Hz at q swelling and dying over length s, and the block's soft knock at its end, a tone Hz at level of it dying over decay s); else a gybe, the boom's thump (level by its rate, rad/s; thump Hz, decay s, a knock's band Hz at q). halyards: in port, from wind[0] to wind[1] m/s of apparent wind, at level, a swing every every[0] to every[1] s, its answer pair s later; each tap a band of tone Hz at q dying over decay s. surf: a shore's, as the water shoals from depth[0] to depth[1] m and the sea rises from height[0] to height[1] m, at level, swelling every period s, a band of centre Hz at q.",
+  "master": -8.5,
+  "buses": {
+    "sea": {
+      "level": 0,
+      "shelf": {
+        "frequency": 4000,
+        "gain": -6
+      }
+    },
+    "world": {
+      "level": 0
+    },
+    "boat": {
+      "level": 0
+    },
+    "races": {
+      "level": -8
+    },
+    "notices": {
+      "level": 0
+    }
+  },
+  "limiter": {
+    "threshold": -6,
+    "knee": 0,
+    "ratio": 20,
+    "attack": 0.002,
+    "release": 0.15
+  },
+  "fades": {
+    "start": 1.5,
+    "out": 0.15,
+    "in": 0.5,
+    "slider": 0.05,
+    "glide": 0.15
+  },
+  "bed": {
+    "curve": 0.25,
+    "trims": {
+      "wind": -3.6,
+      "rigging": -10,
+      "flog": -7.5,
+      "water": -9.6,
+      "hiss": -5.4,
+      "sea": -2.3,
+      "rain": -4,
+      "drum": -2,
+      "falls": 0,
+      "lapping": 0,
+      "roar": 0,
+      "surf": 0
+    }
+  },
+  "storm": {
+    "wind": [11, 18],
+    "level": 0.32,
+    "centre": 380,
+    "q": 0.7
+  },
+  "calm": {
+    "centre": 380,
+    "q": 1.2,
+    "level": 0.1,
+    "speed": [0.4, 1.4],
+    "period": [2.6, 4.3]
+  },
+  "tone": {
+    "hiss": 2500,
+    "rigging": {
+      "q": 8,
+      "gust": {
+        "from": 1.03,
+        "full": 1.15
+      }
+    },
+    "flog": {
+      "centre": 650,
+      "depth": 0.5
+    },
+    "gunCrack": 3000,
+    "birds": {
+      "lowpass": 3,
+      "attack": 0.04
+    },
+    "gunShelf": -9
+  },
+  "noise": 12,
+  "layers": {
+    "crossfade": 3,
+    "wind": {
+      "voices": ["wind.light", "wind.moderate", "wind.strong", "wind.gale"],
+      "at": [3, 7, 12, 18],
+      "match": 7.3,
+      "gust": {
+        "from": 1,
+        "full": 1.3,
+        "lowpass": [2500, 7000],
+        "gain": 2
+      }
+    },
+    "hull": {
+      "voices": ["hull.chuckle", "hull.wash", "hull.bow"],
+      "at": [0.2, 0.6, 1.05],
+      "match": 12.5
+    },
+    "sea": {
+      "voices": ["sea.calm", "sea.moderate", "sea.rough"],
+      "at": [0.2, 1, 2.5],
+      "whitecaps": 1.5,
+      "match": 10.6
+    },
+    "rain": {
+      "voices": ["rain.light", "rain.heavy"],
+      "at": [2, 25],
+      "match": 9.1
+    },
+    "flog": {
+      "voices": ["flog"],
+      "match": -0.5
+    },
+    "lapping": {
+      "voices": ["lapping"],
+      "match": 0.3
+    },
+    "calm": {
+      "voices": ["lapping"],
+      "match": 7.8
+    },
+    "surf": {
+      "voices": ["surf"],
+      "match": 9.3
+    },
+    "halyards": {
+      "voices": ["halyards"],
+      "match": 0
+    }
+  },
+  "shots": {
+    "slap": {
+      "gain": 0,
+      "family": "splashes",
+      "pitch": 1,
+      "level": 2
+    },
+    "sheet": {
+      "gain": 0,
+      "family": null,
+      "pitch": 1,
+      "level": 2
+    },
+    "boom": {
+      "gain": 0,
+      "family": null,
+      "pitch": 1,
+      "level": 2
+    },
+    "gull": {
+      "gain": 0,
+      "family": "gulls",
+      "pitch": 2,
+      "level": 2
+    },
+    "seabird.laugh": {
+      "gain": 0,
+      "family": "seabirds",
+      "pitch": 2,
+      "level": 2
+    },
+    "seabird.tern": {
+      "gain": 0,
+      "family": "seabirds",
+      "pitch": 2,
+      "level": 2
+    },
+    "colony": {
+      "gain": 0,
+      "family": "seabirds",
+      "pitch": 2,
+      "level": 2
+    },
+    "bell": {
+      "gain": 0,
+      "family": null,
+      "pitch": 0,
+      "level": 0
+    },
+    "fog": {
+      "gain": 0,
+      "family": "fog",
+      "pitch": 0,
+      "level": 0
+    },
+    "fog.diaphone": {
+      "gain": 0,
+      "family": "fog",
+      "pitch": 0,
+      "level": 0
+    },
+    "fog.reedhorn": {
+      "gain": 0,
+      "family": "fog",
+      "pitch": 0,
+      "level": 0
+    },
+    "fog.siren": {
+      "gain": 0,
+      "family": "fog",
+      "pitch": 0,
+      "level": 0
+    },
+    "fog.twotone": {
+      "gain": 0,
+      "family": "fog",
+      "pitch": 0,
+      "level": 0
+    },
+    "thunder.near": {
+      "gain": 0,
+      "family": "thunder",
+      "pitch": 0,
+      "level": 2
+    },
+    "thunder.far": {
+      "gain": 0,
+      "family": "thunder",
+      "pitch": 0,
+      "level": 2
+    },
+    "splash": {
+      "gain": 0,
+      "family": "splashes",
+      "pitch": 1,
+      "level": 2
+    },
+    "breath": {
+      "gain": 0,
+      "family": "splashes",
+      "pitch": 1,
+      "level": 2
+    },
+    "blow": {
+      "gain": 0,
+      "family": "splashes",
+      "pitch": 1,
+      "level": 2
+    },
+    "knock": {
+      "gain": 0,
+      "family": "knocks",
+      "pitch": 1,
+      "level": 2
+    },
+    "scrape": {
+      "gain": 0,
+      "family": "knocks",
+      "pitch": 1,
+      "level": 2
+    },
+    "gun": {
+      "gain": 0,
+      "family": null,
+      "pitch": 0,
+      "level": 0
+    },
+    "crowd.small": {
+      "gain": 0,
+      "family": null,
+      "pitch": 0,
+      "level": 2
+    },
+    "crowd.medium": {
+      "gain": 0,
+      "family": null,
+      "pitch": 0,
+      "level": 2
+    },
+    "crowd.large": {
+      "gain": 0,
+      "family": null,
+      "pitch": 0,
+      "level": 2
+    },
+    "cheer.own": {
+      "gain": 0,
+      "family": null,
+      "pitch": 0,
+      "level": 2
+    }
+  },
+  "slaps": {
+    "pitchRate": [0.25, 0.55],
+    "heaveRate": [0.05, 0.6],
+    "heave": 0.5,
+    "least": 2,
+    "level": 0.45,
+    "band": [380, 900],
+    "q": 0.8,
+    "decay": 0.09,
+    "thump": 70,
+    "thumpLevel": 0.5
+  },
+  "sail": {
+    "side": 0.06,
+    "tack": 100,
+    "sheet": {
+      "level": 0.1,
+      "wind": [2, 10],
+      "length": 0.35,
+      "band": 480,
+      "q": 0.9,
+      "block": {
+        "tone": 210,
+        "level": 0.5,
+        "decay": 0.035
+      }
+    },
+    "boom": {
+      "level": 0.4,
+      "rate": [0.3, 2.5],
+      "thump": 95,
+      "decay": 0.11,
+      "knock": 600,
+      "q": 1.5
+    }
+  },
+  "halyards": {
+    "level": 0.05,
+    "wind": [1, 8],
+    "every": [2.5, 0.8],
+    "pair": 0.16,
+    "tone": [430, 610],
+    "q": 7,
+    "decay": 0.05
+  },
+  "surf": {
+    "depth": [12, 3],
+    "height": [0.15, 1.5],
+    "level": 0.14,
+    "centre": 420,
+    "q": 0.7,
+    "period": 9
+  },
+  "voices": {
+    "most": 24,
+    "families": {
+      "gulls": 3,
+      "seabirds": 3,
+      "knocks": 4,
+      "splashes": 4,
+      "fog": 2,
+      "thunder": 2
+    },
+    "release": 0.06
+  },
+  "duck": {
+    "depth": -4,
+    "hold": 1.5,
+    "attack": 0.05,
+    "release": 0.8,
+    "gun": 0.5,
+    "fog": 1000
+  },
+  "crowd": {
+    "at": [1, 6, 20]
+  }
+}

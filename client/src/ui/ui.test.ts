@@ -178,6 +178,18 @@ describe('settings', () => {
     }
   });
 
+  test('the sound starts at 70% volume, the sea and every other sound full; each read as a number in range', () => {
+    expect(DEFAULTS).toMatchObject({ sound: true, volume: 0.7, seaVolume: 1, soundsVolume: 1 });
+    const m = memory();
+    saveSettings({ ...DEFAULTS, volume: 0.25, seaVolume: 0, soundsVolume: 0.5 }, m);
+    expect(loadSettings(m)).toMatchObject({ volume: 0.25, seaVolume: 0, soundsVolume: 0.5 });
+    m.data.set('keel.settings', '{"volume": 1.2, "seaVolume": "0.5", "soundsVolume": -1}');
+    expect(loadSettings(m)).toMatchObject({ volume: 0.7, seaVolume: 1, soundsVolume: 1 });
+    // Saved before there were sliders: the defaults.
+    m.data.set('keel.settings', '{"sound": false}');
+    expect(loadSettings(m)).toMatchObject({ sound: false, volume: 0.7 });
+  });
+
   test('the full screen is off until asked for, and the choice is kept', () => {
     expect(DEFAULTS.fullScreen).toBe(false);
     const m = memory();

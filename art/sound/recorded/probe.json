@@ -1,0 +1,16 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A recording's numbers, read by the page alone. kind: a bed (a loop under the physics), a shot (played once) or the probe (decoded to choose the format). voice: which of the page's voices plays it (none where empty). gain: dB over that voice's own level. note: a shot's own pitch, Hz, where it is played at other pitches (one fog signal's recording at each device's note). loop: the stretch of a shot, s, looped to sound as long as it is meant to (a fog signal's blast). The rest is written by go run ./tools/sounds -encode: the SHA-256 of the master it was built from, its seconds and channels, the WebM's integrated loudness (LUFS) and true peak (dBTP), and each file's bytes.",
+  "kind": "probe",
+  "voice": "",
+  "gain": 0,
+  "master": "5368e31e6db01948c3683cd6941211f13446a29debaee2857ff7be2e937134b7",
+  "seconds": 0.05,
+  "channels": 1,
+  "loudness": -70,
+  "peak": -1.2,
+  "bytes": {
+    "webm": 1115,
+    "m4a": 1372
+  }
+}
