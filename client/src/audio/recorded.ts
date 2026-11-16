@@ -35,6 +35,28 @@ export const VOICES = {
   slap: 'shot',
   sheet: 'shot',
   boom: 'shot',
+  gull: 'shot',
+  'seabird.laugh': 'shot',
+  'seabird.tern': 'shot',
+  colony: 'shot',
+  bell: 'shot',
+  fog: 'shot',
+  'fog.diaphone': 'shot',
+  'fog.reedhorn': 'shot',
+  'fog.siren': 'shot',
+  'fog.twotone': 'shot',
+  'thunder.near': 'shot',
+  'thunder.far': 'shot',
+  splash: 'shot',
+  breath: 'shot',
+  blow: 'shot',
+  knock: 'shot',
+  scrape: 'shot',
+  gun: 'shot',
+  'crowd.small': 'shot',
+  'crowd.medium': 'shot',
+  'crowd.large': 'shot',
+  'cheer.own': 'shot',
 } as const;
 
 export type Voice = keyof typeof VOICES;
@@ -46,6 +68,10 @@ export interface Numbers {
   kind: 'bed' | 'shot' | 'probe';
   voice: string;
   gain: number;
+  /** A fog signal's recording to be pitched to each device's note: its own note, Hz. */
+  note?: number;
+  /** The stretch a shot loops to sound as long as it is meant to (a fog signal's blast), s. */
+  loop?: number[];
   seconds: number;
   channels: number;
   bytes: { webm: number; m4a: number };

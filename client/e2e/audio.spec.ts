@@ -13,6 +13,12 @@
 // is 9.3 dB lower. The bow's slaps, the sheet and the boom, the halyards
 // and the surf play in it as the scenes have them.
 //
+// The sounds played once: given takes, each voice's play round robin,
+// never the same twice running, and two pages rendering the same scene hear
+// the same takes, varied alike; the gun dips the sea's bus by 4 dB while it
+// sounds, and not after; the race's guns and cheers and the squall's thunder
+// keep the budget above.
+//
 // The recordings: the game's own (the probe and the test sea) decode from
 // both formats as long as their numbers say; a file not there, or not
 // sound, leaves its voice synthesised while the rest load; and played in
@@ -168,6 +174,13 @@ test.describe('the loudness budget', () => {
     expect(m.fresh.played.sheets).toBeGreaterThanOrEqual(1);
     expect(m.gentle.played.booms).toBeGreaterThanOrEqual(1);
     expect(m.harbour.played.taps).toBeGreaterThan(3);
+    // The signals dip the sea: the guns and the crowd in the race, the horn
+    // in fog; nothing is let go at these scenes' few sounds.
+    expect(m.race.played.ducks).toBeGreaterThanOrEqual(5);
+    expect(m.fog.played.ducks).toBeGreaterThan(0);
+    for (const [name, r] of Object.entries(m)) {
+      expect(r.played.letGo, name).toBe(0);
+    }
   });
 
   test('typical sailing is at −20 ±2 LUFS', () => {
@@ -295,13 +308,66 @@ test.describe('the recordings', () => {
   });
 });
 
+test.describe('the sounds played once', () => {
+  test('takes round robin, never twice running, the same on two pages', async ({ browser }) => {
+    const voices = ['gull', 'seabird.laugh', 'seabird.tern', 'bell', 'slap'] as const;
+    const heard = [];
+    for (const scene of ['harbour', 'fresh']) {
+      const pages = [await browser.newPage(), await browser.newPage()];
+      const both = await Promise.all(
+        pages.map(async (page) => {
+          await page.goto('/e2e/audio.html');
+          await page.waitForFunction(() => globalThis.audio !== undefined);
+          const r = await page.evaluate(
+            ([n, v]) => globalThis.audio.render(n, 30, { takes: { voices: [...v], count: 3 } }),
+            [scene, voices] as const,
+          );
+          await page.close();
+          return r.heard;
+        }),
+      );
+      expect(both[0]?.length, scene).toBeGreaterThan(3);
+      expect(both[1], scene).toEqual(both[0]);
+      heard.push(...(both[0] ?? []));
+    }
+    for (const voice of voices.filter((v) => v !== 'bell')) {
+      const takes = heard.filter((h) => h.voice === voice).map((h) => h.take);
+      for (let i = 1; i < takes.length; i++) {
+        expect(takes[i], voice).not.toBe(takes[i - 1]);
+      }
+    }
+    // The bell, a signal: its first take, unvaried.
+    for (const h of heard.filter((x) => x.voice === 'bell')) {
+      expect(h).toMatchObject({ take: 0, rate: 1, gain: 1 });
+    }
+    expect(heard.some((h) => h.voice === 'gull')).toBe(true);
+    expect(heard.some((h) => h.voice === 'slap' && h.rate !== 1)).toBe(true);
+  });
+
+  test('the gun dips the sea 4 dB while it sounds, and lets it back', async ({ page }) => {
+    await page.goto('/e2e/audio.html');
+    await page.waitForFunction(() => globalThis.audio !== undefined);
+    const [plain, dipped] = await page.evaluate(async () => {
+      const a = globalThis.audio;
+      const windows = (): number[] => [a.bedPower(4.15, 5.45), a.bedPower(7, 8)];
+      await a.render('fresh', 8);
+      const p = windows();
+      await a.render('fresh', 8, { gunAt: 4 });
+      return [p, windows()];
+    });
+    const db = (i: number): number => 10 * Math.log10((dipped[i] ?? 0) / (plain[i] ?? 1));
+    expect(Math.abs(db(0) + 4)).toBeLessThan(0.1);
+    expect(Math.abs(db(1))).toBeLessThan(0.1);
+  });
+});
+
 test('the sound room plays every voice, a file in one at B, and reads the meter', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto('/sounds.html');
   await page.getByRole('button', { name: 'Play' }).click();
-  await expect(page.locator('.room-voice')).toHaveCount(19);
+  await expect(page.locator('.room-voice')).toHaveCount(41);
   const sea = page.locator('.room-voice', { hasText: 'sea.moderate' });
   await sea.getByRole('combobox').selectOption({ label: 'recording: test-sea.webm' });
   await sea.getByRole('button', { name: 'B' }).click();
@@ -310,6 +376,15 @@ test('the sound room plays every voice, a file in one at B, and reads the meter'
   await expect(page.locator('.room-meter')).toContainText(/Integrated +-\d+\.\d LUFS/);
   await sea.getByRole('button', { name: 'A' }).click();
   await expect(page.locator('.room-meter')).toContainText(/Recorded +none/);
+  // A sound played once takes two files as two takes; its key plays one.
+  const knock = page.locator('.room-voice', { hasText: /^knock/ });
+  await knock.getByRole('combobox').selectOption({ label: 'recording: test-sea.webm' });
+  await knock.getByRole('button', { name: 'B' }).click();
+  await expect(knock).toContainText('1 take');
+  await knock.getByRole('button', { name: 'knock: add a take' }).click();
+  await expect(knock).toContainText('2 takes');
+  await page.getByRole('button', { name: 'Knock', exact: true }).click();
+  await expect(page.locator('.room-meter')).toContainText(/Last take +knock [12]/);
   // Laid out within a phone's width.
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(360);

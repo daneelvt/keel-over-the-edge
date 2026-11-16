@@ -80,6 +80,12 @@ type numbers struct {
 	Voice string `json:"voice"`
 	// Gain is its level in the mix over its voice's own, dB.
 	Gain float64 `json:"gain"`
+	// Note is a shot's own pitch, Hz, where it is played at others' (one
+	// fog signal's recording at each device's note); none where 0.
+	Note float64 `json:"note,omitempty"`
+	// Loop is the stretch of a shot, s, that loops to sound longer (a fog
+	// signal's blast).
+	Loop []float64 `json:"loop,omitempty"`
 	// Master is the SHA-256 of the master the files were built from.
 	Master   string  `json:"master"`
 	Seconds  float64 `json:"seconds"`
@@ -94,7 +100,7 @@ type numbers struct {
 	} `json:"bytes"`
 }
 
-const numbersDescription = "A recording's numbers, read by the page alone. kind: a bed (a loop under the physics), a shot (played once) or the probe (decoded to choose the format). voice: which of the page's voices plays it (none where empty). gain: dB over that voice's own level. The rest is written by go run ./tools/sounds -encode: the SHA-256 of the master it was built from, its seconds and channels, the WebM's integrated loudness (LUFS) and true peak (dBTP), and each file's bytes."
+const numbersDescription = "A recording's numbers, read by the page alone. kind: a bed (a loop under the physics), a shot (played once) or the probe (decoded to choose the format). voice: which of the page's voices plays it (none where empty). gain: dB over that voice's own level. note: a shot's own pitch, Hz, where it is played at other pitches (one fog signal's recording at each device's note). loop: the stretch of a shot, s, looped to sound as long as it is meant to (a fog signal's blast). The rest is written by go run ./tools/sounds -encode: the SHA-256 of the master it was built from, its seconds and channels, the WebM's integrated loudness (LUFS) and true peak (dBTP), and each file's bytes."
 
 var (
 	tableRow = regexp.MustCompile(`^\|(.+)\|\s*$`)

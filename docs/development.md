@@ -9354,7 +9354,30 @@ puts a recording normalised to −23 LUFS at its synthesis's loudness, as
 `audio.spec.ts` measures. The boat's motion plays once (`audio/motion.ts`):
 a slap as the bow turns up from a fast fall (its pitch rate, weighed by the
 hull's heave rate), the sheet running in a tack and the boom's thump in a
-gybe as the boom crosses; synthesised until recorded.
+gybe as the boom crosses; synthesised until recorded. The slap's threshold
+is set from the boats' own pitch in the sandbox's seas: none in a light
+air, a few a minute for the small boats at 12 knots, about one a wave in
+four or five at 20 knots, and never closer than 2 s in a gale; the yacht,
+the catamaran and the tall ship, slower to pitch, seldom or never.
+
+**The sounds played once** (`audio/oneshots.ts`): the gulls, the sea's
+birds and the colonies, the bell, the fog signals, thunder near and far,
+splashes, a dolphin's breath and a whale's blow, knocks and the scrape,
+the gun and the crowd each play one of their recordings where they have
+some, else their synthesis. Several recordings of one voice are its takes:
+the event's own seed (which every phone hearing it has alike) picks one,
+never the one played last, and varies it, by up to a semitone for knocks,
+slaps and splashes, two for birds, and 2 dB, the synthesis too; the
+signals (the fog signals, the gun, the bell) are never varied. At most 24
+play at once, and of a family at most its number (`mix.json`'s `voices`:
+gulls 3, seabirds 3, knocks 4, splashes and slaps 4, fog signals 2,
+thunder 2); one more lets the quietest go, faded out fast. The gun, a fog
+signal within 1,000 m and the crowd's cheer dip the sea's bus 4 dB for
+1.5 s (`duck`). A fog signal is its device's own recording, or one horn's
+recording played at each device's note as its pitch moves (its numbers'
+`note`, and the `loop` it holds to sound as long as the blast). The
+crowd's small, medium and large recordings are crossfaded by the number of
+cheers and low-passed from the quay; the player's own cheer is its own.
 
 The recordings (`audio/recorded.ts`) are listed by their numbers' files,
 `art/sound/recorded/*.json`; none is listed yet, so nothing is fetched.
@@ -9371,13 +9394,17 @@ masters with ffmpeg.
 **The sound room** (`client/sounds.html`, `dev.html#sounds`, built apart
 by `vite.sounds.config.ts`) plays the engine with sliders for the apparent
 wind, the speed, the sea, rain, the distance and the hour, switches for
-port, a shore, a luffing sail and fog, keys for a tack, a gybe, a knock,
-the bell, the gun, the cheer and thunder, and A and B for every recorded
-voice between its synthesis and a file: the game's recordings, the
-masters, or anything dropped into `art/sound/candidates/` (not committed;
-the development server lists it). Its meter reads the integrated,
+port (with its gulls), a shore, a luffing sail, fog (a horn of the device
+chosen) and the sea's birds and a colony, keys for a tack, a gybe and each
+sound played once (a new seed each time, so its variation is heard), a
+race's guns and cheers and a storm's thunder played through, and A and B
+for every recorded voice between its synthesis and a file: the game's
+recordings, the masters, or anything dropped into `art/sound/candidates/`
+(not committed; the development server lists it). A sound played once
+takes more files as more takes (+), and the horn's `fog` voice a note. Its meter reads the integrated,
 short-term and momentary loudness, the true peak, the share above 2 kHz of
-the mix and of the bed, and the limiter. Open it at `/sounds.html` on the
+the mix and of the bed, the limiter, the sounds played once and let go,
+the dips, and the last take played. Open it at `/sounds.html` on the
 development server: `go run ./tools/dev`, then on the Mac
 `https://localhost:5173/sounds.html`, and on a phone on the same network
 `https://<this Mac's name>.local:5173/sounds.html`.

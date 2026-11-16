@@ -7,12 +7,18 @@
 // It plays every voice in its scene, as the engine plays it at sea: the bed
 // from sliders for the apparent wind, the boat's speed, the sea's height
 // (the boat pitching in it, so the bow slaps), rain, a shore's nearness and
-// the hour; in port, the harbour; and the one-shots on their keys, the gun,
-// the cheer, thunder and a fog signal at the distance set. Each recorded
-// voice can play its synthesis or a file: one of the game's recordings, a
-// master, or a candidate dropped into art/sound/candidates (which is not
-// committed; the development server lists it at /sound-candidates/). A and
-// B switch between the synthesis and the file at once, at the gain set.
+// the hour; in port, the harbour and its gulls; the sea's birds and a
+// colony about; and the one-shots on their keys at the distance set (the
+// knock and the scrape, splashes and blows, the bell, the gun, the crowd,
+// thunder near and far, a fog signal of each device), each key a new seed
+// so its variation is heard; and two scenes played through, a race's start
+// and finish and a storm's thunder. Each recorded voice can play its
+// synthesis or a file: one of the game's recordings, a master, or a
+// candidate dropped into art/sound/candidates (which is not committed; the
+// development server lists it at /sound-candidates/). A and B switch
+// between the synthesis and the file at once, at the gain set; a sound
+// played once takes more files as more takes (+), played round robin, and
+// one horn's recording plays every fog signal at its device's note.
 //
 // The meter reads the mix as it plays: integrated loudness since the reset,
 // short-term and momentary, the highest true peak, the share of the mix's
@@ -21,14 +27,19 @@
 import './soundroom.css';
 import { CHEER, cheerOf } from '../audio/cheer';
 import { SoundEngine } from '../audio/engine';
+import type { FeaturesInput } from '../audio/features';
 import { FOG_SIGNAL_RULES } from '../audio/fogsignals';
+import { SCRAPE, scrapeOf } from '../audio/ground';
 import { GUN, gunReport } from '../audio/gun';
 import type { HarbourInput } from '../audio/harbour';
 import { KNOCK, knockOf } from '../audio/knock';
+import type { LifeGroup, LifeInput, WaterKind } from '../audio/life';
 import { LiveMeter } from '../audio/livemeter';
 import { VOICES, type Voice } from '../audio/recorded';
 import type { ThunderFlash } from '../audio/thunder';
 import type { SoundInput } from '../audio/voices';
+import { catalog } from '../catalog';
+import type { FogSignalDevice } from '../catalog/types.gen';
 
 /** The game's recordings' files, the tests' own too, by name: to try in any voice. */
 const BUILT = import.meta.glob<string>('../../../art/sound/recorded/*.webm', {
@@ -67,6 +78,7 @@ interface Settings {
   port: boolean;
   luffing: boolean;
   fog: boolean;
+  birds: boolean;
   volume: number;
 }
 
@@ -81,8 +93,39 @@ const settings: Settings = {
   port: false,
   luffing: false,
   fog: false,
+  birds: false,
   volume: 1,
 };
+
+/** The fog signal the horn plays: one of each device's patterns. */
+let device: FogSignalDevice = 'diaphone';
+
+/** A group of the sea's life that calls call, hovering at east, north, as the catalog has it. */
+function lifeGroup(call: string, east: number, north: number, seed: number): LifeGroup | null {
+  const kind = catalog.life.kinds.findIndex((k) => k.look?.call === call);
+  if (kind < 0) {
+    return null;
+  }
+  return {
+    record: {
+      id: String(seed),
+      rev: 0,
+      kind,
+      start: 0,
+      end: 1e9,
+      east,
+      north,
+      heading: 0,
+      speed: 0,
+      count: 6,
+      seed,
+      with: 0,
+      over: '',
+    },
+    kind: catalog.life.kinds[kind] as LifeGroup['kind'],
+    pose: null,
+  };
+}
 
 /** A node with its text, classes and children. */
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -207,7 +250,16 @@ export async function openSoundRoom(): Promise<void> {
     shore: toggle('shore', 'Near a shore'),
     luffing: toggle('luffing', 'Sail luffing'),
     fog: toggle('fog', 'Fog, a horn at the distance'),
+    birds: toggle('birds', 'Birds about, a colony at the distance'),
   };
+  const horn = el('select', {});
+  horn.setAttribute('aria-label', 'Horn');
+  for (const d of ['diaphone', 'twotone', 'siren', 'reedhorn'] as const) {
+    horn.append(el('option', { value: d }, d));
+  }
+  horn.addEventListener('change', () => {
+    device = horn.value as FogSignalDevice;
+  });
   const presets = el(
     'div',
     { className: 'room-keys' },
@@ -234,6 +286,7 @@ export async function openSoundRoom(): Promise<void> {
       presets,
       ...Object.values(rows).map((r) => r.row),
       ...Object.values(switches).map((s) => s.row),
+      el('label', { className: 'room-row' }, el('span', {}, 'Horn'), horn),
     ),
   );
 
@@ -351,9 +404,32 @@ function start(
     bell: settings.port ? { east: 60, north: 80 } : null,
     yard: settings.port ? { east: -140, north: 160 } : null,
     quay: settings.port ? { east: -25, north: 10 } : null,
-    gulls: [],
+    gulls: settings.port ? [{ town: 0, east: 90, north: 160, level: 1, seed: 7 }] : [],
     seaHeight: settings.sea,
     period: 4,
+  });
+  const groups = [lifeGroup('laugh', 70, 50, 3), lifeGroup('tern', -60, 90, 5)].filter(
+    (x): x is LifeGroup => x !== null,
+  );
+  const life = (seconds: number): LifeInput => ({
+    seconds,
+    day: settings.hour > 6 && settings.hour < 18,
+    listener,
+    look: 0,
+    groups: settings.birds ? groups : [],
+  });
+  const features = (seconds: number): FeaturesInput => ({
+    seconds,
+    day: settings.hour > 6 && settings.hour < 18,
+    listener,
+    look: 0,
+    seaHeight: settings.sea,
+    period: 4,
+    falls: [],
+    blowholes: [],
+    colonies: settings.birds
+      ? [{ east: settings.distance * 0.6, north: settings.distance * 0.8, call: 'harsh', seed: 3 }]
+      : [],
   });
   let boom = 0.35;
   setInterval(() => {
@@ -375,11 +451,14 @@ function start(
     input.time = seconds;
     input.rain = settings.rain;
     input.depth = settings.shore ? 4 : 40;
-    // The boat pitching in the sea: 4° a metre of it, every 3 s to 5 s.
-    const period = 3 + settings.sea;
+    // The boat pitching in the sea as a small boat does in the sandbox's
+    // seas: short and quick, faster the higher the sea, two swells beating.
+    const period = 1.4 + 0.4 * settings.sea;
     const omega = (2 * Math.PI) / period;
-    input.pitchRate = ((4 * settings.sea * Math.PI) / 180) * omega * Math.cos(omega * t);
-    input.heaveRate = 0.4 * settings.sea * omega * Math.cos(omega * t - 0.4);
+    const beat = 0.75 + 0.25 * Math.sin((2 * Math.PI * t) / 23);
+    const rate = Math.min(0.35, 0.12 + 0.13 * settings.sea) * beat;
+    input.pitchRate = rate * Math.cos(omega * t);
+    input.heaveRate = 0.15 * settings.sea * omega * Math.cos(omega * t - 0.4);
     input.boom = boom;
     input.boomRate = 0;
     input.apparentAngle = 0.8 * Math.sign(boom);
@@ -397,13 +476,15 @@ function start(
             east: settings.distance * 0.6,
             north: settings.distance * 0.8,
             phase: 0.25,
-            fogSignal: FOG_SIGNAL_RULES.signals.findIndex((s) => s.device === 'diaphone'),
+            fogSignal: FOG_SIGNAL_RULES.signals.findIndex((s) => s.device === device),
           },
         ],
         poorAt: () => true,
       });
     }
     engine.thunder(now, { seconds, listener, look: 0, flashes });
+    engine.life(now, life(seconds));
+    engine.features(now, features(seconds));
     if (ctx.currentTime >= readFrom) {
       reduction = Math.min(reduction, engine.reduction);
     }
@@ -430,32 +511,85 @@ function start(
     engine.update(performance.now() + 100, input);
     boom = -boom;
   });
-  key('Knock', () => engine.knock(knockOf(KNOCK, 1.2, 0, 0)));
-  key('Bell', () => engine.bell(2));
-  key('Gun', () => {
-    const r = gunReport(GUN, at(), listener, 0, 1, false);
-    if (r !== null) {
-      engine.gun(r);
-    }
-  });
-  key('Gun, a racer', () => {
-    const r = gunReport(GUN, at(), listener, 0, 1, true);
-    if (r !== null) {
-      engine.gun(r);
-    }
-  });
-  key('Cheer', () => engine.cheer(cheerOf(CHEER, 6, false, true)));
-  key('Thunder', () => {
-    const seconds = 1000 + (performance.now() - t0) / 1000;
+  // Each key a new seed, so its variation is heard.
+  let seed = 1;
+  const next = (): number => seed++ * 7919;
+  key('Knock', () => engine.knock(knockOf(KNOCK, 0.6 + (next() % 7) * 0.2, 0, 0)));
+  key('Scrape', () => engine.scrape(scrapeOf(SCRAPE, 1 + (next() % 5) * 0.4)));
+  const water = (kind: WaterKind, level: number, size = 1): void => {
     const p = at();
+    engine.water([
+      {
+        kind,
+        level: level * Math.min(1, 20 / Math.hypot(p.east, p.north)),
+        pan: 0.5,
+        size,
+        seed: next(),
+      },
+    ]);
+  };
+  key('Splash', () => water('splash', 0.25));
+  key('Breath', () => water('breath', 0.3));
+  key('Blow', () => water('blow', 0.4));
+  key('Bell', () => engine.bell(2));
+  const gun = (loud: number, inRace: boolean): void => {
+    const r = gunReport(GUN, at(), listener, 0, loud, inRace);
+    if (r !== null) {
+      engine.gun(r);
+    }
+  };
+  key('Gun', () => gun(1, false));
+  key('Gun, a racer', () => gun(1, true));
+  key('The winner’s gun', () => gun(1.6, true));
+  key('Crowd, one cheer', () => engine.cheer(cheerOf(CHEER, 1, false, true)));
+  key('Crowd, six', () => engine.cheer(cheerOf(CHEER, 6, false, true)));
+  key('Crowd, thirty', () => engine.cheer(cheerOf(CHEER, 30, false, false)));
+  key('Huzzah!', () => engine.cheer(cheerOf(CHEER, 1, true, false)));
+  const flash = (east: number, north: number): void => {
+    const seconds = 1000 + (performance.now() - t0) / 1000;
     flashes.push({
       tick: Math.round(seconds * 30),
-      east: p.east,
-      north: p.north,
+      east,
+      north,
       sea: true,
       base: 900,
-      seed: flashes.length + 1,
+      seed: next(),
     });
+  };
+  key('Thunder', () => {
+    const p = at();
+    flash(p.east, p.north);
+  });
+  key('Thunder near', () => flash(400, 560));
+  key('Thunder far', () => flash(-2800, 2900));
+  // The race: the start's signals a gun each, the start's louder; then the
+  // winner's gun, the crowd cheering the boat, and the player's own.
+  const later = (s: number, act: () => void): void => {
+    setTimeout(act, s * 1000);
+  };
+  key('Race', () => {
+    for (const [s, loud] of [
+      [0, 1],
+      [6, 1],
+      [12, 1.6],
+      [19, 1.6],
+    ] as const) {
+      later(s, () => {
+        const r = gunReport(GUN, { east: 45, north: 30 }, listener, 0, loud, true);
+        if (r !== null) {
+          engine.gun(r);
+        }
+      });
+    }
+    later(20, () => engine.cheer(cheerOf(CHEER, 6, false, true)));
+    later(25, () => engine.cheer(cheerOf(CHEER, 1, true, false)));
+  });
+  // A storm's thunder (with the squall's scene): a flash near and
+  // cracking, then one far, rolling, then another.
+  key('Storm', () => {
+    flash(400, 560);
+    later(8, () => flash(-2800, 2900));
+    later(12, () => flash(900, -700));
   });
 
   // The voices: each its synthesis (A) or a file (B), at a gain.
@@ -468,6 +602,7 @@ function start(
   // The meter, read out.
   setInterval(() => {
     const f = engine.families();
+    const last = engine.heard.at(-1);
     const synth = Object.entries(f)
       .filter(([, v]) => v.synth < 0.999)
       .map(([k, v]) => `${k} ${Math.round(100 * (1 - v.synth))}%`)
@@ -482,6 +617,8 @@ function start(
       `Limiter      ${fmt(-reduction)} dB at most`,
       `Recorded     ${synth === '' ? 'none' : synth}`,
       `Played       ${engine.slaps} slaps, ${engine.sheets} sheets, ${engine.booms} booms, ${engine.taps} taps`,
+      `Once         ${engine.playingOnce} playing, ${engine.letGo} let go, ${engine.ducks} dips`,
+      `Last take    ${last === undefined ? 'none' : `${last.voice} ${last.take + 1}, ${fmt(12 * Math.log2(last.rate))} st, ${fmt(20 * Math.log10(last.gain))} dB`}`,
     ].join('\n');
   }, 250);
   void ctx.resume();
@@ -507,13 +644,21 @@ function voiceRow(
   const b = el('button', { type: 'button' }, 'B');
   const state = el('span', { className: 'room-value' }, 'synthesis');
   const buffers = new Map<string, AudioBuffer>();
+  const shot = VOICES[voice] === 'shot';
+  // A sound played once may have several takes; one horn's recording its note.
+  const more = el('button', { type: 'button' }, '+');
+  more.setAttribute('aria-label', `${voice}: add a take`);
+  const note = el('input', { type: 'number', value: '200', step: '1' });
+  note.setAttribute('aria-label', `${voice}: its note, Hz`);
+  let count = 0;
   const useA = (): void => {
     engine.useSynthesis(voice);
     a.className = 'room-on';
     b.className = '';
+    count = 0;
     state.textContent = 'synthesis';
   };
-  const useB = async (): Promise<void> => {
+  const useB = async (add = false): Promise<void> => {
     const url = pick.value;
     if (url === '') {
       return;
@@ -529,14 +674,25 @@ function voiceRow(
         return;
       }
     }
-    engine.useSynthesis(voice);
-    engine.useRecording(voice, buffer, Number(gain.value) || 0, 0.05);
+    if (!add) {
+      engine.useSynthesis(voice);
+      count = 0;
+    }
+    engine.useRecording(
+      voice,
+      buffer,
+      Number(gain.value) || 0,
+      0.05,
+      voice === 'fog' ? { note: Number(note.value) || 200 } : {},
+    );
+    count++;
     a.className = '';
     b.className = 'room-on';
-    state.textContent = `${fmt(buffer.duration)} s, ${buffer.numberOfChannels} ch`;
+    state.textContent = `${fmt(buffer.duration)} s, ${buffer.numberOfChannels} ch${shot ? `, ${count} take${count === 1 ? '' : 's'}` : ''}`;
   };
   a.addEventListener('click', useA);
   b.addEventListener('click', () => void useB());
+  more.addEventListener('click', () => void useB(true));
   gain.addEventListener('change', () => {
     if (b.className === 'room-on') {
       void useB();
@@ -550,6 +706,8 @@ function voiceRow(
     gain,
     a,
     b,
+    ...(shot ? [more] : []),
+    ...(voice === 'fog' ? [note] : []),
     state,
   );
 }

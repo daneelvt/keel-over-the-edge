@@ -258,3 +258,31 @@ func TestEncodeAsksForNumbers(t *testing.T) {
 		t.Fatalf("%+v, %v", n, err)
 	}
 }
+
+// A shot's note and loop are the owner's numbers: encoding keeps them.
+func TestNumbersKeepNoteAndLoop(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "fog-horn.json")
+	in := &numbers{Licence: artHeader, Kind: kindShot, Voice: "fog", Note: 180, Loop: []float64{0.4, 2.1}}
+	if err := writeNumbers(p, in); err != nil {
+		t.Fatal(err)
+	}
+	out, err := readNumbers(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Note != 180 || len(out.Loop) != 2 || out.Loop[0] != 0.4 || out.Loop[1] != 2.1 {
+		t.Fatalf("read back note %v, loop %v", out.Note, out.Loop)
+	}
+	// A bed has neither, and its file says nothing of them.
+	bed := &numbers{Licence: artHeader, Kind: kindBed, Voice: "surf"}
+	if err := writeNumbers(p, bed); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "note") || strings.Contains(string(raw), "loop") {
+		t.Fatalf("a bed's numbers name a note or a loop:\n%s", raw)
+	}
+}

@@ -27,7 +27,13 @@ and the sizes within their budgets. Lint runs it.
    recorded/masters/sea-moderate.flac`.
 3. Write its numbers' file, `recorded/<name>.json`: copy another's, and set
    `kind` (`bed` or `shot`) and `voice` (which of the page's voices plays
-   it: `client/src/audio/recorded.ts` lists them). Leave the rest.
+   it: `client/src/audio/recorded.ts` lists them). Leave the rest. A sound
+   played once may have several recordings, each its own master with the
+   same `voice`: they are its takes, played in turn. One horn's recording
+   for every fog signal is the voice `fog`, with its `note` (its pitch,
+   Hz) and the `loop` (start and end, s) it holds to sound as long as a
+   blast; a device's own recording is `fog.diaphone`, `fog.twotone`,
+   `fog.siren` or `fog.reedhorn`.
 4. Encode it: `cd client && npm run sounds`. That writes `<name>.webm` and
    `<name>.m4a` beside it, normalised, and fills in its numbers.
 5. List it below: the master, the original (author, title and page), the

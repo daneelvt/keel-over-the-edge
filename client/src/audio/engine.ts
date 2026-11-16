@@ -29,6 +29,14 @@
 // and its synthesis the share they leave. The synthesis plays from the
 // start and wherever no recording has come.
 //
+// So do the sounds played once (audio/oneshots.ts): the gulls, the sea's
+// birds and the colonies, the bell, the fog signals, thunder, splashes and
+// breaths, knocks and the scrape, the gun and the crowd each play one of
+// their recordings where they have some, chosen and varied by the event's
+// own seed, and their synthesis, varied alike, where they have none. At
+// most so many play at once, and so many of a family, the quietest let go.
+// The gun, a near fog signal and the crowd's cheer dip the sea's bus.
+//
 // Every voice plays into its family's bus of the mix (audio/mix.ts), which
 // decides how loud it is heard: the bed's levels as the recipes give them
 // (the server's lookout tells machine sailors the same) are played on the
@@ -90,6 +98,7 @@ import {
 import { type BusName, calmLevel, curved, gainOf, MIX, Mixer, type MixRecipe } from './mix';
 import { type SailSound, SailWatch, type Slap, SlapWatch } from './motion';
 import { type NoiseColour, noiseBuffer } from './noise';
+import { pickTake, unit, type Variation, Voices, vary } from './oneshots';
 import {
   betweenFrames,
   fetchBytes,
@@ -162,11 +171,29 @@ interface Family {
   synth: number;
 }
 
-/** A shot's recordings: its takes and their trims, and the last played. */
+/** A shot's recordings: its takes, their trims, notes (Hz, 0 for none) and loops (s), and the last played. */
 interface Takes {
   buffers: AudioBuffer[];
   trims: number[];
+  notes: number[];
+  loops: ([number, number] | null)[];
   last: number;
+}
+
+/** The voices played once, as the mix lists them. */
+type ShotVoice = keyof MixRecipe['shots'];
+
+/** A recording chosen for a sound played once: its take, how it is varied, and how long it plays at that rate, s. */
+interface Chosen {
+  voice: ShotVoice;
+  take: number;
+  buffer: AudioBuffer;
+  trim: number;
+  note: number;
+  loop: [number, number] | null;
+  rate: number;
+  gain: number;
+  seconds: number;
 }
 
 interface Graph {
@@ -206,6 +233,8 @@ interface Graph {
   takes: Map<Voice, Takes>;
   /** The fog signals' tones, by device: made once each. */
   waves: Map<string, PeriodicWave>;
+  /** The sounds playing once, held to their limits. */
+  voices: Voices;
 }
 
 function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: AudioNode): Graph {
@@ -367,6 +396,7 @@ function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: Aud
     families,
     takes: new Map(),
     waves: new Map(),
+    voices: new Voices(m.voices),
   };
 }
 
@@ -777,25 +807,41 @@ export class SoundEngine {
     if (!(e.level > 0)) {
       return;
     }
-    this.featureEvents++;
     const ctx = g.ctx;
-    const pan = this.#shot(g, 'world', e.pan);
-    const nodes: AudioNode[] = [pan];
-    const unit = (k: number): number => {
-      const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
-      return v - Math.floor(v);
-    };
+    const unit = (k: number): number => this.#unit(e.seed, k);
     const between = (r: number[], k: number): number =>
       (r[0] ?? 0) + unit(k) * ((r[1] ?? 0) - (r[0] ?? 0));
+    // A colony's harsh calls and rattles are its recordings' where it has
+    // them; its whistles, and a blowhole's boom, stay synthesised.
+    const call = e.kind !== 'boom';
+    const rec =
+      e.kind === 'harsh' || e.kind === 'rattle' ? this.#choose(g, 'colony', e.seed) : null;
+    const v = call ? this.#vary('colony', e.seed) : { rate: 1, gain: 1 };
+    const length =
+      rec?.seconds ??
+      (e.kind === 'boom'
+        ? 5 * this.#features.blowhole.decay
+        : between(this.#features.colony[e.kind].note, 2));
+    const pan = this.#shot(g, 'world', e.pan, call ? 'seabirds' : null, e.level, at, at + length);
+    if (pan === null) {
+      return;
+    }
+    this.featureEvents++;
+    if (rec !== null) {
+      this.#start(g, rec, at, e.level, pan);
+      return;
+    }
+    const level = e.level * v.gain;
+    const nodes: AudioNode[] = [pan];
     if (e.kind === 'boom') {
       // A thump falling in pitch, and the air's whoosh out of the vent.
       const c = this.#features.blowhole;
       const o = ctx.createOscillator();
       o.frequency.setValueAtTime(c.thump * 1.6, at);
       o.frequency.exponentialRampToValueAtTime(c.thump, at + c.decay);
-      const v = ctx.createGain();
-      v.gain.setValueAtTime(e.level, at);
-      v.gain.setTargetAtTime(0, at + 0.01, c.decay / 2);
+      const thump = ctx.createGain();
+      thump.gain.setValueAtTime(e.level, at);
+      thump.gain.setTargetAtTime(0, at + 0.01, c.decay / 2);
       const burst = ctx.createBufferSource();
       burst.buffer = g.noise.white;
       const bandp = ctx.createBiquadFilter();
@@ -806,8 +852,8 @@ export class SoundEngine {
       whoosh.gain.setValueAtTime(0, at);
       whoosh.gain.linearRampToValueAtTime(0.7 * e.level, at + 0.08);
       whoosh.gain.setTargetAtTime(0, at + 0.1, c.decay);
-      o.connect(v);
-      v.connect(pan);
+      o.connect(thump);
+      thump.connect(pan);
       burst.connect(bandp);
       bandp.connect(whoosh);
       whoosh.connect(pan);
@@ -816,12 +862,12 @@ export class SoundEngine {
       o.stop(end);
       burst.start(at, (e.seed % 10) * 0.1);
       burst.stop(end);
-      nodes.push(o, v, burst, bandp, whoosh);
+      nodes.push(o, thump, burst, bandp, whoosh);
     } else {
       // A call: a rasp, a whistle or a rattle.
       const c = this.#features.colony;
       const r = c[e.kind];
-      const pitch = between(r.pitch, 1);
+      const pitch = between(r.pitch, 1) * v.rate;
       const note = between(r.note, 2);
       const o = ctx.createOscillator();
       o.type = e.kind === 'whistle' ? 'sine' : 'sawtooth';
@@ -830,16 +876,19 @@ export class SoundEngine {
         pitch * (e.kind === 'harsh' ? 0.75 : 1.1),
         at + note,
       );
-      const v = ctx.createGain();
-      v.gain.setValueAtTime(0, at);
-      v.gain.linearRampToValueAtTime(e.level, at + Math.min(this.#mix.tone.birds.attack, note / 3));
-      v.gain.linearRampToValueAtTime(0, at + note);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(
+        level,
+        at + Math.min(this.#mix.tone.birds.attack, note / 3),
+      );
+      gain.gain.linearRampToValueAtTime(0, at + note);
       if (e.kind === 'whistle') {
-        o.connect(v);
+        o.connect(gain);
       } else {
         const soft = this.#soft(g, pitch);
         o.connect(soft);
-        soft.connect(v);
+        soft.connect(gain);
         nodes.push(soft);
       }
       if (e.kind === 'rattle') {
@@ -853,17 +902,17 @@ export class SoundEngine {
         gate.gain.value = 0.5;
         beat.connect(depth);
         depth.connect(gate.gain);
-        v.connect(gate);
+        gain.connect(gate);
         gate.connect(pan);
         beat.start(at);
         beat.stop(at + note);
         nodes.push(beat, depth, gate);
       } else {
-        v.connect(pan);
+        gain.connect(pan);
       }
       o.start(at);
       o.stop(at + note);
-      nodes.push(o, v);
+      nodes.push(o, gain);
     }
     const first = nodes[1] as AudioScheduledSourceNode | undefined;
     if (first !== undefined && 'onended' in first) {
@@ -921,17 +970,35 @@ export class SoundEngine {
     if (!(s.level > 0)) {
       return;
     }
-    this.waterSounds++;
     const ctx = g.ctx;
     const c = this.#water[s.kind];
-    const unit = (k: number): number => {
-      const v = Math.sin(s.seed * 3.7 + k * 1.3) * 43758.5453;
-      return v - Math.floor(v);
-    };
+    const unit = (k: number): number => this.#unit(s.seed, k);
     const at = ctx.currentTime;
+    // A splash, a dolphin's breath and a whale's blow are their recordings'
+    // where they have them; the rest stay synthesised, varied as a splash.
+    const voice = s.kind === 'breath' ? 'breath' : s.kind === 'blow' ? 'blow' : 'splash';
+    const rec = s.kind === voice ? this.#choose(g, voice, s.seed) : null;
+    const v = this.#vary(voice, s.seed);
     const length =
       (c.length[0] ?? 0.2) + unit(1) * ((c.length[1] ?? 0.4) - (c.length[0] ?? 0.2)) * s.size;
-    const f = (c.band[0] ?? 800) + unit(2) * ((c.band[1] ?? 1600) - (c.band[0] ?? 800));
+    const pan = this.#shot(
+      g,
+      'world',
+      s.pan,
+      'splashes',
+      s.level,
+      at,
+      at + (rec?.seconds ?? length + 0.05),
+    );
+    if (pan === null) {
+      return;
+    }
+    this.waterSounds++;
+    if (rec !== null) {
+      this.#start(g, rec, at, s.level, pan);
+      return;
+    }
+    const f = ((c.band[0] ?? 800) + unit(2) * ((c.band[1] ?? 1600) - (c.band[0] ?? 800))) * v.rate;
     const burst = ctx.createBufferSource();
     burst.buffer = g.noise.white;
     const band = ctx.createBiquadFilter();
@@ -939,18 +1006,17 @@ export class SoundEngine {
     band.Q.value = c.q;
     band.frequency.setValueAtTime(f, at);
     band.frequency.exponentialRampToValueAtTime(f * c.fall, at + length);
-    const v = ctx.createGain();
-    v.gain.setValueAtTime(0, at);
-    v.gain.linearRampToValueAtTime(s.level, at + 0.012);
-    v.gain.exponentialRampToValueAtTime(0.0001, at + length);
-    const pan = this.#shot(g, 'world', s.pan);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(s.level * v.gain, at + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
     burst.connect(band);
-    band.connect(v);
-    v.connect(pan);
+    band.connect(gain);
+    gain.connect(pan);
     burst.start(at, unit(3) * 2);
     burst.stop(at + length + 0.05);
     burst.onended = () => {
-      for (const n of [burst, band, v, pan]) {
+      for (const n of [burst, band, gain, pan]) {
         n.disconnect();
       }
     };
@@ -960,16 +1026,44 @@ export class SoundEngine {
     if (!(e.level > 0)) {
       return;
     }
-    this.lifeEvents++;
     const ctx = g.ctx;
     const r = this.#life;
-    const unit = (k: number): number => {
-      const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
-      return v - Math.floor(v);
-    };
+    const unit = (k: number): number => this.#unit(e.seed, k);
     const between = (p: readonly number[], k: number): number =>
       (p[0] ?? 0) + unit(k) * ((p[1] ?? 0) - (p[0] ?? 0));
-    const pan = this.#shot(g, 'world', e.pan);
+    // The laugh's and the tern's calls are their recordings' where they have
+    // them; the booby's whistle stays synthesised.
+    const voice = e.kind === 'tern' ? 'seabird.tern' : 'seabird.laugh';
+    const rec = e.kind === 'whistle' ? null : this.#choose(g, voice, e.seed);
+    const vary = this.#vary(voice, e.seed);
+    const laughs = Math.round(between(r.laugh.notes, 2));
+    const length =
+      e.kind === 'whistle'
+        ? between(r.whistle.note, 2)
+        : e.kind === 'laugh'
+          ? Array.from(
+              { length: laughs },
+              (_, k) => between(r.laugh.note, 3 + k) + r.laugh.gap,
+            ).reduce((a, b) => a + b, 0)
+          : r.tern.syllables.reduce((a, b) => a + b + r.tern.gap, 0);
+    const pan = this.#shot(
+      g,
+      'world',
+      e.pan,
+      'seabirds',
+      e.level,
+      at,
+      at + (rec?.seconds ?? length),
+    );
+    if (pan === null) {
+      return;
+    }
+    this.lifeEvents++;
+    if (rec !== null) {
+      this.#start(g, rec, at, e.level, pan);
+      return;
+    }
+    const level = e.level * vary.gain;
     const o = ctx.createOscillator();
     const v = ctx.createGain();
     v.gain.setValueAtTime(0, at);
@@ -980,17 +1074,13 @@ export class SoundEngine {
       o.frequency.setValueAtTime(pitch, t);
       o.frequency.exponentialRampToValueAtTime(end, t + length);
       v.gain.setValueAtTime(0, t);
-      v.gain.linearRampToValueAtTime(
-        e.level,
-        t + Math.min(this.#mix.tone.birds.attack, length / 4),
-      );
+      v.gain.linearRampToValueAtTime(level, t + Math.min(this.#mix.tone.birds.attack, length / 4));
       v.gain.linearRampToValueAtTime(0, t + length);
     };
     if (e.kind === 'whistle') {
       // A thin whistle, rising a little at its end.
       const c = r.whistle;
-      const pitch = between(c.pitch, 1);
-      const length = between(c.note, 2);
+      const pitch = between(c.pitch, 1) * vary.rate;
       o.type = 'sine';
       note(pitch, pitch * c.rise, length);
       o.connect(v);
@@ -999,7 +1089,7 @@ export class SoundEngine {
       // A nasal voice: a harmonic tone through a band at the call's pitch,
       // its fundamental an octave under it.
       const c = e.kind === 'laugh' ? r.laugh : r.tern;
-      const pitch = between(c.pitch, 1);
+      const pitch = between(c.pitch, 1) * vary.rate;
       o.type = 'sawtooth';
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
@@ -1013,8 +1103,7 @@ export class SoundEngine {
       if (e.kind === 'laugh') {
         // "Ha-ha-ha": a run of short notes, each a little lower.
         const l = r.laugh;
-        const notes = Math.round(between(l.notes, 2));
-        for (let k = 0; k < notes; k++) {
+        for (let k = 0; k < laughs; k++) {
           const length = between(l.note, 3 + k);
           const f = (pitch / 2) * (1 - 0.02 * k);
           note(f, f * l.fall, length);
@@ -1044,99 +1133,118 @@ export class SoundEngine {
     if (!(e.level > 0)) {
       return;
     }
-    this.harbourEvents++;
     const ctx = g.ctx;
-    const pan = this.#shot(g, bus, e.pan);
+    const r = this.#harbour;
+    // The gull's notes, drawn from its seed: how many, its pitch, each's length.
+    const draw = (k: number): number => this.#unit(e.seed, k);
+    const voice = e.kind === 'bell' ? 'bell' : e.kind === 'gull' ? 'gull' : null;
+    const rec = voice === null ? null : this.#choose(g, voice, e.seed);
+    const v = voice === null ? { rate: 1, gain: 1 } : this.#vary(voice, e.seed);
+    const c = r.gulls;
+    const notes = Math.round((c.notes[0] ?? 3) + draw(1) * ((c.notes[1] ?? 7) - (c.notes[0] ?? 3)));
+    const lengths: number[] = [];
+    for (let k = 0; k < notes; k++) {
+      lengths.push((c.note[0] ?? 0.2) + draw(3 + k) * ((c.note[1] ?? 0.3) - (c.note[0] ?? 0.2)));
+    }
+    const length =
+      rec?.seconds ??
+      (e.kind === 'bell'
+        ? 2 * Math.max(...r.bell.decays)
+        : e.kind === 'gull'
+          ? lengths.reduce((s, l) => s + l + c.gap, 0)
+          : 10 * r.mallets.decay);
+    const family = e.kind === 'gull' ? 'gulls' : null;
+    const pan = this.#shot(g, bus, e.pan, family, e.level, at, at + length);
+    if (pan === null) {
+      return;
+    }
+    this.harbourEvents++;
+    if (rec !== null) {
+      this.#start(g, rec, at, e.level, pan);
+      return;
+    }
+    const level = e.level * v.gain;
     const nodes: AudioNode[] = [pan];
     let end = at;
-    const r = this.#harbour;
     if (e.kind === 'bell') {
       // Its partials, each dying away over its own decay.
       bellPartials(r.bell).forEach((f, i) => {
         const o = ctx.createOscillator();
         o.frequency.value = f;
-        const v = ctx.createGain();
-        v.gain.setValueAtTime(0, at);
-        v.gain.linearRampToValueAtTime(e.level * (r.bell.levels[i] ?? 0.3), at + 0.004);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, at);
+        gain.gain.linearRampToValueAtTime(level * (r.bell.levels[i] ?? 0.3), at + 0.004);
         const decay = r.bell.decays[i] ?? 1;
-        v.gain.setTargetAtTime(0, at + 0.004, decay / 3);
-        o.connect(v);
-        v.connect(pan);
+        gain.gain.setTargetAtTime(0, at + 0.004, decay / 3);
+        o.connect(gain);
+        gain.connect(pan);
         o.start(at);
         o.stop(at + decay * 2);
         end = Math.max(end, at + decay * 2);
-        nodes.push(o, v);
+        nodes.push(o, gain);
       });
     } else if (e.kind === 'gull') {
       // A long call: notes of a harmonic voice, each falling at its end.
-      const c = r.gulls;
-      const unit = (k: number): number => {
-        const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
-        return v - Math.floor(v);
-      };
-      const notes = Math.round(
-        (c.notes[0] ?? 3) + unit(1) * ((c.notes[1] ?? 7) - (c.notes[0] ?? 3)),
-      );
-      const pitch = (c.pitch[0] ?? 1100) + unit(2) * ((c.pitch[1] ?? 1500) - (c.pitch[0] ?? 1100));
+      const pitch =
+        ((c.pitch[0] ?? 1100) + draw(2) * ((c.pitch[1] ?? 1500) - (c.pitch[0] ?? 1100))) * v.rate;
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
       const bandp = ctx.createBiquadFilter();
       bandp.type = 'bandpass';
       bandp.frequency.value = pitch;
       bandp.Q.value = c.q;
-      const v = ctx.createGain();
-      v.gain.setValueAtTime(0, at);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, at);
       let t = at;
-      for (let k = 0; k < notes; k++) {
-        const note = (c.note[0] ?? 0.2) + unit(3 + k) * ((c.note[1] ?? 0.3) - (c.note[0] ?? 0.2));
+      for (const note of lengths) {
         o.frequency.setValueAtTime(pitch / 2, t);
         o.frequency.exponentialRampToValueAtTime((pitch / 2) * c.fall, t + note);
-        v.gain.setValueAtTime(0, t);
-        v.gain.linearRampToValueAtTime(
-          e.level,
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(
+          level,
           t + Math.min(this.#mix.tone.birds.attack, note / 3),
         );
-        v.gain.linearRampToValueAtTime(0, t + note);
+        gain.gain.linearRampToValueAtTime(0, t + note);
         t += note + c.gap;
       }
       const soft = this.#soft(g, pitch);
       o.connect(bandp);
       bandp.connect(soft);
-      soft.connect(v);
-      v.connect(pan);
+      soft.connect(gain);
+      gain.connect(pan);
       o.start(at);
       o.stop(t);
       end = t;
-      nodes.push(o, bandp, soft, v);
+      nodes.push(o, bandp, soft, gain);
     } else {
       // A mallet's blow: a falling tone and a crack.
-      const c = r.mallets;
+      const m = r.mallets;
       const o = ctx.createOscillator();
-      o.frequency.setValueAtTime(c.thump, at);
-      o.frequency.exponentialRampToValueAtTime(c.thump * 0.6, at + 4 * c.decay);
-      const v = ctx.createGain();
-      v.gain.setValueAtTime(e.level, at);
-      v.gain.setTargetAtTime(0, at + 0.003, c.decay);
+      o.frequency.setValueAtTime(m.thump, at);
+      o.frequency.exponentialRampToValueAtTime(m.thump * 0.6, at + 4 * m.decay);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(level, at);
+      gain.gain.setTargetAtTime(0, at + 0.003, m.decay);
       const burst = ctx.createBufferSource();
       burst.buffer = g.noise.white;
       const bandp = ctx.createBiquadFilter();
       bandp.type = 'bandpass';
-      bandp.frequency.value = c.crack;
-      bandp.Q.value = c.q;
+      bandp.frequency.value = m.crack;
+      bandp.Q.value = m.q;
       const crack = ctx.createGain();
-      crack.gain.setValueAtTime(0.6 * e.level, at);
-      crack.gain.setTargetAtTime(0, at + 0.002, c.decay / 2);
-      o.connect(v);
-      v.connect(pan);
+      crack.gain.setValueAtTime(0.6 * level, at);
+      crack.gain.setTargetAtTime(0, at + 0.002, m.decay / 2);
+      o.connect(gain);
+      gain.connect(pan);
       burst.connect(bandp);
       bandp.connect(crack);
       crack.connect(pan);
-      end = at + 10 * c.decay;
+      end = at + 10 * m.decay;
       o.start(at);
       o.stop(end);
       burst.start(at, (e.seed % 10) * 0.1);
       burst.stop(end);
-      nodes.push(o, v, burst, bandp, crack);
+      nodes.push(o, gain, burst, bandp, crack);
     }
     const first = nodes[1] as AudioScheduledSourceNode | undefined;
     if (first !== undefined && 'onended' in first) {
@@ -1192,22 +1300,37 @@ export class SoundEngine {
   }
 
   /**
-   * A blast: the device's tone through a low-pass, never above the air's
-   * over its distance, swelling in over the attack, held, and dying away
-   * over the release after it ends.
+   * A blast: the device's tone, swelling in over the attack, held, and dying
+   * away over the release after it ends, through a low-pass never above the
+   * air's over its distance. The tone is the device's own recording where
+   * it has one; else one recording of a horn played at the device's pitch,
+   * its note moved as the device's moves; else the device's harmonics
+   * through a low-pass that opens as the blast swells. A recording loops
+   * the stretch its numbers give to sound as long as the blast. Never
+   * varied: a signal is known by its sound. The nearest dips the sea.
    */
   #playBlast(g: Graph, e: FogSignalEvent, at: number): void {
     if (!(e.level > 0) || !(e.length > 0)) {
       return;
     }
-    this.fogSignalEvents++;
     const ctx = g.ctx;
     const r = this.#fog;
     const device = r[e.device];
     const end = at + e.length;
     const stop = end + 2 * device.release;
-    const o = ctx.createOscillator();
-    o.setPeriodicWave(this.#wave(g, e.device));
+    const own = this.#choose(g, `fog.${e.device}` as ShotVoice, 0);
+    const pitched = own === null ? this.#choose(g, 'fog', 0) : null;
+    const rec = own ?? (pitched !== null && pitched.note > 0 ? pitched : null);
+    const pan = this.#shot(g, 'world', e.pan, 'fog', e.level, at, stop);
+    if (pan === null) {
+      return;
+    }
+    this.fogSignalEvents++;
+    // Heard from within the duck's distance: a fog signal's level falls as
+    // its near distance over the distance.
+    if (e.level >= device.level * Math.min(1, device.near / this.#mix.duck.fog)) {
+      this.#dip(g, at);
+    }
     const low = ctx.createBiquadFilter();
     low.type = 'lowpass';
     low.Q.value = 0.7;
@@ -1216,66 +1339,118 @@ export class SoundEngine {
     v.gain.linearRampToValueAtTime(e.level, at + Math.min(device.attack, e.length / 3));
     v.gain.setValueAtTime(e.level, end);
     v.gain.setTargetAtTime(0, end, device.release / 3);
-    const pan = this.#shot(g, 'world', e.pan);
-    o.connect(low);
     low.connect(v);
     v.connect(pan);
-    const nodes: AudioNode[] = [o, low, v, pan];
-    // A diaphone's low-pass opens as the blast swells: a horn brightens as
-    // it grows louder.
+    const nodes: AudioNode[] = [low, v, pan];
+    // The tone's pitch, Hz, set on the oscillator, or on the recording's
+    // rate as a share of its note.
+    let source: AudioScheduledSourceNode;
+    let tone: { param: AudioParam; per: number };
+    if (rec !== null) {
+      const played = this.#start(g, rec, at, 1, low);
+      const s = played.source;
+      if (rec.loop !== null) {
+        s.loop = true;
+        s.loopStart = rec.loop[0];
+        s.loopEnd = rec.loop[1];
+      }
+      s.stop(stop);
+      source = s;
+      tone = { param: s.playbackRate, per: rec === own ? 0 : 1 / rec.note };
+      low.frequency.value = e.cutoff;
+    } else {
+      const o = ctx.createOscillator();
+      o.setPeriodicWave(this.#wave(g, e.device));
+      o.connect(low);
+      o.start(at);
+      o.stop(stop);
+      nodes.push(o);
+      source = o;
+      tone = { param: o.frequency, per: 1 };
+    }
+    const synth = rec === null;
+    // A device's own recording keeps its own pitch.
+    const f = {
+      set: (hz: number, t: number): void => {
+        if (tone.per > 0) {
+          tone.param.setValueAtTime(hz * tone.per, t);
+        }
+      },
+      exp: (hz: number, t: number): void => {
+        if (tone.per > 0) {
+          tone.param.exponentialRampToValueAtTime(hz * tone.per, t);
+        }
+      },
+    };
+    // A horn's low-pass opens as the blast swells: it brightens as it grows louder.
     const swell = (c: { from: number; to: number; open: number }): void => {
+      if (!synth) {
+        return;
+      }
       low.frequency.setValueAtTime(Math.min(c.from, e.cutoff), at);
       low.frequency.exponentialRampToValueAtTime(
         Math.min(c.to, e.cutoff),
         at + Math.min(c.open, e.length),
       );
     };
-    const f = o.frequency;
     if (e.device === 'diaphone') {
       // Its pitch sags as the air runs out, then drops in the grunt.
       const c = r.diaphone;
       const grunt = Math.min(c.gruntTime, e.length / 3);
-      f.setValueAtTime(c.pitch, at);
-      f.exponentialRampToValueAtTime(c.sag, end - grunt);
-      f.exponentialRampToValueAtTime(c.sag * c.grunt, end - grunt + Math.min(0.04, grunt));
+      f.set(c.pitch, at);
+      f.exp(c.sag, end - grunt);
+      f.exp(c.sag * c.grunt, end - grunt + Math.min(0.04, grunt));
       swell(c.cutoff);
     } else if (e.device === 'twotone') {
       // The high tone, then the low held to the end.
       const c = r.twotone;
       const high = e.tones[0] ?? c.pitch;
       const turn = at + c.high * e.length;
-      f.setValueAtTime(high, at);
-      f.setValueAtTime(high, turn);
-      f.exponentialRampToValueAtTime(e.tones[1] ?? c.low, turn + c.glide);
+      f.set(high, at);
+      f.set(high, turn);
+      f.exp(e.tones[1] ?? c.low, turn + c.glide);
       swell(c.cutoff);
     } else if (e.device === 'siren') {
       // The wail: rising as the rotor spins up, falling at the end.
       const c = r.siren;
       const k = Math.min(1, e.length / (c.rise + c.fall));
-      f.setValueAtTime(c.low, at);
-      f.exponentialRampToValueAtTime(e.tones[0] ?? c.pitch, at + c.rise * k);
-      f.setValueAtTime(e.tones[0] ?? c.pitch, end - c.fall * k);
-      f.exponentialRampToValueAtTime(c.low, end);
-      low.frequency.value = Math.min(c.cutoff, e.cutoff);
+      f.set(c.low, at);
+      f.exp(e.tones[0] ?? c.pitch, at + c.rise * k);
+      f.set(e.tones[0] ?? c.pitch, end - c.fall * k);
+      f.exp(c.low, end);
+      if (synth) {
+        low.frequency.value = Math.min(c.cutoff, e.cutoff);
+      }
     } else {
       // A reed's note, wavering a few cents.
       const c = r.reedhorn;
       const pitch = e.tones[0] ?? c.pitch;
-      f.value = pitch;
-      const lfo = ctx.createOscillator();
-      lfo.frequency.value = c.vibrato.rate;
-      const depth = ctx.createGain();
-      depth.gain.value = pitch * (2 ** (c.vibrato.cents / 1200) - 1);
-      lfo.connect(depth);
-      depth.connect(f);
-      lfo.start(at);
-      lfo.stop(stop);
-      nodes.push(lfo, depth);
-      low.frequency.value = Math.min(c.cutoff, e.cutoff);
+      f.set(pitch, at);
+      if (tone.per > 0) {
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = c.vibrato.rate;
+        const depth = ctx.createGain();
+        depth.gain.value = pitch * tone.per * (2 ** (c.vibrato.cents / 1200) - 1);
+        lfo.connect(depth);
+        depth.connect(tone.param);
+        lfo.start(at);
+        lfo.stop(stop);
+        nodes.push(lfo, depth);
+      }
+      if (synth) {
+        low.frequency.value = Math.min(c.cutoff, e.cutoff);
+      }
     }
-    o.start(at);
-    o.stop(stop);
-    o.onended = () => {
+    this.#whenEnded(source, nodes);
+  }
+
+  /** Lets nodes go when source ends, after what its onended already does. */
+  #whenEnded(source: AudioScheduledSourceNode, nodes: AudioNode[]): void {
+    const before = source.onended;
+    source.onended = (ev) => {
+      if (typeof before === 'function') {
+        before.call(source, ev);
+      }
       for (const n of nodes) {
         n.disconnect();
       }
@@ -1322,19 +1497,30 @@ export class SoundEngine {
     if (!(e.level > 0)) {
       return;
     }
-    this.thunderEvents++;
     const ctx = g.ctx;
     const r = this.#thunder;
-    const unit = (k: number): number => {
-      const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
-      return v - Math.floor(v);
-    };
+    const unit = (k: number): number => this.#unit(e.seed, k);
     const hold = at + Math.max(e.length, 0.3);
     const stop = hold + 1.5 * r.roll;
-    const burst = ctx.createBufferSource();
-    burst.buffer = g.noise.white;
-    burst.loop = true;
-    const pan = this.#shot(g, 'world', e.pan);
+    // Its recording, a near one's crack or a far one's roll, else the
+    // other's, else the synthesis; louder or softer by its seed.
+    const near = this.#choose(g, 'thunder.near', e.seed);
+    const far = this.#choose(g, 'thunder.far', e.seed);
+    const rec = e.crack ? (near ?? far) : (far ?? near);
+    const vary = this.#vary('thunder.near', e.seed);
+    const pan = this.#shot(
+      g,
+      'world',
+      e.pan,
+      'thunder',
+      e.level,
+      at,
+      rec === null ? stop : at + rec.seconds,
+    );
+    if (pan === null) {
+      return;
+    }
+    this.thunderEvents++;
     const lowpass = (frequency: number): BiquadFilterNode => {
       const f = ctx.createBiquadFilter();
       f.type = 'lowpass';
@@ -1342,21 +1528,33 @@ export class SoundEngine {
       f.Q.value = 0.7;
       return f;
     };
+    if (rec !== null) {
+      // Dulled by the air over its distance.
+      const air = lowpass(e.cutoff);
+      air.connect(pan);
+      const s = this.#start(g, rec, at, e.level, air).source;
+      this.#whenEnded(s, [air, pan]);
+      return;
+    }
+    const level = e.level * vary.gain;
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise.white;
+    burst.loop = true;
     const nodes: AudioNode[] = [burst, pan];
 
     // The rumble: its swells drawn from the flash's seed, each fainter as
     // the sound comes from farther along the channel.
     const rumbleLow = lowpass(Math.min(r.rumble.cutoff, e.cutoff));
     const rumble = ctx.createGain();
-    const level = e.level * r.rumble.level;
+    const rumbleLevel = level * r.rumble.level;
     const step = 1 / r.rumble.swells;
-    const near = Math.max(e.distance, r.near);
+    const nearest = Math.max(e.distance, r.near);
     rumble.gain.setValueAtTime(0, at);
-    rumble.gain.linearRampToValueAtTime(level * (1 - r.rumble.depth * unit(0)), at + 0.15);
+    rumble.gain.linearRampToValueAtTime(rumbleLevel * (1 - r.rumble.depth * unit(0)), at + 0.15);
     for (let k = 1; at + k * step < hold; k++) {
-      const fade = near / (near + this.#thunderRule.speed * k * step);
+      const fade = nearest / (nearest + this.#thunderRule.speed * k * step);
       rumble.gain.setTargetAtTime(
-        level * fade * (1 - r.rumble.depth * unit(k)),
+        rumbleLevel * fade * (1 - r.rumble.depth * unit(k)),
         at + k * step,
         step / 3,
       );
@@ -1371,7 +1569,7 @@ export class SoundEngine {
     const deepLow = lowpass(r.deep.cutoff);
     const deep = ctx.createGain();
     deep.gain.setValueAtTime(0, at);
-    deep.gain.linearRampToValueAtTime(e.level * r.deep.level, at + 0.3);
+    deep.gain.linearRampToValueAtTime(level * r.deep.level, at + 0.3);
     deep.gain.setTargetAtTime(0, hold, r.roll / 3);
     burst.connect(deepLow);
     deepLow.connect(deep);
@@ -1386,7 +1584,7 @@ export class SoundEngine {
       band.Q.value = r.crack.q;
       const air = lowpass(e.cutoff);
       const crack = ctx.createGain();
-      crack.gain.setValueAtTime(e.level * r.crack.level, at);
+      crack.gain.setValueAtTime(level * r.crack.level, at);
       crack.gain.setTargetAtTime(0, at + 0.005, r.crack.decay / 3);
       burst.connect(band);
       band.connect(air);
@@ -1406,64 +1604,109 @@ export class SoundEngine {
   /** How many knocks were played (tests). */
   knocks = 0;
 
-  /**
-   * Plays a bump's knock once: a thump falling in pitch and a crack of
-   * noise, each dying away, placed left or right.
-   */
   /** How many scrapes were played (tests). */
   scrapes = 0;
 
-  /** Plays a hull's scrape on the bottom once: band-passed noise swelling and dying away. */
+  /**
+   * Plays a hull's scrape on the bottom once: its recording, or band-passed
+   * noise swelling and dying away. Its seed is its own numbers, which every
+   * phone hearing it has alike.
+   */
   scrape(sc: Scrape): void {
     const g = this.#graph;
     if (g === null || !this.#live(g) || !(sc.level > 0)) {
       return;
     }
-    this.scrapes++;
     const ctx = g.ctx;
     const at = ctx.currentTime;
+    const seed = Math.round(sc.band * 7 + sc.level * 1000);
+    const rec = this.#choose(g, 'scrape', seed);
+    const end = at + sc.rise + 8 * sc.decay;
+    const out = this.#shot(
+      g,
+      'boat',
+      0,
+      'knocks',
+      sc.level,
+      at,
+      rec === null ? end : at + rec.seconds,
+    );
+    if (out === null) {
+      return;
+    }
+    this.scrapes++;
+    if (rec !== null) {
+      this.#start(g, rec, at, sc.level, out);
+      return;
+    }
+    const v = this.#vary('scrape', seed);
     const burst = ctx.createBufferSource();
     burst.buffer = g.noise.white;
     const band = ctx.createBiquadFilter();
     band.type = 'bandpass';
-    band.frequency.value = sc.band;
+    band.frequency.value = sc.band * v.rate;
     band.Q.value = sc.q;
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(sc.level, at + sc.rise);
+    gain.gain.linearRampToValueAtTime(sc.level * v.gain, at + sc.rise);
     gain.gain.setTargetAtTime(0, at + sc.rise, sc.decay);
     burst.connect(band);
     band.connect(gain);
-    gain.connect(g.mix.input('boat'));
-    const end = at + sc.rise + 8 * sc.decay;
+    gain.connect(out);
     burst.start(at, 0.7);
     burst.stop(end);
     burst.onended = () => {
-      for (const n of [burst, band, gain]) {
+      for (const n of [burst, band, gain, out]) {
         n.disconnect();
       }
     };
   }
 
+  /**
+   * Plays a bump's knock once: its recording, or a thump falling in pitch
+   * and a crack of noise, each dying away; placed left or right. Its seed is
+   * the knock's own numbers (how hard the hulls closed), which every phone
+   * hearing it has alike.
+   */
   knock(k: Knock): void {
     const g = this.#graph;
     if (g === null || !this.#live(g) || !(k.level > 0)) {
       return;
     }
-    this.knocks++;
     const ctx = g.ctx;
     const at = ctx.currentTime;
-    const pan = this.#shot(g, 'boat', k.pan);
+    const seed = Math.round(k.thump * 13 + k.crack);
+    const rec = this.#choose(g, 'knock', seed);
+    const end = at + 8 * Math.max(k.thumpDecay, k.crackDecay);
+    const pan = this.#shot(
+      g,
+      'boat',
+      k.pan,
+      'knocks',
+      k.level,
+      at,
+      rec === null ? end : at + rec.seconds,
+    );
+    if (pan === null) {
+      return;
+    }
+    this.knocks++;
+    if (rec !== null) {
+      this.#start(g, rec, at, k.level, pan);
+      return;
+    }
+    const v = this.#vary('knock', seed);
+    const level = k.level * v.gain;
 
     const tone = ctx.createOscillator();
     tone.type = 'sine';
-    tone.frequency.setValueAtTime(k.thump, at);
+    tone.frequency.setValueAtTime(k.thump * v.rate, at);
     tone.frequency.exponentialRampToValueAtTime(
-      Math.max(20, k.thump * k.fall),
+      Math.max(20, k.thump * v.rate * k.fall),
       at + 4 * k.thumpDecay,
     );
     const thump = ctx.createGain();
-    thump.gain.setValueAtTime(k.level, at);
+    thump.gain.setValueAtTime(level, at);
     thump.gain.setTargetAtTime(0, at + 0.004, k.thumpDecay);
     tone.connect(thump);
     thump.connect(pan);
@@ -1472,16 +1715,15 @@ export class SoundEngine {
     burst.buffer = g.noise.white;
     const band = ctx.createBiquadFilter();
     band.type = 'bandpass';
-    band.frequency.value = k.crack;
+    band.frequency.value = k.crack * v.rate;
     band.Q.value = k.q;
     const crack = ctx.createGain();
-    crack.gain.setValueAtTime(0.8 * k.level, at);
+    crack.gain.setValueAtTime(0.8 * level, at);
     crack.gain.setTargetAtTime(0, at + 0.002, k.crackDecay);
     burst.connect(band);
     band.connect(crack);
     crack.connect(pan);
 
-    const end = at + 8 * Math.max(k.thumpDecay, k.crackDecay);
     tone.start(at);
     tone.stop(end);
     burst.start(at, 0.3);
@@ -1533,17 +1775,61 @@ export class SoundEngine {
     if (g === null || !this.#live(g) || !(g0.level > 0)) {
       return;
     }
-    this.guns++;
     const r = GUN;
     const ctx = g.ctx;
     const at = ctx.currentTime + g0.delay;
-    const pan = this.#shot(g, 'races', g0.pan);
+    const rec = this.#choose(g, 'gun', 0);
+    const lastEcho = Math.max(0, ...g0.echoes.map((e) => e.delay));
+    const length =
+      rec === null
+        ? Math.max(3 * r.thump.decay, lastEcho + 2 * r.boom.decay)
+        : lastEcho + rec.seconds;
+    const pan = this.#shot(g, 'races', g0.pan, null, g0.level, at, at + length);
+    if (pan === null) {
+      return;
+    }
+    this.guns++;
+    if (g0.level >= this.#mix.duck.gun * r.level) {
+      this.#dip(g, at);
+    }
     const air = ctx.createBiquadFilter();
     air.type = 'lowpass';
     air.frequency.value = g0.cutoff;
     air.Q.value = 0.7;
     air.connect(pan);
     const nodes: AudioNode[] = [pan, air];
+    if (rec !== null) {
+      // Its recording, its crack shelved down: a report across the water,
+      // not a snap at the ear; then its echoes, each a later copy of it,
+      // fainter and duller.
+      const shelf = ctx.createBiquadFilter();
+      shelf.type = 'highshelf';
+      shelf.frequency.value = this.#mix.tone.gunCrack;
+      shelf.gain.value = this.#mix.tone.gunShelf;
+      shelf.connect(air);
+      nodes.push(shelf);
+      this.#start(g, rec, at, g0.level, shelf);
+      for (const e of g0.echoes) {
+        const low = ctx.createBiquadFilter();
+        low.type = 'lowpass';
+        low.frequency.value = e.cutoff;
+        low.Q.value = 0.7;
+        low.connect(shelf);
+        const s = ctx.createBufferSource();
+        s.buffer = rec.buffer;
+        const v = ctx.createGain();
+        v.gain.value = g0.level * rec.trim * e.level;
+        s.connect(v);
+        v.connect(low);
+        s.start(at + e.delay);
+        nodes.push(low, s, v);
+      }
+      const done = ctx.createConstantSource();
+      done.start(at);
+      done.stop(at + length + 0.1);
+      this.#whenEnded(done, nodes);
+      return;
+    }
 
     const tone = ctx.createOscillator();
     tone.type = 'sine';
@@ -1620,32 +1906,83 @@ export class SoundEngine {
    * breath and an "ah" through the open vowel's formants, its pitch rising
    * on the stress and falling away; a roar and claps under a big crowd's;
    * all through the low-pass of its distance. The one place the crowd is
-   * heard: a recorded cheer would be played here instead.
+   * heard. Where the crowds' recordings have come, the small, the medium
+   * and the large are crossfaded by how many cheered, through the same
+   * low-pass; and the player's own is its recording, near and short. The
+   * crowd's cheer dips the sea.
    */
   cheer(c: CheerSound): void {
     const g = this.#graph;
     if (g === null || !this.#live(g) || !(c.level > 0)) {
       return;
     }
-    this.cheers++;
     const r = CHEER;
     const ctx = g.ctx;
     const t0 = ctx.currentTime + 0.02;
-    const out = ctx.createGain();
-    out.gain.value = c.level;
-    out.connect(g.mix.input('races'));
+    const seed = c.count * 31 + (c.own ? 7 : 0);
+    // The recordings: the player's own, or each crowd at its share.
+    const recs: { rec: Chosen; share: number }[] = [];
+    if (c.own) {
+      const rec = this.#choose(g, 'cheer.own', seed);
+      if (rec !== null) {
+        recs.push({ rec, share: 1 });
+      }
+    } else {
+      const sizes = (['crowd.small', 'crowd.medium', 'crowd.large'] as const)
+        .map((voice, i) => ({ voice, at: Math.log2(this.#mix.crowd.at[i] ?? 1) }))
+        .filter((s) => (g.takes.get(s.voice)?.buffers.length ?? 0) > 0);
+      const each = shares(
+        Math.log2(Math.max(1, c.count)),
+        sizes.map((s) => s.at),
+      );
+      sizes.forEach((s, i) => {
+        const share = each[i] ?? 0;
+        const rec = share > 0.01 ? this.#choose(g, s.voice, seed) : null;
+        if (rec !== null) {
+          recs.push({ rec, share });
+        }
+      });
+    }
+    const length =
+      recs.length > 0
+        ? Math.max(...recs.map((x) => x.rec.seconds))
+        : Math.max(
+            r.roar.length * 1.6,
+            ...c.voices.map((v) => v.at + r.breath.length * 0.7 + v.length + 0.3),
+          );
+    const out = this.#shot(g, 'races', 0, null, c.level, t0, t0 + length);
+    if (out === null) {
+      return;
+    }
+    this.cheers++;
+    if (!c.own) {
+      this.#dip(g, t0);
+    }
     const air = ctx.createBiquadFilter();
     air.type = 'lowpass';
     air.frequency.value = c.cutoff;
     air.Q.value = 0.7;
     air.connect(out);
-    const nodes: AudioNode[] = [out, air];
+    if (recs.length > 0) {
+      let last: AudioScheduledSourceNode | null = null;
+      for (const x of recs) {
+        last = this.#start(g, x.rec, t0, c.level * x.share, air).source;
+      }
+      if (last !== null) {
+        this.#whenEnded(last, [air, out]);
+      }
+      return;
+    }
+    const level = ctx.createGain();
+    level.gain.value = c.level;
+    level.connect(air);
+    const nodes: AudioNode[] = [out, air, level];
     let end = t0;
     for (const v of c.voices) {
       const at = t0 + v.at;
       const pan = ctx.createStereoPanner();
       pan.pan.value = v.pan;
-      pan.connect(air);
+      pan.connect(level);
       // The breath, "h".
       const breath = ctx.createBufferSource();
       breath.buffer = g.noise.white;
@@ -1721,7 +2058,7 @@ export class SoundEngine {
       roar.connect(lo);
       lo.connect(hi);
       hi.connect(rg);
-      rg.connect(air);
+      rg.connect(level);
       roar.start(t0, Math.random());
       roar.stop(t0 + r.roar.length * 1.6);
       nodes.push(roar, lo, hi, rg);
@@ -1744,7 +2081,7 @@ export class SoundEngine {
       clap.connect(band);
       band.connect(cg);
       cg.connect(pan);
-      pan.connect(air);
+      pan.connect(level);
       clap.start(at, Math.random());
       clap.stop(at + r.claps.length * 4);
       nodes.push(clap, band, cg, pan);
@@ -1761,45 +2098,81 @@ export class SoundEngine {
 
   /** A number from 0 to 1 for a seed and a draw. */
   #unit(seed: number, k: number): number {
-    const v = Math.sin(seed * 3.7 + k * 1.3) * 43758.5453;
-    return v - Math.floor(v);
+    return unit(seed, k);
+  }
+
+  /** How a voice played once is varied for a seed: none for a signal. */
+  #vary(voice: ShotVoice, seed: number): Variation {
+    const s = this.#mix.shots[voice];
+    return vary(seed, s.pitch, s.level);
   }
 
   /**
-   * Plays one of a shot's recordings, if it has any, at level into out: a
-   * take other than the last, a little higher or lower and louder or softer
-   * by the seed (pitch semitones, spread dB either way). Whether it did.
+   * The recording a voice played once plays for a seed, if it has any: the
+   * take the seed picks (a signal's first), varied as the voice is.
    */
-  #take(
-    g: Graph,
-    voice: Voice,
-    level: number,
-    seed: number,
-    out: AudioNode,
-    pitch: number,
-    spread: number,
-  ): boolean {
+  #choose(g: Graph, voice: ShotVoice, seed: number): Chosen | null {
     const t = g.takes.get(voice);
     const n = t?.buffers.length ?? 0;
     if (t === undefined || n === 0) {
-      return false;
+      return null;
     }
-    const k = n === 1 ? 0 : (t.last + 1 + Math.floor(this.#unit(seed, 7) * (n - 1))) % n;
-    t.last = k;
-    const ctx = g.ctx;
-    const s = ctx.createBufferSource();
-    s.buffer = t.buffers[k] ?? null;
-    s.playbackRate.value = 2 ** ((pitch * (2 * this.#unit(seed, 8) - 1)) / 12);
-    const v = ctx.createGain();
-    v.gain.value = level * (t.trims[k] ?? 1) * gainOf(spread * (2 * this.#unit(seed, 9) - 1));
-    s.connect(v);
-    v.connect(out);
-    s.start(ctx.currentTime);
-    s.onended = () => {
-      s.disconnect();
-      v.disconnect();
+    const s = this.#mix.shots[voice];
+    const signal = s.pitch === 0 && s.level === 0;
+    const k = signal ? 0 : pickTake(seed, n, t.last);
+    const buffer = t.buffers[k] as AudioBuffer;
+    const v = this.#vary(voice, seed);
+    return {
+      voice,
+      take: k,
+      buffer,
+      trim: t.trims[k] ?? 1,
+      note: t.notes[k] ?? 0,
+      loop: t.loops[k] ?? null,
+      rate: v.rate,
+      gain: v.gain,
+      seconds: buffer.duration / v.rate,
     };
-    return true;
+  }
+
+  /** What was played of the voices' recordings, the latest last (tests, the sound room). */
+  readonly heard: { voice: Voice; take: number; rate: number; gain: number }[] = [];
+
+  /**
+   * Plays a chosen recording into out from at, at level times its trim and
+   * variation, at its rate times rate: the source, to be stopped or shaped,
+   * and its gain.
+   */
+  #start(
+    g: Graph,
+    c: Chosen,
+    at: number,
+    level: number,
+    out: AudioNode,
+    rate = 1,
+  ): { source: AudioBufferSourceNode; gain: GainNode } {
+    const t = g.takes.get(c.voice);
+    if (t !== undefined) {
+      t.last = c.take;
+    }
+    this.heard.push({ voice: c.voice, take: c.take, rate: c.rate * rate, gain: c.gain });
+    if (this.heard.length > 256) {
+      this.heard.splice(0, 128);
+    }
+    const ctx = g.ctx;
+    const source = ctx.createBufferSource();
+    source.buffer = c.buffer;
+    source.playbackRate.value = c.rate * rate;
+    const gain = ctx.createGain();
+    gain.gain.value = level * c.trim * c.gain;
+    source.connect(gain);
+    gain.connect(out);
+    source.start(at);
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
+    return { source, gain };
   }
 
   /**
@@ -1810,16 +2183,30 @@ export class SoundEngine {
     if (!(sl.level > 0)) {
       return;
     }
-    this.slaps++;
     const c = this.#mix.slaps;
-    const out = g.mix.input('sea');
-    if (this.#take(g, 'slap', sl.level, sl.seed, out, c.pitch, c.spread)) {
-      return;
-    }
     const ctx = g.ctx;
     const at = ctx.currentTime;
-    const k = 2 ** ((c.pitch * (2 * this.#unit(sl.seed, 1) - 1)) / 12);
-    const level = sl.level * gainOf(c.spread * (2 * this.#unit(sl.seed, 2) - 1));
+    const rec = this.#choose(g, 'slap', sl.seed);
+    const out = this.#shot(
+      g,
+      'sea',
+      0,
+      'splashes',
+      sl.level,
+      at,
+      at + (rec?.seconds ?? 8 * c.decay),
+    );
+    if (out === null) {
+      return;
+    }
+    this.slaps++;
+    if (rec !== null) {
+      this.#start(g, rec, at, sl.level, out);
+      return;
+    }
+    const v = this.#vary('slap', sl.seed);
+    const k = v.rate;
+    const level = sl.level * v.gain;
     const lo = c.band[0] ?? 380;
     const hi = c.band[1] ?? 900;
     const burst = ctx.createBufferSource();
@@ -1829,10 +2216,10 @@ export class SoundEngine {
     band.Q.value = c.q;
     band.frequency.setValueAtTime(hi * k, at);
     band.frequency.exponentialRampToValueAtTime(lo * k, at + 2 * c.decay);
-    const v = ctx.createGain();
-    v.gain.setValueAtTime(0, at);
-    v.gain.linearRampToValueAtTime(level, at + 0.006);
-    v.gain.setTargetAtTime(0, at + 0.006, c.decay);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(level, at + 0.006);
+    gain.gain.setTargetAtTime(0, at + 0.006, c.decay);
     const tone = ctx.createOscillator();
     tone.frequency.setValueAtTime(c.thump * k * 1.4, at);
     tone.frequency.exponentialRampToValueAtTime(c.thump * k, at + c.decay);
@@ -1841,8 +2228,8 @@ export class SoundEngine {
     thump.gain.linearRampToValueAtTime(level * c.thumpLevel, at + 0.008);
     thump.gain.setTargetAtTime(0, at + 0.008, c.decay / 1.5);
     burst.connect(band);
-    band.connect(v);
-    v.connect(out);
+    band.connect(gain);
+    gain.connect(out);
     tone.connect(thump);
     thump.connect(out);
     const end = at + 8 * c.decay;
@@ -1851,7 +2238,7 @@ export class SoundEngine {
     tone.start(at);
     tone.stop(end);
     burst.onended = () => {
-      for (const n of [burst, band, v, tone, thump]) {
+      for (const n of [burst, band, gain, tone, thump, out]) {
         n.disconnect();
       }
     };
@@ -1868,14 +2255,23 @@ export class SoundEngine {
       return;
     }
     const c = this.#mix.sail;
-    const out = this.#shot(g, 'boat', 0);
     const ctx = g.ctx;
     const at = ctx.currentTime;
+    const voice = sc.kind === 'sheet' ? 'sheet' : 'boom';
+    const rec = this.#choose(g, voice, sc.seed);
+    const length = rec?.seconds ?? (sc.kind === 'sheet' ? 2 * c.sheet.length : 8 * c.boom.decay);
+    const out = this.#shot(g, 'boat', 0, null, sc.level, at, at + length);
+    if (out === null) {
+      return;
+    }
     const nodes: AudioNode[] = [out];
     let end = at;
+    const v = this.#vary(voice, sc.seed);
+    const level = sc.level * v.gain;
     if (sc.kind === 'sheet') {
       this.sheets++;
-      if (this.#take(g, 'sheet', sc.level, sc.seed, out, 1, 2)) {
+      if (rec !== null) {
+        this.#start(g, rec, at, sc.level, out);
         return;
       }
       const r = c.sheet;
@@ -1884,12 +2280,12 @@ export class SoundEngine {
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
       band.Q.value = r.q;
-      band.frequency.setValueAtTime(r.band, at);
-      band.frequency.exponentialRampToValueAtTime(r.band * 0.6, at + r.length);
-      const v = ctx.createGain();
-      v.gain.setValueAtTime(0, at);
-      v.gain.linearRampToValueAtTime(sc.level, at + 0.04);
-      v.gain.setTargetAtTime(0, at + 0.4 * r.length, r.length / 4);
+      band.frequency.setValueAtTime(r.band * v.rate, at);
+      band.frequency.exponentialRampToValueAtTime(r.band * v.rate * 0.6, at + r.length);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(level, at + 0.04);
+      gain.gain.setTargetAtTime(0, at + 0.4 * r.length, r.length / 4);
       // The flutter: half the level beaten at the sheave's rate, slowing.
       const flutter = ctx.createGain();
       flutter.gain.value = 0.6;
@@ -1902,36 +2298,37 @@ export class SoundEngine {
       depth.connect(flutter.gain);
       burst.connect(band);
       band.connect(flutter);
-      flutter.connect(v);
-      v.connect(out);
+      flutter.connect(gain);
+      gain.connect(out);
       end = at + 2 * r.length;
       burst.start(at, this.#unit(sc.seed, 1) * 8);
       burst.stop(end);
       beat.start(at);
       beat.stop(end);
-      nodes.push(burst, band, v, flutter, beat, depth);
+      nodes.push(burst, band, gain, flutter, beat, depth);
     } else {
       this.booms++;
-      if (this.#take(g, 'boom', sc.level, sc.seed, out, 1, 2)) {
+      if (rec !== null) {
+        this.#start(g, rec, at, sc.level, out);
         return;
       }
       const r = c.boom;
       const tone = ctx.createOscillator();
-      tone.frequency.setValueAtTime(r.thump * 1.3, at);
-      tone.frequency.exponentialRampToValueAtTime(r.thump, at + r.decay);
+      tone.frequency.setValueAtTime(r.thump * v.rate * 1.3, at);
+      tone.frequency.exponentialRampToValueAtTime(r.thump * v.rate, at + r.decay);
       const thump = ctx.createGain();
       thump.gain.setValueAtTime(0, at);
-      thump.gain.linearRampToValueAtTime(sc.level, at + 0.005);
+      thump.gain.linearRampToValueAtTime(level, at + 0.005);
       thump.gain.setTargetAtTime(0, at + 0.005, r.decay);
       const burst = ctx.createBufferSource();
       burst.buffer = g.noise.white;
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
-      band.frequency.value = r.knock;
+      band.frequency.value = r.knock * v.rate;
       band.Q.value = r.q;
       const knock = ctx.createGain();
       knock.gain.setValueAtTime(0, at);
-      knock.gain.linearRampToValueAtTime(0.5 * sc.level, at + 0.003);
+      knock.gain.linearRampToValueAtTime(0.5 * level, at + 0.003);
       knock.gain.setTargetAtTime(0, at + 0.003, r.decay / 2);
       tone.connect(thump);
       thump.connect(out);
@@ -1989,15 +2386,18 @@ export class SoundEngine {
   /**
    * Plays a recording as a voice's from now: a bed's in each family that
    * has it as a layer, taking over from the synthesis over crossfade
-   * seconds, starting at a random place; a shot's as one more take. gain is
-   * its own, dB, over the voice's. It replaces a bed's recording already
-   * there.
+   * seconds, starting at a random place; a shot's as one more take, with
+   * its note (Hz: a fog signal's recording pitched to each device's note)
+   * and the stretch it loops to sound longer (a fog signal's blast), s.
+   * gain is its own, dB, over the voice's. It replaces a bed's recording
+   * already there.
    */
   useRecording(
     voice: Voice,
     buffer: AudioBuffer,
     gain = 0,
     crossfade = this.#mix.layers.crossfade,
+    shape: { note?: number; loop?: readonly number[] } = {},
   ): void {
     const g = this.#graph;
     if (g === null) {
@@ -2006,9 +2406,12 @@ export class SoundEngine {
     const ctx = g.ctx;
     const at = ctx.currentTime;
     if (VOICES[voice] === 'shot') {
-      const t = g.takes.get(voice) ?? { buffers: [], trims: [], last: -1 };
+      const t = g.takes.get(voice) ?? { buffers: [], trims: [], notes: [], loops: [], last: -1 };
       t.buffers.push(buffer);
-      t.trims.push(gainOf(gain + this.#mix.shots[voice as keyof MixRecipe['shots']]));
+      t.trims.push(gainOf(gain + this.#mix.shots[voice as ShotVoice].gain));
+      t.notes.push(shape.note ?? 0);
+      const [from, to] = shape.loop ?? [];
+      t.loops.push(from !== undefined && to !== undefined && to > from ? [from, to] : null);
       g.takes.set(voice, t);
       this.recorded.add(voice);
       return;
@@ -2118,7 +2521,11 @@ export class SoundEngine {
       fetch: fetchBytes,
       frame: betweenFrames,
       need: (r) => this.#need(g, r),
-      loaded: (r, buffer) => this.useRecording(r.voice as Voice, buffer, r.gain),
+      loaded: (r, buffer) =>
+        this.useRecording(r.voice as Voice, buffer, r.gain, undefined, {
+          ...(r.note === undefined ? {} : { note: r.note }),
+          ...(r.loop === undefined ? {} : { loop: r.loop }),
+        }),
       failed: (r, why) => console.warn(`sound: ${r.name} plays synthesised`, why),
       ...w.host,
     };
@@ -2151,15 +2558,64 @@ export class SoundEngine {
   }
 
   /**
-   * Where a sound played once goes: a panner into its family's bus. Every
-   * one-shot goes through here.
+   * Where a sound played once goes: a panner, then the gain that lets it go
+   * fast, into its bus. Every one-shot goes through here, its family (null
+   * for none), its level and when it starts and ends (s) asked of the voice
+   * limits first: null where it is not to play, the quietest of too many.
    */
-  #shot(g: Graph, bus: BusName, pan: number): StereoPannerNode {
-    const p = g.ctx.createStereoPanner();
+  #shot(
+    g: Graph,
+    bus: BusName,
+    pan: number,
+    family: string | null,
+    level: number,
+    start: number,
+    end: number,
+  ): StereoPannerNode | null {
+    const ctx = g.ctx;
+    const fade = ctx.createGain();
+    const release = this.#mix.voices.release;
+    const ok = g.voices.admit(
+      {
+        family,
+        level,
+        start,
+        end,
+        letGo: (at) => {
+          fade.gain.setTargetAtTime(0, at, release / 3);
+        },
+      },
+      ctx.currentTime,
+    );
+    if (!ok) {
+      return null;
+    }
+    const p = ctx.createStereoPanner();
     p.pan.value = pan;
-    p.connect(g.mix.input(bus));
+    p.connect(fade);
+    fade.connect(g.mix.input(bus));
     return p;
   }
+
+  /** How many sounds played once were let go, or not started, for the voice limits (tests, the sound room). */
+  get letGo(): number {
+    return this.#graph?.voices.letGo ?? 0;
+  }
+
+  /** How many sounds played once play now. */
+  get playingOnce(): number {
+    const g = this.#graph;
+    return g === null ? 0 : g.voices.count(g.ctx.currentTime);
+  }
+
+  /** Dips the sea's bus from at under a signal that matters. */
+  #dip(g: Graph, at: number): void {
+    this.ducks++;
+    g.mix.dip('sea', at, this.#mix.duck);
+  }
+
+  /** How many times the sea's bus was dipped (tests). */
+  ducks = 0;
 
   /**
    * Fades the sound out and then suspends the context while it is off or

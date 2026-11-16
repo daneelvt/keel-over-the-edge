@@ -21,8 +21,10 @@ export interface CheerVoice {
   pan: number;
 }
 
-/** A cheer to play once: its voices, its roar's level (0 for none) and its claps (each when, s, and where), the low-pass over it, Hz, and its level. */
+/** A cheer to play once: how many cheered, and whether it is the player's own; its voices, its roar's level (0 for none) and its claps (each when, s, and where), the low-pass over it, Hz, and its level. */
 export interface CheerSound {
+  count: number;
+  own: boolean;
   voices: CheerVoice[];
   roar: number;
   claps: { at: number; pan: number }[];
@@ -76,5 +78,13 @@ export function cheerOf(
     : distant
       ? Math.min(r.distant.most, r.distant.level + r.distant.perDouble * doubles)
       : Math.min(r.distant.most, r.distant.level + r.distant.perDouble * doubles) * 0.8;
-  return { voices, roar, claps, cutoff: distant ? r.distant.cutoff : 9000, level: level * r.level };
+  return {
+    count: n,
+    own,
+    voices,
+    roar,
+    claps,
+    cutoff: distant ? r.distant.cutoff : 9000,
+    level: level * r.level,
+  };
 }

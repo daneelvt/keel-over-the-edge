@@ -10,7 +10,10 @@
 // what the server's lookout hears stays the recipes'), under the player's
 // slider; the buses run into the master, the player's volume, then a fade
 // that starts and stops the sound without a click, then a limiter, a
-// safety net the mix is staged to keep away from, then the speaker.
+// safety net the mix is staged to keep away from, then the speaker. A
+// signal that matters (the gun, a near fog signal, the crowd's cheer) dips
+// the sea's bus a little while it sounds, so it stands out without being
+// loud.
 //
 // The player's sliders are cubed: loudness goes as the logarithm of power,
 // so a slider that set the gain itself would be dead at the top and abrupt
@@ -153,6 +156,25 @@ export class Mixer {
   /** A bus's duck: held at one; a signal that matters dips the bus by it. */
   duck(bus: BusName): AudioParam {
     return this.#buses[bus].duck.gain;
+  }
+
+  /** When each bus's dip ends, s: a dip within another holds it longer. */
+  readonly #dipped = new Map<BusName, number>();
+
+  /**
+   * Dips a bus under a signal that matters: down by the duck's depth dB from
+   * at over its attack, held to hold seconds after at, and back over its
+   * release. A dip that starts within another's lengthens it.
+   */
+  dip(bus: BusName, at: number, d: MixRecipe['duck'] = this.#r.duck): void {
+    const p = this.duck(bus);
+    const depth = gainOf(d.depth);
+    const until = Math.max(at + d.hold, this.#dipped.get(bus) ?? Number.NEGATIVE_INFINITY);
+    this.#dipped.set(bus, until);
+    hold(p, at);
+    p.linearRampToValueAtTime(depth, at + d.attack);
+    p.setValueAtTime(depth, until);
+    p.linearRampToValueAtTime(1, until + d.release);
   }
 
   /** A bus's output, after its balance and slider: for a meter to listen to. */

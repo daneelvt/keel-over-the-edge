@@ -13,6 +13,7 @@
 // and one that is not sound.
 
 import { SoundEngine } from '../src/audio/engine';
+import { GUN, gunReport } from '../src/audio/gun';
 import {
   integrated,
   measure,
@@ -163,6 +164,8 @@ export interface Measured {
   reduction: number;
   /** How many of each kind of sound played once were played. */
   played: Record<string, number>;
+  /** The recordings played once, in turn: each its voice, take and variation. */
+  heard: { voice: string; take: number; rate: number; gain: number }[];
 }
 
 /** An engine's parts this harness may find on it: older engines have none. */
@@ -180,6 +183,22 @@ export interface RenderOptions {
   tap?: BusName;
   /** Voices played by the test sea in place of their synthesis, from the start, taking over over crossfade s (none: at once). */
   recorded?: { voices: Voice[]; crossfade?: number };
+  /** Voices played once given count takes of their own (bursts of noise, each its own length). */
+  takes?: { voices: Voice[]; count: number };
+  /** A racer's gun fired beside the boat at this, s. */
+  gunAt?: number;
+}
+
+/** A take for a test: a burst of noise dying away over seconds. */
+function burst(ctx: BaseAudioContext, seconds: number): AudioBuffer {
+  const b = ctx.createBuffer(1, Math.round(RATE * seconds), RATE);
+  const d = b.getChannelData(0);
+  let seed = Math.round(seconds * 1000);
+  for (let i = 0; i < d.length; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    d[i] = (seed / 2147483648 - 1) * 0.3 * Math.exp((-4 * i) / d.length);
+  }
+  return b;
 }
 
 async function render(name: string, seconds: number, o: RenderOptions = {}): Promise<Measured> {
@@ -214,6 +233,13 @@ async function render(name: string, seconds: number, o: RenderOptions = {}): Pro
       engine.useRecording(v, b, 0, o.recorded.crossfade ?? 0);
     }
   }
+  if (o.takes !== undefined) {
+    for (const v of o.takes.voices) {
+      for (let k = 0; k < o.takes.count; k++) {
+        engine.useRecording(v, burst(ctx, 0.3 + 0.1 * k));
+      }
+    }
+  }
   const taps = engine as unknown as Taps;
   taps.volumes?.(o.volume ?? 1, 1, 1);
   const bed = taps.tap?.(o.tap ?? 'sea') ?? null;
@@ -224,6 +250,12 @@ async function render(name: string, seconds: number, o: RenderOptions = {}): Pro
   let k = 0;
   const tick = (): void => {
     scene.step(engine, k * STEP, k * STEP * 1000);
+    if (o.gunAt !== undefined && Math.abs(k * STEP - o.gunAt) < STEP / 2) {
+      const r = gunReport(GUN, { east: 0, north: 0 }, { east: 0, north: 0 }, 0, 1, true);
+      if (r !== null) {
+        engine.gun(r);
+      }
+    }
     // The limiter's meter starts from a reduction of its own, settling
     // within a second: it is read from then on.
     if (k * STEP >= SETTLE) {
@@ -278,8 +310,31 @@ async function render(name: string, seconds: number, o: RenderOptions = {}): Pro
       sheets: engine.sheets,
       booms: engine.booms,
       taps: engine.taps,
+      knocks: engine.knocks,
+      water: engine.waterSounds,
+      features: engine.featureEvents,
+      letGo: engine.letGo,
+      ducks: engine.ducks,
     },
+    heard: (engine.heard ?? []).map((h) => ({ ...h })),
   };
+}
+
+/** The mean power of the last rendering's bed (the tapped bus) from s to s. */
+function bedPower(from: number, to: number): number {
+  if (last === null) {
+    throw new Error('nothing rendered');
+  }
+  let sum = 0;
+  let n = 0;
+  for (const c of [2, 3]) {
+    const d = last.getChannelData(c);
+    for (let i = Math.round(from * RATE); i < Math.min(d.length, Math.round(to * RATE)); i++) {
+      sum += (d[i] ?? 0) ** 2;
+      n++;
+    }
+  }
+  return sum / Math.max(1, n);
 }
 
 /** The integrated loudness of scenes' last renderings heard one after another, LUFS. */
@@ -319,6 +374,7 @@ function pcm(from: number, to: number): string {
 const hooks = {
   render,
   pcm,
+  bedPower,
   typical,
   useEngine,
   decodeOwn,
