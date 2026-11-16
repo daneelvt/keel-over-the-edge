@@ -14,6 +14,8 @@ import { expect, type Page, test } from '@playwright/test';
 import { GAME, sail, sailor, setSail } from './helpers';
 
 // Playwright keeps Chromium's back/forward cache off; these tests need it.
+// Chromium's headless shell keeps it off all the same: there the test
+// checks only that nothing of the page's own would keep it out.
 test.use({ launchOptions: { ignoreDefaultArgs: ['--disable-back-forward-cache'] } });
 
 /** keel's metrics, on its internal listener (tools/e2e). */
@@ -124,6 +126,12 @@ test('away to the rules and back: the page comes back from the cache and sails o
     Object.assign(globalThis, { shows });
     window.addEventListener('pageshow', (e) => shows.push(e.persisted));
   });
+  // Why a page was not kept, as Chromium says it: the page's own faults
+  // ("PageSupportNeeded") apart from the browser's.
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Page.enable');
+  const notKept: { type: string; reason: string }[] = [];
+  cdp.on('Page.backForwardCacheNotUsed', (e) => notKept.push(...e.notRestoredExplanations));
   await sailor(context, 'Back');
   await sail(page);
   const boat = await page.evaluate(() => globalThis.keel.net().boat);
@@ -131,12 +139,27 @@ test('away to the rules and back: the page comes back from the cache and sails o
   await expect(page.locator('h1').first()).toBeVisible();
   // A page restored from the cache fires pageshow, not load.
   await page.goBack({ waitUntil: 'commit' });
+  await page.waitForFunction(
+    () => ((globalThis as unknown as { shows?: boolean[] }).shows ?? []).length > 0,
+    null,
+    { timeout: 30_000 },
+  );
+  const shows = await page.evaluate(() => (globalThis as unknown as { shows: boolean[] }).shows);
+  if (shows.length === 1) {
+    // Loaded again: nothing of the page's own kept it out. Chromium's
+    // headless shell (CI) keeps no page at all; Chrome does.
+    await expect.poll(() => notKept.length, { timeout: 10_000 }).toBeGreaterThan(0);
+    expect(notKept.filter((x) => x.type === 'PageSupportNeeded')).toEqual([]);
+    await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible();
+    test.info().annotations.push({
+      type: 'not kept',
+      description: notKept.map((x) => x.reason).join(', '),
+    });
+    return;
+  }
   // The same page, its hooks still there: restored, not loaded again.
-  await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 30_000 });
-  expect(await page.evaluate(() => (globalThis as unknown as { shows: boolean[] }).shows)).toEqual([
-    false,
-    true,
-  ]);
+  expect(shows).toEqual([false, true]);
+  expect(notKept).toEqual([]);
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,
   });
