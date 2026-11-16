@@ -186,7 +186,7 @@ export const SEA_LOOK = {
   crestFloor: 0.03,
 };
 
-interface WaterInput {
+export interface WaterInput {
   /** The surface's normal. */
   normal: Node<'vec3'>;
   /** How far the crest lightens the water, 0 to 1 (lightening). */
@@ -227,8 +227,8 @@ const lightening = (crest: Node<'float'>, detail: Node<'float'>): Node<'float'> 
     1,
   ) as unknown as Node<'float'>;
 
-/** The water's colour (display values), before the tile style and the haze. */
-const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
+/** The water's colour (display values), before the tile style and the haze: the sea's, and the falls'. */
+export const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const N = input.normal;
   const L = look.light;
   const R = reflect(V.negate(), N);
