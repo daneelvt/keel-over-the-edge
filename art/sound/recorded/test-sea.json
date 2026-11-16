@@ -1,0 +1,16 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A recording's numbers, read by the page alone. kind: a bed (a loop under the physics), a shot (played once) or the probe (decoded to choose the format). voice: which of the page's voices plays it (none where empty). gain: dB over that voice's own level. The rest is written by go run ./tools/sounds -encode: the SHA-256 of the master it was built from, its seconds and channels, the WebM's integrated loudness (LUFS) and true peak (dBTP), and each file's bytes.",
+  "kind": "bed",
+  "voice": "",
+  "gain": 0,
+  "master": "883603d0806c72a3f1ee02899f1a829910988b84a2778c461c3468b080ec13e8",
+  "seconds": 2,
+  "channels": 1,
+  "loudness": -23.2,
+  "peak": -6.5,
+  "bytes": {
+    "webm": 12364,
+    "m4a": 13452
+  }
+}

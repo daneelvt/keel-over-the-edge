@@ -417,6 +417,9 @@ func runLint(ctx context.Context, out io.Writer) error {
 		{".", []string{"env", "CGO_ENABLED=0", "go", "tool", "sqlc", "compile", "-f", "internal/store/sqlc.yaml"}},
 		{".", []string{"env", "CGO_ENABLED=0", "go", "tool", "sqlc", "diff", "-f", "internal/store/sqlc.yaml"}},
 		{".", []string{"go", "run", "./tools/confusables", "-check"}},
+		// The recordings: each listed with its licence, built from its
+		// master, and within the sizes.
+		{".", []string{"go", "run", "./tools/sounds", "-check"}},
 		// The game connection's schema: buf's own rules, and the code
 		// generated from it current.
 		{"shared/protocol", []string{"../../client/node_modules/.bin/buf", "lint"}},
