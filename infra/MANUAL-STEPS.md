@@ -754,7 +754,7 @@ reads):
 | `GITHUB_APP_PRIVATE_KEY` | the `.pem` file's whole text, its `BEGIN` and `END` lines included |
 | `GITHUB_APP_WEBHOOK_SECRET` | the webhook's secret, from 15.2 |
 | `GITHUB_APP_CLIENT_SECRET` | the client secret |
-| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read, never at the game's domain, which receives no mail |
+| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read; `contact@keelovertheedge.com` once its mailbox receives mail (section 17), and until then one elsewhere, as the game's domain receives none |
 
 Then delete the `.pem` file and the webhook's secret from the password
 manager: Infisical holds them alone, and a new key or secret can always
@@ -929,6 +929,26 @@ the map rests on its last good copy.
 To rotate only its secret (one that may have leaked): raise
 `website_token_generation` and set `website_token_old_until` an hour
 after you will apply; the old secret is let through until then.
+
+## 17. The contact mailbox: contact@keelovertheedge.com
+
+The website's footer, the game's privacy page (`client/privacy.html`) and
+its safety page (`client/safety.html`) give `contact@keelovertheedge.com`
+for questions, privacy requests and anyone outside the game. Today the
+domain receives no mail at all: `infra/tofu/dns.tf` has a null MX, an SPF
+record that allows no sender and DMARC `p=reject`, so mail to that address
+bounces until this is done.
+
+1. Choose a mail service for the domain and make the mailbox (or an alias
+   forwarded to one you read) for `contact@keelovertheedge.com`.
+2. By a pull request, replace `null_mx` in `infra/tofu/dns.tf` with the
+   service's MX records, add its SPF include (or keep `-all` if it only
+   receives) and its DKIM records, and keep DMARC at `p=reject` once its
+   DKIM passes. Run `accounts` with `plan`, then `apply`.
+3. Send a message to the address from another account, and answer it, to
+   check both ways.
+4. If the agreement page's `CONTACT_EMAIL` (section 15.3) points
+   elsewhere, it may now point here.
 
 ## If something fails
 
