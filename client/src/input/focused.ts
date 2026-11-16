@@ -8,8 +8,42 @@
 // they do there; Escape still closes what is open. On the scene or the
 // page, and on a key a pointer pressed (which keeps the focus but not its
 // ring), the game's keys work as everywhere.
+//
+// How the focus came is kept here rather than read from :focus-visible:
+// Chrome turns that on at any key pressed after a click, Shift included,
+// so a player who clicked Reef would steer once with Q and then no more.
 
 import type { KeyFocus } from './keys';
+
+/** The element the keyboard last brought the focus to, or null. */
+let reached: Element | null = null;
+/** Whether the latest press was a key's rather than a pointer's. */
+let lastKey = false;
+
+if (typeof document !== 'undefined') {
+  const opts = { capture: true, passive: true } as const;
+  document.addEventListener(
+    'keydown',
+    () => {
+      lastKey = true;
+    },
+    opts,
+  );
+  document.addEventListener(
+    'pointerdown',
+    () => {
+      lastKey = false;
+    },
+    opts,
+  );
+  document.addEventListener(
+    'focusin',
+    (e) => {
+      reached = lastKey && e.target instanceof Element ? e.target : null;
+    },
+    opts,
+  );
+}
 
 /** Where a key goes: typing in a field, standing aside, or the game's keys with the focus there. */
 export type KeysGo = 'typing' | 'aside' | KeyFocus;
@@ -37,12 +71,5 @@ export function keysGo(target: EventTarget | null): KeysGo {
   if (target.closest('[aria-modal="true"]') !== null) {
     return 'aside';
   }
-  let shown = false;
-  try {
-    shown = target.matches(':focus-visible');
-  } catch {
-    // A browser that does not know the selector: the focus as it was.
-    shown = true;
-  }
-  return shown ? 'aside' : 'page';
+  return target === reached ? 'aside' : 'page';
 }

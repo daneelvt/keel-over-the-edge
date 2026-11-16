@@ -155,7 +155,7 @@ test('at sea, the screen, the menu, the question before going home, the log and 
   expect(found).toEqual([]);
 });
 
-test('keys go to what has the focus: the sheet trims on its arrows, a key keeps them, a question and the chart close on Escape and give the focus back', async ({
+test('keys go to what has the focus: the sheet trims on its arrows, a key tabbed to keeps them, a clicked one not, a question and the chart close on Escape and give the focus back', async ({
   context,
   page,
 }) => {
@@ -226,4 +226,14 @@ test('keys go to what has the focus: the sheet trims on its arrows, a key keeps 
   await page.keyboard.press('Escape');
   await expect(chart).toHaveCount(0);
   await expect(page.locator('.pocket-chart')).toBeFocused();
+  // A key a pointer pressed keeps the game's keys, a Shift between too:
+  // the arrows still steer.
+  await page.evaluate(() => globalThis.keel.setControls(0, 0.5));
+  const reef = page.getByRole('button', { name: /^Reef: / });
+  await reef.click();
+  await expect(reef).toBeFocused();
+  await page.keyboard.press('Shift');
+  await page.keyboard.down('ArrowLeft');
+  await expect.poll(async () => (await controls()).helm, { timeout: 5_000 }).toBeLessThan(-0.3);
+  await page.keyboard.up('ArrowLeft');
 });
