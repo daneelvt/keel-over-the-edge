@@ -39,6 +39,21 @@ export interface Response {
   /** When it was asked for and when it ended, ms from the navigation's start. */
   start: number;
   end: number;
+  /** Whether it could not be read in time, its bytes unknown (and 0 here). */
+  unread?: true;
+}
+
+/** How long a finished request's reading may take. */
+const READ_WITHIN = 10_000;
+
+/**
+ * The counted files (the build's assets and the land's chunks) whose bytes
+ * could not be read: a tally with any is short.
+ */
+export function unreadFiles(all: readonly Response[]): string[] {
+  return all
+    .filter((r) => r.unread && (r.path.startsWith('/assets/') || r.path.startsWith('/w/')))
+    .map((r) => r.path);
 }
 
 /** What a response is, for the table, by its path and type. */
@@ -99,9 +114,36 @@ export async function measure(
 /**
  * A request read as it finishes, its times from the clock's zero: a
  * service worker's request can be read only while the worker runs, and
- * the browser stops an idle worker soon after.
+ * the browser stops an idle worker soon after. Even so a worker's request
+ * may never answer (its own script's, seen on CI): after a while it is
+ * told as unread rather than awaited for ever.
  */
 async function take(req: Request): Promise<Response | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<Response>((resolve) => {
+    timer = setTimeout(() => {
+      const t = req.timing();
+      const path = new URL(req.url()).pathname;
+      resolve({
+        path,
+        kind: 'unread',
+        raw: 0,
+        sent: 0,
+        before: 0,
+        start: t.startTime,
+        end: t.startTime,
+        unread: true,
+      });
+    }, READ_WITHIN);
+  });
+  try {
+    return await Promise.race([read(req), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function read(req: Request): Promise<Response | null> {
   const res = await req.response();
   // A page's request the service worker answered: what it fetched from the
   // network, if anything, is the worker's own request, counted as such.

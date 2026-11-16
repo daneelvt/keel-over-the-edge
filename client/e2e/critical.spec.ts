@@ -37,6 +37,7 @@ import {
   revealed,
   s,
   throttle,
+  unreadFiles,
 } from './wire';
 
 /** The critical download's budget, bytes on the wire to the reveal. */
@@ -72,6 +73,7 @@ test('a new sailor’s download to the reveal is under 4 MB on the wire', async 
   const all = (await Promise.all(finished.map((r) => measure(r, origin)))).filter(
     (r): r is Response => r !== null,
   );
+  expect(unreadFiles(all), 'files whose bytes could not be read').toEqual([]);
   const reveal = marks.reveal ?? 0;
   const toReveal = all.filter((r) => r.end <= reveal);
   const toStart = all.filter((r) => r.end <= (marks.start ?? 0));

@@ -40,6 +40,7 @@ import {
   revealed,
   s,
   throttle,
+  unreadFiles,
 } from './wire';
 
 /** A return visit's budget, bytes on the wire to the reveal. */
@@ -159,6 +160,7 @@ async function visit(title: string): Promise<{ total: number; lines: string[] }>
   const all = (await Promise.all(finished.map((r) => measure(r, origin)))).filter(
     (r): r is Response => r !== null && r.end <= reveal,
   );
+  expect(unreadFiles(all), 'files whose bytes could not be read').toEqual([]);
   finished.length = 0;
   const land = all.filter((r) => r.kind === 'land');
   const rest = all.filter((r) => r.kind !== 'land');
