@@ -10,7 +10,14 @@
 // over its scene, the limiter all but idle in typical weather (1 dB) and
 // in a storm (3 dB); and at most 15% of the bed's energy above 2 kHz in
 // typical weather, 30% in a storm. At the default volume, 70%, everything
-// is 9.3 dB lower.
+// is 9.3 dB lower. The bow's slaps, the sheet and the boom, the halyards
+// and the surf play in it as the scenes have them.
+//
+// The recordings: the game's own (the probe and the test sea) decode from
+// both formats as long as their numbers say; a file not there, or not
+// sound, leaves its voice synthesised while the rest load; and played in
+// every bed's voice in place of its synthesis, a recording takes over at
+// its synthesis's loudness, the budget holding.
 //
 // And the controls on the game's page: no audio context while the sound
 // is off, the M key's mute held through the page hidden and shown, and
@@ -35,6 +42,7 @@ const SCENES = {
   fog: 'typical',
   squall: 'storm',
   edge: 'typical',
+  shore: 'typical',
   race: 'typical',
 } as const;
 
@@ -150,6 +158,15 @@ test.describe('the loudness budget', () => {
     expect(m.squall.played.thunder).toBeGreaterThanOrEqual(2);
     expect(m.race.played.guns).toBeGreaterThanOrEqual(4);
     expect(m.race.played.cheers).toBeGreaterThanOrEqual(2);
+    // The boat's motion: the bow slapping in a sea, the sheet in a tack,
+    // the boom in a gybe; and the halyards in port.
+    for (const name of ['fresh', 'gale', 'squall'] as const) {
+      expect(m[name].played.slaps, name).toBeGreaterThan(3);
+    }
+    expect(m.calm.played.slaps).toBe(0);
+    expect(m.fresh.played.sheets).toBeGreaterThanOrEqual(1);
+    expect(m.gentle.played.booms).toBeGreaterThanOrEqual(1);
+    expect(m.harbour.played.taps).toBeGreaterThan(3);
   });
 
   test('typical sailing is at −20 ±2 LUFS', () => {
@@ -190,6 +207,90 @@ test.describe('the loudness budget', () => {
 
   test('at the default volume, 70%, the sound is 9.3 dB quieter', () => {
     expect(Math.abs(fresh70.integrated - m.fresh.integrated + 9.29)).toBeLessThan(0.2);
+  });
+});
+
+test.describe('the recordings', () => {
+  test.describe.configure({ mode: 'serial' });
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+    await page.goto('/e2e/audio.html');
+    await page.waitForFunction(() => globalThis.audio !== undefined);
+  });
+
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  test('the game’s own decode from WebM and from AAC, as long and as wide as their numbers say, within the sizes', async () => {
+    const files = await page.evaluate(() => globalThis.audio.decodeOwn());
+    expect(files).toHaveLength(4);
+    for (const f of files) {
+      const label = `${f.name}.${f.format}`;
+      expect(f.channels, label).toBe(1);
+      // AAC's frames round a short file up by a few milliseconds.
+      expect(Math.abs(f.length / 48000 - f.seconds), label).toBeLessThan(0.05);
+      const declared = await page.evaluate((n) => globalThis.audio.declared(n as 'probe'), f.name);
+      expect(f.decoded, label).toBeLessThanOrEqual(declared * 1.05 + 4096 * 4);
+    }
+    // The probe is about a kilobyte in each format; the decoded set far
+    // within its 40 MB, and what is fetched within its 3 MB.
+    for (const f of files.filter((x) => x.name === 'probe')) {
+      expect(f.bytes).toBeLessThanOrEqual(1536);
+    }
+    const decoded = files.filter((f) => f.format === 'webm').reduce((s, f) => s + f.decoded, 0);
+    expect(decoded).toBeLessThanOrEqual(40 << 20);
+    for (const format of ['webm', 'm4a']) {
+      const bytes = files.filter((f) => f.format === format).reduce((s, f) => s + f.bytes, 0);
+      expect(bytes, format).toBeLessThanOrEqual(3 << 20);
+    }
+  });
+
+  test('a file not there, or not sound, leaves its voice synthesised; the rest load', async () => {
+    const out = await page.evaluate(() => globalThis.audio.loadWithFaults());
+    expect(out.format).toBe('webm');
+    expect(out.loaded).toEqual(['test-sea']);
+    expect([...out.failed].sort()).toEqual(['gone', 'not-sound']);
+    expect(out.recorded).toEqual(['sea.moderate']);
+  });
+
+  test('in every bed’s voice, a recording takes over at its synthesis’s loudness, and the budget holds', async () => {
+    test.setTimeout(120_000);
+    const voices = [
+      'wind.light',
+      'wind.moderate',
+      'wind.strong',
+      'wind.gale',
+      'hull.chuckle',
+      'hull.wash',
+      'hull.bow',
+      'sea.calm',
+      'sea.moderate',
+      'sea.rough',
+      'rain.light',
+      'rain.heavy',
+      'flog',
+      'lapping',
+      'halyards',
+      'surf',
+    ] as const;
+    for (const name of ['calm', 'harbour', 'fresh', 'gale', 'squall', 'shore'] as const) {
+      const [synth, rec] = await page.evaluate(
+        async ([n, v]) => [
+          await globalThis.audio.render(n, 30),
+          await globalThis.audio.render(n, 30, { recorded: { voices: [...v], crossfade: 3 } }),
+        ],
+        [name, voices] as const,
+      );
+      expect(Math.abs(rec.bed - synth.bed), name).toBeLessThanOrEqual(
+        SCENES[name] === 'storm' ? 3 : 1.5,
+      );
+      expect(rec.truePeak, name).toBeLessThanOrEqual(-1);
+      expect(rec.momentaryMax - rec.integrated, name).toBeLessThanOrEqual(10);
+      expect(rec.bedAbove, name).toBeLessThanOrEqual(SCENES[name] === 'storm' ? 0.3 : 0.15);
+    }
   });
 });
 

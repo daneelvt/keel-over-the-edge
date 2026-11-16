@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The sound engine: Web Audio, synthesised, with no sound files. The boat's
+// The sound engine: Web Audio, synthesised, with recordings taking over
+// where they have loaded (audio/recorded.ts, audio/layers.ts). The boat's
 // bed is made of noises (audio/noise.ts: pink for the wind, brown for the
 // water and the sea, white for the rest), each voice reading its own at its
 // own offset: the wind (a band-pass), the rigging's song (a narrow band at
@@ -16,7 +17,17 @@
 // bump's knock is played once, from the noise and a tone, and let go when
 // it has died away; so are a lighthouse's fog signal's blasts in fog
 // (audio/fogsignals.ts), each a tone of the device's harmonics, and the
-// thunder after a flash (audio/thunder.ts), from the noise.
+// thunder after a flash (audio/thunder.ts), from the noise. The boat's own
+// motion makes its sounds once (audio/motion.ts): a slap as the bow meets a
+// wave, the sheet running in a tack, the boom's thump in a gybe; and near
+// the land (audio/shore.ts) the halyards in port tap their masts and the
+// surf breaks as the water shoals.
+//
+// The bed's families (the wind, the hull's water, the sea, rain, the
+// flogging sail, the lapping, the halyards and the surf) are layers: each
+// plays its recordings, crossfaded by the physics, where they have loaded,
+// and its synthesis the share they leave. The synthesis plays from the
+// start and wherever no recording has come.
 //
 // Every voice plays into its family's bus of the mix (audio/mix.ts), which
 // decides how loud it is heard: the bed's levels as the recipes give them
@@ -65,6 +76,7 @@ import {
   strokeTimes,
 } from './harbour';
 import type { Knock } from './knock';
+import { Loop, shares, takeOf } from './layers';
 import {
   LIFE_RECIPES,
   type LifeEvent,
@@ -76,7 +88,20 @@ import {
   type WaterSound,
 } from './life';
 import { type BusName, calmLevel, curved, gainOf, MIX, Mixer, type MixRecipe } from './mix';
+import { type SailSound, SailWatch, type Slap, SlapWatch } from './motion';
 import { type NoiseColour, noiseBuffer } from './noise';
+import {
+  betweenFrames,
+  fetchBytes,
+  type Loaded,
+  type LoaderHost,
+  load,
+  RECORDED,
+  type Recording,
+  VOICES,
+  type Voice,
+} from './recorded';
+import { halyardsLevel, halyardTaps, surfLevel, type Tap } from './shore';
 import {
   THUNDER_RECIPE,
   THUNDER_RULE,
@@ -101,13 +126,47 @@ import {
 const SLOW = 0.32;
 
 /**
- * A voice of the bed: its synthesis, held at one, into its level, which
- * the physics sets. A recording of the same voice would play into the
- * level beside the synthesis, the two crossfaded.
+ * A voice of the bed: its synthesis, at its family's share of it, into its
+ * level, which the physics sets.
  */
 interface BedVoice {
   synth: GainNode;
   level: GainNode;
+}
+
+/** The bed's families, each a set of layers (mix.json's layers). */
+export type FamilyName = Exclude<keyof MixRecipe['layers'], 'crossfade'>;
+
+/** A recording playing a layer: its loop, its gain, when it began to take over and over how long, and its trim. */
+interface Layer {
+  loop: Loop;
+  gain: GainNode;
+  from: number;
+  seconds: number;
+  trim: number;
+}
+
+/**
+ * A family of the bed: its layers' voices, its synthesis's voices, where
+ * its recordings play into, and as last set its level (a gain), its
+ * layers' shares and its synthesis's share.
+ */
+interface Family {
+  voices: readonly Voice[];
+  synths: GainNode[];
+  out: AudioNode;
+  match: number;
+  layers: (Layer | null)[];
+  level: number;
+  shares: number[];
+  synth: number;
+}
+
+/** A shot's recordings: its takes and their trims, and the last played. */
+interface Takes {
+  buffers: AudioBuffer[];
+  trims: number[];
+  last: number;
 }
 
 interface Graph {
@@ -136,6 +195,15 @@ interface Graph {
   rain: BedVoice;
   drum: BedVoice;
   calm: BedVoice;
+  surf: BedVoice;
+  /** The wind's recordings' low-pass and gain, which its gusts open. */
+  windLow: BiquadFilterNode;
+  windGust: GainNode;
+  /** The halyards, panned toward the quay. */
+  halyardsPan: StereoPannerNode;
+  families: Record<FamilyName, Family>;
+  /** The shots' recordings, by voice. */
+  takes: Map<Voice, Takes>;
   /** The fog signals' tones, by device: made once each. */
   waves: Map<string, PeriodicWave>;
 }
@@ -227,6 +295,41 @@ function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: Aud
   );
   // The calm's lapping at the hull.
   const calm = bed('brown', [band('bandpass', m.calm.centre, m.calm.q)]);
+  // The surf on a shore near.
+  const surf = bed('brown', [band('bandpass', m.surf.centre, m.surf.q)]);
+
+  // Where each family's recordings play: the wind's through the low-pass
+  // its gusts open; the lapping's and the halyards' panned.
+  const windLow = band('lowpass', m.layers.wind.gust.lowpass[0] ?? 2500, 0.7);
+  const windGust = ctx.createGain();
+  windLow.connect(windGust);
+  windGust.connect(mix.input('sea'));
+  const halyardsPan = ctx.createStereoPanner();
+  halyardsPan.connect(mix.input('world'));
+  const family = (name: FamilyName, synths: BedVoice[], out: AudioNode): Family => {
+    const f = m.layers[name];
+    return {
+      voices: f.voices as Voice[],
+      synths: synths.map((v) => v.synth),
+      out,
+      match: f.match,
+      layers: f.voices.map(() => null),
+      level: 0,
+      shares: f.voices.map(() => 0),
+      synth: 1,
+    };
+  };
+  const families: Record<FamilyName, Family> = {
+    wind: family('wind', [wind], windLow),
+    hull: family('hull', [water, hiss], mix.input('sea')),
+    sea: family('sea', [sea], mix.input('sea')),
+    rain: family('rain', [rain, drum], mix.input('sea')),
+    flog: family('flog', [flog], mix.input('sea')),
+    lapping: family('lapping', [lapping], lappingPan),
+    calm: family('calm', [calm], mix.input('sea')),
+    surf: family('surf', [surf], mix.input('sea')),
+    halyards: family('halyards', [], halyardsPan),
+  };
 
   for (const [s, offset] of sources) {
     s.start(0, offset);
@@ -257,6 +360,12 @@ function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: Aud
     rain,
     drum,
     calm,
+    surf,
+    windLow,
+    windGust,
+    halyardsPan,
+    families,
+    takes: new Map(),
     waves: new Map(),
   };
 }
@@ -303,6 +412,8 @@ export class SoundEngine {
   #playing = false;
   #suspending: ReturnType<typeof setTimeout> | null = null;
   #volumes = { volume: 1, sea: 1, sounds: 1 };
+  readonly #slaps: SlapWatch;
+  readonly #sail: SailWatch;
   /** How many times the parameters were set, and contexts made (tests). */
   updates = 0;
   contexts = 0;
@@ -310,6 +421,8 @@ export class SoundEngine {
   constructor(recipes: Recipes = RECIPES, options: EngineOptions = {}) {
     this.#recipes = recipes;
     this.#mix = options.mix ?? MIX;
+    this.#slaps = new SlapWatch(this.#mix.slaps);
+    this.#sail = new SailWatch(this.#mix.sail);
     this.#context =
       options.context ??
       (typeof AudioContext === 'undefined'
@@ -338,6 +451,7 @@ export class SoundEngine {
     this.#graph.mix.volumes(this.#volumes);
     this.#graph.mix.fade.gain.value = 1;
     this.#playing = true;
+    this.#startLoading();
   }
 
   /** Whether the graph plays: its context runs, or renders offline. */
@@ -408,6 +522,7 @@ export class SoundEngine {
       this.#graph.mix.volumes(this.#volumes);
       this.#graph.mix.fadeIn(this.#mix.fades.start);
       this.#playing = true;
+      this.#startLoading();
     }
     const ctx = this.#graph.ctx;
     if (!this.#offline && ctx.state !== 'running') {
@@ -469,7 +584,114 @@ export class SoundEngine {
     g.fallsPan.pan.setTargetAtTime(t.fallsPan, at, glide);
     play(g.rain, t.rainLevel, r.rain.level.most, b.trims.rain);
     play(g.drum, t.drumLevel, r.rain.drumLevel.most, b.trims.drum);
-    g.calm.level.gain.setTargetAtTime(calmLevel(m.calm, input.speed, input.time), at, glide);
+    const calm = calmLevel(m.calm, input.speed, input.time);
+    g.calm.level.gain.setTargetAtTime(calm, at, glide);
+    const surf =
+      gainOf(b.trims.surf) *
+      surfLevel(m.surf, input.depth ?? Number.NaN, input.seaHeight, input.time);
+    g.surf.level.gain.setTargetAtTime(surf, at, glide);
+
+    // The families' recordings, at the level their synthesis plays at.
+    const on = (level: number, most: number, trim: number): number =>
+      gainOf(trim) * curved(level, most, b.curve);
+    const L = m.layers;
+    this.#family(g, 'wind', on(t.windLevel, r.wind.level.most, b.trims.wind), input.apparentWind);
+    const gusting = ramp(L.wind.gust.from, L.wind.gust.full, input.gustFactor ?? 1);
+    const [still, gust] = L.wind.gust.lowpass;
+    g.windLow.frequency.setTargetAtTime(
+      (still ?? 2500) + ((gust ?? 7000) - (still ?? 2500)) * gusting,
+      at,
+      glide,
+    );
+    g.windGust.gain.setTargetAtTime(gainOf(L.wind.gust.gain * gusting), at, glide);
+    const hullSpeed =
+      r.water.hiss.hullSpeed *
+      Math.sqrt((input.waterline ?? r.water.hiss.waterline) / r.water.hiss.waterline);
+    this.#family(
+      g,
+      'hull',
+      Math.hypot(
+        on(t.waterLevel, r.water.level.most, b.trims.water),
+        on(t.hissLevel, r.water.hiss.most, b.trims.hiss),
+      ),
+      Math.abs(input.speed) / hullSpeed,
+    );
+    this.#family(
+      g,
+      'sea',
+      on(t.seaLevel, r.sea.level.most, b.trims.sea),
+      input.seaHeight + L.sea.whitecaps * input.whitecaps,
+    );
+    this.#family(
+      g,
+      'rain',
+      Math.hypot(
+        on(t.rainLevel, r.rain.level.most, b.trims.rain),
+        on(t.drumLevel, r.rain.drumLevel.most, b.trims.drum),
+      ),
+      input.rain ?? 0,
+    );
+    this.#family(g, 'flog', on(t.flogLevel, r.flogging.level.most, b.trims.flog), 0);
+    this.#family(g, 'calm', calm, 0);
+    this.#family(g, 'surf', surf, 0);
+    this.#wind = input.apparentWind;
+
+    // What the boat's motion makes once.
+    const slap = this.#slaps.step(input.pitchRate ?? 0, input.heaveRate ?? 0, input.time);
+    if (slap !== null) {
+      this.#playSlap(g, slap);
+    }
+    const sail = this.#sail.step(
+      input.boom ?? Number.NaN,
+      input.boomRate ?? 0,
+      input.apparentAngle ?? 0,
+      input.apparentWind,
+    );
+    if (sail !== null) {
+      this.#playSail(g, sail);
+    }
+  }
+
+  /** The apparent wind as the bed was last set, m/s: the halyards swing in it. */
+  #wind = 0;
+  /** How many slaps, sheets, booms and halyards' taps were played (tests). */
+  slaps = 0;
+  sheets = 0;
+  booms = 0;
+  taps = 0;
+
+  /**
+   * Sets a family at a level (a gain) and where the physics is in it (x, on
+   * its layers' scale): each layer that plays a recording at its share of
+   * the level, as far as it has taken over, and the synthesis at the share
+   * they leave.
+   */
+  #family(g: Graph, name: FamilyName, level: number, x: number): void {
+    const f = g.families[name];
+    const at = g.ctx.currentTime;
+    const glide = this.#mix.fades.glide;
+    f.level = level;
+    if (f.voices.length > 1) {
+      shares(x, this.#mix.layers[name as 'wind'].at, f.shares);
+    } else {
+      f.shares[0] = 1;
+    }
+    let left = 1;
+    for (let i = 0; i < f.layers.length; i++) {
+      const l = f.layers[i];
+      if (l === null || l === undefined) {
+        continue;
+      }
+      const take = takeOf(at - l.from, l.seconds);
+      const share = f.shares[i] ?? 0;
+      left -= (share * take) ** 2;
+      l.gain.gain.setTargetAtTime(level * share * take * l.trim, at, glide);
+    }
+    const synth = Math.sqrt(Math.max(0, left));
+    f.synth = synth;
+    for (const v of f.synths) {
+      v.gain.setTargetAtTime(synth, at, glide);
+    }
   }
 
   /** The harbour's recipes, the world seconds its events are played to, and how many were played (tests). */
@@ -491,8 +713,14 @@ export class SoundEngine {
     }
     const at = g.ctx.currentTime;
     const lap = lappingNow(this.#harbour.lapping, x);
-    g.lapping.level.gain.setTargetAtTime(gainOf(this.#mix.bed.trims.lapping) * lap.level, at, SLOW);
+    const lapping = gainOf(this.#mix.bed.trims.lapping) * lap.level;
+    g.lapping.level.gain.setTargetAtTime(lapping, at, SLOW);
     g.lappingPan.pan.setTargetAtTime(lap.pan, at, SLOW);
+    this.#family(g, 'lapping', lapping, 0);
+    // The halyards, toward the quay where the boats lie.
+    const halyards = halyardsLevel(this.#mix.halyards, x.inPort, this.#wind);
+    g.halyardsPan.pan.setTargetAtTime(lap.pan, at, SLOW);
+    this.#family(g, 'halyards', halyards, 0);
     // A jump in world time (a new world, a restore) plays nothing missed.
     if (!(x.seconds - this.#harbourTo < 2) || x.seconds < this.#harbourTo) {
       this.#harbourTo = x.seconds;
@@ -500,6 +728,17 @@ export class SoundEngine {
     }
     for (const e of harbourEvents(this.#harbour, x, this.#harbourTo, x.seconds, secondsPerHour)) {
       this.#play(g, e, at + Math.max(0, e.at - x.seconds), 'world');
+    }
+    // Their taps, synthesised, at the share a recording of them leaves.
+    const synth = g.families.halyards.synth;
+    for (const tap of halyardTaps(
+      this.#mix.halyards,
+      this.#harbourTo,
+      x.seconds,
+      halyards * synth,
+      this.#wind,
+    )) {
+      this.#playTap(g, tap, at + Math.max(0, tap.at - x.seconds));
     }
     this.#harbourTo = x.seconds;
   }
@@ -1518,6 +1757,385 @@ export class SoundEngine {
         n.disconnect();
       }
     };
+  }
+
+  /** A number from 0 to 1 for a seed and a draw. */
+  #unit(seed: number, k: number): number {
+    const v = Math.sin(seed * 3.7 + k * 1.3) * 43758.5453;
+    return v - Math.floor(v);
+  }
+
+  /**
+   * Plays one of a shot's recordings, if it has any, at level into out: a
+   * take other than the last, a little higher or lower and louder or softer
+   * by the seed (pitch semitones, spread dB either way). Whether it did.
+   */
+  #take(
+    g: Graph,
+    voice: Voice,
+    level: number,
+    seed: number,
+    out: AudioNode,
+    pitch: number,
+    spread: number,
+  ): boolean {
+    const t = g.takes.get(voice);
+    const n = t?.buffers.length ?? 0;
+    if (t === undefined || n === 0) {
+      return false;
+    }
+    const k = n === 1 ? 0 : (t.last + 1 + Math.floor(this.#unit(seed, 7) * (n - 1))) % n;
+    t.last = k;
+    const ctx = g.ctx;
+    const s = ctx.createBufferSource();
+    s.buffer = t.buffers[k] ?? null;
+    s.playbackRate.value = 2 ** ((pitch * (2 * this.#unit(seed, 8) - 1)) / 12);
+    const v = ctx.createGain();
+    v.gain.value = level * (t.trims[k] ?? 1) * gainOf(spread * (2 * this.#unit(seed, 9) - 1));
+    s.connect(v);
+    v.connect(out);
+    s.start(ctx.currentTime);
+    s.onended = () => {
+      s.disconnect();
+      v.disconnect();
+    };
+    return true;
+  }
+
+  /**
+   * A slap of the bow on a wave, through the sea's bus: its recording, or a
+   * burst of the noise through a band and a low thump, both dying fast.
+   */
+  #playSlap(g: Graph, sl: Slap): void {
+    if (!(sl.level > 0)) {
+      return;
+    }
+    this.slaps++;
+    const c = this.#mix.slaps;
+    const out = g.mix.input('sea');
+    if (this.#take(g, 'slap', sl.level, sl.seed, out, c.pitch, c.spread)) {
+      return;
+    }
+    const ctx = g.ctx;
+    const at = ctx.currentTime;
+    const k = 2 ** ((c.pitch * (2 * this.#unit(sl.seed, 1) - 1)) / 12);
+    const level = sl.level * gainOf(c.spread * (2 * this.#unit(sl.seed, 2) - 1));
+    const lo = c.band[0] ?? 380;
+    const hi = c.band[1] ?? 900;
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise.white;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = c.q;
+    band.frequency.setValueAtTime(hi * k, at);
+    band.frequency.exponentialRampToValueAtTime(lo * k, at + 2 * c.decay);
+    const v = ctx.createGain();
+    v.gain.setValueAtTime(0, at);
+    v.gain.linearRampToValueAtTime(level, at + 0.006);
+    v.gain.setTargetAtTime(0, at + 0.006, c.decay);
+    const tone = ctx.createOscillator();
+    tone.frequency.setValueAtTime(c.thump * k * 1.4, at);
+    tone.frequency.exponentialRampToValueAtTime(c.thump * k, at + c.decay);
+    const thump = ctx.createGain();
+    thump.gain.setValueAtTime(0, at);
+    thump.gain.linearRampToValueAtTime(level * c.thumpLevel, at + 0.008);
+    thump.gain.setTargetAtTime(0, at + 0.008, c.decay / 1.5);
+    burst.connect(band);
+    band.connect(v);
+    v.connect(out);
+    tone.connect(thump);
+    thump.connect(out);
+    const end = at + 8 * c.decay;
+    burst.start(at, this.#unit(sl.seed, 3) * 8);
+    burst.stop(end);
+    tone.start(at);
+    tone.stop(end);
+    burst.onended = () => {
+      for (const n of [burst, band, v, tone, thump]) {
+        n.disconnect();
+      }
+    };
+  }
+
+  /**
+   * The sail crossing, through the boat's bus: the sheet running out through
+   * its block in a tack, a band of noise fluttering as the rope's lay runs
+   * over the sheave and slowing; the boom's thump in a gybe, a low knock of
+   * wood. Its recording where it has one.
+   */
+  #playSail(g: Graph, sc: SailSound): void {
+    if (!(sc.level > 0)) {
+      return;
+    }
+    const c = this.#mix.sail;
+    const out = this.#shot(g, 'boat', 0);
+    const ctx = g.ctx;
+    const at = ctx.currentTime;
+    const nodes: AudioNode[] = [out];
+    let end = at;
+    if (sc.kind === 'sheet') {
+      this.sheets++;
+      if (this.#take(g, 'sheet', sc.level, sc.seed, out, 1, 2)) {
+        return;
+      }
+      const r = c.sheet;
+      const burst = ctx.createBufferSource();
+      burst.buffer = g.noise.white;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.Q.value = r.q;
+      band.frequency.setValueAtTime(r.band, at);
+      band.frequency.exponentialRampToValueAtTime(r.band * 0.6, at + r.length);
+      const v = ctx.createGain();
+      v.gain.setValueAtTime(0, at);
+      v.gain.linearRampToValueAtTime(sc.level, at + 0.04);
+      v.gain.setTargetAtTime(0, at + 0.4 * r.length, r.length / 4);
+      // The flutter: half the level beaten at the sheave's rate, slowing.
+      const flutter = ctx.createGain();
+      flutter.gain.value = 0.6;
+      const beat = ctx.createOscillator();
+      beat.frequency.setValueAtTime(r.rate, at);
+      beat.frequency.exponentialRampToValueAtTime(r.rate * 0.4, at + r.length);
+      const depth = ctx.createGain();
+      depth.gain.value = 0.4;
+      beat.connect(depth);
+      depth.connect(flutter.gain);
+      burst.connect(band);
+      band.connect(flutter);
+      flutter.connect(v);
+      v.connect(out);
+      end = at + 2 * r.length;
+      burst.start(at, this.#unit(sc.seed, 1) * 8);
+      burst.stop(end);
+      beat.start(at);
+      beat.stop(end);
+      nodes.push(burst, band, v, flutter, beat, depth);
+    } else {
+      this.booms++;
+      if (this.#take(g, 'boom', sc.level, sc.seed, out, 1, 2)) {
+        return;
+      }
+      const r = c.boom;
+      const tone = ctx.createOscillator();
+      tone.frequency.setValueAtTime(r.thump * 1.3, at);
+      tone.frequency.exponentialRampToValueAtTime(r.thump, at + r.decay);
+      const thump = ctx.createGain();
+      thump.gain.setValueAtTime(0, at);
+      thump.gain.linearRampToValueAtTime(sc.level, at + 0.005);
+      thump.gain.setTargetAtTime(0, at + 0.005, r.decay);
+      const burst = ctx.createBufferSource();
+      burst.buffer = g.noise.white;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = r.knock;
+      band.Q.value = r.q;
+      const knock = ctx.createGain();
+      knock.gain.setValueAtTime(0, at);
+      knock.gain.linearRampToValueAtTime(0.5 * sc.level, at + 0.003);
+      knock.gain.setTargetAtTime(0, at + 0.003, r.decay / 2);
+      tone.connect(thump);
+      thump.connect(out);
+      burst.connect(band);
+      band.connect(knock);
+      knock.connect(out);
+      end = at + 8 * r.decay;
+      tone.start(at);
+      tone.stop(end);
+      burst.start(at, this.#unit(sc.seed, 2) * 8);
+      burst.stop(end);
+      nodes.push(tone, thump, burst, band, knock);
+    }
+    const first = nodes[1] as AudioScheduledSourceNode;
+    first.onended = () => {
+      for (const n of nodes) {
+        n.disconnect();
+      }
+    };
+  }
+
+  /** A halyard's tap on its mast: a soft knock of wood, a narrow band of the noise dying fast. */
+  #playTap(g: Graph, tap: Tap, at: number): void {
+    if (!(tap.level > 0)) {
+      return;
+    }
+    this.taps++;
+    const c = this.#mix.halyards;
+    const ctx = g.ctx;
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise.white;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = c.q;
+    const lo = c.tone[0] ?? 430;
+    const hi = c.tone[1] ?? 610;
+    band.frequency.value = lo + (hi - lo) * this.#unit(tap.seed, 1);
+    const v = ctx.createGain();
+    v.gain.setValueAtTime(0, at);
+    v.gain.linearRampToValueAtTime(tap.level, at + 0.004);
+    v.gain.setTargetAtTime(0, at + 0.004, c.decay);
+    burst.connect(band);
+    band.connect(v);
+    v.connect(g.halyardsPan);
+    const end = at + 10 * c.decay;
+    burst.start(at, this.#unit(tap.seed, 2) * 8);
+    burst.stop(end);
+    burst.onended = () => {
+      for (const n of [burst, band, v]) {
+        n.disconnect();
+      }
+    };
+  }
+
+  /**
+   * Plays a recording as a voice's from now: a bed's in each family that
+   * has it as a layer, taking over from the synthesis over crossfade
+   * seconds, starting at a random place; a shot's as one more take. gain is
+   * its own, dB, over the voice's. It replaces a bed's recording already
+   * there.
+   */
+  useRecording(
+    voice: Voice,
+    buffer: AudioBuffer,
+    gain = 0,
+    crossfade = this.#mix.layers.crossfade,
+  ): void {
+    const g = this.#graph;
+    if (g === null) {
+      return;
+    }
+    const ctx = g.ctx;
+    const at = ctx.currentTime;
+    if (VOICES[voice] === 'shot') {
+      const t = g.takes.get(voice) ?? { buffers: [], trims: [], last: -1 };
+      t.buffers.push(buffer);
+      t.trims.push(gainOf(gain + this.#mix.shots[voice as keyof MixRecipe['shots']]));
+      g.takes.set(voice, t);
+      this.recorded.add(voice);
+      return;
+    }
+    for (const f of Object.values(g.families)) {
+      const i = f.voices.indexOf(voice);
+      if (i < 0) {
+        continue;
+      }
+      f.layers[i]?.loop.stop(at + 0.2);
+      const out = ctx.createGain();
+      out.gain.value = 0;
+      out.connect(f.out);
+      f.layers[i] = {
+        loop: new Loop(ctx, buffer, out, at, Math.random()),
+        gain: out,
+        from: at,
+        seconds: crossfade,
+        trim: gainOf(gain + f.match),
+      };
+    }
+    this.recorded.add(voice);
+  }
+
+  /** Lets a voice's recordings go, its synthesis taking its place again (the sound room's A and B). */
+  useSynthesis(voice: Voice): void {
+    const g = this.#graph;
+    if (g === null) {
+      return;
+    }
+    const at = g.ctx.currentTime;
+    g.takes.delete(voice);
+    for (const f of Object.values(g.families)) {
+      const i = f.voices.indexOf(voice);
+      const l = f.layers[i];
+      if (i < 0 || l === null || l === undefined) {
+        continue;
+      }
+      l.gain.gain.setTargetAtTime(0, at, 0.05);
+      l.loop.stop(at + 0.3);
+      f.layers[i] = null;
+    }
+    this.recorded.delete(voice);
+  }
+
+  /** The voices playing recordings. */
+  readonly recorded = new Set<Voice>();
+
+  /** Each family as last set: its synthesis's share, and each layer's share and how far its recording has taken over (tests, the sound room). */
+  families(): Record<
+    FamilyName,
+    { level: number; synth: number; layers: Record<string, { share: number; take: number }> }
+  > {
+    const out = {} as ReturnType<SoundEngine['families']>;
+    const g = this.#graph;
+    if (g === null) {
+      return out;
+    }
+    const at = g.ctx.currentTime;
+    for (const [name, f] of Object.entries(g.families) as [FamilyName, Family][]) {
+      const layers: Record<string, { share: number; take: number }> = {};
+      f.voices.forEach((v, i) => {
+        const l = f.layers[i];
+        layers[v] = { share: f.shares[i] ?? 0, take: l ? takeOf(at - l.from, l.seconds) : 0 };
+      });
+      out[name] = { level: f.level, synth: f.synth, layers };
+    }
+    return out;
+  }
+
+  #loading: Promise<Loaded> | null = null;
+  #wanted: {
+    list: readonly Recording[];
+    probe: Recording | null;
+    host: Partial<LoaderHost>;
+  } | null = null;
+
+  /**
+   * Loads recordings (the game's, unless given) as the engine's voices, once
+   * its context is made: called when the game's first download is done.
+   * Each takes over from its synthesis as it arrives; what fails leaves its
+   * synthesis. host may stand in for the page's fetch and frames (tests).
+   */
+  record(
+    list: readonly Recording[] = RECORDED.voices,
+    probe: Recording | null = RECORDED.probe,
+    host: Partial<LoaderHost> = {},
+  ): Promise<Loaded> | null {
+    this.#wanted = { list, probe, host };
+    return this.#startLoading();
+  }
+
+  /** The loading started by record, once there is a context to decode on. */
+  get loading(): Promise<Loaded> | null {
+    return this.#loading;
+  }
+
+  #startLoading(): Promise<Loaded> | null {
+    const g = this.#graph;
+    const w = this.#wanted;
+    if (g === null || w === null || this.#loading !== null) {
+      return this.#loading;
+    }
+    const ctx = g.ctx;
+    const host: LoaderHost = {
+      decode: (data) => ctx.decodeAudioData(data),
+      fetch: fetchBytes,
+      frame: betweenFrames,
+      need: (r) => this.#need(g, r),
+      loaded: (r, buffer) => this.useRecording(r.voice as Voice, buffer, r.gain),
+      failed: (r, why) => console.warn(`sound: ${r.name} plays synthesised`, why),
+      ...w.host,
+    };
+    this.#loading = load(host, w.list, w.probe);
+    return this.#loading;
+  }
+
+  /** How much a recording is needed now: its layer's level in its family as last set. */
+  #need(g: Graph, r: Recording): number {
+    let need = 0;
+    for (const f of Object.values(g.families)) {
+      const i = f.voices.indexOf(r.voice as Voice);
+      if (i >= 0) {
+        need = Math.max(need, f.level * (f.shares[i] ?? 0));
+      }
+    }
+    return need;
   }
 
   /**

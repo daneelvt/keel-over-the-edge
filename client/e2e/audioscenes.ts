@@ -5,7 +5,9 @@
 // weather, the wind gusting about its mean; and what is heard about it,
 // from the sound's own schedules (the harbour's bell, gulls and mallets,
 // the sea's life's calls, a lighthouse's fog signal, thunder after its
-// flashes, a race's guns and cheers). Each repeats every CYCLE seconds, so
+// flashes, a race's guns and cheers); the boat pitching and heaving in the
+// waves as the sea makes it, so the bow slaps, and its boom crossing in a
+// tack and a gybe. Each repeats every CYCLE seconds, so
 // a scene rendered short measures as one rendered long. The listener sits
 // at the origin looking north.
 
@@ -37,6 +39,12 @@ interface Weather {
   rain?: number;
   /** How far the lip is, m. */
   lip?: number;
+  /** How far the boat pitches either way in the waves, degrees, and their period, s; how far it heaves, m. */
+  pitch?: number;
+  period?: number;
+  heave?: number;
+  /** The water's depth under the boat, m: a shore near where shallow. */
+  depth?: number;
 }
 
 /** A scene: its weather, and what happens in it at t seconds into its cycle. */
@@ -71,8 +79,39 @@ const input: SoundInput = {
   sailArea: 7,
 };
 
-/** The boat's own voices in a weather at t, s; luffing, how many strips luff. */
-function bed(engine: SoundEngine, w: Weather, t: number, now: number, luffing = 0): void {
+/** The boom's angle, rad, and its rate, rad/s, and the apparent wind's angle off the bow, rad: on starboard, close-hauled. */
+const STARBOARD = { boom: 0.35, rate: 0, angle: 0.8 };
+
+/** The boom as it crosses in a tack (the wind across the bow) or a gybe (across the stern), from start to end, s, at t. */
+function crossing(kind: 'tack' | 'gybe', start: number, end: number, t: number): typeof STARBOARD {
+  const c = inCycle(t);
+  const k = Math.min(1, Math.max(0, (c - start) / (end - start)));
+  const side = Math.cos(Math.PI * k);
+  if (kind === 'tack') {
+    return {
+      boom: 0.35 * side,
+      rate: (-0.35 * Math.PI * Math.sin(Math.PI * k)) / (end - start),
+      angle: 0.8 * side,
+    };
+  }
+  // A gybe's boom swings across fast, from well out to well out.
+  const swing = c < (start + end) / 2 ? 1 : -1;
+  return {
+    boom: 1.2 * swing,
+    rate: c >= (start + end) / 2 && c < (start + end) / 2 + 0.2 ? -2 : 0,
+    angle: 2.9 * swing,
+  };
+}
+
+/** The boat's own voices in a weather at t, s; luffing, how many strips luff; sail, the boom and the wind's angle. */
+function bed(
+  engine: SoundEngine,
+  w: Weather,
+  t: number,
+  now: number,
+  luffing = 0,
+  sail: typeof STARBOARD = STARBOARD,
+): void {
   const g = 1 + w.gusts * gust(t);
   input.apparentWind = w.wind * g;
   input.gustFactor = g;
@@ -85,6 +124,16 @@ function bed(engine: SoundEngine, w: Weather, t: number, now: number, luffing = 
   input.rain = w.rain ?? 0;
   input.lip = w.lip ?? Number.POSITIVE_INFINITY;
   input.lipPan = 0.4;
+  // The waves, a little irregular: two periods beating.
+  const omega = (2 * Math.PI) / (w.period ?? 4);
+  const a = ((w.pitch ?? 0.5) * Math.PI) / 180;
+  const beat = 0.75 + 0.25 * Math.sin((2 * Math.PI * t) / 23);
+  input.pitchRate = a * beat * omega * Math.cos(omega * t);
+  input.heaveRate = (w.heave ?? 0.1) * omega * Math.cos(omega * t - 0.4);
+  input.boom = sail.boom;
+  input.boomRate = sail.rate;
+  input.apparentAngle = sail.angle;
+  input.depth = w.depth ?? 40;
   engine.update(now, input);
 }
 
@@ -163,7 +212,16 @@ const fogLight = {
 /** The committee boat's muzzle, near the line the boat sails up to. */
 const muzzle = { east: 45, north: 30 };
 
-const fresh: Weather = { wind: 9.5, gusts: 0.12, speed: 3.2, sea: 1.2, whitecaps: 0.3 };
+const fresh: Weather = {
+  wind: 9.5,
+  gusts: 0.12,
+  speed: 3.2,
+  sea: 1.2,
+  whitecaps: 0.3,
+  pitch: 5,
+  period: 3.5,
+  heave: 0.35,
+};
 
 export const SCENES: Record<string, Scene> = {
   calm: {
@@ -173,7 +231,7 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   harbour: {
-    weather: { wind: 3, gusts: 0.12, speed: 1, sea: 0.2, whitecaps: 0 },
+    weather: { wind: 4, gusts: 0.12, speed: 1, sea: 0.2, whitecaps: 0 },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);
       harbour.seconds = START + t;
@@ -182,9 +240,10 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   gentle: {
-    weather: { wind: 5, gusts: 0.12, speed: 2, sea: 0.4, whitecaps: 0.05 },
+    weather: { wind: 5, gusts: 0.12, speed: 2, sea: 0.4, whitecaps: 0.05, pitch: 2.5, period: 3 },
     step(engine, t, now) {
-      bed(engine, this.weather, t, now);
+      // A gybe.
+      bed(engine, this.weather, t, now, 0, crossing('gybe', 19, 21, t));
       gentleLife(engine, t, now);
     },
   },
@@ -193,12 +252,21 @@ export const SCENES: Record<string, Scene> = {
     step(engine, t, now) {
       // A tack: the sail luffs through it.
       const tacking = inCycle(t) > 12 && inCycle(t) < 15;
-      bed(engine, this.weather, t, now, tacking ? 2 : 0);
+      bed(engine, this.weather, t, now, tacking ? 2 : 0, crossing('tack', 12.5, 14.5, t));
       freshLife(engine, t, now);
     },
   },
   gale: {
-    weather: { wind: 18, gusts: 0.15, speed: 4.4, sea: 2.6, whitecaps: 0.8 },
+    weather: {
+      wind: 18,
+      gusts: 0.15,
+      speed: 4.4,
+      sea: 2.6,
+      whitecaps: 0.8,
+      pitch: 8,
+      period: 5,
+      heave: 0.9,
+    },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);
     },
@@ -217,7 +285,17 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   squall: {
-    weather: { wind: 14, gusts: 0.2, speed: 3.8, sea: 1.5, whitecaps: 0.6, rain: 20 },
+    weather: {
+      wind: 14,
+      gusts: 0.2,
+      speed: 3.8,
+      sea: 1.5,
+      whitecaps: 0.6,
+      rain: 20,
+      pitch: 6,
+      period: 4,
+      heave: 0.5,
+    },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);
       // A flash near, 700 m off, cracking; one far, 4 km off, rolling.
@@ -232,13 +310,46 @@ export const SCENES: Record<string, Scene> = {
     },
   },
   edge: {
-    weather: { wind: 7, gusts: 0.12, speed: 2.8, sea: 1, whitecaps: 0.2, lip: 300 },
+    weather: {
+      wind: 7,
+      gusts: 0.12,
+      speed: 2.8,
+      sea: 1,
+      whitecaps: 0.2,
+      lip: 300,
+      pitch: 3.5,
+      period: 4,
+    },
+    step(engine, t, now) {
+      bed(engine, this.weather, t, now);
+    },
+  },
+  shore: {
+    // Along a beach, the surf breaking on it.
+    weather: {
+      wind: 6,
+      gusts: 0.12,
+      speed: 2.4,
+      sea: 0.9,
+      whitecaps: 0.1,
+      pitch: 3,
+      period: 4,
+      depth: 4,
+    },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);
     },
   },
   race: {
-    weather: { wind: 6, gusts: 0.12, speed: 2.6, sea: 0.6, whitecaps: 0.1 },
+    weather: {
+      wind: 6,
+      gusts: 0.12,
+      speed: 2.6,
+      sea: 0.6,
+      whitecaps: 0.1,
+      pitch: 2.5,
+      period: 3.5,
+    },
     step(engine, t, now) {
       bed(engine, this.weather, t, now);
       // The start's signals, a gun each, the start's louder; then a finish:

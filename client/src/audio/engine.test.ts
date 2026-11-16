@@ -9,6 +9,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { SoundEngine } from './engine';
 import { MIX } from './mix';
+import type { Recording } from './recorded';
+import type { SoundInput } from './voices';
 
 /** An automation call: its name, the value and the time. */
 type Call = [string, number, number];
@@ -252,5 +254,174 @@ describe('the sound engine', () => {
     const world = last((m.output('world') as GainNode).gain);
     expect(sea?.[1]).toBeCloseTo(0.125 * 10 ** (MIX.buses.sea.level / 20), 6);
     expect(world?.[1]).toBeCloseTo(10 ** (MIX.buses.world.level / 20), 6);
+  });
+});
+
+/** A boat sailing in a moderate sea, for the bed's tests. */
+function sailing(): SoundInput {
+  return {
+    apparentWind: 7,
+    speed: 2,
+    throughWater: 2,
+    seaHeight: 1,
+    whitecaps: 0,
+    luffing: 0,
+    time: 1000,
+    lip: Number.POSITIVE_INFINITY,
+    lipPan: 0,
+    falling: false,
+  };
+}
+
+/** A recording's buffer, as the stand-in context's sources need it. */
+const buffer = { duration: 4, length: 4 * 8000, sampleRate: 8000 } as AudioBuffer;
+
+describe('the bed’s recordings', () => {
+  test('a recording takes over its layer from the synthesis over the crossfade, at equal power', async () => {
+    const e = engine();
+    e.unlock();
+    await settle();
+    const c = made[0] as Context;
+    let now = 0;
+    const step = (): void => {
+      now += 100;
+      e.update(now, sailing());
+    };
+    step();
+    expect(e.families().sea.synth).toBe(1);
+    e.useRecording('sea.moderate', buffer);
+    expect(e.recorded.has('sea.moderate')).toBe(true);
+    const seen: number[] = [];
+    for (let t = 0; t <= MIX.layers.crossfade + 0.5; t += 0.5) {
+      c.currentTime = 10 + t;
+      step();
+      const f = e.families().sea;
+      const layer = f.layers['sea.moderate'];
+      // At 1 m the moderate sea is all of the family.
+      expect(layer?.share).toBeCloseTo(1, 9);
+      expect(f.synth ** 2 + (layer?.take ?? 0) ** 2).toBeCloseTo(1, 9);
+      seen.push(f.synth);
+    }
+    expect(seen[0]).toBe(1);
+    expect(seen.at(-1)).toBe(0);
+    for (let i = 1; i < seen.length; i++) {
+      expect(seen[i] ?? 0).toBeLessThanOrEqual(seen[i - 1] ?? 0);
+    }
+  });
+
+  test('the synthesis plays the share of the layers with no recording', async () => {
+    const e = engine();
+    e.unlock();
+    await settle();
+    const c = made[0] as Context;
+    e.useRecording('wind.moderate', buffer);
+    c.currentTime += 10;
+    // Between the moderate's and the strong's centres.
+    const x = { ...sailing(), apparentWind: 9.5 };
+    e.update(100, x);
+    const w = e.families().wind;
+    expect(w.layers['wind.moderate']?.take).toBe(1);
+    expect(w.synth).toBeCloseTo(w.layers['wind.strong']?.share ?? 0, 9);
+    expect(w.synth).toBeGreaterThan(0.5);
+    // Its recording let go: the synthesis is all of it again.
+    e.useSynthesis('wind.moderate');
+    e.update(200, x);
+    expect(e.families().wind.synth).toBe(1);
+    expect(e.recorded.size).toBe(0);
+  });
+
+  test('recordings that cannot be fetched or decoded leave the synthesis playing', async () => {
+    const e = engine();
+    e.unlock();
+    await settle();
+    const list = (['sea-moderate', 'wind-light'] as const).map((name, i) => ({
+      name,
+      voice: i === 0 ? 'sea.moderate' : 'wind.light',
+      kind: 'bed' as const,
+      gain: 0,
+      seconds: 4,
+      channels: 1,
+      bytes: { webm: 1, m4a: 1 },
+      urls: { webm: `${name}.webm`, m4a: `${name}.m4a` },
+    }));
+    const probe: Recording = {
+      ...(list[0] as Recording),
+      name: 'probe',
+      kind: 'probe',
+      urls: { webm: 'probe.webm', m4a: 'probe.m4a' },
+    };
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // The probe decodes; the sea's recording does not.
+    let decodes = 0;
+    const out = await e.record(list, probe, {
+      fetch: async (url) => {
+        if (url === 'wind-light.webm') {
+          throw new Error('404');
+        }
+        return new ArrayBuffer(8);
+      },
+      decode: async () => {
+        if (decodes++ > 0) {
+          throw new Error('EncodingError');
+        }
+        return buffer;
+      },
+      frame: async () => {},
+    });
+    expect(out?.failed.sort()).toEqual(['sea-moderate', 'wind-light']);
+    expect(e.recorded.size).toBe(0);
+    e.update(100, sailing());
+    expect(e.families().sea.synth).toBe(1);
+    expect(e.families().wind.synth).toBe(1);
+  });
+
+  test('asks for nothing while the game lists no recordings', async () => {
+    const e = engine();
+    const fetches = vi.fn();
+    vi.stubGlobal('fetch', fetches);
+    e.record();
+    e.unlock();
+    await settle();
+    const out = await e.loading;
+    expect(fetches).not.toHaveBeenCalled();
+    expect(out?.loaded).toEqual([]);
+  });
+});
+
+describe('the boat’s motion', () => {
+  test('a slap as the bow turns up from a fast fall, through the sea bus', async () => {
+    const e = engine();
+    e.unlock();
+    await settle();
+    const x = sailing();
+    let now = 0;
+    for (let t = 0; t < 12; t += 0.05) {
+      now += 50;
+      // 6° every 3 s.
+      x.pitchRate = 0.22 * Math.cos(((2 * Math.PI) / 3) * t);
+      x.heaveRate = 0.5 * Math.cos(((2 * Math.PI) / 3) * t - 0.4);
+      x.time = 1000 + t;
+      e.update(now, x);
+    }
+    expect(e.slaps).toBe(4);
+  });
+
+  test('the sheet in a tack, the boom in a gybe', async () => {
+    const e = engine();
+    e.unlock();
+    await settle();
+    const x = sailing();
+    const at = (boom: number, rate: number, angle: number, now: number): void => {
+      x.boom = boom;
+      x.boomRate = rate;
+      x.apparentAngle = angle;
+      e.update(now, x);
+    };
+    at(0.4, 0, 0.7, 100);
+    at(-0.4, -0.3, -0.7, 200);
+    expect(e.sheets).toBe(1);
+    at(-1.2, 0, -2.9, 300);
+    at(1.1, 2, 2.9, 400);
+    expect(e.booms).toBe(1);
   });
 });

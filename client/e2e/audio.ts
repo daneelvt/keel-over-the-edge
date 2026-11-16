@@ -6,6 +6,11 @@
 // measured (audio/loudness.ts). The mix is in the first two channels; the
 // bed alone, where the engine has a tap on it, in the next two. The last
 // rendering stays, for its samples to be read out (pcm).
+//
+// The game's own recordings (the probe and the test sea) are decoded here
+// as the page would decode them, and played in a scene's beds in place of
+// their synthesis; and the loader is run against a file that is not there
+// and one that is not sound.
 
 import { SoundEngine } from '../src/audio/engine';
 import {
@@ -15,8 +20,112 @@ import {
   shareAbove,
   windowPowers,
 } from '../src/audio/loudness';
-import type { MixRecipe } from '../src/audio/mix';
+import type { BusName, MixRecipe } from '../src/audio/mix';
+import { decodedBytes, type Numbers, type Recording, type Voice } from '../src/audio/recorded';
 import { SCENES } from './audioscenes';
+
+/** The game's own recordings, by name: the probe and the test sea, with their files. */
+const OWN_FILES = import.meta.glob<string>(
+  ['../../art/sound/recorded/probe.*', '../../art/sound/recorded/test-sea.*', '!**/*.json'],
+  { eager: true, query: '?url', import: 'default' },
+);
+const OWN_NUMBERS = import.meta.glob<Numbers>(
+  ['../../art/sound/recorded/probe.json', '../../art/sound/recorded/test-sea.json'],
+  { eager: true, import: 'default' },
+);
+
+function own(name: 'probe' | 'test-sea', voice: Voice | '' = ''): Recording {
+  const n = OWN_NUMBERS[`../../art/sound/recorded/${name}.json`];
+  const webm = OWN_FILES[`../../art/sound/recorded/${name}.webm`];
+  const m4a = OWN_FILES[`../../art/sound/recorded/${name}.m4a`];
+  if (n === undefined || webm === undefined || m4a === undefined) {
+    throw new Error(`no ${name} recording`);
+  }
+  return { ...n, voice, name, urls: { webm, m4a } };
+}
+
+/** Each of the game's own recordings decoded from each format: how long and how wide it is, and what it decodes to. */
+async function decodeOwn(): Promise<
+  {
+    name: string;
+    format: string;
+    length: number;
+    channels: number;
+    seconds: number;
+    bytes: number;
+    decoded: number;
+  }[]
+> {
+  const out = [];
+  for (const name of ['probe', 'test-sea'] as const) {
+    const r = own(name);
+    for (const format of ['webm', 'm4a'] as const) {
+      const data = await (await fetch(r.urls[format])).arrayBuffer();
+      const ctx = new OfflineAudioContext({ numberOfChannels: 1, length: 1, sampleRate: RATE });
+      const b = await ctx.decodeAudioData(data);
+      out.push({
+        name,
+        format,
+        length: b.length,
+        channels: b.numberOfChannels,
+        seconds: r.seconds,
+        bytes: data.byteLength,
+        decoded: b.length * b.numberOfChannels * 4,
+      });
+    }
+  }
+  return out;
+}
+
+/** The decoded bytes the numbers say a recording comes to. */
+function declared(name: 'probe' | 'test-sea'): number {
+  return decodedBytes(own(name), RATE);
+}
+
+/**
+ * The loader on the engine, offline, given the test sea as a voice's and
+ * as two more whose files are not there and are not sound: what loaded and
+ * what did not, and the voices then playing recordings.
+ */
+async function loadWithFaults(): Promise<{
+  format: string | null;
+  loaded: string[];
+  failed: string[];
+  recorded: string[];
+}> {
+  const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: RATE, sampleRate: RATE });
+  const engine = new SoundEngine();
+  engine.attach(ctx);
+  const sea = own('test-sea', 'sea.moderate');
+  const gone: Recording = {
+    ...sea,
+    name: 'gone',
+    voice: 'wind.light',
+    urls: { webm: '/no/such.webm', m4a: '/no/such.m4a' },
+  };
+  const notSound: Recording = {
+    ...sea,
+    name: 'not-sound',
+    voice: 'surf',
+    urls: { webm: '/e2e/audio.html', m4a: '/e2e/audio.html' },
+  };
+  const out = await engine.record([gone, notSound, sea], own('probe'), { failed: () => {} });
+  return { ...(out ?? { format: null, loaded: [], failed: [] }), recorded: [...engine.recorded] };
+}
+
+/** The test sea, decoded once for the renderings that play it. */
+let testSea: Promise<AudioBuffer> | null = null;
+function testSeaBuffer(): Promise<AudioBuffer> {
+  testSea ??= (async () => {
+    const data = await (await fetch(own('test-sea').urls.webm)).arrayBuffer();
+    return new OfflineAudioContext({
+      numberOfChannels: 1,
+      length: 1,
+      sampleRate: RATE,
+    }).decodeAudioData(data);
+  })();
+  return testSea;
+}
 
 const RATE = 48000;
 const STEP = 0.05;
@@ -48,6 +157,8 @@ export interface Measured {
   /** The share of the bed's energy above 2 kHz (the whole mix's where the bed has no tap). */
   bedAbove: number;
   mixAbove: number;
+  /** The bed's own integrated loudness, LUFS (the tapped bus's, where another is tapped). */
+  bed: number;
   /** The limiter's most gain reduction, dB; 0 where there is none. */
   reduction: number;
   /** How many of each kind of sound played once were played. */
@@ -65,6 +176,10 @@ interface Taps {
 export interface RenderOptions {
   volume?: number;
   mix?: MixRecipe;
+  /** The bus measured as the bed: the sea's, unless another is named. */
+  tap?: BusName;
+  /** Voices played by the test sea in place of their synthesis, from the start, taking over over crossfade s (none: at once). */
+  recorded?: { voices: Voice[]; crossfade?: number };
 }
 
 async function render(name: string, seconds: number, o: RenderOptions = {}): Promise<Measured> {
@@ -93,9 +208,15 @@ async function render(name: string, seconds: number, o: RenderOptions = {}): Pro
   };
   const engine = makeEngine(o);
   engine.attach(ctx, stereo(0));
+  if (o.recorded !== undefined) {
+    const b = await testSeaBuffer();
+    for (const v of o.recorded.voices) {
+      engine.useRecording(v, b, 0, o.recorded.crossfade ?? 0);
+    }
+  }
   const taps = engine as unknown as Taps;
   taps.volumes?.(o.volume ?? 1, 1, 1);
-  const bed = taps.tap?.('sea') ?? null;
+  const bed = taps.tap?.(o.tap ?? 'sea') ?? null;
   if (bed !== null) {
     bed.connect(stereo(2));
   }
@@ -136,6 +257,15 @@ async function render(name: string, seconds: number, o: RenderOptions = {}): Pro
         ? mixAbove
         : shareAbove([buffer.getChannelData(2), buffer.getChannelData(3)], RATE, 2000),
     mixAbove,
+    bed:
+      bed === null
+        ? m.integrated
+        : integrated(
+            windowPowers(
+              segmentPowers([buffer.getChannelData(2), buffer.getChannelData(3)], RATE),
+              4,
+            ),
+          ),
     reduction,
     played: {
       harbour: engine.harbourEvents,
@@ -144,6 +274,10 @@ async function render(name: string, seconds: number, o: RenderOptions = {}): Pro
       thunder: engine.thunderEvents,
       guns: engine.guns,
       cheers: engine.cheers,
+      slaps: engine.slaps,
+      sheets: engine.sheets,
+      booms: engine.booms,
+      taps: engine.taps,
     },
   };
 }
@@ -182,7 +316,17 @@ function pcm(from: number, to: number): string {
   return btoa(s);
 }
 
-const hooks = { render, pcm, typical, useEngine, rate: RATE, scenes: Object.keys(SCENES) };
+const hooks = {
+  render,
+  pcm,
+  typical,
+  useEngine,
+  decodeOwn,
+  declared,
+  loadWithFaults,
+  rate: RATE,
+  scenes: Object.keys(SCENES),
+};
 
 export type AudioHooks = typeof hooks;
 

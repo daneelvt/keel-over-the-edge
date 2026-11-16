@@ -38,7 +38,7 @@ import {
   waterSounds,
 } from '../audio/life';
 import type { ThunderInput } from '../audio/thunder';
-import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
+import { edgeInput, motionInput, type SoundInput, soundInput } from '../audio/voices';
 import { catalog } from '../catalog';
 import {
   ApproachWatch,
@@ -150,6 +150,8 @@ export class Game implements PilotActions {
   #speed = 0;
   #pushes = 0;
   #lastTime = 0;
+  /** Whether the recordings have been asked for. */
+  #recording = false;
 
   /** The own boat's kind's rudder's travel and the boom's least and most, radians. */
   get #rudderMax(): number {
@@ -662,7 +664,16 @@ export class Game implements PilotActions {
     // rig's yards too (a headsail's stay is not the rigging that sings).
     const { rig, square } = w.kind.physics;
     this.#sound.sailArea = rig.sailArea + square.squareForeArea + square.squareAfterArea;
+    if (s !== undefined) {
+      motionInput(s, this.#sound);
+    }
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
+    // The recordings, once the game is under way: never in its first
+    // download, and taking over from the synthesis as each arrives.
+    if (!this.#recording) {
+      this.#recording = true;
+      this.sound.record();
+    }
     this.#harbour(now, look);
     this.#features(now, look);
     this.#life(now, look);
