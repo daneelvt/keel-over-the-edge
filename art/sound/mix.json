@@ -1,0 +1,43 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The mix, read by the page alone: how loud each family of sounds is heard against the others, and how the bed is made gentle. Each bus's level is in dB, under the player's slider; the sea bus is shelved down above shelf.frequency by shelf.gain dB. The master runs into a safety limiter (threshold dB, knee dB, ratio, attack and release s) that the mix is staged to keep away from. fades: s to fade in at the start, out on mute or hide, in on unmute or show, a slider's glide and the voices' glide (a time constant). bed: the sea's voices' levels as the recipes give them are played as most times (level / most) to the power curve, so a breeze and a gale are nearer than the recipes have them; trims are each voice's dB in the mix. calm: a quiet lapping at the hull while the boat drifts, its band (Hz, q) and level falling away over speed m/s, swelling every period s, each lap from rest to most. tone: the bow wave's hiss's band, Hz; the rigging sings only in gusts, from gust.from to gust.full of the wind's gust factor, its band's q; the gun's crack is low-passed at gunCrack Hz; birds' and colonies' harmonic calls are low-passed at birds.lowpass times their pitch and swell in over birds.attack s. noise: the seconds of each of the white, pink and brown noises the voices read, each at its own offset.",
+  "buses": {
+    "sea": { "level": 0, "shelf": { "frequency": 4000, "gain": -6 } },
+    "world": { "level": 0 },
+    "boat": { "level": 0 },
+    "races": { "level": -8 },
+    "notices": { "level": 0 }
+  },
+  "limiter": { "threshold": -6, "knee": 0, "ratio": 20, "attack": 0.002, "release": 0.15 },
+  "fades": { "start": 1.5, "out": 0.15, "in": 0.5, "slider": 0.05, "glide": 0.15 },
+  "bed": {
+    "curve": 0.4,
+    "trims": {
+      "wind": -3.6,
+      "rigging": -10,
+      "flog": -1.4,
+      "water": -9.6,
+      "hiss": -5.4,
+      "sea": -2.3,
+      "rain": -4,
+      "drum": -2,
+      "falls": 0,
+      "lapping": 0,
+      "roar": 0
+    }
+  },
+  "calm": {
+    "centre": 380,
+    "q": 1.2,
+    "level": 0.1,
+    "speed": [0.4, 1.4],
+    "period": [2.6, 4.3]
+  },
+  "tone": {
+    "hiss": 2500,
+    "rigging": { "q": 8, "gust": { "from": 1.03, "full": 1.15 } },
+    "gunCrack": 3000,
+    "birds": { "lowpass": 3, "attack": 0.04 }
+  },
+  "noise": 12
+}

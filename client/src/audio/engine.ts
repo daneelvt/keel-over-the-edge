@@ -1,25 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The sound engine: Web Audio, synthesised, with no sound files. One looped
-// buffer of noise feeds the voices: the wind (a band-pass), the rigging's
-// song (a narrow band-pass at the Aeolian tone), the flogging cloth (a band
-// beaten by a flap), the water on the hull (a low-pass, with the bow
-// wave's hiss), the sea about the boat (a wide, low band), and the falls (a
-// low band through a low-pass, panned toward the lip), and in port the
-// water lapping at the quays (audio/harbour.ts, with the bell, the gulls
-// and the mallets, each played once), and by day the calls of the sea's
-// life about the boat (audio/life.ts), each played once. The frame loop sets their parameters at most every 50 ms,
-// each gliding to its target with setTargetAtTime. A bump's knock is played
-// once, from the same noise and a tone, and let go when it has died away;
-// so are a lighthouse's fog signal's blasts in fog (audio/fogsignals.ts),
-// each a tone of the device's harmonics, and the thunder after a flash
-// (audio/thunder.ts), from the noise.
+// The sound engine: Web Audio, synthesised, with no sound files. The boat's
+// bed is made of noises (audio/noise.ts: pink for the wind, brown for the
+// water and the sea, white for the rest), each voice reading its own at its
+// own offset: the wind (a band-pass), the rigging's song (a narrow band at
+// the Aeolian tone, in gusts), the flogging cloth (a band beaten by a
+// flap), the water on the hull (a low-pass, with the bow wave's hiss), the
+// sea about the boat (a wide, low band), rain, the falls (a low band
+// through a low-pass, panned toward the lip), and, while the boat drifts,
+// the calm's lapping at the hull; in port the water lapping at the quays
+// (audio/harbour.ts, with the bell, the gulls and the mallets, each played
+// once), and by day the calls of the sea's life about the boat
+// (audio/life.ts), each played once. The frame loop sets their parameters
+// at most every 50 ms, each gliding to its target with setTargetAtTime. A
+// bump's knock is played once, from the noise and a tone, and let go when
+// it has died away; so are a lighthouse's fog signal's blasts in fog
+// (audio/fogsignals.ts), each a tone of the device's harmonics, and the
+// thunder after a flash (audio/thunder.ts), from the noise.
+//
+// Every voice plays into its family's bus of the mix (audio/mix.ts), which
+// decides how loud it is heard: the bed's levels as the recipes give them
+// (the server's lookout tells machine sailors the same) are played on the
+// mix's curve, nearer together, and each voice at its trim.
 //
 // Browsers start audio only from a user gesture. Under the HTML standard's
 // user activation, a keydown (not Escape), a mouse's pointerdown, or a
 // touch's or pen's pointerup counts; a touch's pointerdown does not. So the
 // context is made and resumed on the first such event, and tried again on
-// every one until it runs. It is suspended while the page is hidden.
+// every one until it runs; never while the sound is off. Before it is made
+// the page's audio session is set to ambient where the browser has one: the
+// game's sound then mixes with the player's own music, and an iPhone's
+// silent switch silences it. It fades in as it starts. Muted, or while the
+// page is hidden, it fades out and then is suspended; unmuted or shown, it
+// is resumed and fades in.
 
 import { CHEER, type CheerSound } from './cheer';
 import {
@@ -62,6 +75,8 @@ import {
   type WaterRecipes,
   type WaterSound,
 } from './life';
+import { type BusName, calmLevel, curved, gainOf, MIX, Mixer, type MixRecipe } from './mix';
+import { type NoiseColour, noiseBuffer } from './noise';
 import {
   THUNDER_RECIPE,
   THUNDER_RULE,
@@ -75,73 +90,62 @@ import {
   newTargets,
   RECIPES,
   type Recipes,
+  ramp,
   SOUND_INTERVAL,
   type SoundInput,
   soundTargets,
   Throttle,
 } from './voices';
 
-/** How quickly a parameter glides to its target: setTargetAtTime's time constant, in seconds. */
-const GLIDE = 0.08;
-const NOISE_SECONDS = 2;
+/** How quickly the lapping and a fall's roar glide to their targets, s: slower than the voices. */
+const SLOW = 0.32;
+
+/**
+ * A voice of the bed: its synthesis, held at one, into its level, which
+ * the physics sets. A recording of the same voice would play into the
+ * level beside the synthesis, the two crossfaded.
+ */
+interface BedVoice {
+  synth: GainNode;
+  level: GainNode;
+}
 
 interface Graph {
   ctx: BaseAudioContext;
-  master: GainNode;
-  noise: AudioBuffer;
+  mix: Mixer;
+  /** The noises the voices read; one-shots read the white. */
+  noise: Record<NoiseColour, AudioBuffer>;
   windBand: BiquadFilterNode;
-  wind: GainNode;
+  wind: BedVoice;
   rigBand: BiquadFilterNode;
-  rig: GainNode;
+  rig: BedVoice;
   flap: OscillatorNode;
-  flog: GainNode;
-  waterLow: GainNode;
+  flog: BedVoice;
+  water: BedVoice;
   waterFilter: BiquadFilterNode;
-  hiss: GainNode;
+  hiss: BedVoice;
   seaBand: BiquadFilterNode;
-  sea: GainNode;
+  sea: BedVoice;
   fallsLow: BiquadFilterNode;
-  falls: GainNode;
+  falls: BedVoice;
   fallsPan: StereoPannerNode;
-  lapping: GainNode;
+  lapping: BedVoice;
   lappingPan: StereoPannerNode;
-  roar: GainNode;
+  roar: BedVoice;
   roarPan: StereoPannerNode;
-  rain: GainNode;
-  drum: GainNode;
+  rain: BedVoice;
+  drum: BedVoice;
+  calm: BedVoice;
   /** The fog signals' tones, by device: made once each. */
   waves: Map<string, PeriodicWave>;
 }
 
-/** A white-noise buffer, from a fixed sequence so every page sounds alike. */
-function noise(ctx: BaseAudioContext): AudioBuffer {
-  const n = Math.floor(ctx.sampleRate * NOISE_SECONDS);
-  const buffer = ctx.createBuffer(1, n, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  let seed = 22222;
-  for (let i = 0; i < n; i++) {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    data[i] = (seed / 2147483648 - 1) * 0.7;
-  }
-  return buffer;
-}
-
-function build(ctx: BaseAudioContext, r: Recipes, destination: AudioNode): Graph {
-  const master = ctx.createGain();
-  master.gain.value = 0.8;
-  master.connect(destination);
-  const source = ctx.createBufferSource();
-  const buffer = noise(ctx);
-  source.buffer = buffer;
-  source.loop = true;
-
-  const voice = (filter: BiquadFilterNode): GainNode => {
-    const g = ctx.createGain();
-    g.gain.value = 0;
-    source.connect(filter);
-    filter.connect(g);
-    g.connect(master);
-    return g;
+function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: AudioNode): Graph {
+  const mix = new Mixer(ctx, destination, m);
+  const noise = {
+    white: noiseBuffer(ctx, 'white', m.noise),
+    pink: noiseBuffer(ctx, 'pink', m.noise),
+    brown: noiseBuffer(ctx, 'brown', m.noise),
   };
   const band = (type: BiquadFilterType, frequency: number, q: number): BiquadFilterNode => {
     const f = ctx.createBiquadFilter();
@@ -150,80 +154,95 @@ function build(ctx: BaseAudioContext, r: Recipes, destination: AudioNode): Graph
     f.Q.value = q;
     return f;
   };
+  // Each voice's noise starts at its own place in the loop, the golden
+  // ratio's steps apart.
+  const sources: [AudioBufferSourceNode, number][] = [];
+  const bed = (colour: NoiseColour, filters: AudioNode[], pan?: StereoPannerNode): BedVoice => {
+    const s = ctx.createBufferSource();
+    s.buffer = noise[colour];
+    s.loop = true;
+    sources.push([s, ((sources.length * 0.61803398875) % 1) * m.noise]);
+    let at: AudioNode = s;
+    for (const f of filters) {
+      at.connect(f);
+      at = f;
+    }
+    const synth = ctx.createGain();
+    const level = ctx.createGain();
+    level.gain.value = 0;
+    at.connect(synth);
+    synth.connect(level);
+    if (pan !== undefined) {
+      level.connect(pan);
+      pan.connect(mix.input('sea'));
+    } else {
+      level.connect(mix.input('sea'));
+    }
+    return { synth, level };
+  };
 
   const windBand = band('bandpass', r.wind.centre.atRest, r.wind.q);
-  const wind = voice(windBand);
-  const rigBand = band('bandpass', 100, r.rigging.q);
-  const rig = voice(rigBand);
+  const wind = bed('pink', [windBand]);
+  const rigBand = band('bandpass', 100, m.tone.rigging.q);
+  const rig = bed('white', [rigBand]);
 
-  // The flog: the cloth's band, its level beaten by a flap. The flap is a
-  // square wave turned from [−1, 1] into [0, 1] so it only opens the gain.
-  const flogBand = band('bandpass', r.flogging.centre, r.flogging.q);
-  const flogGate = voice(flogBand);
-  const flog = ctx.createGain();
-  flog.gain.value = 0;
+  // The flog: the cloth's band, beaten by a flap. The flap is a square wave
+  // turned from [−1, 1] into [0, 1] so it only opens the gate.
+  const flogGate = ctx.createGain();
+  flogGate.gain.value = 0;
+  const flog = bed('white', [band('bandpass', r.flogging.centre, r.flogging.q), flogGate]);
   const flap = ctx.createOscillator();
   flap.type = 'square';
   flap.frequency.value = r.flogging.rate.atRest;
   const rectify = ctx.createWaveShaper();
   rectify.curve = new Float32Array([0, 0, 1]);
   flap.connect(rectify);
-  rectify.connect(flog);
-  flog.connect(flogGate.gain);
+  rectify.connect(flogGate.gain);
 
   const waterFilter = band('lowpass', r.water.cutoff.atRest, 0.7);
-  const waterLow = voice(waterFilter);
-  const hiss = voice(band('bandpass', r.water.hiss.centre, r.water.hiss.q));
+  const water = bed('brown', [waterFilter]);
+  const hiss = bed('white', [band('bandpass', m.tone.hiss, r.water.hiss.q)]);
 
   const seaBand = band('bandpass', r.sea.centre.atRest, r.sea.q);
-  const sea = voice(seaBand);
-  const rain = voice(band('bandpass', r.rain.hiss.centre, r.rain.hiss.q));
-  const drum = voice(band('bandpass', r.rain.drum.centre, r.rain.drum.q));
+  const sea = bed('brown', [seaBand]);
+  const rain = bed('white', [band('bandpass', r.rain.hiss.centre, r.rain.hiss.q)]);
+  const drum = bed('white', [band('bandpass', r.rain.drum.centre, r.rain.drum.q)]);
   // The falls: their band, through a low-pass the distance closes, panned.
-  const fallsBand = band('bandpass', r.falls.centre, r.falls.q);
   const fallsLow = band('lowpass', r.falls.cutoff.most, 0.7);
-  const falls = ctx.createGain();
-  falls.gain.value = 0;
   const fallsPan = ctx.createStereoPanner();
-  source.connect(fallsBand);
-  fallsBand.connect(fallsLow);
-  fallsLow.connect(falls);
-  falls.connect(fallsPan);
-  fallsPan.connect(master);
-
+  const falls = bed('white', [band('bandpass', r.falls.centre, r.falls.q), fallsLow], fallsPan);
   // The harbour's lapping: a band of noise, panned toward the quay.
-  const lappingBand = band('bandpass', HARBOUR_RECIPES.lapping.centre, HARBOUR_RECIPES.lapping.q);
-  const lapping = ctx.createGain();
-  lapping.gain.value = 0;
   const lappingPan = ctx.createStereoPanner();
-  source.connect(lappingBand);
-  lappingBand.connect(lapping);
-  lapping.connect(lappingPan);
-  lappingPan.connect(master);
-
+  const lapping = bed(
+    'white',
+    [band('bandpass', HARBOUR_RECIPES.lapping.centre, HARBOUR_RECIPES.lapping.q)],
+    lappingPan,
+  );
   // A waterfall's roar: a band of noise, panned toward the fall.
-  const roarBand = band('bandpass', FEATURE_RECIPES.waterfall.centre, FEATURE_RECIPES.waterfall.q);
-  const roar = ctx.createGain();
-  roar.gain.value = 0;
   const roarPan = ctx.createStereoPanner();
-  source.connect(roarBand);
-  roarBand.connect(roar);
-  roar.connect(roarPan);
-  roarPan.connect(master);
+  const roar = bed(
+    'white',
+    [band('bandpass', FEATURE_RECIPES.waterfall.centre, FEATURE_RECIPES.waterfall.q)],
+    roarPan,
+  );
+  // The calm's lapping at the hull.
+  const calm = bed('brown', [band('bandpass', m.calm.centre, m.calm.q)]);
 
-  source.start();
+  for (const [s, offset] of sources) {
+    s.start(0, offset);
+  }
   flap.start();
   return {
     ctx,
-    master,
-    noise: buffer,
+    mix,
+    noise,
     windBand,
     wind,
     rigBand,
     rig,
     flap,
     flog,
-    waterLow,
+    water,
     waterFilter,
     hiss,
     seaBand,
@@ -237,22 +256,65 @@ function build(ctx: BaseAudioContext, r: Recipes, destination: AudioNode): Graph
     roarPan,
     rain,
     drum,
+    calm,
     waves: new Map(),
   };
 }
 
+/** What the engine may be given: a maker of its context (the page's own, else none), and the mix. */
+export interface EngineOptions {
+  context?: () => AudioContext;
+  mix?: MixRecipe;
+}
+
+/** The page's audio session, where the browser has one (the W3C's Audio Session; Safari since iOS 17). */
+interface AudioSessionNavigator {
+  audioSession?: { type: string };
+}
+
+/**
+ * Sets the page's audio session to ambient where the browser has one: the
+ * game's sound mixes with what else plays, and an iPhone's silent switch
+ * silences it. Before an audio context is made, which takes the session.
+ */
+export function ambientSession(nav: unknown = globalThis.navigator): void {
+  const s = (nav as AudioSessionNavigator | undefined)?.audioSession;
+  if (s !== undefined && s !== null) {
+    try {
+      s.type = 'ambient';
+    } catch {
+      // A session that refuses: the browser's own then.
+    }
+  }
+}
+
 export class SoundEngine {
   readonly #recipes: Recipes;
+  readonly #mix: MixRecipe;
+  readonly #context: (() => AudioContext) | null;
   readonly #throttle = new Throttle(SOUND_INTERVAL);
   readonly #targets = newTargets();
   #graph: Graph | null = null;
   #enabled = true;
   #hidden = false;
-  /** How many times the parameters were set (tests). */
+  /** Whether a gesture has been seen: the sound turned on later may start at once. */
+  #gestured = false;
+  /** Whether the sound plays: not faded out for a mute or the page hidden. */
+  #playing = false;
+  #suspending: ReturnType<typeof setTimeout> | null = null;
+  #volumes = { volume: 1, sea: 1, sounds: 1 };
+  /** How many times the parameters were set, and contexts made (tests). */
   updates = 0;
+  contexts = 0;
 
-  constructor(recipes: Recipes = RECIPES) {
+  constructor(recipes: Recipes = RECIPES, options: EngineOptions = {}) {
     this.#recipes = recipes;
+    this.#mix = options.mix ?? MIX;
+    this.#context =
+      options.context ??
+      (typeof AudioContext === 'undefined'
+        ? null
+        : () => new AudioContext({ latencyHint: 'playback' }));
   }
 
   /** The audio context's state, or 'none' before the first gesture. */
@@ -268,15 +330,40 @@ export class SoundEngine {
    * OfflineAudioContext renders what the engine plays faster than it
    * would be heard, the caller setting the voices between its suspends.
    * Its state is then no matter: the voices are set while it is suspended.
+   * It starts at full, with no fade.
    */
   attach(ctx: BaseAudioContext, destination: AudioNode = ctx.destination): void {
-    this.#offline = !(typeof AudioContext !== 'undefined' && ctx instanceof AudioContext);
-    this.#graph = build(ctx, this.#recipes, destination);
+    this.#offline = true;
+    this.#graph = build(ctx, this.#recipes, this.#mix, destination);
+    this.#graph.mix.volumes(this.#volumes);
+    this.#graph.mix.fade.gain.value = 1;
+    this.#playing = true;
   }
 
   /** Whether the graph plays: its context runs, or renders offline. */
   #live(g: Graph): boolean {
     return this.#offline || g.ctx.state === 'running';
+  }
+
+  /** The mixer, once the context is made: where recordings and the meter join the mix. */
+  get mixer(): Mixer | null {
+    return this.#graph?.mix ?? null;
+  }
+
+  /** A bus's output, for a meter to listen to; null before the context is made. */
+  tap(bus: BusName): AudioNode | null {
+    return this.#graph?.mix.output(bus) ?? null;
+  }
+
+  /** The limiter's gain reduction now, dB (0 or less). */
+  get reduction(): number {
+    return this.#graph?.mix.reduction ?? 0;
+  }
+
+  /** Sets the player's volume, the sea and wind's and every other sound's, each 0 to 1. */
+  volumes(volume: number, sea: number, sounds: number): void {
+    this.#volumes = { volume, sea, sounds };
+    this.#graph?.mix.volumes(this.#volumes);
   }
 
   /** Listens for the gestures that may start audio, and for the page being hidden. */
@@ -302,28 +389,38 @@ export class SoundEngine {
     );
   }
 
-  /** Makes and resumes the context; called inside a user gesture. */
+  /** Makes and resumes the context; called inside a user gesture. Never while the sound is off. */
   unlock(): void {
-    if (!this.#enabled || this.#hidden || typeof AudioContext === 'undefined') {
+    this.#gestured = true;
+    if (!this.#enabled || this.#hidden || this.#context === null) {
       return;
     }
     if (this.#graph === null) {
       try {
-        const ctx = new AudioContext({ latencyHint: 'playback' });
-        this.#graph = build(ctx, this.#recipes, ctx.destination);
+        ambientSession();
+        const ctx = this.#context();
+        this.contexts++;
+        this.#graph = build(ctx, this.#recipes, this.#mix, ctx.destination);
       } catch (err) {
         console.warn('sound could not start', err);
         return;
       }
+      this.#graph.mix.volumes(this.#volumes);
+      this.#graph.mix.fadeIn(this.#mix.fades.start);
+      this.#playing = true;
     }
     const ctx = this.#graph.ctx;
-    if (ctx instanceof AudioContext && ctx.state !== 'running') {
-      void ctx.resume().catch(() => {});
+    if (!this.#offline && ctx.state !== 'running') {
+      void (ctx as AudioContext).resume().catch(() => {});
     }
   }
 
   set enabled(on: boolean) {
     this.#enabled = on;
+    // Turned on from a gesture (the menu's switch, the M key): start now.
+    if (on && this.#graph === null && this.#gestured) {
+      this.unlock();
+    }
     this.#apply();
   }
 
@@ -343,24 +440,36 @@ export class SoundEngine {
       return;
     }
     this.updates++;
-    const t = soundTargets(this.#recipes, input, this.#targets);
+    const r = this.#recipes;
+    const m = this.#mix;
+    const t = soundTargets(r, input, this.#targets);
     const at = g.ctx.currentTime;
-    g.windBand.frequency.setTargetAtTime(t.windCentre, at, GLIDE);
-    g.wind.gain.setTargetAtTime(t.windLevel, at, GLIDE);
-    g.rigBand.frequency.setTargetAtTime(Math.max(20, t.rigTone), at, GLIDE);
-    g.rig.gain.setTargetAtTime(t.rigLevel, at, GLIDE);
-    g.flap.frequency.setTargetAtTime(t.flapRate, at, GLIDE);
-    g.flog.gain.setTargetAtTime(t.flogLevel, at, GLIDE);
-    g.waterFilter.frequency.setTargetAtTime(t.waterCutoff, at, GLIDE);
-    g.waterLow.gain.setTargetAtTime(t.waterLevel, at, GLIDE);
-    g.hiss.gain.setTargetAtTime(t.hissLevel, at, GLIDE);
-    g.seaBand.frequency.setTargetAtTime(t.seaCentre, at, GLIDE);
-    g.sea.gain.setTargetAtTime(t.seaLevel, at, GLIDE);
-    g.fallsLow.frequency.setTargetAtTime(t.fallsCutoff, at, GLIDE);
-    g.falls.gain.setTargetAtTime(t.fallsLevel, at, GLIDE);
-    g.fallsPan.pan.setTargetAtTime(t.fallsPan, at, GLIDE);
-    g.rain.gain.setTargetAtTime(t.rainLevel, at, GLIDE);
-    g.drum.gain.setTargetAtTime(t.drumLevel, at, GLIDE);
+    const glide = m.fades.glide;
+    const b = m.bed;
+    // A bed's voice at the level the recipe gives, on the mix's curve, at its trim.
+    const play = (v: BedVoice, level: number, most: number, trim: number): void => {
+      v.level.gain.setTargetAtTime(gainOf(trim) * curved(level, most, b.curve), at, glide);
+    };
+    g.windBand.frequency.setTargetAtTime(t.windCentre, at, glide);
+    play(g.wind, t.windLevel, r.wind.level.most, b.trims.wind);
+    // The rigging sings in the gusts alone.
+    const sings = ramp(m.tone.rigging.gust.from, m.tone.rigging.gust.full, input.gustFactor ?? 1);
+    g.rigBand.frequency.setTargetAtTime(Math.max(20, t.rigTone), at, glide);
+    play(g.rig, t.rigLevel * sings, r.rigging.level.most, b.trims.rigging);
+    g.flap.frequency.setTargetAtTime(t.flapRate, at, glide);
+    play(g.flog, t.flogLevel, r.flogging.level.most, b.trims.flog);
+    g.waterFilter.frequency.setTargetAtTime(t.waterCutoff, at, glide);
+    play(g.water, t.waterLevel, r.water.level.most, b.trims.water);
+    play(g.hiss, t.hissLevel, r.water.hiss.most, b.trims.hiss);
+    g.seaBand.frequency.setTargetAtTime(t.seaCentre, at, glide);
+    play(g.sea, t.seaLevel, r.sea.level.most, b.trims.sea);
+    g.fallsLow.frequency.setTargetAtTime(t.fallsCutoff, at, glide);
+    // The falls keep their fall with distance: their warning is in it.
+    g.falls.level.gain.setTargetAtTime(gainOf(b.trims.falls) * t.fallsLevel, at, glide);
+    g.fallsPan.pan.setTargetAtTime(t.fallsPan, at, glide);
+    play(g.rain, t.rainLevel, r.rain.level.most, b.trims.rain);
+    play(g.drum, t.drumLevel, r.rain.drumLevel.most, b.trims.drum);
+    g.calm.level.gain.setTargetAtTime(calmLevel(m.calm, input.speed, input.time), at, glide);
   }
 
   /** The harbour's recipes, the world seconds its events are played to, and how many were played (tests). */
@@ -382,15 +491,15 @@ export class SoundEngine {
     }
     const at = g.ctx.currentTime;
     const lap = lappingNow(this.#harbour.lapping, x);
-    g.lapping.gain.setTargetAtTime(lap.level, at, GLIDE * 4);
-    g.lappingPan.pan.setTargetAtTime(lap.pan, at, GLIDE * 4);
+    g.lapping.level.gain.setTargetAtTime(gainOf(this.#mix.bed.trims.lapping) * lap.level, at, SLOW);
+    g.lappingPan.pan.setTargetAtTime(lap.pan, at, SLOW);
     // A jump in world time (a new world, a restore) plays nothing missed.
     if (!(x.seconds - this.#harbourTo < 2) || x.seconds < this.#harbourTo) {
       this.#harbourTo = x.seconds;
       return;
     }
     for (const e of harbourEvents(this.#harbour, x, this.#harbourTo, x.seconds, secondsPerHour)) {
-      this.#play(g, e, at + Math.max(0, e.at - x.seconds));
+      this.#play(g, e, at + Math.max(0, e.at - x.seconds), 'world');
     }
     this.#harbourTo = x.seconds;
   }
@@ -413,8 +522,8 @@ export class SoundEngine {
     }
     const at = g.ctx.currentTime;
     const roar = roarNow(this.#features.waterfall, x);
-    g.roar.gain.setTargetAtTime(roar.level, at, GLIDE * 4);
-    g.roarPan.pan.setTargetAtTime(roar.pan, at, GLIDE * 4);
+    g.roar.level.gain.setTargetAtTime(gainOf(this.#mix.bed.trims.roar) * roar.level, at, SLOW);
+    g.roarPan.pan.setTargetAtTime(roar.pan, at, SLOW);
     if (!(x.seconds - this.#featuresTo < 2) || x.seconds < this.#featuresTo) {
       this.#featuresTo = x.seconds;
       return;
@@ -431,9 +540,7 @@ export class SoundEngine {
     }
     this.featureEvents++;
     const ctx = g.ctx;
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = e.pan;
-    pan.connect(g.master);
+    const pan = this.#shot(g, 'world', e.pan);
     const nodes: AudioNode[] = [pan];
     const unit = (k: number): number => {
       const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
@@ -451,7 +558,7 @@ export class SoundEngine {
       v.gain.setValueAtTime(e.level, at);
       v.gain.setTargetAtTime(0, at + 0.01, c.decay / 2);
       const burst = ctx.createBufferSource();
-      burst.buffer = g.noise;
+      burst.buffer = g.noise.white;
       const bandp = ctx.createBiquadFilter();
       bandp.type = 'bandpass';
       bandp.frequency.value = c.whoosh;
@@ -486,9 +593,16 @@ export class SoundEngine {
       );
       const v = ctx.createGain();
       v.gain.setValueAtTime(0, at);
-      v.gain.linearRampToValueAtTime(e.level, at + 0.02);
+      v.gain.linearRampToValueAtTime(e.level, at + Math.min(this.#mix.tone.birds.attack, note / 3));
       v.gain.linearRampToValueAtTime(0, at + note);
-      o.connect(v);
+      if (e.kind === 'whistle') {
+        o.connect(v);
+      } else {
+        const soft = this.#soft(g, pitch);
+        o.connect(soft);
+        soft.connect(v);
+        nodes.push(soft);
+      }
       if (e.kind === 'rattle') {
         // Beaten rate times a second.
         const beat = ctx.createOscillator();
@@ -580,7 +694,7 @@ export class SoundEngine {
       (c.length[0] ?? 0.2) + unit(1) * ((c.length[1] ?? 0.4) - (c.length[0] ?? 0.2)) * s.size;
     const f = (c.band[0] ?? 800) + unit(2) * ((c.band[1] ?? 1600) - (c.band[0] ?? 800));
     const burst = ctx.createBufferSource();
-    burst.buffer = g.noise;
+    burst.buffer = g.noise.white;
     const band = ctx.createBiquadFilter();
     band.type = 'bandpass';
     band.Q.value = c.q;
@@ -590,12 +704,10 @@ export class SoundEngine {
     v.gain.setValueAtTime(0, at);
     v.gain.linearRampToValueAtTime(s.level, at + 0.012);
     v.gain.exponentialRampToValueAtTime(0.0001, at + length);
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = s.pan;
+    const pan = this.#shot(g, 'world', s.pan);
     burst.connect(band);
     band.connect(v);
     v.connect(pan);
-    pan.connect(g.master);
     burst.start(at, unit(3) * 2);
     burst.stop(at + length + 0.05);
     burst.onended = () => {
@@ -618,9 +730,7 @@ export class SoundEngine {
     };
     const between = (p: readonly number[], k: number): number =>
       (p[0] ?? 0) + unit(k) * ((p[1] ?? 0) - (p[0] ?? 0));
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = e.pan;
-    pan.connect(g.master);
+    const pan = this.#shot(g, 'world', e.pan);
     const o = ctx.createOscillator();
     const v = ctx.createGain();
     v.gain.setValueAtTime(0, at);
@@ -631,7 +741,10 @@ export class SoundEngine {
       o.frequency.setValueAtTime(pitch, t);
       o.frequency.exponentialRampToValueAtTime(end, t + length);
       v.gain.setValueAtTime(0, t);
-      v.gain.linearRampToValueAtTime(e.level, t + Math.min(0.015, length / 4));
+      v.gain.linearRampToValueAtTime(
+        e.level,
+        t + Math.min(this.#mix.tone.birds.attack, length / 4),
+      );
       v.gain.linearRampToValueAtTime(0, t + length);
     };
     if (e.kind === 'whistle') {
@@ -653,9 +766,11 @@ export class SoundEngine {
       band.type = 'bandpass';
       band.frequency.value = pitch;
       band.Q.value = c.q;
+      const soft = this.#soft(g, pitch);
       o.connect(band);
-      band.connect(v);
-      nodes.push(band);
+      band.connect(soft);
+      soft.connect(v);
+      nodes.push(band, soft);
       if (e.kind === 'laugh') {
         // "Ha-ha-ha": a run of short notes, each a little lower.
         const l = r.laugh;
@@ -686,15 +801,13 @@ export class SoundEngine {
     };
   }
 
-  #play(g: Graph, e: HarbourEvent, at: number): void {
+  #play(g: Graph, e: HarbourEvent, at: number, bus: BusName): void {
     if (!(e.level > 0)) {
       return;
     }
     this.harbourEvents++;
     const ctx = g.ctx;
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = e.pan;
-    pan.connect(g.master);
+    const pan = this.#shot(g, bus, e.pan);
     const nodes: AudioNode[] = [pan];
     let end = at;
     const r = this.#harbour;
@@ -740,17 +853,22 @@ export class SoundEngine {
         o.frequency.setValueAtTime(pitch / 2, t);
         o.frequency.exponentialRampToValueAtTime((pitch / 2) * c.fall, t + note);
         v.gain.setValueAtTime(0, t);
-        v.gain.linearRampToValueAtTime(e.level, t + 0.02);
+        v.gain.linearRampToValueAtTime(
+          e.level,
+          t + Math.min(this.#mix.tone.birds.attack, note / 3),
+        );
         v.gain.linearRampToValueAtTime(0, t + note);
         t += note + c.gap;
       }
+      const soft = this.#soft(g, pitch);
       o.connect(bandp);
-      bandp.connect(v);
+      bandp.connect(soft);
+      soft.connect(v);
       v.connect(pan);
       o.start(at);
       o.stop(t);
       end = t;
-      nodes.push(o, bandp, v);
+      nodes.push(o, bandp, soft, v);
     } else {
       // A mallet's blow: a falling tone and a crack.
       const c = r.mallets;
@@ -761,7 +879,7 @@ export class SoundEngine {
       v.gain.setValueAtTime(e.level, at);
       v.gain.setTargetAtTime(0, at + 0.003, c.decay);
       const burst = ctx.createBufferSource();
-      burst.buffer = g.noise;
+      burst.buffer = g.noise.white;
       const bandp = ctx.createBiquadFilter();
       bandp.type = 'bandpass';
       bandp.frequency.value = c.crack;
@@ -859,12 +977,10 @@ export class SoundEngine {
     v.gain.linearRampToValueAtTime(e.level, at + Math.min(device.attack, e.length / 3));
     v.gain.setValueAtTime(e.level, end);
     v.gain.setTargetAtTime(0, end, device.release / 3);
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = e.pan;
+    const pan = this.#shot(g, 'world', e.pan);
     o.connect(low);
     low.connect(v);
     v.connect(pan);
-    pan.connect(g.master);
     const nodes: AudioNode[] = [o, low, v, pan];
     // A diaphone's low-pass opens as the blast swells: a horn brightens as
     // it grows louder.
@@ -977,11 +1093,9 @@ export class SoundEngine {
     const hold = at + Math.max(e.length, 0.3);
     const stop = hold + 1.5 * r.roll;
     const burst = ctx.createBufferSource();
-    burst.buffer = g.noise;
+    burst.buffer = g.noise.white;
     burst.loop = true;
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = e.pan;
-    pan.connect(g.master);
+    const pan = this.#shot(g, 'world', e.pan);
     const lowpass = (frequency: number): BiquadFilterNode => {
       const f = ctx.createBiquadFilter();
       f.type = 'lowpass';
@@ -1070,7 +1184,7 @@ export class SoundEngine {
     const ctx = g.ctx;
     const at = ctx.currentTime;
     const burst = ctx.createBufferSource();
-    burst.buffer = g.noise;
+    burst.buffer = g.noise.white;
     const band = ctx.createBiquadFilter();
     band.type = 'bandpass';
     band.frequency.value = sc.band;
@@ -1081,7 +1195,7 @@ export class SoundEngine {
     gain.gain.setTargetAtTime(0, at + sc.rise, sc.decay);
     burst.connect(band);
     band.connect(gain);
-    gain.connect(g.master);
+    gain.connect(g.mix.input('boat'));
     const end = at + sc.rise + 8 * sc.decay;
     burst.start(at, 0.7);
     burst.stop(end);
@@ -1100,9 +1214,7 @@ export class SoundEngine {
     this.knocks++;
     const ctx = g.ctx;
     const at = ctx.currentTime;
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = k.pan;
-    pan.connect(g.master);
+    const pan = this.#shot(g, 'boat', k.pan);
 
     const tone = ctx.createOscillator();
     tone.type = 'sine';
@@ -1118,7 +1230,7 @@ export class SoundEngine {
     thump.connect(pan);
 
     const burst = ctx.createBufferSource();
-    burst.buffer = g.noise;
+    burst.buffer = g.noise.white;
     const band = ctx.createBiquadFilter();
     band.type = 'bandpass';
     band.frequency.value = k.crack;
@@ -1159,7 +1271,12 @@ export class SoundEngine {
     const r = this.#harbour.bell;
     const at = g.ctx.currentTime;
     strokeTimes(strokes, r).forEach((t, i) => {
-      this.#play(g, { kind: 'bell', at: at + t, level: r.level, pan: 0, seed: i }, at + t);
+      this.#play(
+        g,
+        { kind: 'bell', at: at + t, level: r.level, pan: 0, seed: i },
+        at + t,
+        'notices',
+      );
     });
   }
 
@@ -1181,9 +1298,7 @@ export class SoundEngine {
     const r = GUN;
     const ctx = g.ctx;
     const at = ctx.currentTime + g0.delay;
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = g0.pan;
-    pan.connect(g.master);
+    const pan = this.#shot(g, 'races', g0.pan);
     const air = ctx.createBiquadFilter();
     air.type = 'lowpass';
     air.frequency.value = g0.cutoff;
@@ -1207,20 +1322,26 @@ export class SoundEngine {
     nodes.push(tone, thump);
 
     const burst = ctx.createBufferSource();
-    burst.buffer = g.noise;
+    burst.buffer = g.noise.white;
     burst.loop = true;
     const band = ctx.createBiquadFilter();
     band.type = 'bandpass';
     band.frequency.value = r.crack.centre;
     band.Q.value = r.crack.q;
+    // The crack, low-passed: a report across the water, not a snap at the ear.
+    const dull = ctx.createBiquadFilter();
+    dull.type = 'lowpass';
+    dull.frequency.value = this.#mix.tone.gunCrack;
+    dull.Q.value = 0.7;
     const crack = ctx.createGain();
     crack.gain.setValueAtTime(0, ctx.currentTime);
     crack.gain.setValueAtTime(g0.level * r.crack.level, at);
     crack.gain.setTargetAtTime(0, at + 0.002, r.crack.decay / 3);
     burst.connect(band);
-    band.connect(crack);
+    band.connect(dull);
+    dull.connect(crack);
     crack.connect(air);
-    nodes.push(burst, band, crack);
+    nodes.push(burst, band, dull, crack);
 
     // The boom, and each echo a later copy of it, duller and fainter.
     let end = at + 3 * r.thump.decay;
@@ -1273,7 +1394,7 @@ export class SoundEngine {
     const t0 = ctx.currentTime + 0.02;
     const out = ctx.createGain();
     out.gain.value = c.level;
-    out.connect(g.master);
+    out.connect(g.mix.input('races'));
     const air = ctx.createBiquadFilter();
     air.type = 'lowpass';
     air.frequency.value = c.cutoff;
@@ -1288,7 +1409,7 @@ export class SoundEngine {
       pan.connect(air);
       // The breath, "h".
       const breath = ctx.createBufferSource();
-      breath.buffer = g.noise;
+      breath.buffer = g.noise.white;
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
       band.frequency.value = r.breath.centre;
@@ -1346,7 +1467,7 @@ export class SoundEngine {
     }
     if (c.roar > 0) {
       const roar = ctx.createBufferSource();
-      roar.buffer = g.noise;
+      roar.buffer = g.noise.white;
       roar.loop = true;
       const lo = ctx.createBiquadFilter();
       lo.type = 'highpass';
@@ -1370,7 +1491,7 @@ export class SoundEngine {
     for (const k of c.claps) {
       const at = t0 + k.at;
       const clap = ctx.createBufferSource();
-      clap.buffer = g.noise;
+      clap.buffer = g.noise.white;
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
       band.frequency.value = r.claps.centre;
@@ -1399,17 +1520,79 @@ export class SoundEngine {
     };
   }
 
+  /**
+   * A bird's harmonic call's low-pass, at the mix's times its pitch: the
+   * sawtooth's harsh upper partials taken off.
+   */
+  #soft(g: Graph, pitch: number): BiquadFilterNode {
+    const f = g.ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = Math.min(this.#mix.tone.birds.lowpass * pitch, g.ctx.sampleRate / 2);
+    f.Q.value = 0.5;
+    return f;
+  }
+
+  /**
+   * Where a sound played once goes: a panner into its family's bus. Every
+   * one-shot goes through here.
+   */
+  #shot(g: Graph, bus: BusName, pan: number): StereoPannerNode {
+    const p = g.ctx.createStereoPanner();
+    p.pan.value = pan;
+    p.connect(g.mix.input(bus));
+    return p;
+  }
+
+  /**
+   * Fades the sound out and then suspends the context while it is off or
+   * the page hidden; resumes it and fades it in when both are past.
+   */
   #apply(): void {
-    const ctx = this.#graph?.ctx;
-    if (ctx === undefined || !(ctx instanceof AudioContext)) {
+    const g = this.#graph;
+    if (g === null || this.#offline) {
       return;
     }
+    const ctx = g.ctx as AudioContext;
+    const f = this.#mix.fades;
     if (!this.#enabled || this.#hidden) {
-      if (ctx.state === 'running') {
-        void ctx.suspend().catch(() => {});
+      if (!this.#playing) {
+        return;
       }
-    } else if (ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {});
+      this.#playing = false;
+      g.mix.fadeOut(f.out);
+      if (this.#suspending !== null) {
+        clearTimeout(this.#suspending);
+      }
+      this.#suspending = setTimeout(
+        () => {
+          this.#suspending = null;
+          if (!this.#playing && ctx.state === 'running') {
+            void ctx.suspend().catch(() => {});
+          }
+        },
+        f.out * 1000 + 20,
+      );
+      return;
     }
+    if (this.#playing) {
+      return;
+    }
+    this.#playing = true;
+    if (this.#suspending !== null) {
+      clearTimeout(this.#suspending);
+      this.#suspending = null;
+    }
+    if (ctx.state === 'running') {
+      g.mix.fadeTo(1, f.in);
+      return;
+    }
+    void ctx.resume().then(
+      () => {
+        if (this.#playing) {
+          g.mix.fadeTo(1, f.in);
+        }
+      },
+      () => {},
+    );
   }
 }
