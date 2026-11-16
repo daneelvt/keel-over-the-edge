@@ -1593,6 +1593,7 @@ function chooseSky(world: SeaScene, query: URLSearchParams): void {
  */
 function keptAtSea(online: Online, chart: Chart, world: SeaScene, stages: Stages): void {
   const lock = screenLock();
+  // The menu, or a panel it opened (the account, the machine sailors).
   lock.open = () => chart.open.value || document.querySelector('.menu') !== null;
   effect(() => lock.sailing(online.status.value === 'sailing'));
   lock.atSea(true);
