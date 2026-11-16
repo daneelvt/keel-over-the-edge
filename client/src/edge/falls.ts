@@ -393,30 +393,29 @@ export class Falls {
     // sky's reflection, so the light changes smoothly between them.
     const toEye = normalize(cameraPosition.sub(vertex));
     const N = select(normal.dot(toEye).lessThan(0), normal.negate(), normal);
-    // The sea's own water, thin at the brink and the light through it; and
-    // white water.
-    // At the brink the sheet is thin and the light comes through it in the
-    // sea's own green, as through a crest.
+    // The sea's own water: at the brink the sheet is thin and the light
+    // comes through it in the sea's own green, as through a crest; and its
+    // white water. Both go to the mist's colour as it falls, here, in linear
+    // light, so a fragment only mixes them.
+    const misted = smoothstep(c.mist[0] ?? 5, c.mist[1] ?? 10, t);
+    const mist = toLinear(edgeLook.colour);
     const sea = water({ normal: N, crest: float(1), glint: 0 }, toEye);
-    const body = varying(
-      mix(sea, look.scatter, smoothstep(1.5, 0, t).mul(CURTAIN_LOOK.thin)),
-    ) as unknown as Node<'vec3'>;
-    const foamLit = varying(foamColour(N)) as unknown as Node<'vec3'>;
+    const thin = mix(sea, look.scatter, smoothstep(1.5, 0, t).mul(CURTAIN_LOOK.thin));
+    const body = varying(mix(toLinear(thin), mist, misted)) as unknown as Node<'vec3'>;
+    const foamLit = varying(mix(toLinear(foamColour(N)), mist, misted)) as unknown as Node<'vec3'>;
     // By the time since the brink, once a vertex: where the white streaks
-    // begin, where it tears, how much is left before it fades, and how far
-    // it has gone to the mist's colour.
+    // begin, where it tears, and how much is left before it fades.
     const [w0, w1, f0, f1] = CURTAIN_LOOK.foam;
     const [t0, t1, most] = CURTAIN_LOOK.tear;
     const row = varying(
-      vec4(
+      vec3(
         mix(float(w0), float(w1), smoothstep(f0, f1, t)),
         smoothstep(t0, t1, t).mul(most),
         float(1)
           .sub(smoothstep(c.fade[0] ?? 6, c.fade[1] ?? 10, t))
           .mul(edgeLook.on),
-        smoothstep(c.mist[0] ?? 5, c.mist[1] ?? 10, t),
       ),
-    ) as unknown as Node<'vec4'>;
+    ) as unknown as Node<'vec3'>;
     const tv = varying(t);
     const along = varying(across.mul(c.reach));
     const m = basicMaterial({ transparent: true, depthWrite: false, side: DoubleSide }, vertex);
@@ -435,12 +434,10 @@ export class Falls {
     const foamy = smoothstep(row.x, row.x.add(CURTAIN_LOOK.edge), streak);
     const [s0, s1] = CURTAIN_LOOK.strokes;
     const white = mix(body, foamLit, clamp(p.w.mul(s1).add(s0), 0, 1));
-    const colour = mix(mix(body, white, foamy), edgeLook.colour, row.w);
     // Whole at the brink; torn into ribbons as it falls; then faded out.
     const torn = smoothstep(row.y, row.y.add(CURTAIN_LOOK.edge), broad);
-    const alpha = row.z.mul(torn);
-    m.colorNode = vec4(toLinear(colour), 1);
-    m.opacityNode = alpha;
+    m.colorNode = vec4(mix(body, white, foamy), 1);
+    m.opacityNode = row.z.mul(torn);
     const mesh = new Mesh(g, m);
     mesh.name = 'falls-curtain';
     mesh.frustumCulled = false;
