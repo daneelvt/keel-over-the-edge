@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The mix's numbers: the sliders' cube, the bed's curve, the calm's
-// lapping, and the recipe's limiter a safety net, not a compressor.
+// lapping, a storm's weight, and the recipe's limiter a safety net, not a
+// compressor.
 
 import { describe, expect, test } from 'vitest';
-import { BUSES, calmLevel, curved, MIX, sliderGain } from './mix';
+import { BUSES, calmLevel, curved, MIX, sliderGain, stormLevel } from './mix';
 
 const db = (g: number): number => 20 * Math.log10(g);
 
@@ -55,7 +56,26 @@ describe('the calm’s lapping', () => {
   });
 });
 
+describe('a storm’s weight', () => {
+  test('is nothing in a fresh breeze, rises with the wind and is all there in a gale', () => {
+    const s = MIX.storm;
+    expect(stormLevel(s, 10.6)).toBe(0);
+    expect(stormLevel(s, 14)).toBeGreaterThan(0);
+    expect(stormLevel(s, 14)).toBeLessThan(stormLevel(s, 16));
+    expect(stormLevel(s, 18)).toBeCloseTo(s.level, 12);
+    expect(stormLevel(s, 25)).toBeCloseTo(s.level, 12);
+  });
+
+  test('is deep: well under the wind’s band', () => {
+    expect(MIX.storm.centre).toBeLessThan(500);
+  });
+});
+
 describe('the recipe', () => {
+  test('sets the whole mix under the player’s volume, quieter than full scale', () => {
+    expect(MIX.master).toBeLessThan(0);
+  });
+
   test('balances every bus', () => {
     for (const b of BUSES) {
       expect(typeof MIX.buses[b].level).toBe('number');

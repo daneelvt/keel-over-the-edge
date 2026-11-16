@@ -3,15 +3,18 @@
 // The sound's loudness budget, measured: the real engine rendered offline
 // at each scene of e2e/audioscenes.ts (e2e/audio.html, no GPU), at full
 // volume, and held to it, so no change makes the game loud again. Typical
-// sailing (the gentle and the fresh breeze together) at −20 ±2 LUFS, each
+// sailing (the gentle and the fresh breeze together) at −26 ±2 LUFS, each
 // step of weather at most 6 LU louder than the last and a gale at most
-// −16; a calm heard, at least −36, and the harbour at most −24; the true
-// peak at most −1 dBTP everywhere, nothing momentarily more than 10 LU
-// over its scene, the limiter all but idle in typical weather (1 dB) and
-// in a storm (3 dB); and at most 15% of the bed's energy above 2 kHz in
+// −22, yet a gale clearly over a fresh breeze, at least 3 LU, from its
+// first seconds; a calm heard, at least −42, and the harbour at most −30;
+// the true peak at most −1 dBTP everywhere, nothing momentarily more than
+// 10 LU over its scene, the limiter all but idle in typical weather (1 dB)
+// and in a storm (3 dB); and at most 15% of the bed's energy above 2 kHz in
 // typical weather, 30% in a storm. At the default volume, 70%, everything
 // is 9.3 dB lower. The bow's slaps, the sheet and the boom, the halyards
-// and the surf play in it as the scenes have them.
+// and the surf play in it as the scenes have them; in a tack the luffing
+// sail beats softly, without a buzz, and the sheet runs low and soft, both
+// well under the bed.
 //
 // The sounds played once: given takes, each voice's play round robin,
 // never the same twice running, and two pages rendering the same scene hear
@@ -183,21 +186,26 @@ test.describe('the loudness budget', () => {
     }
   });
 
-  test('typical sailing is at −20 ±2 LUFS', () => {
-    expect(typical).toBeGreaterThanOrEqual(-22);
-    expect(typical).toBeLessThanOrEqual(-18);
+  test('typical sailing is at −26 ±2 LUFS', () => {
+    expect(typical).toBeGreaterThanOrEqual(-28);
+    expect(typical).toBeLessThanOrEqual(-24);
   });
 
-  test('each step of weather is at most 6 LU louder, and a gale at most −16 LUFS', () => {
+  test('each step of weather is at most 6 LU louder, and a gale at most −22 LUFS', () => {
     expect(m.fresh.integrated - m.gentle.integrated).toBeLessThanOrEqual(6);
     expect(m.gale.integrated - m.fresh.integrated).toBeLessThanOrEqual(6);
-    expect(m.gale.integrated).toBeLessThanOrEqual(-16);
-    expect(m.squall.integrated).toBeLessThanOrEqual(-16);
+    expect(m.gale.integrated).toBeLessThanOrEqual(-22);
+    expect(m.squall.integrated).toBeLessThanOrEqual(-22);
+  });
+
+  test('a gale stands clearly over a fresh breeze, from its first seconds', () => {
+    expect(m.gale.integrated - m.fresh.integrated).toBeGreaterThanOrEqual(3);
+    expect(m.gale.early.least - m.fresh.early.most).toBeGreaterThanOrEqual(2);
   });
 
   test('a calm is heard, and the harbour is quiet', () => {
-    expect(m.calm.integrated).toBeGreaterThanOrEqual(-36);
-    expect(m.harbour.integrated).toBeLessThanOrEqual(-24);
+    expect(m.calm.integrated).toBeGreaterThanOrEqual(-42);
+    expect(m.harbour.integrated).toBeLessThanOrEqual(-30);
   });
 
   test('no scene peaks over −1 dBTP or stands out more than 10 LU over itself', () => {
@@ -221,6 +229,22 @@ test.describe('the loudness budget', () => {
 
   test('at the default volume, 70%, the sound is 9.3 dB quieter', () => {
     expect(Math.abs(fresh70.integrated - m.fresh.integrated + 9.29)).toBeLessThan(0.2);
+  });
+
+  test('in a tack the luffing sail beats softly and the sheet runs low, both well under the bed', async () => {
+    // The fresh breeze's tack: the sail luffs from 12 s to 15 s, the boom
+    // crossing from 12.5 s, the sheet running as it does.
+    const [flog, beat, sheet] = await page.evaluate(async () => {
+      const a = globalThis.audio;
+      const f = await a.render('fresh', 16, { alone: 'flog' });
+      const b = a.flutter(12.6, 14.6);
+      return [f, b, await a.render('fresh', 16, { alone: 'sheet' })];
+    });
+    expect(flog.momentaryMax - m.fresh.integrated).toBeLessThanOrEqual(-14);
+    expect(beat).toBeLessThanOrEqual(10);
+    expect(sheet.played.sheets).toBe(1);
+    expect(sheet.momentaryMax - m.fresh.integrated).toBeLessThanOrEqual(-18);
+    expect(sheet.mixAbove).toBeLessThanOrEqual(0.05);
   });
 });
 

@@ -249,7 +249,7 @@ describe('the sound engine', () => {
     expect(fadeOf(e).calls.at(-1)).toEqual(['ramp', 1, c.currentTime + MIX.fades.in]);
   });
 
-  test('sets the sliders on their cube, gliding: the volume on the master, Sounds on every bus but the sea’s', () => {
+  test('sets the sliders on their cube, gliding: the volume on the master, at the mix’s own level, Sounds on every bus but the sea’s', () => {
     const e = engine();
     e.volumes(0.7, 1, 0.5);
     e.unlock();
@@ -261,7 +261,7 @@ describe('the sound engine', () => {
     const last = (p: AudioParam): Call | undefined => (p as unknown as Param).calls.at(-1);
     const master = last(m.master.gain);
     expect(master?.[0]).toBe('ramp');
-    expect(master?.[1]).toBeCloseTo(0.343, 6);
+    expect(master?.[1]).toBeCloseTo(0.343 * gainOf(MIX.master), 6);
     expect(master?.[2]).toBeCloseTo(c.currentTime + MIX.fades.slider, 9);
     e.volumes(0.7, 0.5, 1);
     const sea = last((m.output('sea') as GainNode).gain);

@@ -8,7 +8,8 @@
 // and the cheer) and notices (the certificate's bell). Each bus has a
 // balance of the mix's own (art/sound/mix.json, which only the page reads:
 // what the server's lookout hears stays the recipes'), under the player's
-// slider; the buses run into the master, the player's volume, then a fade
+// slider; the buses run into the master (the mix's own level times the
+// player's volume), then a fade
 // that starts and stops the sound without a click, then a limiter, a
 // safety net the mix is staged to keep away from, then the speaker. A
 // signal that matters (the gun, a near fog signal, the crowd's cheer) dips
@@ -76,6 +77,14 @@ export function calmLevel(c: MixRecipe['calm'], speed: number, time: number): nu
   const b = Math.sin((2 * Math.PI * time) / (c.period[1] ?? 4.3) + 1);
   const lap = Math.max(0, 0.6 * a + 0.4 * b);
   return c.level * drift * (0.25 + 0.75 * lap);
+}
+
+/**
+ * A storm's weight under the wind now: nothing up to a fresh breeze's
+ * apparent wind, m/s, rising smoothly to the recipe's level at a gale's.
+ */
+export function stormLevel(s: MixRecipe['storm'], wind: number): number {
+  return s.level * ramp(s.wind[0] ?? 11, s.wind[1] ?? 18, wind);
 }
 
 /** What the player has set: the volume, the sea and wind's and every other sound's, each 0 to 1. */
@@ -204,7 +213,7 @@ export class Mixer {
       }
     };
     const v = this.#volumes;
-    to(this.master.gain, sliderGain(v.volume));
+    to(this.master.gain, gainOf(this.#r.master) * sliderGain(v.volume));
     for (const name of BUSES) {
       const slider = name === 'sea' ? v.sea : SOUNDS.includes(name) ? v.sounds : 1;
       to(this.#buses[name].level.gain, gainOf(this.#r.buses[name].level) * sliderGain(slider));

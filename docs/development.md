@@ -9299,7 +9299,7 @@ howls, its centre rising by a third from 23 to 39 knots; **rigging**, a narrow b
 the sheet's Aeolian tone, 0.2 × apparent wind ÷ its diameter, 10 mm on a
 main of 7 m² and thicker as the fourth root of the main's area (12 mm on
 the keelboat); **flogging**, the
-cloth's band beaten at a flap rate, only while a sail strip luffs;
+cloth's band beaten softly at a flap rate, only while a sail strip luffs;
 **water**, low-passed noise rising with speed and a bow wave's hiss past the
 hull speed, 2.4 m/s on the Jolly boat's waterline and faster as the square
 root of a longer one's; **sea**, a wide, low band that rises and brightens with the
@@ -9317,11 +9317,14 @@ silent switch on the page plays no sound.
 **The mix** (`client/src/audio/mix.ts`, its numbers in
 `art/sound/mix.json`, which the page alone reads): every voice plays into
 its family's bus (the sea, the world, the boat, the races, notices), each
-bus balanced against the others, into the master, a fade and a safety
-limiter (−6 dB, 20:1, staged to stay idle). The bed's levels as the recipes
-give them, which the server's lookout tells machine sailors in words, are
-played on a curve that brings a calm, a breeze and a gale nearer, and a
-drifting boat hears the calm's lapping at her hull. The menu's Sound block
+bus balanced against the others, into the master (the mix's own level,
+`master`, under the player's volume), a fade and a safety limiter (−6 dB,
+20:1, staged to stay idle). The bed's levels as the recipes give them,
+which the server's lookout tells machine sailors in words, are played on a
+curve that brings a calm, a breeze and a gale nearer; above a fresh breeze
+a storm's weight, a deep roar under the wind (`storm`), makes a gale stand
+over it, heavier rather than brighter; and a drifting boat hears the
+calm's lapping at her hull. The menu's Sound block
 holds the switch (the mute; M on a keyboard), **Volume**, **Sea and wind**
 and **Sounds**, each heard as its cube and kept in `keel.settings`; Volume
 starts at 70%, 9.3 dB down.
@@ -9332,11 +9335,13 @@ scripted scenes of `e2e/audioscenes.ts` (a calm, the harbour, a gentle and
 a fresh breeze, a gale, fog with a horn, a squall with thunder and rain,
 near the edge, a race's guns and cheers) and measures each with
 `audio/loudness.ts`, a meter after ITU-R BS.1770-4 tested against EBU Tech
-3341's cases: typical sailing at −20 ±2 LUFS at full volume, each step of
-weather at most 6 LU louder and a gale at most −16, a calm at least −36
-and the harbour at most −24, every true peak at most −1 dBTP, the limiter
-at most 1 dB in typical weather, and at most 15% of the bed's energy above
-2 kHz. `KEEL_AUDIO_OUT=<folder> KEEL_AUDIO_SECONDS=120` writes each scene's
+3341's cases: typical sailing at −26 ±2 LUFS at full volume, each step of
+weather at most 6 LU louder and a gale at most −22 yet at least 3 LU over
+a fresh breeze from its first seconds, a calm at least −42 and the harbour
+at most −30, every true peak at most −1 dBTP, the limiter at most 1 dB in
+typical weather, at most 15% of the bed's energy above 2 kHz, and in a
+tack the luffing sail and the sheet well under the bed, the sail beating
+without a buzz. `KEEL_AUDIO_OUT=<folder> KEEL_AUDIO_SECONDS=120` writes each scene's
 rendering there to listen to, with the table.
 
 **The bed as layers, and the recordings.** Each family of the bed (the
@@ -9353,7 +9358,8 @@ the synthesis plays the share the recordings leave. Each family's `match`
 puts a recording normalised to −23 LUFS at its synthesis's loudness, as
 `audio.spec.ts` measures. The boat's motion plays once (`audio/motion.ts`):
 a slap as the bow turns up from a fast fall (its pitch rate, weighed by the
-hull's heave rate), the sheet running in a tack and the boom's thump in a
+hull's heave rate), the sheet running out through its block in a tack (a
+soft, short, low rush and the block's knock) and the boom's thump in a
 gybe as the boom crosses; synthesised until recorded. The slap's threshold
 is set from the boats' own pitch in the sandbox's seas: none in a light
 air, a few a minute for the small boats at 12 knots, about one a wave in

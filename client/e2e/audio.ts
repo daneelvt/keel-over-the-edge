@@ -5,7 +5,8 @@
 // renders, the engine's voices set every 50 ms between its suspends, then
 // measured (audio/loudness.ts). The mix is in the first two channels; the
 // bed alone, where the engine has a tap on it, in the next two. The last
-// rendering stays, for its samples to be read out (pcm).
+// rendering stays, for its samples to be read out (pcm) and its flutter
+// measured. A voice may be heard alone, every other silenced.
 //
 // The game's own recordings (the probe and the test sea) are decoded here
 // as the page would decode them, and played in a scene's beds in place of
@@ -16,12 +17,13 @@ import { SoundEngine } from '../src/audio/engine';
 import { GUN, gunReport } from '../src/audio/gun';
 import {
   integrated,
+  lufs,
   measure,
   segmentPowers,
   shareAbove,
   windowPowers,
 } from '../src/audio/loudness';
-import type { BusName, MixRecipe } from '../src/audio/mix';
+import { type BusName, MIX, type MixRecipe } from '../src/audio/mix';
 import { decodedBytes, type Numbers, type Recording, type Voice } from '../src/audio/recorded';
 import { SCENES } from './audioscenes';
 
@@ -139,8 +141,10 @@ let last: AudioBuffer | null = null;
 const powers = new Map<string, Float64Array>();
 
 /** The engine a rendering plays: the game's, on the mix given. */
-let makeEngine = (o: RenderOptions): SoundEngine =>
-  new SoundEngine(undefined, o.mix === undefined ? {} : { mix: o.mix });
+let makeEngine = (o: RenderOptions): SoundEngine => {
+  const mix = o.alone === undefined ? o.mix : alone(o.mix ?? MIX, o.alone);
+  return new SoundEngine(undefined, mix === undefined ? {} : { mix });
+};
 
 /** Renders with another engine (a tuning script's). */
 function useEngine(make: (o: RenderOptions) => SoundEngine): void {
@@ -150,6 +154,8 @@ function useEngine(make: (o: RenderOptions) => SoundEngine): void {
 /** What a rendering of a scene measures. */
 export interface Measured {
   integrated: number;
+  /** The quietest and loudest momentary loudness in the first 10 s, once the voices have glided in (from 2 s, as the game's fade in is done by then), LUFS. */
+  early: { least: number; most: number };
   momentaryMax: number;
   shortTermMax: number;
   range: number;
@@ -187,6 +193,43 @@ export interface RenderOptions {
   takes?: { voices: Voice[]; count: number };
   /** A racer's gun fired beside the boat at this, s. */
   gunAt?: number;
+  /** A voice heard alone: a voice of the bed (by its trim's name), the storm, the slaps, the sheet or the boom. */
+  alone?: Alone;
+}
+
+/** The voices that may be heard alone. */
+export type Alone = keyof MixRecipe['bed']['trims'] | 'storm' | 'slaps' | 'sheet' | 'boom';
+
+/** The mix with every voice but one silenced: the other buses, the bed's other voices, the calm, the storm and the sounds of the boat's motion. */
+function alone(base: MixRecipe, keep: Alone): MixRecipe {
+  const m = structuredClone(base);
+  const off = -200;
+  for (const k of Object.keys(m.bed.trims) as (keyof MixRecipe['bed']['trims'])[]) {
+    if (k !== keep) {
+      m.bed.trims[k] = off;
+    }
+  }
+  m.calm.level = 0;
+  m.halyards.level = 0;
+  if (keep !== 'storm') {
+    m.storm.level = 0;
+  }
+  if (keep !== 'slaps') {
+    m.slaps.level = 0;
+  }
+  if (keep !== 'sheet') {
+    m.sail.sheet.level = 0;
+  }
+  if (keep !== 'boom') {
+    m.sail.boom.level = 0;
+  }
+  for (const b of ['world', 'races', 'notices'] as const) {
+    m.buses[b].level = off;
+  }
+  if (keep !== 'sheet' && keep !== 'boom') {
+    m.buses.boat.level = off;
+  }
+  return m;
 }
 
 /** A take for a test: a burst of noise dying away over seconds. */
@@ -280,10 +323,17 @@ async function render(name: string, seconds: number, o: RenderOptions = {}): Pro
   last = buffer;
   const mix = [buffer.getChannelData(0), buffer.getChannelData(1)];
   const m = measure(mix, RATE);
-  powers.set(name, segmentPowers(mix, RATE));
+  const segments = segmentPowers(mix, RATE);
+  powers.set(name, segments);
+  const first = windowPowers(segments.subarray(20, 100), 4);
+  const early = {
+    least: lufs(first.reduce((a, z) => Math.min(a, z), Number.POSITIVE_INFINITY)),
+    most: lufs(first.reduce((a, z) => Math.max(a, z), 0)),
+  };
   const mixAbove = shareAbove(mix, RATE, 2000);
   return {
     ...m,
+    early,
     bedAbove:
       bed === null
         ? mixAbove
@@ -337,6 +387,31 @@ function bedPower(from: number, to: number): number {
   return sum / Math.max(1, n);
 }
 
+/**
+ * How much the last rendering's mix flutters from s to s: its power over
+ * 10 ms blocks, the loudest tenth's against the quietest tenth's, dB. A
+ * sound gated on and off is far apart; a steady or softly swelling one near.
+ */
+function flutter(from: number, to: number): number {
+  if (last === null) {
+    throw new Error('nothing rendered');
+  }
+  const block = RATE / 100;
+  const blocks: number[] = [];
+  const a = last.getChannelData(0);
+  const b = last.getChannelData(1);
+  for (let i = Math.round(from * RATE); i + block <= Math.min(a.length, to * RATE); i += block) {
+    let sum = 0;
+    for (let j = i; j < i + block; j++) {
+      sum += (a[j] ?? 0) ** 2 + (b[j] ?? 0) ** 2;
+    }
+    blocks.push(sum / block);
+  }
+  blocks.sort((x, y) => x - y);
+  const at = (q: number): number => blocks[Math.floor(q * (blocks.length - 1))] ?? 0;
+  return 10 * Math.log10(at(0.9) / Math.max(at(0.1), 1e-30));
+}
+
 /** The integrated loudness of scenes' last renderings heard one after another, LUFS. */
 function typical(names: string[]): number {
   const parts = names.map((n) => powers.get(n) ?? new Float64Array(0));
@@ -375,6 +450,7 @@ const hooks = {
   render,
   pcm,
   bedPower,
+  flutter,
   typical,
   useEngine,
   decodeOwn,

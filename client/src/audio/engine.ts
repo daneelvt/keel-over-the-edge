@@ -4,9 +4,9 @@
 // where they have loaded (audio/recorded.ts, audio/layers.ts). The boat's
 // bed is made of noises (audio/noise.ts: pink for the wind, brown for the
 // water and the sea, white for the rest), each voice reading its own at its
-// own offset: the wind (a band-pass), the rigging's song (a narrow band at
-// the Aeolian tone, in gusts), the flogging cloth (a band beaten by a
-// flap), the water on the hull (a low-pass, with the bow wave's hiss), the
+// own offset: the wind (a band-pass, and in a storm a deep roar under it),
+// the rigging's song (a narrow band at the Aeolian tone, in gusts), the
+// flogging cloth (a band beaten softly by a flap), the water on the hull (a low-pass, with the bow wave's hiss), the
 // sea about the boat (a wide, low band), rain, the falls (a low band
 // through a low-pass, panned toward the lip), and, while the boat drifts,
 // the calm's lapping at the hull; in port the water lapping at the quays
@@ -19,7 +19,7 @@
 // (audio/fogsignals.ts), each a tone of the device's harmonics, and the
 // thunder after a flash (audio/thunder.ts), from the noise. The boat's own
 // motion makes its sounds once (audio/motion.ts): a slap as the bow meets a
-// wave, the sheet running in a tack, the boom's thump in a gybe; and near
+// wave, the sheet running softly in a tack, the boom's thump in a gybe; and near
 // the land (audio/shore.ts) the halyards in port tap their masts and the
 // surf breaks as the water shoals.
 //
@@ -95,7 +95,16 @@ import {
   type WaterRecipes,
   type WaterSound,
 } from './life';
-import { type BusName, calmLevel, curved, gainOf, MIX, Mixer, type MixRecipe } from './mix';
+import {
+  type BusName,
+  calmLevel,
+  curved,
+  gainOf,
+  MIX,
+  Mixer,
+  type MixRecipe,
+  stormLevel,
+} from './mix';
 import { type SailSound, SailWatch, type Slap, SlapWatch } from './motion';
 import { type NoiseColour, noiseBuffer } from './noise';
 import { pickTake, unit, type Variation, Voices, vary } from './oneshots';
@@ -203,6 +212,7 @@ interface Graph {
   noise: Record<NoiseColour, AudioBuffer>;
   windBand: BiquadFilterNode;
   wind: BedVoice;
+  storm: BedVoice;
   rigBand: BiquadFilterNode;
   rig: BedVoice;
   flap: OscillatorNode;
@@ -280,19 +290,21 @@ function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: Aud
 
   const windBand = band('bandpass', r.wind.centre.atRest, r.wind.q);
   const wind = bed('pink', [windBand]);
+  // A storm's weight: a deep roar under the wind.
+  const storm = bed('brown', [band('bandpass', m.storm.centre, m.storm.q)]);
   const rigBand = band('bandpass', 100, m.tone.rigging.q);
   const rig = bed('white', [rigBand]);
 
-  // The flog: the cloth's band, beaten by a flap. The flap is a square wave
-  // turned from [−1, 1] into [0, 1] so it only opens the gate.
+  // The flog: the cloth's band, beaten by a flap. The flap is a sine turned
+  // from [−1, 1] into a gate from 1 − depth to 1: a soft beat, not a buzz.
   const flogGate = ctx.createGain();
   flogGate.gain.value = 0;
-  const flog = bed('white', [band('bandpass', r.flogging.centre, r.flogging.q), flogGate]);
+  const flog = bed('white', [band('bandpass', m.tone.flog.centre, r.flogging.q), flogGate]);
   const flap = ctx.createOscillator();
-  flap.type = 'square';
+  flap.type = 'sine';
   flap.frequency.value = r.flogging.rate.atRest;
   const rectify = ctx.createWaveShaper();
-  rectify.curve = new Float32Array([0, 0, 1]);
+  rectify.curve = new Float32Array([1 - m.tone.flog.depth, 1]);
   flap.connect(rectify);
   rectify.connect(flogGate.gain);
 
@@ -349,7 +361,7 @@ function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: Aud
     };
   };
   const families: Record<FamilyName, Family> = {
-    wind: family('wind', [wind], windLow),
+    wind: family('wind', [wind, storm], windLow),
     hull: family('hull', [water, hiss], mix.input('sea')),
     sea: family('sea', [sea], mix.input('sea')),
     rain: family('rain', [rain, drum], mix.input('sea')),
@@ -370,6 +382,7 @@ function build(ctx: BaseAudioContext, r: Recipes, m: MixRecipe, destination: Aud
     noise,
     windBand,
     wind,
+    storm,
     rigBand,
     rig,
     flap,
@@ -597,6 +610,8 @@ export class SoundEngine {
     };
     g.windBand.frequency.setTargetAtTime(t.windCentre, at, glide);
     play(g.wind, t.windLevel, r.wind.level.most, b.trims.wind);
+    const storm = stormLevel(m.storm, input.apparentWind);
+    g.storm.level.gain.setTargetAtTime(storm, at, glide);
     // The rigging sings in the gusts alone.
     const sings = ramp(m.tone.rigging.gust.from, m.tone.rigging.gust.full, input.gustFactor ?? 1);
     g.rigBand.frequency.setTargetAtTime(Math.max(20, t.rigTone), at, glide);
@@ -625,7 +640,12 @@ export class SoundEngine {
     const on = (level: number, most: number, trim: number): number =>
       gainOf(trim) * curved(level, most, b.curve);
     const L = m.layers;
-    this.#family(g, 'wind', on(t.windLevel, r.wind.level.most, b.trims.wind), input.apparentWind);
+    this.#family(
+      g,
+      'wind',
+      Math.hypot(on(t.windLevel, r.wind.level.most, b.trims.wind), storm),
+      input.apparentWind,
+    );
     const gusting = ramp(L.wind.gust.from, L.wind.gust.full, input.gustFactor ?? 1);
     const [still, gust] = L.wind.gust.lowpass;
     g.windLow.frequency.setTargetAtTime(
@@ -2246,9 +2266,9 @@ export class SoundEngine {
 
   /**
    * The sail crossing, through the boat's bus: the sheet running out through
-   * its block in a tack, a band of noise fluttering as the rope's lay runs
-   * over the sheave and slowing; the boom's thump in a gybe, a low knock of
-   * wood. Its recording where it has one.
+   * its block in a tack, a low band of noise swelling and dying, short and
+   * soft, and the block's knock as it comes up; the boom's thump in a gybe,
+   * a low knock of wood. Its recording where it has one.
    */
   #playSail(g: Graph, sc: SailSound): void {
     if (!(sc.level > 0)) {
@@ -2259,7 +2279,9 @@ export class SoundEngine {
     const at = ctx.currentTime;
     const voice = sc.kind === 'sheet' ? 'sheet' : 'boom';
     const rec = this.#choose(g, voice, sc.seed);
-    const length = rec?.seconds ?? (sc.kind === 'sheet' ? 2 * c.sheet.length : 8 * c.boom.decay);
+    const length =
+      rec?.seconds ??
+      (sc.kind === 'sheet' ? c.sheet.length + 8 * c.sheet.block.decay : 8 * c.boom.decay);
     const out = this.#shot(g, 'boat', 0, null, sc.level, at, at + length);
     if (out === null) {
       return;
@@ -2276,36 +2298,37 @@ export class SoundEngine {
       }
       const r = c.sheet;
       const burst = ctx.createBufferSource();
-      burst.buffer = g.noise.white;
+      burst.buffer = g.noise.brown;
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
       band.Q.value = r.q;
       band.frequency.setValueAtTime(r.band * v.rate, at);
-      band.frequency.exponentialRampToValueAtTime(r.band * v.rate * 0.6, at + r.length);
+      band.frequency.exponentialRampToValueAtTime(r.band * v.rate * 0.8, at + r.length);
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, at);
-      gain.gain.linearRampToValueAtTime(level, at + 0.04);
-      gain.gain.setTargetAtTime(0, at + 0.4 * r.length, r.length / 4);
-      // The flutter: half the level beaten at the sheave's rate, slowing.
-      const flutter = ctx.createGain();
-      flutter.gain.value = 0.6;
-      const beat = ctx.createOscillator();
-      beat.frequency.setValueAtTime(r.rate, at);
-      beat.frequency.exponentialRampToValueAtTime(r.rate * 0.4, at + r.length);
-      const depth = ctx.createGain();
-      depth.gain.value = 0.4;
-      beat.connect(depth);
-      depth.connect(flutter.gain);
+      gain.gain.linearRampToValueAtTime(level, at + 0.3 * r.length);
+      gain.gain.setTargetAtTime(0, at + 0.3 * r.length, r.length / 5);
+      // The block's knock as the sheet comes up.
+      const k = r.block;
+      const knockAt = at + r.length;
+      const tone = ctx.createOscillator();
+      tone.frequency.value = k.tone * v.rate;
+      const knock = ctx.createGain();
+      knock.gain.value = 0;
+      knock.gain.setValueAtTime(0, knockAt);
+      knock.gain.linearRampToValueAtTime(level * k.level, knockAt + 0.004);
+      knock.gain.setTargetAtTime(0, knockAt + 0.004, k.decay);
       burst.connect(band);
-      band.connect(flutter);
-      flutter.connect(gain);
+      band.connect(gain);
       gain.connect(out);
-      end = at + 2 * r.length;
+      tone.connect(knock);
+      knock.connect(out);
+      end = knockAt + 8 * k.decay;
       burst.start(at, this.#unit(sc.seed, 1) * 8);
       burst.stop(end);
-      beat.start(at);
-      beat.stop(end);
-      nodes.push(burst, band, gain, flutter, beat, depth);
+      tone.start(knockAt);
+      tone.stop(end);
+      nodes.push(burst, band, gain, tone, knock);
     } else {
       this.booms++;
       if (rec !== null) {

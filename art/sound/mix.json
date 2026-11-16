@@ -1,6 +1,7 @@
 {
   "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
-  "description": "The mix, read by the page alone: how loud each family of sounds is heard against the others, and how the bed is made gentle. Each bus's level is in dB, under the player's slider; the sea bus is shelved down above shelf.frequency by shelf.gain dB. The master runs into a safety limiter (threshold dB, knee dB, ratio, attack and release s) that the mix is staged to keep away from. fades: s to fade in at the start, out on mute or hide, in on unmute or show, a slider's glide and the voices' glide (a time constant). bed: the sea's voices' levels as the recipes give them are played as most times (level / most) to the power curve, so a breeze and a gale are nearer than the recipes have them; trims are each voice's dB in the mix. calm: a quiet lapping at the hull while the boat drifts, its band (Hz, q) and level falling away over speed m/s, swelling every period s, each lap from rest to most. tone: the bow wave's hiss's band, Hz; the rigging sings only in gusts, from gust.from to gust.full of the wind's gust factor, its band's q; the gun's crack is low-passed at gunCrack Hz; birds' and colonies' harmonic calls are low-passed at birds.lowpass times their pitch and swell in over birds.attack s. noise: the seconds of each of the white, pink and brown noises the voices read, each at its own offset. layers: the bed's families, each played by its recordings where they have loaded (recorded/*.json) and by its synthesis the share they leave, a recording taking over over crossfade s; a family of several layers crossfades them at equal power between their centres at, on its scale: the apparent wind, m/s (the wind, whose recordings' low-pass opens from lowpass[0] to lowpass[1] Hz and gain rises by gust.gain dB from gust.from to gust.full of the gust factor); the speed as a share of the hull speed (the hull); the sea's height, m, with whitecaps times its whitecaps (the sea); the rain, mm an hour. match is the dB a recording at -23 LUFS plays at over its family's level to be as loud as the synthesis, as the tests measure it. shots: each voice played once: gain, the dB its recordings (each at a true peak of -1 dBTP) play at over the level its synthesis is given; family, the family whose limit it counts in (none where null); and how far each play is varied, by its event's seed, pitch semitones and level dB either way (0 for a signal, never varied). voices: at most most sounds played once at a time, and in each family its number; when one more would pass a limit the quietest is let go, faded over release s. duck: under the gun (heard at gun of its full level or more, as every racer hears it), a fog signal within fog m and the crowd's cheer, the sea's bus dips depth dB for hold s, over attack s and back over release s. crowd: the small, medium and large crowds' recordings are crossfaded by the number of cheers, each heard alone at its number in at. A gun's recording is shelved by tone.gunShelf dB above tone.gunCrack Hz: no harsh crack. slaps: the bow meeting a wave, from a pitch rate (rad/s) falling past pitchRate[0] and full at pitchRate[1], heave of it from the hull dropping (heaveRate, m/s), at most every least s, at level; synthesised as a burst through a band falling from band[1] to band[0] Hz at q dying over decay s, and a thump Hz at thumpLevel. sail: the boom past side rad of the centreline crossing; a tack where the apparent wind is within tack degrees of the bow, the sheet running (level, rising with the apparent wind over wind m/s, length s, a band Hz at q fluttering at rate Hz); else a gybe, the boom's thump (level by its rate, rad/s; thump Hz, decay s, a knock's band Hz at q). halyards: in port, from wind[0] to wind[1] m/s of apparent wind, at level, a swing every every[0] to every[1] s, its answer pair s later; each tap a band of tone Hz at q dying over decay s. surf: a shore's, as the water shoals from depth[0] to depth[1] m and the sea rises from height[0] to height[1] m, at level, swelling every period s, a band of centre Hz at q.",
+  "description": "The mix, read by the page alone: how loud each family of sounds is heard against the others, and how the bed is made gentle. master is the whole mix's level, dB, under the player's volume; each bus's level is in dB, under the player's slider; the sea bus is shelved down above shelf.frequency by shelf.gain dB. The master runs into a safety limiter (threshold dB, knee dB, ratio, attack and release s) that the mix is staged to keep away from. fades: s to fade in at the start, out on mute or hide, in on unmute or show, a slider's glide and the voices' glide (a time constant). bed: the sea's voices' levels as the recipes give them are played as most times (level / most) to the power curve, so a breeze and a gale are nearer than the recipes have them; trims are each voice's dB in the mix. storm: a storm's weight, a deep roar under the wind (a band of centre Hz at q), from nothing at wind[0] m/s of apparent wind to level at wind[1]; recordings of the wind take it over with the wind's own. calm: a quiet lapping at the hull while the boat drifts, its band (Hz, q) and level falling away over speed m/s, swelling every period s, each lap from rest to most. tone: the bow wave's hiss's band, Hz; the flogging sail's band, centre Hz, beaten by a soft flap that dips it by depth (a share of its level) at the recipe's rate; the rigging sings only in gusts, from gust.from to gust.full of the wind's gust factor, its band's q; the gun's crack is low-passed at gunCrack Hz; birds' and colonies' harmonic calls are low-passed at birds.lowpass times their pitch and swell in over birds.attack s. noise: the seconds of each of the white, pink and brown noises the voices read, each at its own offset. layers: the bed's families, each played by its recordings where they have loaded (recorded/*.json) and by its synthesis the share they leave, a recording taking over over crossfade s; a family of several layers crossfades them at equal power between their centres at, on its scale: the apparent wind, m/s (the wind, whose recordings' low-pass opens from lowpass[0] to lowpass[1] Hz and gain rises by gust.gain dB from gust.from to gust.full of the gust factor); the speed as a share of the hull speed (the hull); the sea's height, m, with whitecaps times its whitecaps (the sea); the rain, mm an hour. match is the dB a recording at -23 LUFS plays at over its family's level to be as loud as the synthesis, as the tests measure it. shots: each voice played once: gain, the dB its recordings (each at a true peak of -1 dBTP) play at over the level its synthesis is given; family, the family whose limit it counts in (none where null); and how far each play is varied, by its event's seed, pitch semitones and level dB either way (0 for a signal, never varied). voices: at most most sounds played once at a time, and in each family its number; when one more would pass a limit the quietest is let go, faded over release s. duck: under the gun (heard at gun of its full level or more, as every racer hears it), a fog signal within fog m and the crowd's cheer, the sea's bus dips depth dB for hold s, over attack s and back over release s. crowd: the small, medium and large crowds' recordings are crossfaded by the number of cheers, each heard alone at its number in at. A gun's recording is shelved by tone.gunShelf dB above tone.gunCrack Hz: no harsh crack. slaps: the bow meeting a wave, from a pitch rate (rad/s) falling past pitchRate[0] and full at pitchRate[1], heave of it from the hull dropping (heaveRate, m/s), at most every least s, at level; synthesised as a burst through a band falling from band[1] to band[0] Hz at q dying over decay s, and a thump Hz at thumpLevel. sail: the boom past side rad of the centreline crossing; a tack where the apparent wind is within tack degrees of the bow, the sheet running out through its block, soft, short and low (level, rising with the apparent wind over wind m/s; a band Hz at q swelling and dying over length s, and the block's soft knock at its end, a tone Hz at level of it dying over decay s); else a gybe, the boom's thump (level by its rate, rad/s; thump Hz, decay s, a knock's band Hz at q). halyards: in port, from wind[0] to wind[1] m/s of apparent wind, at level, a swing every every[0] to every[1] s, its answer pair s later; each tap a band of tone Hz at q dying over decay s. surf: a shore's, as the water shoals from depth[0] to depth[1] m and the sea rises from height[0] to height[1] m, at level, swelling every period s, a band of centre Hz at q.",
+  "master": -8.5,
   "buses": {
     "sea": {
       "level": 0,
@@ -37,11 +38,11 @@
     "glide": 0.15
   },
   "bed": {
-    "curve": 0.4,
+    "curve": 0.25,
     "trims": {
       "wind": -3.6,
       "rigging": -10,
-      "flog": -1.4,
+      "flog": -7.5,
       "water": -9.6,
       "hiss": -5.4,
       "sea": -2.3,
@@ -52,6 +53,12 @@
       "roar": 0,
       "surf": 0
     }
+  },
+  "storm": {
+    "wind": [11, 18],
+    "level": 0.32,
+    "centre": 380,
+    "q": 0.7
   },
   "calm": {
     "centre": 380,
@@ -68,6 +75,10 @@
         "from": 1.03,
         "full": 1.15
       }
+    },
+    "flog": {
+      "centre": 650,
+      "depth": 0.5
     },
     "gunCrack": 3000,
     "birds": {
@@ -108,7 +119,7 @@
     },
     "flog": {
       "voices": ["flog"],
-      "match": -0.7
+      "match": -0.5
     },
     "lapping": {
       "voices": ["lapping"],
@@ -295,12 +306,16 @@
     "side": 0.06,
     "tack": 100,
     "sheet": {
-      "level": 0.16,
+      "level": 0.1,
       "wind": [2, 10],
-      "length": 0.7,
-      "band": 1400,
-      "q": 1.4,
-      "rate": 26
+      "length": 0.35,
+      "band": 480,
+      "q": 0.9,
+      "block": {
+        "tone": 210,
+        "level": 0.5,
+        "decay": 0.035
+      }
     },
     "boom": {
       "level": 0.4,
