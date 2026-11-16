@@ -39,18 +39,27 @@
   box-shadow: 0 4px 18px rgb(0 0 0 / 25%);
 }
 
-/* A panel's title, the game's name on most: with larger text it grows
-   only as far as the screen's width keeps the name on one line, and never
-   under its own 30 px, so the panel's keys stay in view. */
 .start-panel h1 {
   margin: 0 0 8px;
   font:
-    max(30px, min(1.875rem, 9vw)) / 1.1 "IM Fell English SC",
+    1.875rem / 1.1 "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+/* With the reader's text larger than the browser's own, on a phone, a
+   panel's title (the game's name on most) grows only as far as the
+   screen's width keeps the name on one line, so the panel's keys stay in
+   view. A media query's em is the browser's own text size: 20em is
+   320 px at its default 16, so this never applies there, and 400 px at
+   20. */
+@media (min-width: 321px) and (max-width: 20em) {
+  .start-panel h1 {
+    font-size: min(1.875rem, 9vw);
+  }
 }
 
 .start-panel h2 {
