@@ -10,8 +10,7 @@
 // stands on.
 
 import type { IslandModel } from './model';
-import { meridianText, parallelText } from './position';
-import { NM } from './store';
+import { meridianText, NM, parallelText } from './position';
 
 /** What the paper is painted with. */
 export interface PaperLook {
@@ -155,7 +154,9 @@ export function paintPaper(
   // The compass rose, in the south-west.
   rose(ctx, px(-look.lip * 0.62), py(-look.lip * 0.62), look.lip * 0.14 * k, look.ink);
 
-  // The charted islands' coasts: the land inked round, then tinted.
+  // The charted islands' coasts: the land inked round, then tinted. The
+  // website's map inks the coasts keel traces of them the same way
+  // (website/worker/src/map/draw.ts, inkCoasts).
   for (const m of models) {
     const w = Math.max(m.dx * k, 1);
     const h = Math.max(m.dy * k, 1);

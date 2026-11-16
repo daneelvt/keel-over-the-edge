@@ -1,0 +1,5 @@
+node_modules/
+worker/gen/
+dist/
+.wrangler/
+wrangler.deploy.json

@@ -1,0 +1,28 @@
+// The website's Worker and its static files, deployed by the accounts
+// workflow (go run ./tools/accounts -run apply) after OpenTofu's apply:
+// it fills the KV namespace's id from tofu's output website_kv_namespace_id
+// and hands the Access service token's id and secret over as secrets.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "keel-website",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-11-01",
+  // The Worker's fetch to play. goes the public way, through Access, not
+  // straight to the origin as a fetch within the zone otherwise does.
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "routes": [{ "pattern": "keelovertheedge.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./site",
+    "binding": "ASSETS",
+    // Only these run the Worker; every other file is served as it is.
+    "run_worker_first": ["/", "/live", "/map.svg", "/share.png", "/next.ics"]
+  },
+  "triggers": { "crons": ["*/10 * * * *"] },
+  // The last good copy. Its id is OpenTofu's, set at deploy.
+  "kv_namespaces": [{ "binding": "WEBSITE" }],
+  "vars": { "STATUS_URL": "https://play.keelovertheedge.com/api/status" },
+  // The Worker's own warnings only: no log of each request.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } }
+}

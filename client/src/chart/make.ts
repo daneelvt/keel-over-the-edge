@@ -26,7 +26,7 @@ import { ChartStore } from './store';
 import { type ChartLook, ChartView, type WindSampler } from './view';
 import { ChartWeather } from './weatherlayer';
 
-/** The chart's look, from the catalog. */
+/** The chart's look, from the catalog; the website's map reads the same (website/worker/src/map/look.ts). */
 export function chartLook(): ChartLook {
   const w = catalog.world;
   const l = w.chart.look;
