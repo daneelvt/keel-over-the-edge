@@ -1,0 +1,1029 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The website’s pictures, taken from the game by website/pictures (npm run pictures): each picture by name, with its words for those who cannot see it, its take, and its AVIF and JPEG files beside this manifest at each width; the boat at the edge for each hour at sea, wide and upright (for a phone held upright), the title’s contrast over the lower left of each wide frame (at its middle brightness, at its brightest tenth, and the black veil that brings its brightest tenth to 4.5:1); the groups the page shows them in; and the game’s own art the page shows as it is, by path from the repository’s root.",
+  "pictures": {
+    "edge-dawn": {
+      "alt": "A keelboat and her crew sail along the edge of the world at sunrise, where the sea pours over the falls and breaks away into the mist.",
+      "take": "edge-dawn-keel-b",
+      "width": 2400,
+      "height": 1500,
+      "hour": "dawn",
+      "frame": "wide",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-dawn-800.avif",
+            "bytes": 18623
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-dawn-1200.avif",
+            "bytes": 33570
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-dawn-1600.avif",
+            "bytes": 49848
+          },
+          {
+            "width": 2400,
+            "height": 1500,
+            "file": "edge-dawn-2400.avif",
+            "bytes": 88793
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-dawn-800.jpg",
+            "bytes": 24853
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-dawn-1200.jpg",
+            "bytes": 48226
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-dawn-1600.jpg",
+            "bytes": 76233
+          }
+        ]
+      },
+      "titleContrast": {
+        "median": 8.21,
+        "brightest": 4.09,
+        "veil": 0.1
+      }
+    },
+    "edge-dawn-upright": {
+      "alt": "A keelboat and her crew sail along the edge of the world at sunrise, where the sea pours over the falls and breaks away into the mist.",
+      "take": "edge-dawn-upright-keel-along",
+      "width": 1200,
+      "height": 1500,
+      "hour": "dawn",
+      "frame": "upright",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-dawn-upright-800.avif",
+            "bytes": 28953
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-dawn-upright-1200.avif",
+            "bytes": 47227
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-dawn-upright-800.jpg",
+            "bytes": 45170
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-dawn-upright-1200.jpg",
+            "bytes": 81433
+          }
+        ]
+      }
+    },
+    "edge-day": {
+      "alt": "A keelboat and her crew sail along the edge of the world on a bright morning, the sea pouring white over the falls beside them.",
+      "take": "edge-day-keel-b",
+      "width": 2400,
+      "height": 1500,
+      "hour": "day",
+      "frame": "wide",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-day-800.avif",
+            "bytes": 27566
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-day-1200.avif",
+            "bytes": 50350
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-day-1600.avif",
+            "bytes": 76341
+          },
+          {
+            "width": 2400,
+            "height": 1500,
+            "file": "edge-day-2400.avif",
+            "bytes": 140515
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-day-800.jpg",
+            "bytes": 34430
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-day-1200.jpg",
+            "bytes": 67693
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-day-1600.jpg",
+            "bytes": 107748
+          }
+        ]
+      },
+      "titleContrast": {
+        "median": 4.14,
+        "brightest": 1.99,
+        "veil": 0.4
+      }
+    },
+    "edge-day-upright": {
+      "alt": "A keelboat and her crew sail along the edge of the world on a bright morning, the sea pouring white over the falls beside them.",
+      "take": "edge-day-upright-keel-along",
+      "width": 1200,
+      "height": 1500,
+      "hour": "day",
+      "frame": "upright",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-day-upright-800.avif",
+            "bytes": 53806
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-day-upright-1200.avif",
+            "bytes": 89292
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-day-upright-800.jpg",
+            "bytes": 73733
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-day-upright-1200.jpg",
+            "bytes": 132981
+          }
+        ]
+      }
+    },
+    "edge-dusk": {
+      "alt": "A keelboat and her crew sail along the edge of the world at sunset, where the sea pours over the falls and breaks away into the mist.",
+      "take": "edge-dusk-keel-b",
+      "width": 2400,
+      "height": 1500,
+      "hour": "dusk",
+      "frame": "wide",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-dusk-800.avif",
+            "bytes": 19415
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-dusk-1200.avif",
+            "bytes": 35451
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-dusk-1600.avif",
+            "bytes": 52478
+          },
+          {
+            "width": 2400,
+            "height": 1500,
+            "file": "edge-dusk-2400.avif",
+            "bytes": 92427
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-dusk-800.jpg",
+            "bytes": 25145
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-dusk-1200.jpg",
+            "bytes": 49116
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-dusk-1600.jpg",
+            "bytes": 77994
+          }
+        ]
+      },
+      "titleContrast": {
+        "median": 7.89,
+        "brightest": 4.2,
+        "veil": 0.05
+      }
+    },
+    "edge-dusk-upright": {
+      "alt": "A keelboat and her crew sail along the edge of the world at sunset, where the sea pours over the falls and breaks away into the mist.",
+      "take": "edge-dusk-upright-keel-along",
+      "width": 1200,
+      "height": 1500,
+      "hour": "dusk",
+      "frame": "upright",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-dusk-upright-800.avif",
+            "bytes": 31862
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-dusk-upright-1200.avif",
+            "bytes": 51979
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-dusk-upright-800.jpg",
+            "bytes": 47141
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-dusk-upright-1200.jpg",
+            "bytes": 85372
+          }
+        ]
+      }
+    },
+    "edge-night": {
+      "alt": "A keelboat and her crew sail along the edge of the world by moonlight, her masthead light burning above the falls.",
+      "take": "edge-night-keel-a",
+      "width": 2400,
+      "height": 1500,
+      "hour": "night",
+      "frame": "wide",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-night-800.avif",
+            "bytes": 13315
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-night-1200.avif",
+            "bytes": 24865
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-night-1600.avif",
+            "bytes": 37384
+          },
+          {
+            "width": 2400,
+            "height": 1500,
+            "file": "edge-night-2400.avif",
+            "bytes": 68961
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "edge-night-800.jpg",
+            "bytes": 14879
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "edge-night-1200.jpg",
+            "bytes": 29785
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "edge-night-1600.jpg",
+            "bytes": 47853
+          }
+        ]
+      },
+      "titleContrast": {
+        "median": 12.97,
+        "brightest": 11.27,
+        "veil": 0
+      }
+    },
+    "edge-night-upright": {
+      "alt": "A keelboat and her crew sail along the edge of the world by moonlight, her masthead light burning above the falls.",
+      "take": "edge-night-upright-keel-along",
+      "width": 1200,
+      "height": 1500,
+      "hour": "night",
+      "frame": "upright",
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-night-upright-800.avif",
+            "bytes": 22294
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-night-upright-1200.avif",
+            "bytes": 37536
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 1000,
+            "file": "edge-night-upright-800.jpg",
+            "bytes": 29419
+          },
+          {
+            "width": 1200,
+            "height": 1500,
+            "file": "edge-night-upright-1200.jpg",
+            "bytes": 52940
+          }
+        ]
+      }
+    },
+    "race": {
+      "alt": "The game’s chart during a race: six boats’ tracks in their own colours, tacking up to mark 1 and round marks 2 and 3, the leader named.",
+      "take": "race-c",
+      "width": 1800,
+      "height": 1125,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "race-800.avif",
+            "bytes": 10857
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "race-1200.avif",
+            "bytes": 16377
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "race-1600.avif",
+            "bytes": 23024
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "race-800.jpg",
+            "bytes": 17629
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "race-1200.jpg",
+            "bytes": 30185
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "race-1600.jpg",
+            "bytes": 43724
+          }
+        ]
+      }
+    },
+    "together-keelboat": {
+      "alt": "Five friends sit out on the rail of a keelboat as she heels in the low evening sun.",
+      "take": "together-keelboat-c",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "together-keelboat-800.avif",
+            "bytes": 22387
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "together-keelboat-1200.avif",
+            "bytes": 39445
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "together-keelboat-1600.avif",
+            "bytes": 58790
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "together-keelboat-800.jpg",
+            "bytes": 33978
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "together-keelboat-1200.jpg",
+            "bytes": 62791
+          },
+          {
+            "width": 1600,
+            "height": 1000,
+            "file": "together-keelboat-1600.jpg",
+            "bytes": 97427
+          }
+        ]
+      }
+    },
+    "together-yacht": {
+      "alt": "Eight aboard a yacht under sail in the evening light.",
+      "take": "together-yacht-c",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "together-yacht-800.avif",
+            "bytes": 23017
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "together-yacht-1200.avif",
+            "bytes": 40016
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "together-yacht-800.jpg",
+            "bytes": 32097
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "together-yacht-1200.jpg",
+            "bytes": 59677
+          }
+        ]
+      }
+    },
+    "together-tall-ship": {
+      "alt": "A tall ship under full sail at golden hour, the low sun warm on her canvas.",
+      "take": "together-tall-ship-c",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "together-tall-ship-800.avif",
+            "bytes": 33871
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "together-tall-ship-1200.avif",
+            "bytes": 56598
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "together-tall-ship-800.jpg",
+            "bytes": 51955
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "together-tall-ship-1200.jpg",
+            "bytes": 95805
+          }
+        ]
+      }
+    },
+    "storm": {
+      "alt": "A small boat sails toward a storm cloud towering over the sea.",
+      "take": "storm-a",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "storm-800.avif",
+            "bytes": 14500
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "storm-1200.avif",
+            "bytes": 25298
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "storm-800.jpg",
+            "bytes": 22966
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "storm-1200.jpg",
+            "bytes": 42940
+          }
+        ]
+      }
+    },
+    "lightning": {
+      "alt": "Lightning forks down to the sea at night beside a small boat.",
+      "take": "lightning-d",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "lightning-800.avif",
+            "bytes": 5198
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "lightning-1200.avif",
+            "bytes": 8825
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "lightning-800.jpg",
+            "bytes": 8419
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "lightning-1200.jpg",
+            "bytes": 16080
+          }
+        ]
+      }
+    },
+    "squall": {
+      "alt": "A squall’s cloud overhead and rain driving across the sea around a small boat.",
+      "take": "squall-a",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "squall-800.avif",
+            "bytes": 13416
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "squall-1200.avif",
+            "bytes": 22803
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "squall-800.jpg",
+            "bytes": 19916
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "squall-1200.jpg",
+            "bytes": 38400
+          }
+        ]
+      }
+    },
+    "fog": {
+      "alt": "A small boat in fog, the low sun glittering on the water through it.",
+      "take": "fog-a",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "fog-800.avif",
+            "bytes": 13766
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "fog-1200.avif",
+            "bytes": 23554
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "fog-800.jpg",
+            "bytes": 19988
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "fog-1200.jpg",
+            "bytes": 37576
+          }
+        ]
+      }
+    },
+    "out-gale": {
+      "alt": "A small boat in a gale among whitecaps.",
+      "take": "out-gale-a",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-gale-800.avif",
+            "bytes": 23043
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-gale-1200.avif",
+            "bytes": 40600
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-gale-800.jpg",
+            "bytes": 36006
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-gale-1200.jpg",
+            "bytes": 67560
+          }
+        ]
+      }
+    },
+    "out-reefs": {
+      "alt": "Surf breaking white along the foot of the cliffs, a small boat just off it.",
+      "take": "out-reefs-c",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-reefs-800.avif",
+            "bytes": 46023
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-reefs-1200.avif",
+            "bytes": 80247
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-reefs-800.jpg",
+            "bytes": 53449
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-reefs-1200.jpg",
+            "bytes": 101468
+          }
+        ]
+      }
+    },
+    "out-land": {
+      "alt": "A boat sails toward an island whose crater smokes.",
+      "take": "out-land-a",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-land-800.avif",
+            "bytes": 18911
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-land-1200.avif",
+            "bytes": 32576
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-land-800.jpg",
+            "bytes": 28735
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-land-1200.jpg",
+            "bytes": 54283
+          }
+        ]
+      }
+    },
+    "out-lagoon": {
+      "alt": "A boat in a lagoon before a waterfall, palms and a village around it.",
+      "take": "out-lagoon-b",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-lagoon-800.avif",
+            "bytes": 26287
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-lagoon-1200.avif",
+            "bytes": 43970
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-lagoon-800.jpg",
+            "bytes": 35920
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-lagoon-1200.jpg",
+            "bytes": 66303
+          }
+        ]
+      }
+    },
+    "out-stars": {
+      "alt": "A boat at night under the moon and stars, her masthead light burning.",
+      "take": "out-stars-a",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-stars-800.avif",
+            "bytes": 7223
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-stars-1200.avif",
+            "bytes": 12579
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-stars-800.jpg",
+            "bytes": 10490
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-stars-1200.jpg",
+            "bytes": 20202
+          }
+        ]
+      }
+    },
+    "out-edge": {
+      "alt": "Looking back along the falls at a small boat close to the lip, the sea pouring over beside her.",
+      "take": "out-edge-a",
+      "width": 1600,
+      "height": 1000,
+      "avifQuality": 60,
+      "files": {
+        "avif": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-edge-800.avif",
+            "bytes": 16130
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-edge-1200.avif",
+            "bytes": 27724
+          }
+        ],
+        "jpeg": [
+          {
+            "width": 800,
+            "height": 500,
+            "file": "out-edge-800.jpg",
+            "bytes": 22693
+          },
+          {
+            "width": 1200,
+            "height": 750,
+            "file": "out-edge-1200.jpg",
+            "bytes": 42978
+          }
+        ]
+      }
+    }
+  },
+  "opening": {
+    "hours": {
+      "dawn": {
+        "wide": "edge-dawn",
+        "upright": "edge-dawn-upright"
+      },
+      "day": {
+        "wide": "edge-day",
+        "upright": "edge-day-upright"
+      },
+      "dusk": {
+        "wide": "edge-dusk",
+        "upright": "edge-dusk-upright"
+      },
+      "night": {
+        "wide": "edge-night",
+        "upright": "edge-night-upright"
+      }
+    },
+    "default": "dusk",
+    "upright": "(orientation: portrait) and (max-width: 700px)",
+    "title": "#efe4c8",
+    "words": {
+      "left": 0.04,
+      "top": 0.42,
+      "right": 0.5,
+      "bottom": 0.92
+    }
+  },
+  "groups": {
+    "race": ["race"],
+    "together": ["together-keelboat", "together-yacht", "together-tall-ship"],
+    "weather": ["lightning", "storm", "squall", "fog"],
+    "out": ["out-gale", "out-reefs", "out-land", "out-lagoon", "out-stars", "out-edge"]
+  },
+  "art": {
+    "watch": ["art/sailors/buccaneer/female.ink.webp", "art/sailors/buccaneer/male.ink.webp"],
+    "machine": ["art/sailors/machine/female.ink.webp", "art/sailors/machine/male.ink.webp"],
+    "medals": ["art/glyphs/magnificent-frigatebird.webp", "art/glyphs/sperm-whale.webp"],
+    "boats": [
+      {
+        "name": "Jolly boat",
+        "aboard": 1,
+        "glyph": "art/glyphs/jolly-boat.webp"
+      },
+      {
+        "name": "Skiff",
+        "aboard": 2,
+        "glyph": "art/glyphs/skiff.webp"
+      },
+      {
+        "name": "Beach cat",
+        "aboard": 2,
+        "glyph": "art/glyphs/beach-cat.webp"
+      },
+      {
+        "name": "Keelboat",
+        "aboard": 5,
+        "glyph": "art/glyphs/keelboat.webp"
+      },
+      {
+        "name": "Yacht",
+        "aboard": 8,
+        "glyph": "art/glyphs/yacht.webp"
+      },
+      {
+        "name": "Catamaran",
+        "aboard": 12,
+        "glyph": "art/glyphs/catamaran.webp"
+      },
+      {
+        "name": "Tall ship",
+        "aboard": 40,
+        "glyph": "art/glyphs/tall-ship.webp"
+      }
+    ]
+  }
+}

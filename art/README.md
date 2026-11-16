@@ -595,6 +595,20 @@ The log's collection shows each found kind so, and a kind not yet found as
 its silhouette; `client/src/ui/logglyphs.test.ts` checks that every kind
 has its glyph.
 
+## The website's pictures
+
+`website/` (the website, keelovertheedge.com) shows pictures of the game
+taken from the game itself: `website/pictures/`, run by hand on a Mac
+(`cd website && npm run pictures`), stages each in the client's offline
+sandbox with the browser tests' hooks, screenshots it in Chrome, and
+encodes the picks to `website/`: AVIF and JPEG at their widths, named
+`<picture>-<width>`, and `manifest.json`, which lists each picture's
+words, take, files and sizes, the boat at the edge for each hour at sea,
+and the game's art the page shows as it is (the inked portraits, the
+log's glyphs). They are art like the rest of this folder: taken again,
+not edited, whenever the game's look changes
+(`docs/development.md`, "The website").
+
 ## Sound
 
 `sound/*.json` are the recipes the client's sound engine plays: filter
