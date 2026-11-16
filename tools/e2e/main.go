@@ -242,13 +242,18 @@ func pageEnv(root, client string) ([]string, error) {
 	return []string{"KEEL_PLAY_ORIGIN=" + builtOrigin, "KEEL_CLIENT_DIR=" + dir}, nil
 }
 
-// builtDir is a built page's directory, given from the repository's root:
-// one that holds index.html.
+// builtDir is a built page's directory, given from the repository's root
+// or absolute: one inside the repository that holds index.html.
 func builtDir(root, client string) (string, error) {
 	dir := client
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(root, dir)
 	}
+	rel, err := filepath.Rel(root, dir)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("-client %s: not inside the repository", client)
+	}
+	dir = filepath.Join(root, rel)
 	if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
 		return "", fmt.Errorf("-client %s: no built page there (vite build in client/ first): %w", client, err)
 	}

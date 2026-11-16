@@ -134,3 +134,28 @@ func TestWithEnvReplacesAName(t *testing.T) {
 		t.Error("the env given was changed")
 	}
 }
+
+func TestBuiltDirStaysInTheRepository(t *testing.T) {
+	root := t.TempDir()
+	built := filepath.Join(root, "client", "dist")
+	if err := os.MkdirAll(built, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(built, "index.html"), []byte("<p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, client := range []string{"client/dist", built, "client/../client/dist"} {
+		if dir, err := builtDir(root, client); err != nil || dir != built {
+			t.Errorf("builtDir(%q) = %q, %v; want %q", client, dir, err, built)
+		}
+	}
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "index.html"), []byte("<p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, client := range []string{outside, "../" + filepath.Base(outside), "client/../../x"} {
+		if dir, err := builtDir(root, client); err == nil {
+			t.Errorf("builtDir(%q) = %q, want an error", client, dir)
+		}
+	}
+}
