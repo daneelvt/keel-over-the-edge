@@ -1039,6 +1039,63 @@ func TestClientTier(t *testing.T) {
 	})
 }
 
+// TestMinuteBytes: a connection sailing its boat is observed once each
+// whole minute, under its role: the bytes each way, what its page said it
+// fetched, and the three together, scaled to the minute; nothing before
+// the first minute is whole.
+func TestMinuteBytes(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{})
+		token, _ := s.Sailor("Ann")
+		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		in := client.Read(ws)
+		go func() {
+			for range in.C {
+			}
+		}()
+		minute := func(role, dir string) (uint64, float64) {
+			var m dto.Metric
+			if err := s.Metrics.EdgeMinuteBytes.WithLabelValues(role, dir).(prometheus.Metric).Write(&m); err != nil {
+				t.Fatal(err)
+			}
+			return m.GetHistogram().GetSampleCount(), m.GetHistogram().GetSampleSum()
+		}
+		// A ping every 2 s, each telling of 1,000 bytes fetched: the first
+		// begins the count.
+		ping := func() {
+			client.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{FetchedBytes: 1000}}})
+			time.Sleep(2 * time.Second)
+		}
+		for range 30 {
+			ping()
+		}
+		if n, _ := minute("sailing", "all"); n != 0 {
+			t.Fatalf("observed before a whole minute: %d", n)
+		}
+		ping()
+		synctest.Wait()
+		n, fetched := minute("sailing", "fetched")
+		// The 30 pings after the first in the minute's 60 s.
+		if n != 1 || math.Abs(fetched-30_000) > 1 {
+			t.Fatalf("fetched: %d minutes, %v bytes", n, fetched)
+		}
+		_, inBytes := minute("sailing", "in")
+		_, outBytes := minute("sailing", "out")
+		_, all := minute("sailing", "all")
+		// 15 snapshots a second out; the pings in.
+		if inBytes < 30*10 || outBytes < 60*15*50 || math.Abs(all-(inBytes+outBytes+fetched)) > 1 {
+			t.Fatalf("in %v, out %v, all %v", inBytes, outBytes, all)
+		}
+		if n, _ := minute("watching", "all"); n != 0 {
+			t.Fatalf("a sailor's minute counted as watching: %d", n)
+		}
+	})
+}
+
 // TestWorldEnded: Welcome tells the world's end; when it comes, every
 // connection is closed with 4004, and one that comes meanwhile is told to
 // try again with 1013.

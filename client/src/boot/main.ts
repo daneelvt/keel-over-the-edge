@@ -93,6 +93,7 @@ import {
   placesSeen,
   type WorldFile,
 } from '../land/world';
+import { watchFetched } from '../net/fetched';
 import { Online } from '../net/online';
 import { reloadForVersion } from '../net/reload';
 import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
@@ -167,11 +168,14 @@ import { Gate, type Revealed } from './gate';
 import { harbourWater, watchHarbour } from './harbour';
 import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
+import { homeScreen } from './homescreen';
 import { lookStage } from './lookstage';
 import { raceSea } from './racesea';
+import { pageStart, Reports, reportErrors, type Stages } from './report';
 import { startWorker, takeOverFirst } from './sw';
 import { DESCENT, frames, reveal, UnderCover, untilReady, whenPast } from './undercover';
 import { watchForUpdates } from './updated';
+import { screenLock } from './wakelock';
 
 /** How far a boat tapped in the sea may be from a race's boat's place in its picture, m: two seconds' sailing. */
 const RACER_TAP = 30;
@@ -685,14 +689,26 @@ async function start(): Promise<void> {
   // The wait begins at the tap that sets sail, or at once with no screen
   // to tap; the cover answers the tap at once.
   let tapped = performance.now();
+  // The start's stages for its report: the start screen shown, Set sail
+  // tapped.
+  const stages: Stages = {};
+  const usable = <T>(shown: Promise<T>): Promise<T> => {
+    stages.start ??= performance.now();
+    return shown;
+  };
   // The player's own sailor is loaded as soon as their look is known: at
-  // their own panel, or as the start screen sets sail.
+  // their own panel, or as the start screen sets sail. Known, there is a
+  // session: the page's reports go from now on.
   const own = (me: Me): Me => {
+    reports.open();
     world.sailAs(codeOf(catalog, lookFrom(me)), true);
     return me;
   };
   const set = (me: Me): Me => {
     tapped = performance.now();
+    stages.tap = tapped;
+    // A day of play, toward the home screen's offer.
+    homeScreen()?.sailed();
     cover.say(SETTING_SAIL);
     // The look chosen at the start: drawn now, though the own was loaded.
     world.sailAs(codeOf(catalog, lookFrom(me)));
@@ -755,7 +771,7 @@ async function start(): Promise<void> {
     raceLinked(me).then((m) =>
       m.watchRace !== undefined || m.replayRace !== undefined
         ? own(m)
-        : showSailor(document.body, own(m), catalog, stage, catalog, startRaces),
+        : usable(showSailor(document.body, own(m), catalog, stage, catalog, startRaces)),
     );
   const aboard = (me: Me): Promise<Me> =>
     import('../account/comeaboard').then((m) =>
@@ -786,17 +802,19 @@ async function start(): Promise<void> {
     loadPhysics(fetch(wasmUrl)),
     resolveSailor({
       start: () =>
-        showStartScreen(document.body, {
-          looks: catalog,
-          boats: catalog,
-          ...(stage === undefined ? {} : { stage }),
-          ...(linked === null && sailLink === '' && raceCode === null
-            ? {}
-            : { panel: false, straight: true }),
-          ...(linked === null ? {} : { watching: true }),
-          ...(raceCode === null ? {} : { racing: true }),
-          races: startRaces,
-        })
+        usable(
+          showStartScreen(document.body, {
+            looks: catalog,
+            boats: catalog,
+            ...(stage === undefined ? {} : { stage }),
+            ...(linked === null && sailLink === '' && raceCode === null
+              ? {}
+              : { panel: false, straight: true }),
+            ...(linked === null ? {} : { watching: true }),
+            ...(raceCode === null ? {} : { racing: true }),
+            races: startRaces,
+          }),
+        )
           .then((me) =>
             sailLink !== ''
               ? aboard(me)
@@ -888,6 +906,8 @@ async function start(): Promise<void> {
   );
   world.useLand(land);
   const landNear = () => land.ready(world.pose.east, world.pose.north, NEAR_LAND);
+  // The land's chunks are fetched by its worker, which counts them.
+  fetched.land = () => land.stats.bytes;
   game.bedFriction = (east, north) => land.frictionAt(east, north);
   world.freeCam.ground = (east, north) => land.heightAt(east, north);
   // The free camera is the owner's alone: the server hears it from no other;
@@ -1390,6 +1410,7 @@ async function start(): Promise<void> {
   underCover.atSea = true;
   reveal(world, cover, view === undefined ? DESCENT : 0);
   keeper.revealed();
+  keptAtSea(online, parts.chart, world, stages);
   // A race's link opened after the race: its replay on the chart.
   if (me.replayRace !== undefined) {
     parts.replay.open(me.replayRace);
@@ -1571,6 +1592,30 @@ function chooseSky(world: SeaScene, query: URLSearchParams): void {
   }
 }
 
+/**
+ * At sea from the reveal: the screen kept on while the connection is at
+ * sea, until the full chart or the menu stands two minutes untouched; the
+ * start's report, with the bytes fetched to the reveal; and from now on
+ * the Pings tell the server what the page fetches.
+ */
+function keptAtSea(online: Online, chart: Chart, world: SeaScene, stages: Stages): void {
+  const lock = screenLock();
+  // The menu, or a panel it opened (the account, the machine sailors).
+  lock.open = () => chart.open.value || document.querySelector('.menu') !== null;
+  effect(() => lock.sailing(online.status.value === 'sailing'));
+  lock.atSea(true);
+  const page = pageStart(import.meta.url);
+  reports.startup({
+    stages: { shell: page.shell, cover: page.cover, ...stages, reveal: performance.now() },
+    bytes: fetched.total,
+    visit: page.visit,
+    tier: world.tier.number,
+  });
+  // What came before the reveal is the start's.
+  fetched.take();
+  online.fetched = () => fetched.take();
+}
+
 /** The game connection's URL: this page's own host, /ws. */
 function gameURL(): string {
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
@@ -1632,7 +1677,18 @@ function connect(online: Online): void {
   });
 }
 
+// The page's reports, its errors among them, and what it fetches, from its
+// first moment; and Chrome's offer to install, should it come.
+const reports = new Reports();
+reportErrors(reports);
+const fetched = watchFetched();
+homeScreen();
+
 start().catch((err: unknown) => {
+  reports.error(
+    err instanceof Error ? err.message : String(err),
+    err instanceof Error ? (err.stack ?? '') : '',
+  );
   const p = document.createElement('p');
   p.className = 'failure';
   p.textContent = `The sea could not be drawn: ${err instanceof Error ? err.message : String(err)}`;

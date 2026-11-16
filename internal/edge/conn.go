@@ -162,6 +162,9 @@ type conn struct {
 	tierMu  sync.Mutex
 	counted int32
 
+	// minute is what the connection has carried in its minute at sea.
+	minute minuteCount
+
 	// The owner's free camera.
 	roaming
 
@@ -327,7 +330,9 @@ func (c *conn) next() (data []byte, ok bool) {
 			return nil, false
 		}
 	}
-	c.e.m.bytesIn.Add(frameBytes(n, true))
+	in := frameBytes(n, true)
+	c.e.m.bytesIn.Add(in)
+	c.minute.in += int64(in)
 	if typ != websocket.MessageBinary {
 		c.close(websocket.StatusUnsupportedData, "binary messages only")
 		return nil, false
@@ -663,6 +668,7 @@ func (c *conn) ping(p *pb.Ping) bool {
 	if s := p.GetRenderScale(); s > 0 {
 		e.m.scale.Observe(float64(s) / 100)
 	}
+	c.countMinute(time.Now(), p.GetFetchedBytes())
 	wt, _ := e.cfg.Clock.WorldTime()
 	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Pong{Pong: &pb.Pong{
 		ClientTimeUs: p.GetClientTimeUs(), WorldTimeUs: wt.Microseconds(),
@@ -782,7 +788,9 @@ func (c *conn) write(b []byte, kind int) bool {
 	}
 	e.m.write.Observe(time.Since(start).Seconds())
 	e.m.out[kind].Inc()
-	e.m.bytesOut.Add(frameBytes(len(b), false))
+	out := frameBytes(len(b), false)
+	e.m.bytesOut.Add(out)
+	c.minute.out.Add(int64(out))
 	return true
 }
 

@@ -666,3 +666,20 @@
 .take-out .start-text {
   text-align: center;
 }
+
+/* The offer to play from the home screen, under Set sail: its line, then
+   its two keys side by side, as slim as the panel's others. */
+.home-offer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.home-offer-keys {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.home-offer-keys > .start-sign-in {
+  flex: 1;
+  min-height: 40px;
+}

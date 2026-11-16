@@ -9,7 +9,7 @@
 // the helm returns to the centre when let go, and whether the camera comes
 // back behind the boat by itself. The full screen where the
 // page can take it, with how to install the game where that gives more of
-// the screen. Online, the player's shipmates, a sailor to watch, the link
+// the screen, an Install key once the browser has offered to. Online, the player's shipmates, a sailor to watch, the link
 // that asks others to sail with the player (while their own boat is in
 // the water), who may watch the player's own boat and their link to watch
 // them, shared with a picture of the view; Make a race, and the player's
@@ -20,6 +20,7 @@
 
 import { useLayoutEffect } from 'preact/hooks';
 import type { FullScreen } from '../boot/fullscreen';
+import { type HomeScreen, homeScreen } from '../boot/homescreen';
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
@@ -28,6 +29,7 @@ import { canShareLink, type DeckView, machineShared } from './decklazy';
 import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
 import type { HomeView } from './home';
 import { BACK_TO_PORT_ROYAL } from './homewords';
+import { INSTALL, INSTALL_CHROME, INSTALL_HOME_SCREEN } from './installwords';
 import { sailWithMeFor } from './machinewords';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
@@ -189,25 +191,37 @@ function SoundBlock({ settings }: { settings: SettingsSignal }) {
   );
 }
 
-/** How to install the game from Chrome's menu on Android, where it then opens full screen every time. */
-export const INSTALL_CHROME = 'Every time, without the bars: ⋮ → Add to home screen → Install.';
-
-/** How to add the game to an iPhone's Home Screen, where it opens without Safari's bars. */
-export const INSTALL_HOME_SCREEN =
-  'Tap Share, then Add to Home Screen; keep Open as Web App on; open Keel from its icon. Your sailor comes with you; this phone’s settings start fresh.';
+/** Install, once the browser has offered to install the game: its own question. */
+function InstallKey({ home }: { home: HomeScreen }) {
+  return (
+    <div class="menu-chart">
+      <button type="button" onClick={() => void home.install()}>
+        {INSTALL}
+      </button>
+    </div>
+  );
+}
 
 /**
  * The full screen: the switch where the page can take it, and how to
- * install the game where that gives more; on an iPhone, which has no
- * switch, the steps to the Home Screen, folded under their row.
+ * install the game where that gives more, an Install key once the browser
+ * has offered to; on an iPhone, which has no switch, the steps to the Home
+ * Screen, folded under their row.
  */
-function FullScreenRows({ full }: { full: FullScreen }) {
+function FullScreenRows({
+  full,
+  home = homeScreen(),
+}: {
+  full: FullScreen;
+  home?: HomeScreen | null;
+}) {
   const { offer } = full;
+  const install = home?.prompt.value != null ? <InstallKey home={home} /> : null;
   if (offer.switch) {
     return (
       <>
         <Toggle name="full-screen" label="Full screen" on={full.on.value} set={full.turn} />
-        {offer.install === 'chrome' ? <p class="menu-note">{INSTALL_CHROME}</p> : null}
+        {install ?? (offer.install === 'chrome' ? <p class="menu-note">{INSTALL_CHROME}</p> : null)}
       </>
     );
   }
@@ -224,7 +238,7 @@ function FullScreenRows({ full }: { full: FullScreen }) {
       </details>
     );
   }
-  return null;
+  return install;
 }
 
 /** Make a race, and the player's own races ahead under it, each opening its card. */

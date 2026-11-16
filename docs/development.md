@@ -5534,12 +5534,72 @@ resolved at start, so updating it allocates nothing:
 | `keel_edge_resyncs_total{result}` | Clients' requests for a full snapshot, `honoured` or `ignored` (more than one a second): should stay at 0 |
 | `keel_edge_input_margin_ticks` | How many ticks before their tick inputs arrived; negative when late |
 | `keel_client_rtt_seconds`, `keel_client_frame_seconds` | The phones' round trips and 95th percentile frame times, from their pings |
+| `keel_edge_minute_bytes{role,direction}` | Each game connection's bytes in a whole minute at sea, `sailing` or `watching`: `in`, `out`, `fetched` (what its page fetched over HTTP, from its pings) and `all` (the three together); see [The page's reports and data use](#the-pages-reports-and-data-use) |
+| `keel_client_errors_total{build}` | Errors the pages reported, by the build they ran (the first eight builds by name, `other` after) |
+| `keel_client_startup_seconds{stage,visit}`, `keel_client_startup_bytes{visit}` | The pages' start-up, from the navigation's start to each stage (`shell`, `cover`, `start`, `tap`, `reveal`), and the bytes they fetched before the reveal, by visit: `first`, `return` (from the browser's cache) or `worker` (served by the service worker) |
 | `keel_http_cross_origin_refused_total` | Requests refused as cross-origin |
 | `go_*`, `process_*` | The runtime and the process |
 
 ```sh
 curl -s 127.0.0.1:9090/metrics | grep keel_sim_tick_duration
 go tool pprof http://127.0.0.1:9090/debug/pprof/profile    # 30 s of CPU
+```
+
+### The page's reports and data use
+
+**Reports.** The page reports what it meets to `POST /api/client-report`
+(`internal/api/clientreport.go`, `client/src/boot/report.ts`), a JSON body
+of 8 KB at most, `{build, kind, …}`, with its build as `BUILD` has it
+(`dev` from Vite):
+
+- `error`: from the page's `error` and `unhandledrejection`, five a page at
+  most and the same one once. Its `message` (300 characters at most) is cut
+  before the first quote of any kind, and an address in it becomes its
+  file's name; its `stack` (2 KB at most) is asset names and line numbers
+  only, `index-Bx1.js:12:345`, one a line.
+- `startup`, once, at the reveal: each stage's ms from the navigation's
+  start, `shell` (the HTML arrived), `cover` (the first paint), `start`
+  (the start screen, or the player's own sailor, shown), `tap` (Set sail)
+  and `reveal`, a stage not passed through left out; `bytes`, what the
+  page fetched over HTTP to the reveal (below); `visit`, from the
+  navigation's own timing (`workerStart` set: `worker`; the entry script
+  from the browser's cache, nothing of it over the wire: `return`;
+  otherwise `first`), which works with or without a service worker; and
+  the tier it draws at.
+
+The route needs a session, as every game route does: the page holds its
+reports in memory (eight at most) until its sailor is known, a returning
+player's at their own panel, a new one's once made, so an error before
+then, or from a visitor who leaves, is never sent. A session sends 10 a
+minute at most, then 429 `often`; a body over 8 KB is 413, and anything
+malformed, unknown or out of bounds 400. keel counts each report
+(`keel_client_errors_total`, `keel_client_startup_seconds`,
+`keel_client_startup_bytes`) and logs an error at warn, `a page's error`,
+with `page_build`, its message (cut before a quote again) and its stack.
+Nothing about a report names the account: the access log's line for the
+route has none either. No player's words are in any field: names, chat,
+the log and notices never reach a report.
+
+**Data use.** The page counts what it fetches over HTTP
+(`client/src/net/fetched.ts`): every resource's `transferSize` from a
+`PerformanceObserver`, which is 0 for a file the browser's cache or the
+service worker served, and the land's chunks, which the mesh worker
+counts. After the reveal each `Ping` carries `fetched_bytes`, what was
+fetched since the last; what came before the reveal is the start-up
+report's. The edge counts each connection's frames each way, and once a
+whole minute has passed since the connection's first ping it observes the
+minute into `keel_edge_minute_bytes{role, direction}`: `in`, `out`,
+`fetched` and `all`, under `sailing` (its own boat, or aboard another's)
+or `watching`; a minute queued or idle, and a connection's last part of a
+minute, are not observed. Nothing is kept per player.
+
+The Game dashboard shows **Data an hour at sea, by role** (the median and
+90th percentile of `all`, as an hour), **Start-up, first and return
+visits** and **Errors in the pages, by build**. `ClientErrors` warns when
+the pages report more than one error a minute for 15 minutes.
+
+```sh
+curl -s 127.0.0.1:9090/metrics | grep -E 'keel_client_(errors|startup)|keel_edge_minute_bytes_count'
 ```
 
 ### The flight recorder
@@ -8833,7 +8893,7 @@ In the folder **Keel**, written for this game (`infra/cluster/monitoring/dashboa
 | Dashboard | What it answers |
 |---|---|
 | Overview | Is anything wrong? What fires, how severe, and when each alert fired in the last day; boats, connections and the tick; the database, and the last WAL, base backup, dump and restore test; the machine's CPU, steal, memory and disk, a pending reboot or update; Flux; scrape targets down |
-| Game | How the simulation does: the tick and its phases, ticks late and skipped, boats, connections, joins and closes, the queue's wait, bytes a player a second, phones' round trip and frame time, persistence's oldest unwritten change and inbox, checkpoints, the lease, keel's CPU, throttling and memory, restarts and restores, its warnings and errors |
+| Game | How the simulation does: the tick and its phases, ticks late and skipped, boats, connections, joins and closes, the queue's wait, bytes a player a second, data an hour at sea by role, phones' round trip and frame time, the pages' start-up times and errors by build, persistence's oldest unwritten change and inbox, checkpoints, the lease, keel's CPU, throttling and memory, restarts and restores, its warnings and errors |
 | Machine | The VM: CPU by mode, pressure, memory, the clock; the root filesystem, what grows on it and when it would be full; disk latency; the network and the month's transfer at today's rate; its upkeep (a reboot required, updates waiting, a newer kernel waiting, AIDE, the units, auditd's log); the journal's warnings; each pod against what it asked for |
 | Database | PostgreSQL: connections, transactions, locks, the oldest transaction; tables, dead rows and vacuums; WAL, checkpoints and I/O; keel's pool and its queries' times; the statements that cost the most, and the slow ones with their plans |
 | Backups | How far back a restore can go: the last WAL archived, segments archived and failed, WAL waiting on the machine, WAL written a day, the base backups, the dump's and the restore test's runs and results, the archiver's log |
@@ -8902,6 +8962,7 @@ itself is down. The rules are beside what they watch
 | MachineSailorsShutOut | the machine sailors' queue's head has waited 10 minutes while they sail fewer boats than their reserve and the sea has room, for 5 minutes: admission is broken | The world page's queues; keel's logs |
 | MemoryNearLimit | a container of keel or the database is over 90% of its limit | Its memory over days; raise the limit in a commit |
 | CPUThrottled | keel is throttled in over a tenth of its CPU periods | Game: does the tick suffer |
+| ClientErrors | the players' pages report more than one error a minute for 15 minutes | Game: which build; keel's log, `a page's error`, for the messages and stacks |
 | BackupStale | no base backup completed in 26 hours | `kubectl -n keel get backups.postgresql.cnpg.io`; the sidecar's log |
 | DatabaseConnections | over 80% of `max_connections` are held | Database: who holds them |
 | LongTransaction | a transaction is open for over 5 minutes | `pg_stat_activity`; cancel it if it is nobody's |
@@ -9204,6 +9265,47 @@ copy its scenario into `scenarios.json` and rewrite the golden file.
 `sandbox-sail.json` there is a scripted sail the client's tests record and
 compare (`UPDATE_RECORDING=1 npx vitest run src/sandbox` rewrites it after a
 deliberate change to the physics).
+
+### The screen kept on, and the home screen
+
+**The wake lock** (`client/src/boot/wakelock.ts`). From the reveal, while
+the connection is at sea (sailing, aboard or watching) and the page is in
+sight, the page holds a screen wake lock, so a boat on the autopilot or a
+sailor watched keeps the screen on. The browser lets it go when the page
+is hidden; it is taken again when the page is back in sight, and looked
+at every 5 s. It is let go while the connection is not at sea (the
+world's end, a connection lost) and when the full chart or the menu (or a
+panel it opened) has stood open and untouched for two minutes; a touch or a key takes it
+again. The start screen never holds it. A refusal, or a browser without
+the API, is silent. There is no setting.
+
+**The home screen** (`client/src/boot/homescreen.ts`,
+`account/homeoffer.tsx`). A day of play is a Set sail on a local date not
+counted before, kept in `localStorage` as `keel.homeScreen`
+(`{"days":2,"last":"2026-11-16","done":false,"shown":""}`). From the
+third day, when
+the game is not installed and the browser can install it (Chrome has
+fired `beforeinstallprompt`, which the page keeps and whose own banner it
+holds back; or Safari on an iPhone), the player's own panel shows "Play
+from your home screen, without the browser's bars." under Set sail, with
+**Add Keel** (Chrome's own question; on an iPhone, the menu's three
+steps in its place) and **Not now**. Either, or the game installed
+(`appinstalled`), puts it away for good (`done`). It is offered once:
+the date it is first shown is kept (`shown`), it stays for a reload that
+day, and, left unanswered, it is not shown on a later day. In the menu, once
+Chrome has offered, an **Install** key asks its question; it goes once
+answered, until Chrome offers again. To see the offer, set
+`keel.homeScreen` to two days before today from the browser's console
+(on a phone, through remote DevTools) and reload; in desktop Chrome a
+test can dispatch its own `beforeinstallprompt` (`e2e/lifecycle.spec.ts`
+does).
+
+**The back/forward cache.** Nothing keeps the page out of it: there is no
+`unload` handler, the page is `no-cache`, not `no-store`, and `pagehide`
+closes the game connection, which `pageshow` opens again when the page
+comes back from the cache. `e2e/lifecycle.spec.ts` goes to the rules and
+back at sea and finds the same page sailing the same boat (Playwright
+turns Chromium's cache off; that file turns it on).
 
 ### How it is drawn
 

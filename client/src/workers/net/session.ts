@@ -329,6 +329,8 @@ export class Session {
   readonly views = new ViewRing();
   /** The frame time Pings report, ms. */
   frameMs = 0;
+  /** The bytes the page fetched over HTTP, which the next Ping reports. */
+  fetchedBytes = 0;
   /** The tier and the pixel ratio, in hundredths, Pings report; 0 unknown. */
   tier = 0;
   renderScale = 0;
@@ -1099,6 +1101,13 @@ export class Session {
     return d;
   }
 
+  /** The bytes fetched for a Ping, as many as its field holds, and none left. */
+  #takeFetched(): number {
+    const n = Math.min(this.fetchedBytes, 0xffffffff);
+    this.fetchedBytes = 0;
+    return n;
+  }
+
   /** What is due at now; dead when the connection has gone quiet. */
   time(now: number): { out: Uint8Array<ArrayBuffer>[]; dead: boolean } {
     const out: Uint8Array<ArrayBuffer>[] = [];
@@ -1122,6 +1131,7 @@ export class Session {
                 frameMs: this.frameMs,
                 tier: this.tier,
                 renderScale: this.renderScale,
+                fetchedBytes: this.#takeFetched(),
               },
             },
           }),
@@ -1145,6 +1155,7 @@ export class Session {
               frameMs: this.frameMs,
               tier: this.tier,
               renderScale: this.renderScale,
+              fetchedBytes: this.#takeFetched(),
             },
           },
         }),

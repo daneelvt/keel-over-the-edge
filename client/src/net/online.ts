@@ -295,6 +295,8 @@ export class Online {
   onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
   /** Told of the sea's life come within reach or changed, and encounters to drop; at a new connection's Welcome, of every one dropped. */
   onLife: ((life: LifeSeen[], drop: string[] | 'all') => void) | null = null;
+  /** The bytes the page has fetched over HTTP since last asked, told the server with the frame time; none where unknown. */
+  fetched: (() => number) | null = null;
   /** Islands' caps come into sight, and those to drop: all of them for a new connection. */
   onCaps: ((caps: CapSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
@@ -1332,6 +1334,10 @@ export class Online {
     const n = Math.min(this.#frameN, this.#frames.length);
     const v = Array.from(this.#frames.subarray(0, n)).sort((a, b) => a - b);
     this.#port.postMessage({ type: 'frame', ms: v[Math.ceil(0.95 * n) - 1] ?? 0 });
+    const bytes = this.fetched?.() ?? 0;
+    if (bytes > 0) {
+      this.#port.postMessage({ type: 'fetched', bytes });
+    }
   }
 }
 
