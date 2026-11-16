@@ -276,32 +276,34 @@ export function helmText(helm: number, rudder = RUDDER_ANGLE): string {
 /** The helm's aria-valuetext, written only when the whole degree or its side changes. */
 export class HelmText {
   el: HTMLElement | SVGElement | null = null;
-  #said = '';
+  /** What was written: the whole degrees, negative to port; NaN for nothing. */
+  #said = Number.NaN;
   /** The boat's greatest rudder angle, degrees. */
   #rudder = RUDDER_ANGLE;
 
+  /** Writes the words for the helm, only as the whole degree or its side changes: a frame allocates nothing otherwise. */
   set(helm: number): void {
     if (this.el === null) {
       return;
     }
-    const text = helmText(helm, this.#rudder);
-    if (text === this.#said) {
+    const deg = Math.round(Math.abs(helm) * this.#rudder) * (helm < 0 ? -1 : 1);
+    if (deg === this.#said || (deg === 0 && this.#said === 0)) {
       return;
     }
-    this.#said = text;
-    this.el.setAttribute('aria-valuetext', text);
+    this.#said = deg;
+    this.el.setAttribute('aria-valuetext', helmText(helm, this.#rudder));
   }
 
   /** The boat's greatest rudder angle: written afresh at the next setting. */
   rudder(deg: number): void {
     this.#rudder = deg;
-    this.#said = '';
+    this.#said = Number.NaN;
   }
 
   /** Forgets what was written (a new element was attached). */
   attach(el: HTMLElement | SVGElement | null): void {
     this.el = el;
-    this.#said = '';
+    this.#said = Number.NaN;
   }
 }
 
