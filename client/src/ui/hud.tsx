@@ -29,6 +29,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { AccountPanel, MachinesPanel } from '../account/account';
 import type { FullScreen } from '../boot/fullscreen';
 import { updated } from '../boot/updated';
+import { keysGo } from '../input/focused';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
@@ -293,14 +294,10 @@ export interface ScreenProps {
   home?: HomeView | null;
 }
 
-/** Whether a key press is the player's, not typing in a field. */
+/** Whether a key press is not the game's: typing in a field, or on a key, list or window of its own. */
 function typing(e: KeyboardEvent): boolean {
-  const t = e.target;
-  return (
-    t instanceof HTMLInputElement ||
-    t instanceof HTMLSelectElement ||
-    t instanceof HTMLTextAreaElement
-  );
+  const go = keysGo(e.target);
+  return go === 'typing' || go === 'aside';
 }
 
 /** The free camera as the screen sees it. */

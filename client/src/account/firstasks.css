@@ -11,7 +11,7 @@
   --warn: #f3b3a6;
   color: var(--ink);
   font:
-    16px / 1.35 "Alegreya Sans",
+    1rem / 1.35 "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -35,7 +35,7 @@
   padding: 0;
   margin-bottom: 2px;
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .first-ask .born-legend {
@@ -62,7 +62,7 @@
   background: rgb(255 255 255 / 10%);
   color: var(--ink);
   font:
-    18px "Alegreya Sans",
+    1.125rem "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -87,7 +87,7 @@
   gap: 6px;
   margin: 0;
   padding-left: 1.2em;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .first-ask-links a,
@@ -98,7 +98,7 @@
 .start-pages {
   margin: 0;
   text-align: center;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* These keys, and the link's page's, the game's own size rather than
@@ -112,7 +112,7 @@
   min-height: 40px;
   margin-top: 0;
   padding: 4px 14px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.2;
 }
 
@@ -128,11 +128,11 @@
 .first-ask .born-box {
   min-height: 0;
   height: 40px;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 /* Over the sea, its heading a window's, not the start screen's title. */
 .hud .first-ask :is(h1, h2) {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
 }

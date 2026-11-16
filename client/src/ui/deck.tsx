@@ -80,6 +80,7 @@ import {
 } from './deckwords';
 import { MachineCrew, MachineLink } from './machinelink';
 import { machineAsksWords, machineKnockingWords } from './machinewords';
+import { useModal } from './modal';
 import { PlayerText } from './player';
 import { SailWithMe } from './sailwithme';
 import { ShipmateNotices, ShipmatesWindows, Star } from './shipmates';
@@ -339,24 +340,20 @@ export function DeckLine({ deck }: { deck: DeckView }) {
   );
 }
 
-/** The question before going ashore: Escape is Stay aboard. */
+/**
+ * The question before going ashore: Stay aboard takes the focus, and
+ * Escape is Stay aboard; the screen behind is inert while it is asked.
+ */
 export function AshoreQuestion({ deck }: { deck: DeckView }) {
   const stay = () => (deck.ashore.value = false);
-  useLayoutEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        stay();
-      }
-    };
-    document.addEventListener('keydown', key);
-    return () => document.removeEventListener('keydown', key);
-  }, []);
+  const ref = useModal(stay, { inert: true, focus: '[data-stay]', back: '.menu-button' });
   return (
     <section
       class="panel deck-window deck-question"
       role="alertdialog"
+      aria-modal="true"
       aria-labelledby="deck-ashore"
+      ref={ref}
     >
       <h2 id="deck-ashore">{GO_ASHORE_QUESTION}</h2>
       <p>{GO_ASHORE_DETAIL}</p>
@@ -372,7 +369,7 @@ export function AshoreQuestion({ deck }: { deck: DeckView }) {
         >
           {GO_ASHORE}
         </button>
-        <button type="button" class="plate-key" onClick={stay}>
+        <button type="button" class="plate-key" data-stay onClick={stay}>
           {STAY_ABOARD}
         </button>
       </div>

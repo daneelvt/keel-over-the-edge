@@ -2097,7 +2097,7 @@ that skips a frame misses none. Each connection is sent a `Bump` for each
 bump after the last it was sent (from its Welcome): to the two boats'
 sailors with their part (`yours`, `theirs`, `none`) and the Article; to a
 connection that sees either boat in its near band, without them. The page
-knocks (`art/sound/bump.json`), shakes the camera (a third as much under
+knocks (`art/sound/bump.json`), shakes the camera (not at all under
 reduced motion) and, for its own, says the verdict under the readout for
 four seconds. The persist queue writes each bump to the `event` table, kind
 `bump`, the sailor and boat at fault first (with no fault, the first boat),
@@ -9119,8 +9119,8 @@ things and their pictures stay in one wind. The developer page is
 
 | Control | Touch | Keyboard and mouse |
 |---------|-------|--------------------|
-| Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it |
-| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly). Its name and its ends' words are the boat's (the catalog's `controls.sheet`: "Sheet", Trim and Ease on the Jolly boat and the keelboat) | W trims and S eases, the whole range in 2 s while held |
+| Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it. Tabbed to, its own ← and → |
+| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly). Its name and its ends' words are the boat's (the catalog's `controls.sheet`: "Sheet", Trim and Ease on the Jolly boat and the keelboat) | W trims and S eases, the whole range in 2 s while held. Tabbed to, → and ↑ trim, ← and ↓ ease, Page Up and Page Down a tenth at a time |
 | Reef | The brass Reef key at the sheet's top (held sideways beside it, toward the boat): a tap reefs one more, its face the reef asked for in the boat's words (`controls.reef`: Full sail, One reef, Two reefs); once reefed a second key, Shake, beside it (upright over it) shakes one out. The crew takes the catalog's `reefTime` a reef; the case's last line names the reef the main has. On a boat whose main does not reef, no key | R reefs one more, F shakes one out |
 | Autopilot | The button between them: on at the boat's angle to the wind, and its dial; touching the helm takes the helm back | P on or off; Q and E turn its target a degree to port or starboard, ten with Shift; T tacks, G gybes; the helm's keys take the helm back |
 | Reef | The Reef key (`Game.reef.set(level)`) | R takes one more reef, F shakes one out (Shift and R too, since F flies the free camera where it may); the crew takes the boat's reef time a level, and the reef goes out in each `Input` |
@@ -9151,6 +9151,82 @@ stand over it below the keys under the pocket chart; a drag moves the
 sheet as far whatever its track's length. `e2e/layout.spec.ts` holds the
 keys at 44 px, on the sheet's top or beside it, covering nothing, on its
 five phone screens and the tests' (and the keelboat framed on every one).
+
+### Reading the screen
+
+What a keyboard, a screen reader, a reader's larger text and less motion
+get of the game; `e2e/a11y.spec.ts` checks it in the browser.
+
+**Keys go to what has the focus** (`client/src/input/focused.ts`). Typing
+in a field, the game's keys are not heard. The helm and the sheet are
+sliders (`role="slider"`, a tab stop each): focused, they answer their own
+arrows (table above), and the other keys do as anywhere. On a key, a list
+or a window the keyboard reached, the game's keys stand aside, so the
+arrows, Space and Enter do what they do there, and Escape still closes
+what is open. On the scene or the page, and on a key a pointer pressed
+(which keeps the focus but not its ring, `:focus-visible`), the game's keys
+work as everywhere. The helm's `aria-valuetext` is the rudder asked for
+("Helm 12° to port", "Helm amidships", from the boat's `rudderAngle`),
+written as the whole degree changes; the sheet's, its percentage and what
+the sail wants ("Sheet 50%, luffing: trim in").
+
+**Questions and windows** (`client/src/ui/modal.ts`, one rule for all):
+each is `aria-modal`, takes the focus as it opens (a window on its first
+key or field; a question, `role="alertdialog"`, on the key that changes
+nothing: Stay, Stay aboard, Keep it, Cancel), closes on Escape (the one
+opened last, so a window over a window closes alone) and gives the focus
+back to what opened it, or to the menu's button or the pocket chart where
+that is gone. While a question is asked, the rest of the page is `inert`:
+the scene, the case, the controls. The menu, the full chart (Escape puts
+away a box open on it first), the race's windows and races ashore's are
+windows; the way home, leaving the water to watch, going ashore, a block
+and taking the boat out are questions. A component tested by calling it
+as a function stays free of hooks: `Modal` (drawn beside it) or
+`modalRef` (made by its owner) apply the same rule.
+
+**Live words.** The race line's live words are its events alone, each
+once, in a hidden status line: the start, over the line, every call (a
+mark rounded, over early, a bump) and home (`RaceLive` in
+`racelinewords.ts`). The countdown, bearing and distance change every
+moment and are not read out. Every other status line (the sailor's, a
+bump's verdict, the connection's, the notices, the clock's hour) changes
+only on an event.
+
+**Less motion** (`prefers-reduced-motion`): the camera does not sway or
+shake at a bump, the lightning does not pulse, the cover, the case and the
+chart's streaks keep still, the pushers, keys and controls change at once
+with no turn or fade, and the crews keep their clips still
+(`render/sailors/still.ts`, read every frame, so a change made while
+playing is followed).
+
+**Text size.** The screens for reading follow the browser's text size:
+the start screen, the menu (and the account page in its place), the
+windows (the log, the news, races ashore's and the race's windows, the
+list of sailors to watch and its card, sailing together's windows), the
+questions and the notices. Their words are in `rem` from the page's root,
+which is left at the browser's 100%; at its default 16 px every size is
+what it was in px. The case, the control head, the helm, the sheet, the
+pocket chart, the race line and bar, the plates and the chart's own parts
+keep their px. A rule shared by both writes its size in `--text`: `1px`
+in `.hud`, `0.0625rem` on each screen for reading (the plate's keys, the
+menu's and a window's, sailing together's). Keys stay the head keys'
+40 px tall whatever their words. `e2e/layout.spec.ts` runs its checks of
+the screens for reading again at 20 px (Chromium's `Page.setFontSizes`
+over the DevTools protocol), on a small phone held either way and the
+tests' screen. To look at one: Chrome's settings, Appearance, Font size,
+or `chrome://settings/fonts`.
+
+**The automated check** (`e2e/a11y.spec.ts`, a page project's file):
+`@axe-core/playwright` on the start screen, the screen at sea (the
+barometer out, the control head open), the menu, the question before going
+home, the log and the news, under reduced motion, failing on any serious
+or critical finding; and the instruments read by name and state with
+`getByRole` (the case's pushers, the helm and the sheet with their words,
+the control head, the night light's slider). No rule is turned off;
+`label-content-name-mismatch` is checked apart without the dials (their
+drawn figures are a picture) and the control head's levers (their halves'
+legends mark positions; the state is `aria-pressed`). A rule turned off or
+a part left out is named in the spec with why.
 
 ### The frame
 

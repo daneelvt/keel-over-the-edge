@@ -23,7 +23,7 @@
 import type { PointerEventHandler as Handler } from 'preact';
 import type { HelmInput } from '../input/helm';
 import type { SheetInput } from '../input/sheet';
-import { HELM_ARC, type HudModel, SHEET_WORDS, sheetLegend } from './model';
+import { HELM_ARC, type HudModel, helmText, SHEET_WORDS, sheetLegend } from './model';
 
 /** What the Reef key asks for: the main reefed to a level, 0 (full sail) … 2. */
 export interface ReefActions {
@@ -84,8 +84,12 @@ export function Helm({ input, model }: { input: HelmInput; model: HudModel }) {
       aria-valuemin={-1}
       aria-valuemax={1}
       aria-valuenow={0}
+      aria-valuetext={helmText(0)}
       tabIndex={0}
-      ref={(el) => model.helmValue.attach(el)}
+      ref={(el) => {
+        model.helmValue.attach(el);
+        model.helmText.attach(el);
+      }}
       data-control="helm"
       {...handlers(input, 'x')}
     >
@@ -194,8 +198,7 @@ export function Reef({ actions, model }: { actions: ReefActions; model: HudModel
         disabled={level >= REEFS}
         onClick={() => actions.setReef(level + 1)}
       >
-        <span class="reef-name">Reef</span>
-        <span class="reef-level">{words}</span>
+        <span class="reef-name">Reef</span> <span class="reef-level">{words}</span>
       </button>
       {level > 0 ? (
         <button

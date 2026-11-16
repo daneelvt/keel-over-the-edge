@@ -6,7 +6,7 @@
 // diamond over one that must keep clear of the player, each labelled with
 // its Article, and the player's tack beside the readout; the wind overlay
 // lays dirty air along each sail's apparent wind; a bump shakes the camera
-// once, a third as much under reduced motion, and says its verdict under
+// once, not at all under reduced motion, and says its verdict under
 // the readout; and every new material passes the scene's walk with the bend.
 
 import { expect, type Page, test } from '@playwright/test';
@@ -147,7 +147,7 @@ test.describe('a bump', () => {
     expect(seen.bump).toBe(e.bump);
   });
 
-  test('shakes a third as much under reduced motion', async ({ page }) => {
+  test('does not shake under reduced motion, and still says its verdict', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openScene(page, '', true);
     await reaching(page);
@@ -162,7 +162,8 @@ test.describe('a bump', () => {
       }),
     );
     const e = await page.evaluate(() => globalThis.keel.encounters());
-    expect(e.shake).toBeCloseTo(0.1 / 3, 6);
+    expect(e.bumps).toBe(1);
+    expect(e.shake).toBe(0);
     expect(e.bump).toBe('Bump · windward keeps clear of leeward (Article 11) · theirs');
   });
 });
