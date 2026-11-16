@@ -5,6 +5,7 @@ import { extname } from 'node:path';
 import { build, type Plugin, type ServerOptions, searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { licences } from './build/licences.ts';
+import { serviceWorker, workerOn } from './build/sw.ts';
 
 // tools/dev sets these: the local certificate, and where keel serve listens.
 const cert = process.env.KEEL_DEV_CERT;
@@ -192,8 +193,13 @@ const soundCandidates: Plugin = {
 export default defineConfig({
   server,
   // The build's ID, as the image is built with it (BUILD in the
-  // Dockerfile); "dev" for the development server and the tests.
-  define: { __KEEL_BUILD__: JSON.stringify(process.env.KEEL_BUILD ?? 'dev') },
+  // Dockerfile); "dev" for the development server and the tests. And
+  // whether the page registers the service worker: not in a build with
+  // KEEL_SW=off (build/sw.ts).
+  define: {
+    __KEEL_BUILD__: JSON.stringify(process.env.KEEL_BUILD ?? 'dev'),
+    __KEEL_SW__: JSON.stringify(workerOn()),
+  },
   // The net worker's packages, bundled for the development server from the
   // start: found only when a page first starts the worker, they would be
   // bundled then, and every page open at that moment reloaded.
@@ -202,6 +208,9 @@ export default defineConfig({
     // three.js with its WebGPU renderer is most of the game's first chunk;
     // its size is reported by build/size.ts against the 4 MB critical set.
     chunkSizeWarningLimit: 1500,
+    // The files the service worker keeps are read from it (build/sw.ts);
+    // it is written to dist/.vite/, which keel never serves.
+    manifest: true,
     rolldownOptions: {
       // The game, the developer page with its physics check, and the
       // game's pages of plain words: the Rules of the sea, staying safe,
@@ -223,6 +232,7 @@ export default defineConfig({
   plugins: [
     http1,
     devWorlds,
+    serviceWorker(),
     approvePage,
     dressingRoom,
     soundRoom,

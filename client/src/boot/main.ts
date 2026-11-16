@@ -169,7 +169,9 @@ import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
 import { lookStage } from './lookstage';
 import { raceSea } from './racesea';
+import { startWorker, takeOverFirst } from './sw';
 import { DESCENT, frames, reveal, UnderCover, untilReady, whenPast } from './undercover';
+import { watchForUpdates } from './updated';
 
 /** How far a boat tapped in the sea may be from a race's boat's place in its picture, m: two seconds' sailing. */
 const RACER_TAP = 30;
@@ -185,6 +187,7 @@ function clearView(world: SeaScene): ClearView {
 
 async function start(): Promise<void> {
   const query = new URLSearchParams(location.search);
+  watchForUpdates();
   const backend = chooseBackend(query, 'gpu' in navigator);
   const cover = takeCover(document);
   const container = document.createElement('div');
@@ -675,6 +678,9 @@ async function start(): Promise<void> {
   // sailor and its Set sail; a link to watch goes straight to the watch, or,
   // refused, to the player's own sailor, saying why.
   const notice = backSoon(document.body);
+  // The service worker, once the world is revealed or the start screen
+  // has stood a while.
+  const keeper = startWorker(query);
   const linked = linkFromQuery(query);
   // The wait begins at the tap that sets sail, or at once with no screen
   // to tap; the cover answers the tap at once.
@@ -1383,6 +1389,7 @@ async function start(): Promise<void> {
   };
   underCover.atSea = true;
   reveal(world, cover, view === undefined ? DESCENT : 0);
+  keeper.revealed();
   // A race's link opened after the race: its replay on the chart.
   if (me.replayRace !== undefined) {
     parts.replay.open(me.replayRace);
@@ -1613,7 +1620,8 @@ function connect(online: Online): void {
         // Storage refused.
       }
       if (reloadForVersion(marks, Date.now())) {
-        location.reload();
+        // Under the new build's worker, if one waits.
+        void takeOverFirst().then(() => location.reload());
       } else {
         online.notice.value = {
           text: 'An update is coming. Reload in a minute.',

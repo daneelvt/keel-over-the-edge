@@ -9,6 +9,7 @@
 import { type Signal, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { type ChatServer, chatServer, type Statement } from '../account/chatapi';
+import { lazyFailed } from '../boot/updated';
 
 /** The statements as the screen sees them. */
 export interface StatementsView {
@@ -45,6 +46,8 @@ export function loadStatements(): Promise<Statements> {
   if (loading === null) {
     loading = import('./statements').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }

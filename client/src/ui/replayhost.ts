@@ -8,6 +8,7 @@
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import type { Fetch } from '../account/me';
+import { lazyFailed } from '../boot/updated';
 import type { ReplayModel } from './replay';
 
 type ReplayModule = typeof import('./replayparts');
@@ -19,6 +20,8 @@ export function loadReplay(): Promise<ReplayModule> {
   if (loading === null) {
     loading = import('./replayparts').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }
