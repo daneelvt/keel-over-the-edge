@@ -9410,10 +9410,10 @@ recordings, the masters, or anything dropped into `art/sound/candidates/`
 takes more files as more takes (+), and the horn's `fog` voice a note. Its meter reads the integrated,
 short-term and momentary loudness, the true peak, the share above 2 kHz of
 the mix and of the bed, the limiter, the sounds played once and let go,
-the dips, and the last take played. Open it at `/sounds.html` on the
-development server: `go run ./tools/dev`, then on the Mac
-`https://localhost:5173/sounds.html`, and on a phone on the same network
-`https://<this Mac's name>.local:5173/sounds.html`.
+the dips, and the last take played. It needs no game server, only Vite:
+`cd client && npx vite`, then on the Mac
+`http://localhost:5173/sounds.html`, and on a phone on the same network
+the Network address Vite prints, with `/sounds.html`.
 
 ## Browser tests
 
