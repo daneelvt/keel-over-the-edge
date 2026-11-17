@@ -1247,6 +1247,8 @@ export class SeaScene {
   setSeaLayers(off: ReadonlySet<SeaLayer> | null, apart: boolean | null = null): Promise<void> {
     this.seaLayersOff = off;
     this.seaApart = apart;
+    // The rung may be the same, but the sea's shaders are not.
+    this.#applied = null;
     return this.#apply(true);
   }
 
