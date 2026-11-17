@@ -243,8 +243,12 @@ export class Ocean {
    * the tiles per vertex, each with its tiles by the hulls, and the far sea.
    */
   #materials(): SeaMaterials {
-    const parts = this.parts;
+    const all = this.parts;
     const tile = (tiles: Tiles): [MeshBasicNodeMaterial, MeshBasicNodeMaterial] => {
+      // The tiles that sum the band at each vertex have no room in their
+      // vertex stage for the surf and the rain as well: WebGPU's limit of
+      // uniform buffers a stage.
+      const parts = tiles === this.vertexTiles ? { ...all, byVertex: false } : all;
       const m = seaMaterial('sea-tile');
       if (!this.#apart) {
         m.positionNode = tiles.position;
@@ -264,7 +268,7 @@ export class Ocean {
     };
     const far = seaMaterial('sea-far');
     far.positionNode = this.far.position;
-    far.fragmentNode = farLook(this.far, parts);
+    far.fragmentNode = farLook(this.far, all);
     return { pass: tile(this.passTiles), vertex: tile(this.vertexTiles), far };
   }
 

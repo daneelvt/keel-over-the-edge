@@ -507,9 +507,12 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     // The track is smooth: the wind's ripples flattened in it.
     ripple.mulAssign(float(1).sub(churn.mul(TRACK.smooth)));
     // Rain flattens the ripples and pocks the water near the eye.
+    // A look that takes the surf and the rain from the vertices reads the
+    // period and the mist from the same varying.
+    const tile = parts.byVertex ? v.withSurf() : null;
     const rain = (
-      parts.byVertex && parts.rain !== null && has('rain')
-        ? v.rain
+      tile !== null && parts.rain !== null && has('rain')
+        ? tile.rain
         : rainHere(parts, positionWorld.xz)
     ).toVar();
     ripple.mulAssign(float(1).sub(rain.mul(RAIN_LOOK.flat)));
@@ -557,8 +560,8 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const breaking = (
       !has('surf')
         ? float(0)
-        : parts.byVertex
-          ? v.surf
+        : tile !== null
+          ? tile.surf
           : surf(ground.x, ground.y, ground.w, v.area.w, v.period, lee)
     ).toVar();
     const slope = v.plane.yz.add(tilt).add(ripple);
@@ -677,7 +680,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
         ),
       );
     });
-    return finish(col, dist, v.mist, has('haze'));
+    return finish(col, dist, tile?.mist ?? v.mist, has('haze'));
   })() as unknown as Node<'vec4'>;
 }
 

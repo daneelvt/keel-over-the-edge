@@ -177,6 +177,8 @@ export interface Info {
   adaptive: boolean;
   /** How the detail band is made. */
   detail: string;
+  /** The sea's look the tier draws: whole, or plain (seamaterial.ts's PLAIN_SEA, the tiles by the hulls apart). */
+  sea: 'whole' | 'plain';
   dispatches: number;
   /** Drops of spray in the air. */
   spray: number;
@@ -656,6 +658,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         rungs: (world.quality?.ladder ?? []).map(rungName),
         adaptive: world.quality?.enabled ?? false,
         detail: world.ocean.detail.state.kind,
+        sea: TIERS[world.rung.tier].sea,
         dispatches: world.stats.last.dispatches,
         spray: world.spray.count,
         floatTargets: g?.floatTargets ?? false,
@@ -3720,6 +3723,22 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      */
     async seaLayers(off: string[] | null, apart: boolean | null = null): Promise<void> {
       await world.setSeaLayers(off === null ? null : new Set(off as SeaLayer[]), apart);
+    },
+    /**
+     * The fragment shaders the sea's tiles are drawn with now, as the back
+     * end runs them: the tiles', and the tiles by the hulls' where those are
+     * drawn apart (null where they are not).
+     */
+    async seaShaders(): Promise<{ tiles: string; byHulls: string | null }> {
+      const g = gfx();
+      const tiles = world.ocean.tiles;
+      const shader = async (mesh: Mesh): Promise<string> =>
+        (await g.renderer.debug.getShaderAsync(stage.scene, stage.camera, mesh)).fragmentShader ??
+        '';
+      return {
+        tiles: await shader(tiles.mesh),
+        byHulls: tiles.hullMesh.visible ? await shader(tiles.hullMesh) : null,
+      };
     },
     /** The names of the sea's layers and the sky's, as seaLayers and skyLayers take them. */
     layerNames(): { sea: string[]; sky: string[] } {

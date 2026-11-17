@@ -128,11 +128,18 @@ export interface TileVaryings {
   /** The band's mist from the camera to the vertex. */
   mist: Node<'float'>;
   /**
-   * The surf on the tile, 0 to 1, worked out once a tile from its ground,
-   * its sea and its lee (shore.ts), all the tile's own; and the rain's
-   * share at the vertex. For a look that does not work them out at each
-   * fragment.
+   * The period and the mist as above, with the surf on the tile, 0 to 1,
+   * worked out once a tile from its ground, its sea and its lee (shore.ts),
+   * all the tile's own, and the rain's share at the vertex: for a look that
+   * does not work those out at each fragment. They share one varying in
+   * place of period and mist's, made only for a look that asks for it.
    */
+  withSurf(): TileSurf;
+}
+
+export interface TileSurf {
+  period: Node<'float'>;
+  mist: Node<'float'>;
   surf: Node<'float'>;
   rain: Node<'float'>;
 }
@@ -234,19 +241,14 @@ export class Tiles {
     this.position = placed(land);
     this.away = placed(land.or(near.greaterThan(0)));
     this.byHulls = placed(land.or(near.lessThanEqual(0)));
-    // The sea's period, the optical depth of the band's mist and the
-    // weather (depthToSea's), the tile's surf and the rain's share share a
-    // varying: with one more, WebGPU drew the tiles' glints wrong.
+    // The sea's period and the optical depth of the band's mist and the
+    // weather (depthToSea's) share a varying: with one more, WebGPU drew
+    // the tiles' glints wrong.
     const area = seaAreaAt(band)(c);
     const period = periodAt(band)(c);
-    const periodMist = varying(
-      vec4(
-        period,
-        depthBetween(cameraPosition, seaPoint(c.add(e))),
-        surf(ground.x, ground.y, ground.w, area.w, period, clamp(lee, 0, 1.3)),
-        waterRainAt(gusts.water)(c.add(e)),
-      ),
-    ) as unknown as Node<'vec4'>;
+    const mist = depthBetween(cameraPosition, seaPoint(c.add(e)));
+    const periodMist = varying(vec2(period, mist)) as unknown as Node<'vec2'>;
+    let withSurf: TileSurf | null = null;
     this.varyings = {
       offset: varying(e),
       side: varying(s),
@@ -260,8 +262,20 @@ export class Tiles {
       lee: varying(lee),
       period: periodMist.x,
       mist: periodMist.y,
-      surf: periodMist.z,
-      rain: periodMist.w,
+      withSurf: () => {
+        if (withSurf === null) {
+          const v = varying(
+            vec4(
+              period,
+              mist,
+              surf(ground.x, ground.y, ground.w, area.w, period, clamp(lee, 0, 1.3)),
+              waterRainAt(gusts.water)(c.add(e)),
+            ),
+          ) as unknown as Node<'vec4'>;
+          withSurf = { period: v.x, mist: v.y, surf: v.z, rain: v.w };
+        }
+        return withSurf;
+      },
     };
 
     this.mesh = new Mesh(geometry);
