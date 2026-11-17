@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game in production: the base's sizes, which are production's, the
 # players' address and their passkeys' domain, the MCP address, the
-# database's passwords and the backups' keys from Infisical, the
+# database's passwords and the backups' keys from Infisical, the website's
+# status's Access settings from Infisical, the
 # contributor agreement keeper's GitHub App, the weekly restore test, and
 # cloudflared, which carries players' and AI apps' traffic in from
 # Cloudflare.
@@ -14,6 +15,7 @@ resources:
   - keel-db-app.yaml
   - database-roles.yaml
   - agreement-secrets.yaml
+  - keel-access.yaml
   - backup-keys.yaml
 components:
   - ../../../apps/archive
@@ -76,6 +78,31 @@ patches:
         path: /spec/hostnames
         value:
           - agents.keelovertheedge.com
+  # The website's status is served behind Cloudflare Access, whose team
+  # and application keel reads from keel-access (keel-access.yaml); either
+  # missing, keel starts and serves no status.
+  - target:
+      kind: Deployment
+      name: keel
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: KEEL_ACCESS_TEAM
+          valueFrom:
+            secretKeyRef:
+              name: keel-access
+              key: KEEL_ACCESS_TEAM
+              optional: true
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: KEEL_ACCESS_AUD
+          valueFrom:
+            secretKeyRef:
+              name: keel-access
+              key: KEEL_ACCESS_AUD
+              optional: true
   # The contributor agreement keeper's players' origin is keel's, from its
   # configuration: one place for it (a change to keel's configuration
   # restarts the keeper too).

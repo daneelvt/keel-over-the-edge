@@ -104,10 +104,10 @@ type Config struct {
 	// Ashore, if not nil, takes an account's boat out of the water at its
 	// player's word from the start screen: the game connection.
 	Ashore TakingOut
-	// Status, if not nil, is the game's status as last published, served
-	// at GET /api/status; Website is the origin whose pages may read it.
-	Status  func() *Status
-	Website string
+	// Status, if not nil, is the game's status, served at GET /api/status
+	// behind Access, which must not be nil either for it to be served.
+	Status StatusSource
+	Access Access
 	// Sailing, if not nil, is sailing together's store: a month of birth
 	// given once, the Rules of the sea accepted, and skippers' links;
 	// Young stops an account whose player says they are under 13.
@@ -250,8 +250,8 @@ func Handler(cfg Config) http.Handler {
 	if cfg.News != nil {
 		mux.Handle(newsRoute, required(a.newsEdition))
 	}
-	if cfg.Status != nil {
-		mux.Handle(statusRoute, statusHandler(cfg.Status, cfg.Website))
+	if cfg.Status != nil && cfg.Access != nil {
+		mux.Handle(statusRoute, accessed(cfg.Access, statusHandler(cfg.Status)))
 	}
 	if cfg.Game != nil {
 		mux.Handle("GET /ws", cfg.Game)
@@ -288,6 +288,11 @@ func Handler(cfg Config) http.Handler {
 
 	open := map[string]bool{}
 	for p := range sessionless {
+		open[p] = true
+	}
+	// The routes behind Access read no session either: the website's
+	// Worker has none.
+	for p := range accessRoutes {
 		open[p] = true
 	}
 	if cfg.OAuth != nil {
@@ -327,7 +332,6 @@ var openRoutes = map[string]string{
 	"POST /signin/finish":  "signing in with a passkey",
 	"POST /recovery":       "signing in with the recovery code",
 	"GET /ws":              "the game connection: it reads the session itself, to count those it refuses",
-	statusRoute:            "the website's countdown and sailors at sea, read by keelovertheedge.com",
 	chunkRoute:             "the world's chunks: capability addresses handed only to a signed-in player over the game connection, cached once at the edge for everyone",
 	chunksRoute:            "every other address under /w/, answered not found",
 	modelRoute:             "the islands' models: capability addresses like the chunks', handed out over the game connection",
@@ -339,7 +343,7 @@ var openRoutes = map[string]string{
 // keep it for everyone, so their answers carry no cookie. The page's
 // routes (pageRoutes) read none either, so the page loads even when the
 // database cannot be asked.
-var sessionless = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, statusRoute: true}
+var sessionless = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true}
 
 // session reads the session for every route but the page's and the open
 // ones: the page is the same for everyone, and loads even when the database

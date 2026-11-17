@@ -122,6 +122,14 @@ Configured from the environment:
                        from=2026-11-01T00:00:00Z notice=4m ahead=3m"
   KEEL_WORLD_KEEP      how long an ended world's data is kept before its
                        partitions are dropped (default 672h)
+  KEEL_ACCESS_TEAM     the Cloudflare Access team's domain the website's
+                       status is behind, as keel.cloudflareaccess.com
+                       (default none)
+  KEEL_ACCESS_AUD      the Access application's audience tag; with the team,
+                       GET /api/status answers requests Access signed for it,
+                       and without both it is not served (default none)
+  KEEL_STATUS_BOATS    the most boats the website's status shows, from 0 to
+                       100 (default 12)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (a steady wind),
                        POST /debug/chart?all|subject=island:…|place:…|feature:…
@@ -272,6 +280,9 @@ type serveOptions struct {
 	stopping func()
 	// generate makes a world's terrain; the catalog's generator unless set.
 	generate generator
+	// access, if not nil, checks the website's status's requests in place
+	// of Cloudflare Access, which the settings name: for tests.
+	access api.Access
 }
 
 // runServer runs the game until ctx ends, then stops it in order.
@@ -475,6 +486,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
+	p.access = accessOf(cfg, opt, log)
 	p.ladder = certs.New(cat)
 	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Ladder: p.ladder, Log: log})
 	// The owner's switches for sailing together, as the database has

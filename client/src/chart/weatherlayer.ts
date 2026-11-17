@@ -29,7 +29,7 @@ export interface WeatherChoice {
   layers: Layers;
 }
 
-/** The scene's and the painter's looks, from the catalog. */
+/** The scene's and the painter's looks, from the catalog; the website's map reads the same (website/worker/src/map/look.ts). */
 export function weatherLooks(): { scene: SceneLook; paint: WeatherLook } {
   const w = catalog.weather;
   const look = catalog.world.chart.look;

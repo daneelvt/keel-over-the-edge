@@ -301,7 +301,11 @@ export function windAt(g: FieldGrid, east: number, north: number): [number, numb
 /** The wash's picture, four pixels a side for each of the grid's cells: made afresh each paint, its canvas kept. */
 let washCanvas: OffscreenCanvas | null = null;
 
-/** The wind's wash: the water tinted a step darker from each force of the look's on, its edges sharp. */
+/**
+ * The wind's wash: the water tinted a step darker from each force of the look's on, its edges
+ * sharp. The website's map traces the same steps as shapes (website/worker/src/map/draw.ts,
+ * traceWash): a change here is made there too.
+ */
 export function paintWash(p: Pen, g: FieldGrid): void {
   const { ctx, look } = p;
   const w = look.wash;
@@ -371,6 +375,10 @@ export function fogWave(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
   ctx.stroke();
 }
 
+/**
+ * The fog: a soft wash, wavy lines and the very poor outlined. The website's map traces its
+ * wash as shapes (website/worker/src/map/draw.ts, traceFog): a change to it is made there too.
+ */
 export function paintFog(p: Pen, g: FieldGrid): void {
   const { ctx, look } = p;
   const cell = (2 * g.lip * p.k) / g.n;

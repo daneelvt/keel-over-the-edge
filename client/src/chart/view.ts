@@ -93,7 +93,11 @@ const TABLE = '#22303a';
 const PAPER_PIXELS = 2048;
 /** How long each of the wind's streaks lives, s. */
 const STREAK_LIFE = 6;
-/** The camera's elevation above the paper, rad: from above and to one side. */
+/**
+ * The camera's elevation above the paper, rad: from above and to one side. The website's map
+ * sees the whole disk through this camera (website/worker/src/map/camera.ts): a change to it,
+ * to fit or to the camera's field, is made there too.
+ */
 const TILT = 0.95;
 /** The nearest and furthest the camera goes from what it looks at, m. */
 const NEAREST = 900;
@@ -832,7 +836,10 @@ export class ChartView {
     col.needsUpdate = true;
   }
 
-  /** Lays the labels over the picture, the worthier first where they crowd. */
+  /**
+   * Lays the labels over the picture, the worthier first where they crowd. The website's map
+   * letters its names the same way (website/worker/src/map/draw.ts, letterNames).
+   */
   #placeLabels(): void {
     const layer = this.#labelLayer;
     if (layer === null) {

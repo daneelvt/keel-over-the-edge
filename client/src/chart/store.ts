@@ -8,10 +8,9 @@
 
 import { signal } from '@preact/signals';
 import type { ChartEntry, ChartSubject, CourseOpen } from '../net/messages';
-import { formatPosition } from './position';
+import { formatPosition, NM } from './position';
 
-/** A nautical mile, m. */
-export const NM = 1852;
+export { NM };
 
 /** A subject's key: its kind and number. */
 export function keyOf(subject: ChartSubject, number: number): string {

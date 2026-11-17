@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/access"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
@@ -695,44 +696,29 @@ func (p *process) NextView(ctx context.Context) (*owner.Owner, error) {
 // ownerHandler is the world page's routes for a world half.
 func (p *process) ownerHandler(h *worldHalf) http.Handler { return h.tools.Handler() }
 
-// statusNow is the status as last published, for GET /api/status.
-func (p *process) statusNow() *api.Status { return p.status.Load() }
-
-// publishStatus publishes the status once a second until ctx ends: the
-// boats at sea and waiting, the world and its end.
-func (p *process) publishStatus(ctx context.Context, h *worldHalf) {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	for {
-		f := h.bus.Frames.Acquire()
-		st := &api.Status{AtSea: len(f.Live), Queued: len(f.Queue), World: h.row.Number}
-		f.Release()
-		if !h.ends().IsZero() {
-			st.EndsAt = h.ends().UTC().Format(time.RFC3339)
-			st.Closing = p.cfg.Schedule.Closing(h.ends(), time.Now())
-		}
-		p.status.Store(st)
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
+// statusNow is the world sailed as the website shows it, for GET
+// /api/status; none between worlds.
+func (p *process) statusNow(ctx context.Context) ([]byte, []byte, error) {
+	h := p.current.Load()
+	if h == nil || h.status == nil {
+		return nil, nil, nil
 	}
+	return h.status.JSON(ctx)
 }
 
-// websiteOf is the website's origin, which may read the status: the
-// players' origin's host without its first label, play, over HTTPS; none
-// for an origin with no such label.
-func websiteOf(playOrigin string) string {
-	u, err := url.Parse(playOrigin)
-	if err != nil {
-		return ""
+// accessOf is the check of the website's status's requests: the tests'
+// own, or Cloudflare Access's, by the team and the application the
+// settings name; nil with either unset, and the status is not served.
+func accessOf(cfg config.Config, opt serveOptions, log *slog.Logger) api.Access {
+	switch {
+	case opt.access != nil:
+		return opt.access
+	case cfg.Access():
+		return access.New(access.Config{Issuer: access.Issuer(cfg.AccessTeam), Audience: cfg.AccessAUD})
+	case cfg.AccessTeam != "" || cfg.AccessAUD != "":
+		log.Warn("the website's status is not served: KEEL_ACCESS_TEAM and KEEL_ACCESS_AUD are needed together")
 	}
-	rest, ok := strings.CutPrefix(u.Host, "play.")
-	if !ok || rest == "" {
-		return ""
-	}
-	return "https://" + rest
+	return nil
 }
 
 // closingOf is when a world's last days begin, zero for a world with no

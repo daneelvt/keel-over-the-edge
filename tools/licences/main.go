@@ -125,6 +125,10 @@ func fail(err error) {
 	os.Exit(1)
 }
 
+// builtDirs are folders a build writes and git ignores, whose files are
+// made from sources that carry the header.
+var builtDirs = map[string]bool{"website/out": true, "website/site/gen": true}
+
 // missingHeaders lists the source files under root without their header:
 // the AGPL's, or under art/ the art's.
 func missingHeaders(root string) ([]string, error) {
@@ -135,10 +139,13 @@ func missingHeaders(root string) ([]string, error) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", ".dev", "node_modules", "dist", "testdata":
+			case ".git", ".dev", "node_modules", "dist", "testdata", ".wrangler":
 				if p != root {
 					return fs.SkipDir
 				}
+			}
+			if rel, _ := filepath.Rel(root, p); builtDirs[filepath.ToSlash(rel)] {
+				return fs.SkipDir
 			}
 			return nil
 		}

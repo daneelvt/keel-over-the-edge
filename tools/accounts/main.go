@@ -2,11 +2,13 @@
 
 // Command accounts runs OpenTofu on infra/tofu for the accounts workflow:
 // the zone keelovertheedge.com at Cloudflare, the tunnel, and the secrets
-// they make, written into Infisical for the cluster.
+// they make, written into Infisical for the cluster; and after an apply,
+// deploys the website (website/) with wrangler, with what OpenTofu made
+// for it: its KV namespace and its Access service token.
 //
 //	go run ./tools/accounts -run plan    plan, and keep the plan, encrypted, for the apply job of the same run
-//	go run ./tools/accounts -run apply   apply the plan the plan job of this run kept, and nothing else
-//	go run ./tools/accounts -check       fmt, init without the backend, validate, and the lock file's platforms
+//	go run ./tools/accounts -run apply   apply the plan the plan job of this run kept, and nothing else, then deploy the website
+//	go run ./tools/accounts -check       fmt, init without the backend, validate, the lock file's platforms, and the website's wrangler.jsonc
 //	go run ./tools/accounts -lock        write .terraform.lock.hcl for every platform that runs OpenTofu
 //
 // -run signs in to Infisical as the identity infra/production.yaml names,

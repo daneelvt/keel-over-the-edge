@@ -424,7 +424,7 @@ func runLint(ctx context.Context, out io.Writer) error {
 		// generated from it current.
 		{"shared/protocol", []string{"../../client/node_modules/.bin/buf", "lint"}},
 		{".", []string{"go", "run", "./tools/protocol", "-check"}},
-		{clientDir, []string{"npx", "--no-install", "biome", "ci", ".", "../art"}},
+		{clientDir, []string{"npx", "--no-install", "biome", "ci", ".", "../art", "../website"}},
 		{clientDir, []string{"npx", "--no-install", "tsc", "--noEmit"}},
 	}
 	var failed []string

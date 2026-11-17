@@ -14,8 +14,8 @@ spec:
 # the agents' listeners alone, and the scraper, on the metrics listener
 # alone. Out, it reaches DNS, its database, and the internet on 443, where
 # AI apps publish their metadata documents (keel refuses private addresses
-# itself too), and nothing else: it never calls the Kubernetes API (it
-# mounts no token).
+# itself too) and Cloudflare Access its team's keys, and nothing else: it
+# never calls the Kubernetes API (it mounts no token).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

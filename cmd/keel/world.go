@@ -42,6 +42,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/shipmates"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
+	"github.com/daneelvt/keel-over-the-edge/internal/status"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
@@ -135,7 +136,10 @@ type process struct {
 	carriedMu sync.Mutex
 	carried   counts
 
-	status atomic.Pointer[api.Status]
+	// access checks the website's status's requests came through
+	// Cloudflare Access; nil if it is not set up, and the status is not
+	// served.
+	access api.Access
 }
 
 // counts are a world half's counters, carried over as it closes so the
@@ -286,6 +290,8 @@ type worldHalf struct {
 	news *news.Service
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
+	// status is the world as the website shows it.
+	status *status.Builder
 	// races are the world's races ashore, and clerk the races' clerk,
 	// between them and the committee in the world.
 	races *race.Service
@@ -446,7 +452,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Notices:     p.db,
 		NoticeKinds: noticeKinds(cat),
 		Status:      p.statusNow,
-		Website:     websiteOf(cfg.PlayOrigin),
+		Access:      p.access,
 
 		// Sailing together: the links are made at the play origin; the
 		// Deck, the world sailed, tells a link's page of the boat.
@@ -466,6 +472,10 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
 	playCfg.Watch = h.watch
+	h.status = status.New(status.Config{
+		Frames: b.Frames, Chart: rw.charts.model, Catalog: cat, Timeline: timeline, Sky: cat.PrepareSky(), Epoch: epoch,
+		World: row.Number, Ends: h.ends, Schedule: cfg.Schedule, Boats: h.watch.Liveliest, Limit: cfg.StatusBoats, Log: p.log,
+	})
 	p.agents.apiConfig(&playCfg, p)
 	h.play = api.Handler(playCfg)
 	p.log.Info("world ready", "world", row.Number, "kinds", len(p.kinds), "capacity", world.Capacity(), "limit", world.Limit(),
@@ -578,7 +588,6 @@ func (h *worldHalf) start() {
 		var wg sync.WaitGroup
 		wg.Go(func() { h.tools.Run(encoderCtx) })
 		wg.Go(func() { h.forecasts.Run(encoderCtx) })
-		wg.Go(func() { p.publishStatus(encoderCtx, h) })
 		wg.Go(func() { h.chat.Run(encoderCtx) })
 		wg.Go(func() { h.tally.Run(encoderCtx) })
 		h.game.Run(encoderCtx)

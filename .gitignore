@@ -53,3 +53,4 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+website/pictures/raw/

@@ -3,56 +3,73 @@
 package api
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
 )
 
-// The status: GET /api/status, what the website shows of the game: the
-// sailors at sea and waiting for a boat, the world and when it ends. The
-// same for everyone and published once a second, so it needs no session
-// and is kept 30 s by the edge's cache. The website, on its own origin,
-// may read it (CORS, without credentials); no other origin's page may.
-
-// Status is the game as the website shows it.
-type Status struct {
-	AtSea  int `json:"atSea"`
-	Queued int `json:"queued"`
-	World  int `json:"world"`
-	// EndsAt is when the world ends, RFC 3339 in UTC; "" for no end known.
-	EndsAt  string `json:"endsAt,omitempty"`
-	Closing bool   `json:"closing"`
-}
+// The status: GET /api/status, what the website shows of the game and its
+// map (internal/status). The website's Worker alone may read it: it is
+// behind a Cloudflare Access application of its own, which lets through
+// only the Worker's service token, and here every request must carry the
+// token Access signs what it lets through with (Access), or it is
+// refused. Without Access set up the route is not served at all. Its
+// answer is never kept by a cache: the protected address must not sit in
+// the zone's cache for anyone to read.
 
 // statusRoute is the status's route.
 const statusRoute = "GET /api/status"
 
-// statusKeep is how long a cache may keep the status.
-const statusKeep = "public, max-age=30"
+// statusKeep is how a cache may keep the status: not at all.
+const statusKeep = "private, no-store"
 
-// statusHandler serves the status that now gives, 503 before there is one;
-// website, if not "", is the origin whose pages may read it.
-func statusHandler(now func() *Status, website string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+// StatusSource is the status as JSON and gzipped; nil before there is one.
+type StatusSource func(ctx context.Context) (body, gzipped []byte, err error)
+
+// Access checks that a request came through the Access application in
+// front of the route: internal/access.
+type Access interface {
+	Check(r *http.Request) error
+}
+
+// accessRoutes are the routes behind Access: they read no session, and
+// TestOpenRoutes finds them registered behind it.
+var accessRoutes = map[string]bool{statusRoute: true}
+
+// accessed is h behind Access: a request without a token Access signed
+// for the route is refused, 403.
+func accessed(a Access, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.Check(r) != nil {
+			w.Header().Set("Cache-Control", "no-store")
+			writeError(w, http.StatusForbidden, "access")
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// statusHandler serves the status that now gives, gzipped to a caller
+// that takes it; 503 before there is one.
+func statusHandler(now StatusSource) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
-		// The same for every request, so the edge's cache, which keeps one
-		// copy whatever the Origin, never keeps one without it.
-		if website != "" {
-			h.Set("Access-Control-Allow-Origin", website)
-		}
-		st := now()
-		if st == nil {
-			h.Set("Cache-Control", "no-store")
+		h.Set("Cache-Control", statusKeep)
+		body, gz, err := now(r.Context())
+		switch {
+		case err != nil:
+			writeError(w, http.StatusInternalServerError, "internal")
+			return
+		case body == nil:
 			writeError(w, http.StatusServiceUnavailable, "starting")
 			return
 		}
-		body, err := json.Marshal(st)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal")
-			return
-		}
 		h.Set("Content-Type", "application/json")
-		h.Set("Cache-Control", statusKeep)
+		h.Set("Vary", "Accept-Encoding")
+		if gz != nil && acceptsGzip(r) {
+			h.Set("Content-Encoding", "gzip")
+			body = gz
+		}
 		_, _ = w.Write(body)
 	})
 }

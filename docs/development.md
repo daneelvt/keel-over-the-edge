@@ -142,17 +142,18 @@ credentials.
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's and the sea's life's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, each boat's trimmed sails against ORC's mainsail and jib, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
-| `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
+| `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `website/wrangler.jsonc` what the website's deploy needs; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
 | `pr.worldgen.yaml` | Pull requests labelled `worldgen` (each push while the label stays), and by hand; not a required check | The world generator over a hundred seeds: each world passes the validator's rules within its attempts; how long they took, their attempts, land and islands, in the log (see [The world](#the-world)) | `go test ./internal/worldgen -run '^TestSeeds$' -seeds 100 -v` |
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
-| `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
+| `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures of the client's packages and the website's | `go tool govulncheck ./...`, `npm audit signatures` in `client/` and `website/` |
+| `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game, and the art its pictures are | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the pictures' manifest against the files it names, and the page's colours, words and build, in Node; the page built by Vite and the Worker by `wrangler deploy --dry-run`, nothing uploaded; the page's checks in Chromium through `wrangler dev` (see [The website](#the-website)) | in `website/`, `npm test`, `npm run typecheck`, `npm run build`, `npm run checks` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
 | `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
 | `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
 | `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`; with **rebuild**, on a machine reinstalled from nothing), or `audit` (see [The machine](#the-machine)) | |
-| `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read (see [Online](#online)) | `go run ./tools/accounts -check` |
+| `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read, then the website deployed (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
 | `security.yaml` | Weekly | govulncheck and npm signatures on `main` | |
@@ -3770,7 +3771,7 @@ hexagons, each cell's highest ground and surface, gzipped
 | `GET /owner/api/charted.json` | the world page's chart: what is charted, by whom, when, its worth |
 | `GET /owner/api/accounts.json` | the players' accounts: how many, made in the last seven days, seen in the last day (the world card's "Accounts" line) |
 | `POST /debug/chart?all` or `?subject=island:N` | charts by hand, credited to no one (developer's commands) |
-| `GET /api/status` | the website's: boats at sea and queued, the world, its end and whether it is closing; no session; kept 30 s |
+| `GET /api/status` | the website's: the numbers, the world's end and the map; behind Cloudflare Access and its token, for the website's Worker alone (see [`/api/status`](#apistatus)) |
 | `POST /debug/end?in=90s` | brings the world's end near (developer's commands) |
 
 A discovery's **worth**: an island's size class's (`world.sizes`) times its
@@ -4281,10 +4282,54 @@ rises out of it after its Welcome.
 
 ### `/api/status`
 
-`GET /api/status` is the website's: `{"atSea": 37, "queued": 0, "world":
-14, "endsAt": "2026-11-01T23:00:00Z", "closing": true}`, published once a
-second, cached 30 s by Cloudflare (`infra/tofu/rules.tf`), readable by the
-website's origin (the players' without `play.`).
+`GET /api/status` is the website's, the one route its Worker reads, and
+**only that Worker may call it**. Two locks, either of which holds alone:
+
+- **At Cloudflare**, an Access application on
+  `play.keelovertheedge.com/api/status` with a Service Auth policy that
+  lets through one service token, the Worker's (`infra/tofu/access.tf`). The
+  Worker sends the token's `CF-Access-Client-Id` and
+  `CF-Access-Client-Secret`; anyone else is refused before the tunnel.
+- **In keel**, `internal/access` checks the token Access signs every
+  request it lets through with, `Cf-Access-Jwt-Assertion`: RS256 against
+  the team's keys (`https://<team>/cdn-cgi/access/certs`, fetched when a
+  token names one not held, at most once every 10 s), issued by the team,
+  for the application's audience tag, in date. Anything else is 403
+  `access`. Its settings, `KEEL_ACCESS_TEAM` and `KEEL_ACCESS_AUD`, are
+  written to Infisical by OpenTofu from the application itself; with
+  either unset, **the route is not registered at all**, so a cluster
+  without Access serves nothing (the local cluster, `tools/dev`).
+
+It reads no session, sends no CORS, and says `Cache-Control: private,
+no-store`: the protected address is never in the zone's cache. A caller
+that takes gzip gets it gzipped (about a quarter of the size).
+
+What it carries is built by `internal/status` from the newest frame, never
+from the simulation, and kept 30 s, so a burst of calls costs one build:
+
+- the numbers: `atSea` (every boat in the water), `machinesAtSea`,
+  `queued`, `world`, `endsAt`, `closing`, `turn` (the schedule's weekday,
+  time and zone, for the countdown's words and a calendar), `charted` (the
+  subjects the world's sailors charted, not Port Royal's island known from
+  the start), `hour` (the sky's hour at the centre, noon 12) and `at`;
+- `map`: the disk's `lip` and mist `band`; the charted `islands`,
+  `places` and `features`, each a table of columns in the order the chart
+  letters them, places to 25 m, each island's coast traced from its model
+  and rounded to 25 m (worked out once per island per world); the
+  `weather`, the whole disk's as every sailor's chart shows it, a 32 × 32
+  grid (mean wind and its direction, gust, rain, fog, pressure) sampled
+  with the chart's own physics, and its systems and fronts as the chart
+  draws them; and up to `KEEL_STATUS_BOATS` boats anyone may watch, the
+  watch list's liveliest first with no viewer, to 100 m and 15°, their
+  kind and whether a machine sailor sails them, nothing else.
+
+**Nothing uncharted is ever in it**: its subjects and coasts are the
+chart's entries alone. `internal/status/testdata/status.md` describes it
+field by field and `seed1.json` is one, of seed 1's world all charted at a
+busy moment, for the website's tests (`go test ./internal/status -run
+TestSeed1 -update` writes it again). Seed 1 half charted is about 35 KB, 8
+KB gzipped; all charted, 43 KB, 10 KB gzipped; a build takes a few
+milliseconds.
 
 ### On the world page
 
@@ -5427,6 +5472,9 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1, as `tools/e2e` does |
 | `KEEL_WORLD_SCHEDULE` | `Sun 18:00 America/New_York notice=72h ahead=24h` | When worlds end, how long before a world is closing and its successor made; or a period from an anchor in UTC (see [The weekly world](#the-weekly-world)) |
 | `KEEL_WORLD_KEEP` | `672h` | How long an ended world's data is kept before its partitions are dropped |
+| `KEEL_ACCESS_TEAM` | none | The Cloudflare Access team's domain the website's status is behind, as `keel.cloudflareaccess.com`. With `KEEL_ACCESS_AUD`, `GET /api/status` answers only requests Access signed for its application; with either unset it is not served at all (see [`/api/status`](#apistatus)). Production's come from Infisical, written there by OpenTofu |
+| `KEEL_ACCESS_AUD` | none | The Access application's audience tag |
+| `KEEL_STATUS_BOATS` | 12 | The most boats the website's map shows, from 0 to 100 |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…`, `?front`, `?system=…&in=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
@@ -5714,12 +5762,14 @@ be.** The routes that answer without one are listed in `openRoutes`
 (`internal/api/api.go`), each with its reason: the page and its files,
 `/api/version`, the notice page and its form (anyone may tell of illegal
 content), making a sailor and signing in, the game connection (it reads
-the session itself), `/api/status` (the website's), the world's chunks and
+the session itself), the world's chunks and
 islands' models (capability addresses handed out over the game
 connection), and `robots.txt`; and the sign-in service's own for AI apps
 (`oauth.Routes`). `TestOpenRoutes` finds every route registered without
 `auth.Required` or `auth.Signed` and fails on one not listed, so opening a
-route is always a decision made in review.
+route is always a decision made in review. `/api/status`, the website's,
+is not open: it is behind Cloudflare Access, and `TestOpenRoutes` finds it
+registered behind keel's check of Access's token (`accessRoutes`).
 
 Errors are `{"error": "<code>"}`; the client puts codes into words
 (`client/src/account/reasons.ts`). A session held to adding a passkey is
@@ -6646,6 +6696,15 @@ read again before a link is refused, so a boat that has just set sail is
 found. `GET /api/watch?fleet=<code>` keeps only that fleet's machine
 sailors: the list's "This fleet", first and chosen, on a page opened by a
 fleet's link.
+
+**Links into the list**, as the website gives them, name no one:
+`/?watch` opens Watch a sailor in place of the player's own panel (with
+machine sailors or without), and `/?watch=pick` does what Pick one for
+me does, once the list's first page of everyone at sea is read; with
+fewer than two to watch it leaves the list as it is. Anything else after
+`watch=` is no link. A visitor with no session is told "Make a sailor,
+and you will be watching." first; the link is forgotten once seen, so a
+reload just sails (`listFromQuery`, `listLink` in `watchwords.ts`).
 
 On the phone (`client/src/account/yourlink.tsx`, `ui/sharelink.tsx`),
 "Share a link to watch me" sits under Set sail on "Your sailor" (with "Your
@@ -8192,18 +8251,20 @@ secrets are made from:
 | `versions.tf`, `.terraform.lock.hcl` | OpenTofu `~> 1.13.0`; the Cloudflare, Infisical and random providers at exact versions, their hashes for Linux on amd64 and arm64 and the Mac |
 | `backend.tf` | The state, in the B2 bucket, encrypted with a key made from the passphrase; a run without it fails rather than write plain state |
 | `tunnel.tf` | The tunnel `keel-prod`, remotely managed: `play.keelovertheedge.com` → `http://traefik.kube-system.svc.cluster.local:80`, anything else 404. Its token, written into Infisical |
-| `dns.tf` | `play` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
+| `dns.tf` | `play` and `agents` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
 | `zone.tf` | TLS strict, HTTPS always, TLS 1.2 at least, no 0-RTT, WebSockets; HSTS; nothing that rewrites the page or answers in its place; no bot or AI-crawler blocking |
-| `rules.tf` | `/assets/` cached as the game says; the models and other binary assets under `/assets/` (`model/gltf-binary`, `application/octet-stream`) compressed by a Compression Rule, since Cloudflare's own list of types it compresses has neither; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited); no script of Cloudflare's added to the page (its Web Analytics beacon, Zaraz) |
+| `rules.tf` | `/assets/` cached as the game says; the models and other binary assets under `/assets/` (`model/gltf-binary`, `application/octet-stream`) compressed by a Compression Rule, since Cloudflare's own list of types it compresses has neither; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited; the free plan's rule names the path alone, on every host); no script of Cloudflare's added to the game's page or the website's (its Web Analytics beacon, Zaraz); no challenge where servers call (AI apps, GitHub's webhook, the website's Worker at `/api/status`) |
+| `access.tf` | The Access application on `play.keelovertheedge.com/api/status`, its Service Auth policy and the website's service token (a year; renewed by raising `website_token_term`, its secret rotated by `website_token_generation`); the team's domain and the application's audience tag written to Infisical's `/keel-access/` for keel; the token's ID and secret as sensitive outputs, for the website's deploy |
+| `website.tf` | The website's KV namespace (its ID an output); `www`'s placeholder record (proxied, `100::`); the redirects: `www.` to the apex, the apex's `/play` to `https://play.keelovertheedge.com/`, each keeping the query. No apex record: the Worker's custom domain makes it |
 | `secrets.tf` | The database's password: ephemeral, written into Infisical write-only, in no plan or state |
-| `notifications.tf` | An e-mail to the owner when the tunnel's health changes |
+| `notifications.tf` | An e-mail to the owner when the tunnel's health changes, and a week before an Access service token ends |
 
 **Actions → accounts → Run workflow**, `mode`:
 
 | Mode | What |
 |------|------|
 | `plan` | One job, approved: what `apply` would change. Changes nothing |
-| `apply` | The same plan job, approved; then an `apply` job, **approved again once you have read the plan's summary**, applies that plan and nothing else |
+| `apply` | The same plan job, approved; then an `apply` job, **approved again once you have read the plan's summary**, applies that plan and nothing else, then deploys the website ([The website](#the-website)) |
 
 Each job signs in to Infisical as `gha-accounts` with its own OIDC token
 (only `accounts.yaml` on `main`, in `production`, may), reads
@@ -8228,7 +8289,7 @@ Offline, on any computer, and as `pr.accounts` does on every pull request
 that touches it:
 
 ```sh
-go run ./tools/accounts -check   # fmt, init without the backend, validate, the lock file for every platform
+go run ./tools/accounts -check   # fmt, init without the backend, validate, the lock file for every platform, website/wrangler.jsonc
 go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changing a provider
 ```
 
@@ -8252,11 +8313,195 @@ go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changi
 | The B2 key that writes the dumps | The owner | `keel-backups` `/keel/B2_DUMPS_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-dumps` | No |
 | The B2 key that reads the backups | The owner | `keel-backups` `/keel-restore/B2_RESTORE_KEY_ID`, `…_KEY` | External Secrets → `keel-restore/keel-b2-read` | No |
 | The local bucket's B2 key | The owner | `keel-backups` `/local/B2_KEY_ID`, `…_KEY`; copied to `.dev/backups.env` | `tools/cluster`, on the owner's Mac | No |
+| The website's Access service token, its ID and secret | Cloudflare, for OpenTofu | OpenTofu's state, as sensitive outputs; the Worker's secrets `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET` | `accounts`' apply, which hands them to `wrangler deploy` on its standard input; the Worker, calling `/api/status` | Yes, encrypted |
 
 The backups' keys are in a project of their own because the `accounts`
 workflow's identity may read `keel-cluster`'s values, and a project is the
 only fence Infisical's free plan has: no workflow's identity is a member
 of `keel-backups`, so no workflow can read, replace or delete a backup.
+
+### The website
+
+`keelovertheedge.com` is one Cloudflare Worker with static files
+(`website/`, its own packages and lockfile, pinned as the client's). The
+page is built by Vite from `website/site/` into `website/out/` (git
+ignores it), whose files are served as they are, free, without running
+the Worker; it runs first only for the page and what is live:
+
+| Path | What | Kept in the data centre's cache |
+|---|---|---|
+| `/` | The page, in the hour's light (below), with the security headers | Never: each answer its hour's |
+| `/live` | The game's numbers as JSON: `atSea`, `machinesAtSea`, `queued`, `world`, `endsAt`, `closing`, `turn`, `charted`, `hour`, `at`, and `resting`; `{"resting": true}` alone with nothing to tell | 30 s |
+| `/map.svg` | The world's chart now, drawn as the chart screen draws the whole disk | 10 minutes |
+| `/share.png` | The share picture, 1200 × 630: the map, the name, the three numbers | 10 minutes |
+| `/next.ics` | The world's end every week, in the schedule's zone, an alarm an hour before | |
+
+It reads keel's [`/api/status`](#apistatus) through Access with the
+service token, kept 30 s under the apex's keys (the Cache API, one copy a
+data centre), and draws the pictures when their 10 minutes run out. A
+cron every 10 minutes fetches the status and draws the map into KV: the
+last good copy, and its only writer (KV takes a write a key a second at
+most). A request reads KV only when keel does not answer, and serves its
+map marked "The sea is resting", kept a minute; with nothing in KV, a
+map with no world. The compatibility flag `global_fetch_strictly_public`
+sends the Worker's fetch to `play.` the public way, through Access.
+`site/public/_headers` gives the static files their security headers
+(and the hashed files a year's cache); the Worker sets the same on its
+own answers (`worker/src/headers.ts`), which `_headers` never reaches. A
+test holds the two the same.
+
+**The page** (`site/index.html`, `site/src/page.css`) is plain HTML and
+CSS in the game's own look: the instruments' lacquer cases in brass, the
+raised keys, the gold Set sail, the log's paper and ink, IM Fell English
+SC, Libre Caslon Text and Alegreya Sans. Its order: the boat at the edge
+with the name, one line and **Set sail** (`https://play.keelovertheedge.com/`)
+in the first screen of a phone and a laptop; Race; Sail together; Pick
+your boat; Storms, squalls and fog; The world now (`<img src="/map.svg">`,
+the numbers from `/live`, the countdown and the calendar); What waits out
+there; Watch sailors live (`/?watch`, `/?watch=pick`) and Put your AI at
+the helm (the MCP address with Copy, Add to Claude, Cursor and VS Code);
+The sea is open; the foot (the source, a short privacy note, the contact
+address). Its one small script (`site/src/page.ts`) does four things the
+page is whole without: the countdown, the numbers, Copy, and Google
+Calendar's link; each is hidden until it has something to show. It keeps
+nothing on the visitor's device: no cookie, no storage, no analytics.
+
+The build (`site/build/site.ts`, a Vite plugin) writes what the page is
+made from elsewhere in the repository:
+
+- **The fonts**, the game's (`client/src/fonts/`, OFL), cut to the
+  page's letters (the titles' and the log's to its own words, Alegreya
+  Sans to whatever the script may write too), with their licences under
+  `/fonts/`; only the titles' font is preloaded.
+- **The pictures**, from `art/website/manifest.json`: each
+  `<keel-picture name=…>` in the page written out as a `<picture>`, AVIF
+  then JPEG at the manifest's widths, lazy, with its words; the opening
+  (`<keel-opening>`) upright on a phone held upright and wide else, never
+  lazy, `fetchpriority="high"`. Their files take their content's hash in
+  their names.
+- **The AI apps' links** (`site/src/words.ts`) into the keys.
+
+**Colours that follow the hour at sea** (`site/src/sky.ts`). The sky's
+hour is the game's, from the clock alone: the catalog's `sky` (its day of
+118 minutes, its first moment noon at the centre). Four palettes (night
+and dawn and dusk in lacquer and brass, warmer at the sun's ends; day the
+log's paper `#EFE4C8` and ink `#2B2118`) blend through the sky's day in
+120 steps, a fifth of a sky's hour each, in Oklab; the build writes each
+distinct step (about 30) as `:root[data-sky="n"]` in the style sheet.
+Every step's words read at 4.5:1 or better on every ground they sit on;
+between the dark palettes and the paper the words' ink changes at one
+moment, the grounds on each side blended toward the other only as far as
+their ink still reads. **The Worker answers `/`** (`worker/src/page.ts`):
+it names the hour's step (`data-sky`) and its opening picture
+(`data-opening`) on the page and changes the opening's sources to that
+hour's, from the data the build wrote into the page (`#openings`), so the
+page arrives in its light with no script and never waits for keel; the
+script moves both on once a minute. `/?hour=8.5` shows the page at
+another hour. The opening's words keep 4.5:1 over every hour's picture
+through a veil, darkest at the day's (`--veil`), measured by the checks.
+
+**Budgets**, held by the checks: the page, its style sheet, script and
+fonts under 150 KB; the opening picture under 120 KB on a phone and 250 KB
+on a desktop; the phone's first screen under 300 KB.
+
+**The map is the chart's own painting.** The Worker runs the chart's
+painters, `paintPaper` and `paintWeather` (`client/src/chart/`), on a
+2D context of its own (`worker/src/map/canvas.ts`) that writes SVG: each
+canvas point carried to the paper and through the chart's camera
+(`camera.ts`, the whole-disk view of `view.ts`), a straight line by its
+ends, a circle as the ellipse the camera sees, text laid on the paper
+foreshortened as the chart's texture lays it. The weather sheet is blended
+as the GPU blends it over the paper, in linear light, so its washes and
+thin lines are as pale as on the screen. Three things are the Worker's
+own, each with a comment in the chart's code pointing here: the islands
+lie flat, inked round the coasts keel traces (no heights are sent); the
+wind's and the fog's washes are traced as shapes rather than painted as
+pictures of the grid; and the boats, which the chart does not show but
+for the sailor's own, are small inked boats by their class, a machine
+sailor's sail with the cog. The names are lettered as `#placeLabels`
+letters them, the whole disk naming rank 3 and up. Its letters are the
+game's fonts' outlines (`npm run glyphs` cuts them from
+`client/src/fonts/` into `worker/gen/`), so an SVG shown by `<img>` needs
+no font and resvg, which draws the share picture, needs none either.
+
+On a laptop (M5, Node, the recorded seed 1 at a busy moment): the map
+about 20 ms of CPU and 240 KB (66 KB gzipped); the share picture about
+0.4 s and 0.67 MB, so the account is on Workers Paid.
+
+**Deploying.** `accounts`' apply job deploys it after OpenTofu's apply
+(`tools/accounts/website.go`): `npm ci`, `npm run glyphs` and
+`npm run site` (the page into `out/`) in `website/`, then `wrangler
+deploy` with the configuration as kept but for
+the KV namespace's id (OpenTofu's output, written into the git-ignored
+`wrangler.deploy.json`), the service token's ID and secret as the
+Worker's secrets on wrangler's standard input, and the run's Cloudflare
+token. No workflow of its own and no identity of its own: the website
+changes when the owner runs `accounts` with `apply`.
+
+Locally, in `website/`:
+
+```sh
+npm ci
+npm test            # the Worker's tests, in workerd; the pictures' and the page's, in Node
+npm run typecheck
+npm run build       # the page into out/, then wrangler deploy --dry-run into dist/: nothing uploaded
+npm run page        # Vite's own server, for writing the page (no /live, no map)
+npm run checks      # the page's checks (below), after npm run build
+```
+
+To see it as production serves it, after `npm run build`:
+`WRANGLER_SEND_METRICS=false npx --no-install wrangler dev --local --port
+5293`, then `http://127.0.0.1:5293/?hour=6` (dawn). Without the service
+token every live answer rests; `npm run checks` starts the same with
+seed 1's recorded status in keel's place (`page/keel.ts`).
+
+**The page's checks** (`page/page.spec.ts`, Playwright, in Chromium;
+locally `PW_CHANNEL=chrome` uses the installed Chrome) serve the built
+page through the Worker under `wrangler dev` on ports 5295 and 5296, and
+take about ten seconds. At 360 × 640, 390 × 844, 1366 × 768 and
+1920 × 1080, at each of the four hours: Set sail wholly in the first
+screen; nothing wider than the screen; the opening's words over its
+picture, measured with the words hidden, at 4.5:1 or better against the
+brightest tenth of what is behind each line. Then: each hour's colours
+as the steps make them, the titles' and the keys' words readable; every
+picture with its words, each loaded once in view; the page whole without
+script but for the four; the countdown, the numbers, Copy and Google
+Calendar from `/live`; the sea resting; the keys' links; the budgets.
+
+Biome checks it from `client/` (`npx biome ci ../website`, and
+`go run ./tools/dev -lint`).
+
+**The pictures** are the game's own, taken by a script from the sandbox
+(`website/pictures/`), by hand on a Mac with Chrome, never on CI (CI
+draws on a software GPU at the lowest rung). Each picture the page shows
+is one of several takes, and each take is its staging: the sandbox's
+query, the size, the world time frozen at, and a function the page runs
+with the test hooks as the browser tests write them (`takes.ts`).
+`pictures.ts` names each picture's pick, its words for those who cannot
+see it and its widths; the takes it does not pick stay, so any can be
+swapped in. The script starts the client's Vite on a free port from 5290
+to 5299 and stops it after, opens every take in Chrome on WebGPU at the
+best rung, and screenshots it into `website/pictures/raw/` (git ignores
+it); then it encodes the picks to `art/website/`, AVIF and JPEG at their
+widths (an AVIF's quality lowered until it fits its picture's budget:
+the opening's upright frame 120 KB, its wide one 250 KB), and writes
+`art/website/manifest.json`, which the page reads: each picture's words,
+files and sizes, the boat at the edge for each hour at sea (wide, and
+upright for a phone held upright), the title's contrast over the wide
+frames' lower left, and the game's art the page shows as it is (the
+inked portraits, the boats' glyphs with how many each takes aboard). The
+world's pictures need seed 1's world file (`go run ./tools/dev -world 1`).
+
+```sh
+cd website
+npm run pictures                          # every take, then encode the picks
+npm run pictures -- --only edge-dusk,race # the takes whose id starts so
+npm run pictures -- --encode              # encode the raw takes only
+npm run pictures -- --takes               # list the takes
+```
+
+Take them again when the game's look changes: they are the game's, not a
+style of their own.
 
 ### External Secrets
 

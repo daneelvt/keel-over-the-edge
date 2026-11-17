@@ -12,7 +12,8 @@
 // server's twin is internal/chart/position.go; both are held to
 // internal/chart/testdata/positions.json.
 
-const MILE = 1852;
+/** A nautical mile, m. */
+export const NM = 1852;
 const DEGREES_PER_MILE = 10;
 
 /** A position to the minute: the latitude in whole minutes north, the longitude in whole minutes 0 to 21,599, and whether it is the pole. */
@@ -29,7 +30,7 @@ function roundMinutes(m: number): number {
 
 /** The position of a point m east and north of the centre. */
 export function positionOf(east: number, north: number): Position {
-  const r = Math.sqrt(east * east + north * north) / MILE;
+  const r = Math.sqrt(east * east + north * north) / NM;
   const lat = roundMinutes((90 - DEGREES_PER_MILE * r) * 60);
   if (lat >= 90 * 60) {
     return { latitude: 90 * 60, longitude: 0, pole: true };
@@ -68,12 +69,12 @@ export function meridianText(degrees: number): string {
 
 /** The latitude at r m from the centre, degrees. */
 export function latitudeAt(r: number): number {
-  return 90 - (DEGREES_PER_MILE * r) / MILE;
+  return 90 - (DEGREES_PER_MILE * r) / NM;
 }
 
 /** How far from the centre a latitude lies, m. */
 export function radiusOf(latitude: number): number {
-  return ((90 - latitude) / DEGREES_PER_MILE) * MILE;
+  return ((90 - latitude) / DEGREES_PER_MILE) * NM;
 }
 
 /**

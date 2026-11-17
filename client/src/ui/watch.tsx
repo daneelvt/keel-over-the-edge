@@ -471,6 +471,7 @@ export function WatchList({
   from = server,
   className = 'panel watch-list',
   fleet = '',
+  pick: pickAtOnce = false,
 }: {
   choose: (sailor: string) => void;
   ask: () => boolean;
@@ -479,10 +480,19 @@ export function WatchList({
   className?: string;
   /** The code of the fleet's link the page was opened by: This fleet, first and chosen; '' for none. */
   fleet?: string;
+  /**
+   * Opened to pick one at once, as Pick one for me does, from everyone at
+   * sea: once the first page is read; the list as it is when fewer than
+   * two can be watched.
+   */
+  pick?: boolean;
 }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<WatchSort>(() => loadSettings().watchSort);
-  const [who, setWho] = useState<ListWho>(() => (fleet !== '' ? 'fleet' : loadSettings().watchWho));
+  const [who, setWho] = useState<ListWho>(() =>
+    fleet !== '' ? 'fleet' : pickAtOnce ? 'all' : loadSettings().watchWho,
+  );
+  const picking = useRef(pickAtOnce);
   const [list, setList] = useState<Listing | null>(null);
   const [failed, setFailed] = useState(false);
   const [asking, setAsking] = useState<string | null>(null);
@@ -523,6 +533,13 @@ export function WatchList({
           scrolled.current = 0;
           if (scroller.current !== null) {
             scroller.current.scrollTop = 0;
+          }
+          if (picking.current) {
+            picking.current = false;
+            const name = p === null ? null : pickOne(p.sailors);
+            if (name !== null) {
+              watch(name);
+            }
           }
         });
       },

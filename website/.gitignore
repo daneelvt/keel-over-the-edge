@@ -1,0 +1,9 @@
+node_modules/
+worker/gen/
+dist/
+.wrangler/
+wrangler.deploy.json
+out/
+site/gen/
+test-results/
+playwright-report/

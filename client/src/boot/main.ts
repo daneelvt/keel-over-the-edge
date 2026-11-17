@@ -160,7 +160,13 @@ import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
-import { FLEET_PARAM, linkFromQuery, SAILOR_PARAM } from '../ui/watchwords';
+import {
+  FLEET_PARAM,
+  LIST_PARAM,
+  linkFromQuery,
+  listFromQuery,
+  SAILOR_PARAM,
+} from '../ui/watchwords';
 import { BUILD } from './build';
 import { takeCover } from './cover';
 import { browserEnv, fullScreen } from './fullscreen';
@@ -723,6 +729,11 @@ async function start(): Promise<void> {
   // A race's link (?r=<code>): its card once signed in, or the sailor
   // made, before the player's own Set sail; Make a race beside Set sail.
   const raceCode = linked === null && sailLink === '' ? raceFromQuery(query) : null;
+  // A link into the list of sailors to watch (?watch, or ?watch=pick to
+  // pick one at once): once signed in, or the sailor made, the list in
+  // place of the player's own panel.
+  const listed =
+    linked === null && sailLink === '' && raceCode === null ? listFromQuery(query) : null;
   const startRaces = racesOf();
   const raceLinked = async (me: Me): Promise<Me> => {
     if (raceCode !== null) {
@@ -797,6 +808,19 @@ async function start(): Promise<void> {
       startRaces,
     ).then(set);
   };
+  const listLinked = (me: Me): Promise<Me> => {
+    // Seen: a reload just sails.
+    forgetParams(LIST_PARAM);
+    return showSailor(
+      document.body,
+      own(me),
+      catalog,
+      stage,
+      catalog,
+      startRaces,
+      listed ?? undefined,
+    );
+  };
   const [, physics, me] = await Promise.all([
     world.start(),
     loadPhysics(fetch(wasmUrl)),
@@ -807,10 +831,10 @@ async function start(): Promise<void> {
             looks: catalog,
             boats: catalog,
             ...(stage === undefined ? {} : { stage }),
-            ...(linked === null && sailLink === '' && raceCode === null
+            ...(linked === null && sailLink === '' && raceCode === null && listed === null
               ? {}
               : { panel: false, straight: true }),
-            ...(linked === null ? {} : { watching: true }),
+            ...(linked === null && listed === null ? {} : { watching: true }),
             ...(raceCode === null ? {} : { racing: true }),
             races: startRaces,
           }),
@@ -822,7 +846,9 @@ async function start(): Promise<void> {
                 ? watchLinked(me)
                 : raceCode !== null
                   ? yours(me)
-                  : me,
+                  : listed !== null
+                    ? listLinked(me)
+                    : me,
           )
           .then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
@@ -831,7 +857,9 @@ async function start(): Promise<void> {
           ? aboard(me).then(set)
           : linked !== null
             ? watchLinked(me)
-            : yours(me).then(set),
+            : listed !== null
+              ? listLinked(me).then(set)
+              : yours(me).then(set),
       backSoon: notice,
     }).then(own),
   ]);

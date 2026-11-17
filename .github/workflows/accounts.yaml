@@ -8,7 +8,9 @@
 #
 #   plan    what apply would change; changes nothing
 #   apply   plan, and once the owner has read the plan job's summary and
-#           approved the apply job, apply that same plan and nothing else
+#           approved the apply job, apply that same plan and nothing else;
+#           then deploy the website (website/) with wrangler, its KV
+#           namespace and Access service token from OpenTofu's outputs
 #
 # The plan job hands its plan, encrypted with the state's key, to the apply
 # job as an artifact kept one day. Each job signs in to Infisical as
@@ -79,9 +81,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Node too, for the website's deploy.
       - uses: ./.github/actions/setup
         with:
-          node: "false"
           cache: "false"
       - name: Build the tool
         run: go build -o .dev/bin/accounts ./tools/accounts
@@ -90,5 +92,5 @@ jobs:
         with:
           name: accounts-plan
           path: .dev/accounts/plan/
-      - name: Apply that plan, and nothing else
+      - name: Apply that plan, and nothing else; then deploy the website
         run: .dev/bin/accounts -run apply

@@ -402,6 +402,13 @@ Check:
      | Zone | Zone WAF Rules | Edit |
      | Zone | Bot Management | Edit |
      | Zone | Cache Settings | Edit |
+     | Account | Access: Apps and Policies | Edit |
+     | Account | Access: Service Tokens | Edit |
+     | Account | Access: Organizations, Identity Providers, and Groups | Read |
+     | Account | Workers Scripts | Edit |
+     | Account | Workers KV Storage | Edit |
+     | Zone | Workers Routes | Edit |
+     | Zone | Single Redirect | Edit |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
      zone, `keelovertheedge.com`.
@@ -416,6 +423,13 @@ Check:
    This is where the list starts: the first `plan` and `apply` show what is
    missing (an error naming the endpoint refused) or unused, and this table
    is corrected to the final list.
+
+   The last seven are the website's (section 16): the Access application,
+   its policy and service token in front of the game's status, and reading
+   the Zero Trust organisation's team domain; the Worker, its KV namespace
+   and its custom domain at the apex; and the redirects (www. to the apex,
+   the apex's `/play` to the game). A token made before them is **edited** to add them (Account API
+   Tokens → `accounts` → Edit): its value stays the same.
 3. Cloudflare shows the token once. In `keel-accounts`, Production,
    `accounts`, **Add Secret** `CLOUDFLARE_API_TOKEN`.
 4. On the zone's **Overview**, copy the **Account ID** and **Zone ID** as
@@ -740,7 +754,7 @@ reads):
 | `GITHUB_APP_PRIVATE_KEY` | the `.pem` file's whole text, its `BEGIN` and `END` lines included |
 | `GITHUB_APP_WEBHOOK_SECRET` | the webhook's secret, from 15.2 |
 | `GITHUB_APP_CLIENT_SECRET` | the client secret |
-| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read, never at the game's domain, which receives no mail |
+| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read; `contact@keelovertheedge.com` once its mailbox receives mail (section 17), and until then one elsewhere, as the game's domain receives none |
 
 Then delete the `.pem` file and the webhook's secret from the password
 manager: Infisical holds them alone, and a new key or secret can always
@@ -849,6 +863,92 @@ Check:
 - **The client secret**: GitHub keeps two at once. Generate a new one,
   paste it over `GITHUB_APP_CLIENT_SECRET`, force the sync, restart the
   keeper, sign in on the page once, then delete the old one.
+
+## 16. Cloudflare: the website's Access and its token
+
+The game's status, `GET /api/status` on `play.`, is the website's alone:
+an Access application in front of that one path lets through the
+website's Worker's service token and nothing else, and keel checks the
+token Access signs every request with (`infra/tofu/access.tf`,
+docs/development.md, "`/api/status`"). OpenTofu makes the application, its
+policy and the token; it reads the team's domain and the application's
+audience tag from Cloudflare and writes both to `keel-cluster`'s
+`/keel-access/`, which the cluster reads into keel's settings
+(`KEEL_ACCESS_TEAM`, `KEEL_ACCESS_AUD`). Nothing is copied by hand but
+what follows.
+
+1. The `accounts` token has the website's permissions (section 11).
+2. **Zero Trust → Settings → Team name and domain**: note the team domain
+   (`<team>.cloudflareaccess.com`) in the pull request that first applies
+   `access.tf`. OpenTofu reads it itself; the note is for checking.
+3. The account is on **Workers Paid** (Workers & Pages → Plans): the
+   share picture takes about half a second of CPU to draw, past the free
+   plan's 10 ms.
+4. Run **`accounts`** with `plan`, then `apply`. Its summary makes the
+   application, the policy, the token, the KV namespace, the redirects,
+   `www.`'s record, the token's expiry e-mail and `/keel-access/`'s two
+   values.
+   The same apply job then deploys the website (`website/`): the Worker,
+   its static files, its cron, the apex as its custom domain (which makes
+   the apex's DNS record), the KV namespace's id and the service token's
+   ID and secret as the Worker's secrets, all from OpenTofu's outputs. Its
+   summary ends with a **Website** section saying so.
+5. keel reads its settings when it starts: once `/keel-access/` holds both
+   (at once: `kubectl -n keel annotate externalsecret keel-access
+   force-sync=$(date +%s) --overwrite`), restart it
+   (`kubectl -n keel rollout restart deployment/keel`) in a quiet hour.
+   Until then it serves no status at all, which is safe: the website rests.
+
+Check:
+
+- [ ] `curl -sI https://play.keelovertheedge.com/api/status` answers 401
+      or 403 from Cloudflare, with no `cf-cache-status: HIT`.
+- [ ] keel's log at start has no "the website's status is not served".
+- [ ] A request through Access with the token but a forged
+      `Cf-Access-Jwt-Assertion` is refused by keel, 403 `access`: from the
+      machine, `curl -s -H 'Cf-Access-Jwt-Assertion: x' http://<keel's pod
+      IP>:8080/api/status`.
+- [ ] `https://keelovertheedge.com/live` answers the game's numbers with
+      `"resting": false` once keel serves its status (before that, `{"resting":
+      true}`), and `/map.svg` the world's chart.
+- [ ] Workers & Pages → `keel-website` → Settings lists the custom domain
+      `keelovertheedge.com`, the cron `*/10 * * * *`, the KV binding
+      `WEBSITE` and the secrets `ACCESS_CLIENT_ID` and
+      `ACCESS_CLIENT_SECRET`, and no `workers.dev` route.
+
+### Renewing the website's token, every year
+
+The service token lasts a year. Cloudflare e-mails the owner a week before
+it ends ("Access service token expiring"); put the date in your calendar
+too, a fortnight before. To renew it: in `infra/tofu/access.tf`, raise
+`website_token_term` by one, by a pull request, and run `accounts` with
+`apply`. The token is replaced, a new one for a year from then, and the
+same run's deploy hands the Worker its new ID and secret. Between the two
+the map rests on its last good copy.
+
+To rotate only its secret (one that may have leaked): raise
+`website_token_generation` and set `website_token_old_until` an hour
+after you will apply; the old secret is let through until then.
+
+## 17. The contact mailbox: contact@keelovertheedge.com
+
+The website's footer, the game's privacy page (`client/privacy.html`) and
+its safety page (`client/safety.html`) give `contact@keelovertheedge.com`
+for questions, privacy requests and anyone outside the game. Today the
+domain receives no mail at all: `infra/tofu/dns.tf` has a null MX, an SPF
+record that allows no sender and DMARC `p=reject`, so mail to that address
+bounces until this is done.
+
+1. Choose a mail service for the domain and make the mailbox (or an alias
+   forwarded to one you read) for `contact@keelovertheedge.com`.
+2. By a pull request, replace `null_mx` in `infra/tofu/dns.tf` with the
+   service's MX records, add its SPF include (or keep `-all` if it only
+   receives) and its DKIM records, and keep DMARC at `p=reject` once its
+   DKIM passes. Run `accounts` with `plan`, then `apply`.
+3. Send a message to the address from another account, and answer it, to
+   check both ways.
+4. If the agreement page's `CONTACT_EMAIL` (section 15.3) points
+   elsewhere, it may now point here.
 
 ## If something fails
 

@@ -90,7 +90,17 @@ type fakeTofu struct {
 	fail, says string
 	// plan, if set, is what show -json prints, not thePlan.
 	plan string
+	// failNpm, if set, makes npm or npx fail when its command line holds
+	// this, saying says.
+	failNpm string
 }
+
+// The website's outputs as the fake OpenTofu holds them.
+const (
+	kvID         = "0f0e0d0c0b0a09080706050403020100"
+	clientID     = "0123abcd.access"
+	clientSecret = "a-service-token-secret-0123456789abcdef"
+)
 
 type call struct {
 	cmd
@@ -100,6 +110,12 @@ type call struct {
 
 func (f *fakeTofu) run(_ context.Context, c cmd) ([]byte, []byte, error) {
 	f.calls = append(f.calls, call{c, f.log.String()})
+	if c.argv[0] == "npm" || c.argv[0] == "npx" {
+		if f.failNpm != "" && strings.Contains(strings.Join(c.argv, " "), f.failNpm) {
+			return nil, []byte(f.says), errors.New("exit status 1")
+		}
+		return nil, nil, nil
+	}
 	sub := c.argv[1]
 	var data string
 	for _, e := range c.env {
@@ -114,7 +130,7 @@ func (f *fakeTofu) run(_ context.Context, c cmd) ([]byte, []byte, error) {
 	case "init":
 		os.MkdirAll(data, 0o700)
 		os.WriteFile(marker, []byte("{}"), 0o600)
-	case "plan", "show", "apply":
+	case "plan", "show", "apply", "output":
 		if _, err := os.Stat(marker); err != nil {
 			return nil, []byte("Error: Backend initialization required, please run \"tofu init\""), errors.New("exit status 1")
 		}
@@ -137,6 +153,10 @@ func (f *fakeTofu) run(_ context.Context, c cmd) ([]byte, []byte, error) {
 		return []byte(thePlan), nil, nil
 	case "apply":
 		return []byte("cloudflare_zero_trust_tunnel_cloudflared.prod: Modifying... [connections: 198.51.100.9]\n"), nil, nil
+	case "output":
+		return []byte(`{"website_kv_namespace_id":{"sensitive":false,"type":"string","value":"` + kvID + `"},` +
+			`"website_access_client_id":{"sensitive":true,"type":"string","value":"` + clientID + `"},` +
+			`"website_access_client_secret":{"sensitive":true,"type":"string","value":"` + clientSecret + `"}}`), nil, nil
 	}
 	return nil, nil, nil
 }
@@ -212,6 +232,13 @@ func testAccounts(t *testing.T) (*accounts, *fakeTofu, *bytes.Buffer, *bytes.Buf
 		tofu:   func(context.Context) (string, error) { return "/pinned/tofu", nil },
 		getenv: func(k string) string { return env[k] },
 	}
+	// The website's configuration, as the repository keeps it.
+	cfg, err := os.ReadFile(filepath.Join("..", "..", websiteDir, wranglerFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(a.path(websiteDir), 0o755)
+	os.WriteFile(a.path(websiteDir, wranglerFile), cfg, 0o644)
 	return a, f, &log, &summary
 }
 
