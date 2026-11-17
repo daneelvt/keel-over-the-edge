@@ -63,6 +63,11 @@ type pageFile struct {
 	body        []byte
 	contentType string
 	modified    time.Time
+	// An HTML page's: its inline styles' hashes and whether it runs
+	// script, which its policy is built from (policy.go).
+	html   bool
+	styles []string
+	script bool
 }
 
 // OpenPage reads the page from dir. It fails if dir has no index.html.
@@ -98,7 +103,11 @@ func OpenPage(dir string) (*Page, error) {
 			if !ok {
 				ct = "application/octet-stream"
 			}
-			p.files[name] = pageFile{body: body, contentType: ct, modified: info.ModTime()}
+			f := pageFile{body: body, contentType: ct, modified: info.ModTime()}
+			if sub == "." && path.Ext(name) == ".html" {
+				f.html, f.styles, f.script = true, styleHashes(body), runsScript(body)
+			}
+			p.files[name] = f
 		}
 	}
 	if _, ok := p.files["index.html"]; !ok {
@@ -141,14 +150,17 @@ const sailParam = "s"
 // built report.html, as /report.html serves it.
 const noticePageRoute = "GET /report"
 
-func (p *Page) register(mux *http.ServeMux) {
+// register serves the page's routes, each HTML page with its policy.
+func (p *Page) register(mux *http.ServeMux, o PolicyOptions) {
+	policies := p.policies(o)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
 		if r.URL.Query().Has(sailParam) {
-			h := w.Header()
 			h.Set("Referrer-Policy", "no-referrer")
 			h.Set("X-Robots-Tag", "noindex")
 		}
-		p.serve(w, r, "index.html", pageCache)
+		policies[gamePage].set(h)
+		p.serve(w, r, gamePage, pageCache)
 	})
 	mux.HandleFunc("GET /{file}", func(w http.ResponseWriter, r *http.Request) {
 		if servedElsewhere[r.PathValue("file")] {
@@ -156,12 +168,14 @@ func (p *Page) register(mux *http.ServeMux) {
 			writeError(w, http.StatusNotFound, "not-found")
 			return
 		}
+		policies[r.PathValue("file")].set(w.Header())
 		p.serve(w, r, r.PathValue("file"), pageCache)
 	})
 	mux.HandleFunc("GET /assets/{file}", func(w http.ResponseWriter, r *http.Request) {
 		p.serve(w, r, "assets/"+r.PathValue("file"), assetCache)
 	})
 	mux.HandleFunc(noticePageRoute, func(w http.ResponseWriter, r *http.Request) {
+		policies["report.html"].set(w.Header())
 		p.serve(w, r, "report.html", pageCache)
 	})
 }

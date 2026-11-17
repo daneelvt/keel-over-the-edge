@@ -176,3 +176,63 @@ func TestCutQuoted(t *testing.T) {
 		}
 	}
 }
+
+// TestClientPolicyReports: what a page's policy refused is counted by its
+// directive, an unknown one as "other", and logged at info with what was
+// refused and the asset that asked; a report with a sample, a query or a
+// stack is refused.
+func TestClientPolicyReports(t *testing.T) {
+	st, _ := storetest.Store(t, store.Options{})
+	srv := newTestServer(t, st, nil)
+	_, cookie := makeSailor(t, srv, "Mary Read")
+	before := len(srv.logs.String())
+
+	worker := `{"build":"abc123","kind":"policy","directive":"worker-src","blocked":"data","source":"index-Bx1.js","line":102}`
+	if status, _ := report(t, srv, nil, worker); status != 401 {
+		t.Errorf("without a session: %d", status)
+	}
+	for _, body := range []string{
+		worker,
+		`{"build":"abc123","kind":"policy","directive":"require-trusted-types-for","blocked":"trusted-types-sink","source":"api.js","line":1}`,
+		`{"build":"abc123","kind":"policy","directive":"connect-src","blocked":"https://example.com/a/b.wasm"}`,
+		`{"build":"abc123","kind":"policy","directive":"navigate-to","blocked":"https://example.com/"}`,
+		`{"build":"abc123","kind":"policy","directive":"style-src-elem","blocked":"inline","line":30}`,
+	} {
+		if status, msg := report(t, srv, cookie, body); status != 204 {
+			t.Fatalf("%s: %d %s", body, status, msg)
+		}
+	}
+	for d, want := range map[string]float64{
+		"worker-src": 1, "require-trusted-types-for": 1, "connect-src": 1, "other": 1, "style-src-elem": 1, "img-src": 0,
+	} {
+		if n := testutil.ToFloat64(srv.metrics.ClientPolicyViolations.WithLabelValues(d)); n != want {
+			t.Errorf("%s: %v, want %v", d, n, want)
+		}
+	}
+	if n := testutil.CollectAndCount(srv.metrics.ClientPolicyViolations); n != len(policyDirectives)+1 {
+		t.Errorf("%d series", n)
+	}
+	logs := srv.logs.String()[before:]
+	if !strings.Contains(logs, `"msg":"a page's policy"`) || !strings.Contains(logs, `"directive":"worker-src"`) ||
+		!strings.Contains(logs, `"blocked":"data"`) || !strings.Contains(logs, `"source":"index-Bx1.js"`) ||
+		!strings.Contains(logs, `"line":102`) || !strings.Contains(logs, `"level":"INFO"`) {
+		t.Errorf("the policy's line:\n%s", logs)
+	}
+
+	for name, body := range map[string]string{
+		"a sample":           `{"build":"abc123","kind":"policy","directive":"worker-src","blocked":"data","sample":"data:,"}`,
+		"a query":            `{"build":"abc123","kind":"policy","directive":"connect-src","blocked":"https://example.com/a?token=Mary"}`,
+		"a fragment":         `{"build":"abc123","kind":"policy","directive":"connect-src","blocked":"https://example.com/a#Mary"}`,
+		"words":              `{"build":"abc123","kind":"policy","directive":"connect-src","blocked":"Mary Read"}`,
+		"no directive":       `{"build":"abc123","kind":"policy","blocked":"inline"}`,
+		"a directive's case": `{"build":"abc123","kind":"policy","directive":"Worker-Src","blocked":"inline"}`,
+		"a path as source":   `{"build":"abc123","kind":"policy","directive":"img-src","source":"assets/index.js"}`,
+		"a negative line":    `{"build":"abc123","kind":"policy","directive":"img-src","line":-1}`,
+		"a message":          `{"build":"abc123","kind":"policy","directive":"img-src","message":"x"}`,
+		"a long address":     `{"build":"abc123","kind":"policy","directive":"img-src","blocked":"https://example.com/` + strings.Repeat("a", 300) + `"}`,
+	} {
+		if status, _ := report(t, srv, cookie, body); status != 400 {
+			t.Errorf("%s: %d", name, status)
+		}
+	}
+}

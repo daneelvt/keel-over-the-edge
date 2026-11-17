@@ -468,6 +468,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		playCfg.Shipmates = p.shipmates
 	}
 	playCfg.Logs = logs
+	// The pages' policies: enforced, or reported only.
+	playCfg.PolicyReport = cfg.PolicyReport
 	playCfg.Races = h.races
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})

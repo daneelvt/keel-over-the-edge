@@ -17,8 +17,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 )
 
-// The page's own reports, POST /api/client-report: an error it met, or how
-// long its start took. Only a page with a session sends them; it holds
+// The page's own reports, POST /api/client-report: an error it met, how
+// long its start took, or what its policy refused (policy.go). Only a page with a session sends them; it holds
 // them until it has one. Each is counted, and an error logged at warn with
 // its build, its message and its stack; nothing names the account, not
 // even the access log's line. The page sends no player's words: a message
@@ -72,6 +72,14 @@ type clientReport struct {
 	Bytes  int64            `json:"bytes,omitzero"`
 	Visit  string           `json:"visit,omitzero"`
 	Tier   int              `json:"tier,omitzero"`
+	// A policy's: the directive that refused, or would have refused as a
+	// report; what it refused, an address's origin and path or a word
+	// for what has none (inline, eval, trusted-types-sink); and the
+	// asset and line that asked. Never a sample of what was refused.
+	Directive string `json:"directive,omitzero"`
+	Blocked   string `json:"blocked,omitzero"`
+	Source    string `json:"source,omitzero"`
+	Line      int    `json:"line,omitzero"`
 }
 
 // buildPattern is what a build may be: the image's BUILD, or "dev"; and
@@ -79,7 +87,26 @@ type clientReport struct {
 var (
 	buildPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 	stackPattern = regexp.MustCompile(`^[A-Za-z0-9._:\n-]*$`)
+	// A policy report's directive, what it refused (an address with no
+	// query or fragment, or a word), and the asset that asked.
+	directivePattern = regexp.MustCompile(`^[a-z-]{1,40}$`)
+	blockedPattern   = regexp.MustCompile(`^[A-Za-z0-9._~:/%@+!$&()*,;=-]{0,300}$`)
+	sourcePattern    = regexp.MustCompile(`^[A-Za-z0-9._-]{0,128}$`)
 )
+
+// policyDirectives are the directives counted by name; any other is
+// "other". The pages' policies name these, and a browser reports the one
+// that refused, which may be more particular than the policy's own
+// (script-src-elem where the policy says script-src).
+var policyDirectives = []string{
+	"default-src", "script-src", "script-src-elem", "script-src-attr", "worker-src", "connect-src",
+	"img-src", "style-src", "style-src-elem", "style-src-attr", "font-src", "manifest-src", "media-src",
+	"frame-src", "child-src", "object-src", "frame-ancestors", "base-uri", "form-action",
+	"require-trusted-types-for", "trusted-types",
+}
+
+// reportLongestLine is the latest line a policy report may name.
+const reportLongestLine = 10_000_000
 
 // clientReports are the route's limits and counts, in memory.
 type clientReports struct {
@@ -171,6 +198,14 @@ func (a *api) clientReport(w http.ResponseWriter, r *http.Request) {
 		if in.Bytes > 0 {
 			m.ClientStartupBytes.WithLabelValues(in.Visit).Observe(float64(in.Bytes))
 		}
+	case "policy":
+		d := in.Directive
+		if !slices.Contains(policyDirectives, d) {
+			d = "other"
+		}
+		m.ClientPolicyViolations.WithLabelValues(d).Inc()
+		a.cfg.Log.Info("a page's policy", "page_build", in.Build, "directive", in.Directive, "blocked", in.Blocked,
+			"source", in.Source, "line", in.Line)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -196,6 +231,10 @@ func (in *clientReport) valid() bool {
 			}
 		}
 		return true
+	case "policy":
+		return in.Message == "" && in.Stack == "" && in.Stages == nil && in.Bytes == 0 && in.Visit == "" && in.Tier == 0 &&
+			directivePattern.MatchString(in.Directive) && blockedPattern.MatchString(in.Blocked) &&
+			sourcePattern.MatchString(in.Source) && in.Line >= 0 && in.Line <= reportLongestLine
 	}
 	return false
 }
@@ -219,5 +258,9 @@ func (a *api) registerClientReports(mux *http.ServeMux, required func(http.Handl
 		}
 		m.ClientStartupBytes.WithLabelValues(v)
 	}
+	for _, d := range policyDirectives {
+		m.ClientPolicyViolations.WithLabelValues(d)
+	}
+	m.ClientPolicyViolations.WithLabelValues("other")
 	mux.Handle(clientReportRoute, required(a.clientReport))
 }
