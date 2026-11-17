@@ -79,6 +79,23 @@ export interface Me extends Look {
   knockMachine?: string;
 }
 
+/** The human check a new sailor passes, as the page renders it: Cloudflare Turnstile's site key, and its script's address. */
+export interface HumanCheck {
+  siteKey: string;
+  script: string;
+}
+
+/**
+ * GET /api/me's answer to a browser without a session: whether it has had
+ * a sailor (made or signed in here), so the start screen offers to sign in
+ * first, and the human check a new sailor passes, null for none.
+ */
+export interface NoSession {
+  error: 'session';
+  sailed: boolean;
+  check: HumanCheck | null;
+}
+
 export type SessionCheck = { kind: 'sailor'; me: Me } | { kind: 'none' } | { kind: 'failed' };
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;

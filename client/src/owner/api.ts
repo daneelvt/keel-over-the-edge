@@ -252,7 +252,7 @@ export interface AccountsData {
  * link lasts, s, and whether links and boarding are on for everyone; and
  * chat's switches: chat, shipmates' messages and spectators' reading of
  * machine sailors' chat on for everyone, and the countries, two letters
- * each, where chat is off.
+ * each, where chat is off; and new sailors' settings.
  */
 export interface SailSettings {
   linkLifetime: number;
@@ -262,6 +262,10 @@ export interface SailSettings {
   shipmateMessages: boolean;
   spectatorChat: boolean;
   chatCountries: string[];
+  /** How many new sailors one address (an IPv4 address, an IPv6 /56) may make in 24 hours. */
+  newSailorsPerAddress: number;
+  /** Whether every new sailor passes the human check (Cloudflare Turnstile). */
+  humanCheck: boolean;
 }
 
 /** What POST settings answers: the settings, what it would do or did in words, and the live links it ends. */
