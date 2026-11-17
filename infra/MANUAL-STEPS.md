@@ -471,9 +471,10 @@ Check:
    DNSSEC** shows the DS record (key tag, algorithm 13, digest type 2,
    digest). At Name.com, on the domain: **DNSSEC Management → Add DNSSEC
    Record**, with those four values.
-7. A day later, with nothing gone wrong: in `infra/tofu/zone.tf`, raise
-   `hsts_max_age` from `86400` to `15552000` (six months), by a pull
-   request, and run `accounts` with `apply`.
+7. HSTS: `infra/tofu/zone.tf` sets `hsts_max_age` to `15552000` (six
+   months). On a new zone, set it to `86400` (a day) for the first apply,
+   and raise it back by a pull request a day later, with nothing gone
+   wrong, then run `accounts` with `apply`.
 
 Check:
 

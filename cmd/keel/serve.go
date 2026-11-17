@@ -104,6 +104,9 @@ Configured from the environment:
   KEEL_CLIENT_DIR      the game's built page, served by the game's listener,
                        and its world page, owner/ in it, by the internal one
                        (default none: another server serves them)
+  KEEL_PAGE_POLICY     enforce: the pages' Content Security Policy refuses what
+                       it does not allow; report: it only tells the pages what
+                       it would refuse (default enforce)
   KEEL_BOAT_LIMIT      the most boats at sea at once, from 1 to 4096; beyond it
                        players wait in a queue (default 1000)
   KEEL_BELL            how long the world sails on once players are told the

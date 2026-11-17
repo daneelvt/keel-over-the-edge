@@ -5473,6 +5473,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
+| `KEEL_PAGE_POLICY` | `enforce` | `enforce`: the pages' Content Security Policy refuses what it does not allow; `report`: sent as `Content-Security-Policy-Report-Only`, refusing nothing (see [The page's policy](#the-pages-policy)). Production's overlay sets `report` until a week of reports leaves nothing unexplained |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it. Machine sailors sail at most half of them, with half of that kept for them |
 | `KEEL_SPECTATOR_LIMIT` | 1000 | The most players watching boats at once, from 0 to 100,000; beyond it they wait in a queue of their own of up to 4,096. A priority account, an owner watching their own machine sailor and a player waiting for a boat never wait (see [Watching a boat](#watching-a-boat)) |
 | `KEEL_CREW_LIMIT` | 1000 | The most players aboard boats not their own at once, from 1 to 100,000: each is a connection encoded as a spectator's is. A knock let aboard past it is refused (see [Sailing together](#sailing-together)) |
@@ -5600,6 +5601,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_client_rtt_seconds`, `keel_client_frame_seconds` | The phones' round trips and 95th percentile frame times, from their pings |
 | `keel_edge_minute_bytes{role,direction}` | Each game connection's bytes in a whole minute at sea, `sailing` or `watching`: `in`, `out`, `fetched` (what its page fetched over HTTP, from its pings) and `all` (the three together); see [The page's reports and data use](#the-pages-reports-and-data-use) |
 | `keel_client_errors_total{build}` | Errors the pages reported, by the build they ran (the first eight builds by name, `other` after) |
+| `keel_client_policy_violations_total{directive}` | What the pages' Content Security Policy refused, or would have as a report, as the pages reported it, by directive (`other` for one keel does not know); see [The page's policy](#the-pages-policy) |
 | `keel_client_startup_seconds{stage,visit}`, `keel_client_startup_bytes{visit}` | The pages' start-up, from the navigation's start to each stage (`shell`, `cover`, `start`, `tap`, `reveal`), and the bytes they fetched before the reveal, by visit: `first`, `return` (from the browser's cache) or `worker` (served by the service worker) |
 | `keel_http_cross_origin_refused_total` | Requests refused as cross-origin |
 | `go_*`, `process_*` | The runtime and the process |
@@ -5630,6 +5632,9 @@ of 8 KB at most, `{build, kind, …}`, with its build as `BUILD` has it
   from the browser's cache, nothing of it over the wire: `return`;
   otherwise `first`), which works with or without a service worker; and
   the tier it draws at.
+- `policy`: what the page's Content Security Policy refused, or would have
+  as a report: `directive`, `blocked`, `source` and `line` (see
+  [The page's policy](#the-pages-policy)).
 
 The route needs a session, as every game route does: the page holds its
 reports in memory (eight at most) until its sailor is known, a returning
@@ -8745,7 +8750,7 @@ go run ./tools/online -page client/dist/index.html      # and the page's bytes a
 
 It changes nothing lasting: the one sailor it makes, with a passkey of its
 own, named `Zz Online …`, it deletes at the end, its game connection open
-(closed then with 4003). It checks: HSTS; the
+(closed then with 4003). It checks: HSTS for six months; the page's policy (enforced or a report) and X-Frame-Options; the
 asset cached at the edge and the page not; nothing injected into the page,
 asked for as a browser asks;
 `/api/version` naming the build `prod` holds; HEAD; a PUT blocked by
@@ -9837,8 +9842,9 @@ Its caches:
 **When.** The page registers `/sw.js` once the world is revealed, or after
 20 s on the start screen, whichever comes first, so it never competes with
 the first download; only in a built page, never under Vite, `?test` or
-`?sandbox` (`client/src/boot/sw.ts`, one function, `register()`, for a
-policy on script addresses to cover). Where the game runs installed (from
+`?sandbox` (`client/src/boot/sw.ts`, one function, `register()`, its
+address made by the page's Trusted Types policy: see
+[The page's policy](#the-pages-policy)). Where the game runs installed (from
 its icon), the page asks once for persistent storage
 (`navigator.storage.persist()`), granted there without a question.
 
@@ -9897,6 +9903,126 @@ made with `KEEL_SW=off`: after a navigation no worker and no `keel-`
 caches). By hand: `npx vite build`, then `go run ./tools/e2e -client
 client/dist` and `http://localhost:18088/` in Chrome, DevTools open as
 above.
+
+### The page's policy
+
+Every page the `play.` listener serves by name sends a **Content Security
+Policy** and `X-Frame-Options: DENY` (`internal/api/policy.go`). The
+policies are built when keel reads the page's files at start
+(`api.OpenPage`, `Page.register`): each inline `<style>` (today the
+game's cover, in `index.html`) is allowed by the SHA-256 of its text as the
+build wrote it, so an edit to the cover changes its hash with it. Nothing
+else inline is allowed: no inline script, no `style` attribute, no
+handler. Each page gets one of three:
+
+| Page | Policy |
+|------|--------|
+| The game, `/` (`index.html`) | `default-src 'none'; script-src 'self' 'wasm-unsafe-eval' <check>; worker-src 'self' blob:; connect-src 'self' wss://<play host> blob:; img-src 'self' blob: data:; style-src 'self' 'sha256-<cover>'; font-src 'self'; manifest-src 'self'; frame-src <check>; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; require-trusted-types-for 'script'; trusted-types keel default` |
+| `sailors.html`, `sounds.html`, `dev.html`, `report.html` (and `/report`) | The same without the human check's origin and `frame-src` |
+| `rules.html`, `safety.html`, `privacy.html` (no script) | `default-src 'none'; style-src 'self' <hashes>; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` |
+
+A page is one with script when it holds a `<script>` element. `<play
+host>` is `KEEL_PLAY_ORIGIN`'s host, `ws://` for an `http://` origin
+(tests); `<check>` is the human check's origin (`api.Config.CheckOrigin`),
+left out with no check. `worker-src blob:` is for workers the page makes
+from `blob:`s of its own (the capability probe's); `connect-src blob:` for
+the textures inside the sailors' models; `'wasm-unsafe-eval'` for the
+physics, meshopt's decoder and the Basis transcoder. No `'unsafe-eval'`:
+three.js's `KTX2Loader` builds its transcoder's worker as a `blob:`, which
+would keep the page's policy, and the transcoder (Emscripten's embind)
+makes its functions from strings, so every sailor's texture would fail.
+`client/src/render/sailors/transcoder.ts` has the loader start each worker
+from a file of the page's own instead, `transcoderworker.js`, which runs
+that `blob:` (only a `blob:` of this origin, named after the `#` of its
+address) under no policy, as every worker started from a file of the
+page's is. The approval page (`internal/oauth`), the world page
+(`internal/owner`) and the agreement page (`internal/agreement`) keep
+policies of their own; `Page.Serve`, which serves the first two, sends
+none. The page's other files (assets, icons, `sw.js`) send none either: a
+worker started from a file of its own has no policy, and one started from a
+`blob:` has the page's.
+
+**Trusted Types.** The pages with script enforce Trusted Types: no plain
+string may reach a sink that loads script (a `<script>`'s `src`, `new
+Worker`, the service worker's `register`) or writes HTML
+(`innerHTML` and the rest). `client/src/boot/policy.ts`, imported first by
+every page's entry (`boot/main.ts`, `boot/sailors.ts`, `boot/sounds.ts`,
+`boot/dev.ts`, `pages/report.ts`), makes the two policies the header
+allows:
+
+- `keel`, through `scriptURL(address)`: this origin's `/assets/` and
+  `/sw.js`, the human check's script at
+  `https://challenges.cloudflare.com/turnstile/`, and its stand-in under
+  `/turnstile/` on this origin (tools/e2e's). It throws for anything else.
+  `boot/sw.ts`'s `register()` uses it, and so must any code of the game's
+  that adds a script.
+- `default`, which the browser asks for any plain string reaching a sink,
+  as libraries pass them: a script address of this origin (Vite's
+  workers), a `blob:` this origin made (three.js's transcoder), or the
+  check's path at Cloudflare (its script reloading itself). It refuses
+  every other address, and every string of HTML or script.
+
+A browser without Trusted Types gets plain strings, and the policy's other
+directives still hold. A worker started from a `blob:` keeps the page's
+policy, and what the policy refuses there is heard by the worker, not the
+page: no report reaches keel from it, so a new `blob:` worker is tested
+under the enforced policy (below), never left to the reports. The capability probe (`boot/capabilities.ts`)
+starts an empty worker from a `blob:` of its own, not `data:`, which
+`worker-src` refuses.
+
+**Adding a source.** A new origin, path or kind of address is three
+changes, each tested: the directive in `internal/api/policy.go` (and its
+text in `policy_test.go`), the address in `policy.ts`'s `keelAllows` or
+`defaultAllows` if script loads from it (and `policy.test.ts`), and a run
+of `policy.spec.ts` on the built page. Prefer a file of the page's own
+under `/assets/` to another origin, and never write HTML as a string (the
+Biome rule `build/no-html-sinks.grit` holds that too).
+
+**Report mode.** `KEEL_PAGE_POLICY` is `enforce` (the default: tests, the
+local cluster) or `report`, which sends every policy as
+`Content-Security-Policy-Report-Only`: the browser refuses nothing and
+tells the page what it would have. Production goes out with `report`
+(`infra/cluster/clusters/prod/apps/kustomization.yaml`); once a week of
+reports leaves nothing unexplained, that line is taken out and the policy
+is enforced.
+
+**Reading the violations.** Each page listens for
+`securitypolicyviolation` from its first moment (`policy.ts`) and sends
+each as a page's report of kind `policy` (see
+[The page's reports and data use](#the-pages-reports-and-data-use)): the
+directive, what was refused (an address's origin and path, never its
+query; `data` or `blob` for those; the browser's word for what has no
+address, `inline`, `eval`, `trusted-types-sink`), and the asset and line
+that asked, never the sample the browser quotes. Five a page, each once.
+The game's page holds them until it has a session; the other pages send
+theirs at once, which keel takes only from a browser signed in. keel
+counts them by directive, `keel_client_policy_violations_total{directive}`
+(any directive it does not know as `other`), and logs each at info, `a
+page's policy`, with `page_build`, `directive`, `blocked`, `source` and
+`line`: in production, in Grafana's Explore on VictoriaLogs (see
+[The logs](#the-logs)),
+`kubernetes.pod_namespace:keel msg:"a page's policy" | stats by (directive, blocked, source) count()`. In a browser, DevTools' console
+shows each refusal (or `[Report Only]`) with the code that asked.
+`go run ./tools/online` checks the live page carries its policy, enforced
+or reported, with Trusted Types and `X-Frame-Options: DENY`.
+
+**Testing it.** Go: each page's policy word for word, the hash of the
+cover in `client/index.html` (and `client/dist/index.html`, if built), the
+report mode's header, `X-Frame-Options`, no policy from `Page.Serve` or
+for assets (`internal/api/policy_test.go`); the reports' kind
+(`clientreport_test.go`). Vitest: every address each policy allows and
+refuses, HTML and script refused, the report's fields
+(`client/src/boot/policy.test.ts`). In the browser, the policy can only
+be tested on the built page (Vite's development server injects `<style>`
+tags and sends no policy): `policy.spec.ts` in the `built` project, with
+the policy enforced and a listener that fails the test on any violation,
+makes a sailor on the start screen and sets sail, opens the chart's tabs
+and the menu's race window, sees the service worker register and a string
+of HTML refused; opens the dressing room (sailors in a boat, their
+textures transcoded); and the developer page, the sound room, the notice
+page and the pages without script. By hand: `npx vite build`, then
+`KEEL_PAGE_POLICY=report go run ./tools/e2e -client client/dist` and
+`http://localhost:18088/` with DevTools' console open.
 
 ## Art
 

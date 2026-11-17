@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
@@ -94,4 +95,17 @@ func (p *process) newSailorsJob() jobs.Job {
 			return jobs.Result{Skipped: n == 0, Detail: fmt.Sprintf("%d addresses of new sailors a day old forgotten", n)}, nil
 		},
 	}
+}
+
+// checkOrigin is the human check's origin for the game page's policy: its
+// script's address when the check is configured and the script lives on
+// another origin. A script on the page's own origin (the browser tests'
+// stand-in) is already allowed, so it adds nothing. The owner's switch does
+// not take it away: the page simply loads no script while the check is off.
+func checkOrigin(cfg config.Config) string {
+	ns := cfg.NewSailors
+	if !ns.HumanCheck() || !strings.HasPrefix(ns.TurnstileScript, "https://") {
+		return ""
+	}
+	return ns.TurnstileScript
 }

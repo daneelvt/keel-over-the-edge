@@ -84,8 +84,14 @@ type Config struct {
 	Game http.Handler
 	// Page, if not nil, is the game's built page, served at / and
 	// /assets/. Without it, as in development, another server serves the
-	// page and sends the rest here.
+	// page and sends the rest here. Its pages' policies are built from
+	// Origin, CheckOrigin and PolicyReport (policy.go).
 	Page *Page
+	// PolicyReport sends the pages' policies as reports only, and
+	// CheckOrigin, if not "", is the human check's origin, whose script
+	// and frame the game's page may load.
+	PolicyReport bool
+	CheckOrigin  string
 	// Chunks, if not nil, are the world's chunks, served at their
 	// addresses under /w/; Models its islands' models.
 	Chunks *Chunks
@@ -270,7 +276,7 @@ func Handler(cfg Config) http.Handler {
 		mux.Handle("GET /ws", cfg.Game)
 	}
 	if cfg.Page != nil {
-		cfg.Page.register(mux)
+		cfg.Page.register(mux, PolicyOptions{Origin: cfg.Origin, Check: cfg.CheckOrigin, Report: cfg.PolicyReport})
 	}
 	if cfg.Chunks != nil {
 		mux.Handle(chunkRoute, cfg.Chunks.serve(cfg.Metrics))

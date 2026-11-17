@@ -246,3 +246,20 @@ func TestAccess(t *testing.T) {
 		}
 	}
 }
+
+// TestPagePolicy: the pages' policy is enforced unless KEEL_PAGE_POLICY
+// says report; anything else stops the server.
+func TestPagePolicy(t *testing.T) {
+	for v, report := range map[string]bool{"": false, "enforce": false, "report": true} {
+		c, err := Load(env(map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_PAGE_POLICY": v}))
+		if err != nil || c.PolicyReport != report {
+			t.Errorf("%q: report %v, %v", v, c.PolicyReport, err)
+		}
+	}
+	for _, v := range []string{"off", "Report", "report-only"} {
+		_, err := Load(env(map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_PAGE_POLICY": v}))
+		if err == nil || !strings.Contains(err.Error(), "KEEL_PAGE_POLICY") {
+			t.Errorf("%q: %v", v, err)
+		}
+	}
+}

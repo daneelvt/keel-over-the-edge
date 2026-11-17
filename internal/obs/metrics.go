@@ -213,6 +213,8 @@ type Metrics struct {
 	ClientErrors       *prometheus.CounterVec
 	ClientStartup      *prometheus.HistogramVec
 	ClientStartupBytes *prometheus.HistogramVec
+	// The pages' reports of what their policy refused, or would have.
+	ClientPolicyViolations *prometheus.CounterVec
 }
 
 // NewMetrics makes the metrics, with the Go runtime's and the process's.
@@ -502,6 +504,11 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.ClientStartupBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "keel_client_startup_bytes", Help: "The bytes the pages fetched over HTTP before the reveal, by visit.", Buckets: StartupByteBuckets,
 	}, []string{"visit"})
+	m.ClientPolicyViolations = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_client_policy_violations_total",
+		Help: "What the pages' Content Security Policy refused, or would have refused as a report, as the pages reported it, by directive.",
+	}, []string{"directive"})
+	reg.MustRegister(m.ClientPolicyViolations)
 	m.LeaseEpoch = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "keel_sim_lease_epoch", Help: "The simulation lease's epoch this process took it at: one more for each process that has run the world.",
 	})

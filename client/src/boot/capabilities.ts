@@ -89,7 +89,9 @@ export function browserEnv(): CapabilityEnv {
 }
 
 // A browser that supports module workers reads the type option; one that
-// does not ignores it. No worker is started: the empty script fails at once.
+// does not ignores it. The worker is an empty script of the page's own, a
+// blob: of this origin, which its policy allows (policy.ts), stopped at
+// once.
 function supportsModuleWorkers(): boolean {
   let read = false;
   const options = {
@@ -98,10 +100,16 @@ function supportsModuleWorkers(): boolean {
       return 'module';
     },
   };
+  let empty = '';
   try {
-    new Worker('data:,', options).terminate();
+    empty = URL.createObjectURL(new Blob([], { type: 'text/javascript' }));
+    new Worker(empty, options).terminate();
   } catch {
     // Reading the option is all that matters.
+  } finally {
+    if (empty !== '') {
+      URL.revokeObjectURL(empty);
+    }
   }
   return read;
 }

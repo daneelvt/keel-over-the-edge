@@ -141,3 +141,19 @@ func TestNewSailorsJob(t *testing.T) {
 		t.Fatalf("again: %+v %v", res, err)
 	}
 }
+
+func TestCheckOrigin(t *testing.T) {
+	for _, c := range []struct {
+		key, secret, script, want string
+	}{
+		{"", "", config.DefaultTurnstileScript, ""},
+		{"site", "secret", config.DefaultTurnstileScript, config.DefaultTurnstileScript},
+		{"site", "secret", "/turnstile/api.js?render=explicit", ""},
+	} {
+		var cfg config.Config
+		cfg.NewSailors.TurnstileSiteKey, cfg.NewSailors.TurnstileSecret, cfg.NewSailors.TurnstileScript = c.key, c.secret, c.script
+		if got := checkOrigin(cfg); got != c.want {
+			t.Errorf("%q %q %q: %q, want %q", c.key, c.secret, c.script, got, c.want)
+		}
+	}
+}
