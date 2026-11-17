@@ -120,6 +120,10 @@ type browser struct {
 	c    *http.Client
 	keys []*softkey.Key
 	ua   string
+	// addr, if not "", is the address Cloudflare would say the browser's
+	// requests come from; last are the cookies the last answer set.
+	addr string
+	last []*http.Cookie
 }
 
 func newBrowser(t *testing.T, srv *testServer) *browser {
@@ -140,11 +144,15 @@ func (b *browser) do(method, path, body string) (int, string) {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("User-Agent", b.ua)
+	if b.addr != "" {
+		req.Header.Set(AddressHeader, b.addr)
+	}
 	res, err := b.c.Do(req)
 	if err != nil {
 		b.t.Fatal(err)
 	}
 	defer res.Body.Close()
+	b.last = res.Cookies()
 	out, _ := io.ReadAll(res.Body)
 	return res.StatusCode, strings.TrimSpace(string(out))
 }
@@ -275,7 +283,7 @@ var codeForm = regexp.MustCompile(`^([0-9A-HJKMNP-TV-Z]{4}-){6}[0-9A-HJKMNP-TV-Z
 func TestMakeAnAccount(t *testing.T) {
 	srv, _, u := accountServer(t)
 	b := newBrowser(t, srv)
-	if status, body := b.do("GET", "/api/me", ""); status != 401 || body != `{"error":"session"}` {
+	if status, body := b.do("GET", "/api/me", ""); status != 401 || body != `{"error":"session","sailed":false,"check":null}` {
 		t.Fatalf("me without a session: %d %s", status, body)
 	}
 	status, opts := b.post("/account/begin", `{"name":"  Ann   Bonny ","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)

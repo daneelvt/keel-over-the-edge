@@ -40,7 +40,8 @@ func (a *api) beginSignIn(w http.ResponseWriter, r *http.Request) {
 
 // finishSignIn answers POST /signin/finish: the passkey the browser offered
 // is checked, what it says of itself written back, and a new session made,
-// whose cookie the answer sets.
+// whose cookie the answer sets, with the mark that the browser has had a
+// sailor. Signing in is never limited.
 //
 //	200 {"name", "look", "accepted", "recovered"?}
 //	400 {"error":"refused"}          the browser's answer is not accepted
@@ -77,6 +78,9 @@ func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request) {
 	})
 	if unknown, ok := errors.AsType[*auth.UnknownPasskey](err); ok {
 		a.ceremonyCounted(c.Kind, "refused")
+		// The browser holds a dead passkey: its account was deleted, so
+		// it no longer leads with signing in.
+		http.SetCookie(w, auth.ClearedSailedCookie())
 		writeJSON(w, http.StatusNotFound, refusal{Error: "unknown-passkey", Unknown: a.unknownCredential(unknown.CredentialID)})
 		return
 	}
@@ -115,6 +119,7 @@ func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request) {
 	obs.SetAccount(r.Context(), holder.ID.String())
 	a.cfg.Sessions.Add(hash, store.Session{Account: holder.Account})
 	http.SetCookie(w, auth.SessionCookie(token))
+	http.SetCookie(w, auth.SailedCookie())
 	writeJSON(w, http.StatusOK, sailorResponse{
 		Name: holder.Name, lookShown: a.shown(holder.ID, holder.Look), Recovered: ms(recovered), Accepted: a.cfg.Passkeys.Accepted(u),
 	})
@@ -174,6 +179,7 @@ func (a *api) recover(w http.ResponseWriter, r *http.Request) {
 	a.cfg.Sessions.ForgetAccount(acc.ID)
 	a.cfg.Sessions.Add(hash, store.Session{Account: acc, Held: true})
 	http.SetCookie(w, auth.SessionCookie(token))
+	http.SetCookie(w, auth.SailedCookie())
 	writeJSON(w, http.StatusOK, sailorResponse{Name: acc.Name, lookShown: a.shown(acc.ID, acc.Look), AddPasskey: true})
 }
 

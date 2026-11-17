@@ -5,7 +5,6 @@ package api
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -290,11 +289,7 @@ func (a *api) notice(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	addr := r.Header.Get("Cf-Connecting-Ip")
-	if addr == "" {
-		addr, _, _ = net.SplitHostPort(r.RemoteAddr)
-	}
-	if !a.notices.allow(addr, time.Now()) {
+	if !a.notices.allow(AddressPrefix(Address(r.Context())).String(), time.Now()) {
 		writeError(w, http.StatusTooManyRequests, "often")
 		return
 	}

@@ -47,8 +47,9 @@ func SessionFromContext(ctx context.Context) (Current, bool) {
 
 // Session reads the session cookie of each request, resolves it through
 // the cache and puts the account in the request's context, and the account
-// ID in the access log. A request without a cookie, or with one that names
-// no session, goes on without an account. When the database cannot be
+// ID in the access log; the cookie, and the mark that the browser has had
+// a sailor beside it, are set again once a day. A request without a
+// cookie, or with one that names no session, goes on without an account. When the database cannot be
 // asked, the request is answered 503: going on as nobody would send a
 // returning player to make a new sailor.
 func Session(c *Cache, log *slog.Logger, fail ErrorWriter) func(http.Handler) http.Handler {
@@ -76,6 +77,7 @@ func Session(c *Cache, log *slog.Logger, fail ErrorWriter) func(http.Handler) ht
 			}
 			if res.RenewCookie {
 				http.SetCookie(w, SessionCookie(cookie.Value))
+				http.SetCookie(w, SailedCookie())
 			}
 			obs.SetAccount(r.Context(), res.Account.ID.String())
 			ctx := context.WithValue(r.Context(), sessionKey{}, Current{Session: res.Session, Hash: hash})
@@ -104,9 +106,17 @@ func Required(fail ErrorWriter, h http.Handler) http.Handler {
 // Signed answers 401 to a request without a session, and passes the rest
 // to h, sessions held to adding a passkey among them.
 func Signed(fail ErrorWriter, h http.Handler) http.Handler {
+	return SignedOr(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fail(w, http.StatusUnauthorized, "session")
+	}), h)
+}
+
+// SignedOr passes a request with a session to h, sessions held to adding
+// a passkey among them, and one without to none, which answers it.
+func SignedOr(none, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := SessionFromContext(r.Context()); !ok {
-			fail(w, http.StatusUnauthorized, "session")
+			none.ServeHTTP(w, r)
 			return
 		}
 		h.ServeHTTP(w, r)

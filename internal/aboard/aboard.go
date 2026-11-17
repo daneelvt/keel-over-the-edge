@@ -95,16 +95,19 @@ const (
 // Switches are the owner's for everyone at once, kept in memory as the
 // database has them and read at every knock, link and line: whether links
 // work, whether anyone may come aboard, how long a link lasts, whether
-// chat and shipmates' messages are on, and where chat is off.
+// chat and shipmates' messages are on, and where chat is off; and how many
+// new sailors one address may make in a day, and the human check.
 type Switches struct {
 	links    atomic.Bool
 	boarding atomic.Bool
 	lifetime atomic.Int64
 	chat     chatSwitches
+	// newSailors are the owner's settings for new sailors (newsailors.go).
+	newSailors newSailorSwitches
 }
 
-// NewSwitches is every switch on, chat off nowhere, and the lifetime
-// given.
+// NewSwitches is every switch on, chat off nowhere, 20 new sailors an
+// address a day, and the lifetime given.
 func NewSwitches(lifetime time.Duration) *Switches {
 	s := &Switches{}
 	s.links.Store(true)
@@ -113,6 +116,7 @@ func NewSwitches(lifetime time.Duration) *Switches {
 	s.chat.chat.Store(true)
 	s.chat.shipmates.Store(true)
 	s.chat.spectators.Store(true)
+	s.newSailors.perAddress.Store(DefaultNewSailorsPerAddress)
 	return s
 }
 

@@ -93,6 +93,12 @@ type Metrics struct {
 	OwnerRefused *prometheus.CounterVec // what the owner's tools refused, by what was asked
 	OwnerView    prometheus.Histogram   // building the world page's view
 
+	// HumanChecks are new sailors' human checks, by result;
+	// NewSailorsRefused new sailors refused before their passkey, by
+	// reason: their address's limit, or the check.
+	HumanChecks       *prometheus.CounterVec
+	NewSailorsRefused *prometheus.CounterVec
+
 	DBQueryDuration    *prometheus.HistogramVec // by query
 	DBQueryErrors      *prometheus.CounterVec   // by query
 	SchemaVersion      prometheus.Gauge
@@ -687,6 +693,24 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)
+	m.HumanChecks = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_human_checks_total",
+		Help: "New sailors' human checks, by result: passed, refused, spent (a token used before or too old), unavailable (Cloudflare could not answer: refused, failing closed), off (no check made).",
+	}, []string{"result"})
+	for _, r := range []string{"passed", "refused", "spent", "unavailable", "off"} {
+		m.HumanChecks.WithLabelValues(r)
+	}
+	m.NewSailorsRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_new_sailors_refused_total",
+		Help: "New sailors refused before their passkey, by reason: address (too many from it in a day) or check (the human check not passed).",
+	}, []string{"reason"})
+	for _, r := range []string{"address", "check"} {
+		m.NewSailorsRefused.WithLabelValues(r)
+	}
+	for _, a := range []string{"new-sailors", "human-check"} {
+		m.OwnerActions.WithLabelValues(a)
+	}
+	reg.MustRegister(m.HumanChecks, m.NewSailorsRefused)
 	return m
 }
 

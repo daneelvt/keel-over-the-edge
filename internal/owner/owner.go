@@ -239,6 +239,9 @@ type Config struct {
 	ChatSettings ChatSettings
 	ChatChanged  func()
 	Reports      Reports
+	// NewSailors, if not nil, keeps the settings for new sailors: how
+	// many one address may make in a day, and the human check's switch.
+	NewSailors NewSailorSettings
 	// Racing, if not nil, keeps the racing limits and the harbour
 	// timetable; RaceBoats are the catalog's boats' ids, the harbour
 	// rotation's choices.

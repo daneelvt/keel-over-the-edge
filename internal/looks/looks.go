@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/humancheck"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -294,8 +295,10 @@ func (b *Book) Machines() MachineChoices {
 }
 
 // Begin is POST /account/begin's body for a new sailor of a name and look,
-// whose player was born in January 1990.
+// whose player was born in January 1990, with Cloudflare's test token for
+// the human check, which a server set up with Cloudflare's test keys (the
+// local cluster) passes, and one with real keys refuses.
 func Begin(name string, l store.Look) map[string]any {
 	return map[string]any{"name": name, "look": l.Look, "version": l.Version, "skin": l.Skin, "hair": l.Hair, "colour": l.Colour,
-		"born": map[string]int{"year": 1990, "month": 1}}
+		"born": map[string]int{"year": 1990, "month": 1}, "check": humancheck.TestToken}
 }

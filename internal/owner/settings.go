@@ -33,18 +33,28 @@ type ChatSettings interface {
 	SetChatCountries(ctx context.Context, countries []string, a store.Action) error
 }
 
+// NewSailorSettings are the owner's settings for new sailors as the
+// database keeps them, each written with its entry in the record.
+type NewSailorSettings interface {
+	SetNewSailorsPerAddress(ctx context.Context, n int, a store.Action) error
+	SetHumanCheck(ctx context.Context, on bool, a store.Action) error
+}
+
 // SettingsJSON is settings.json: how long a link lasts, s, and whether
-// links and boarding are on for everyone; and whether chat, shipmates'
+// links and boarding are on for everyone; whether chat, shipmates'
 // messages and spectators' reading of machine sailors' chat are, and the
-// countries where chat is off.
+// countries where chat is off; and how many new sailors one address may
+// make in a day, and whether every new sailor passes the human check.
 type SettingsJSON struct {
-	LinkLifetime     int64    `json:"linkLifetime"`
-	Links            bool     `json:"links"`
-	Boarding         bool     `json:"boarding"`
-	Chat             bool     `json:"chat"`
-	ShipmateMessages bool     `json:"shipmateMessages"`
-	SpectatorChat    bool     `json:"spectatorChat"`
-	ChatCountries    []string `json:"chatCountries"`
+	LinkLifetime         int64    `json:"linkLifetime"`
+	Links                bool     `json:"links"`
+	Boarding             bool     `json:"boarding"`
+	Chat                 bool     `json:"chat"`
+	ShipmateMessages     bool     `json:"shipmateMessages"`
+	SpectatorChat        bool     `json:"spectatorChat"`
+	ChatCountries        []string `json:"chatCountries"`
+	NewSailorsPerAddress int      `json:"newSailorsPerAddress"`
+	HumanCheck           bool     `json:"humanCheck"`
 }
 
 // SettingsRequest changes any of the switches; with Check, it only says
@@ -59,7 +69,11 @@ type SettingsRequest struct {
 	ShipmateMessages *bool     `json:"shipmateMessages,omitempty"`
 	SpectatorChat    *bool     `json:"spectatorChat,omitempty"`
 	ChatCountries    *[]string `json:"chatCountries,omitempty"`
-	Check            bool      `json:"check,omitempty"`
+	// NewSailorsPerAddress and HumanCheck are the settings for new
+	// sailors.
+	NewSailorsPerAddress *int  `json:"newSailorsPerAddress,omitempty"`
+	HumanCheck           *bool `json:"humanCheck,omitempty"`
+	Check                bool  `json:"check,omitempty"`
 }
 
 // SettingsAnswer is what a change did, or checked would do: the switches
@@ -76,7 +90,8 @@ func settingsOf(s *aboard.Switches) SettingsJSON {
 		c = []string{}
 	}
 	return SettingsJSON{LinkLifetime: int64(s.Lifetime() / time.Second), Links: s.Links(), Boarding: s.Boarding(),
-		Chat: s.Chat(), ShipmateMessages: s.ShipmateMessages(), SpectatorChat: s.SpectatorChat(), ChatCountries: c}
+		Chat: s.Chat(), ShipmateMessages: s.ShipmateMessages(), SpectatorChat: s.SpectatorChat(), ChatCountries: c,
+		NewSailorsPerAddress: s.NewSailorsPerAddress(), HumanCheck: s.HumanCheck()}
 }
 
 // settings serves settings.json, the switches in force.
@@ -122,12 +137,21 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chatAsked := req.Chat != nil || req.ShipmateMessages != nil || req.SpectatorChat != nil || req.ChatCountries != nil
-	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil && !chatAsked {
-		o.refuse(w, "settings", http.StatusBadRequest, "nothing to change: give linkLifetime, links, boarding, chat, shipmateMessages, spectatorChat or chatCountries")
+	newAsked := req.NewSailorsPerAddress != nil || req.HumanCheck != nil
+	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil && !chatAsked && !newAsked {
+		o.refuse(w, "settings", http.StatusBadRequest, "nothing to change: give linkLifetime, links, boarding, chat, shipmateMessages, spectatorChat, chatCountries, newSailorsPerAddress or humanCheck")
 		return
 	}
 	if chatAsked && o.cfg.ChatSettings == nil {
 		o.refuse(w, "settings", http.StatusServiceUnavailable, "chat is not running")
+		return
+	}
+	if newAsked && o.cfg.NewSailors == nil {
+		o.refuse(w, "settings", http.StatusServiceUnavailable, "the settings for new sailors are not running")
+		return
+	}
+	if n := req.NewSailorsPerAddress; n != nil && (*n < store.MinNewSailorsPerAddress || *n > store.MaxNewSailorsPerAddress) {
+		o.refuse(w, "settings", http.StatusBadRequest, fmt.Sprintf("newSailorsPerAddress: from %d to %d a day", store.MinNewSailorsPerAddress, store.MaxNewSailorsPerAddress))
 		return
 	}
 	var countries []string
@@ -194,6 +218,14 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 		} else {
 			words = append(words, "chat off in "+strings.Join(countries, ", "))
 		}
+	}
+	if req.NewSailorsPerAddress != nil {
+		after.NewSailorsPerAddress = *req.NewSailorsPerAddress
+		words = append(words, newSailorsWords(*req.NewSailorsPerAddress))
+	}
+	if req.HumanCheck != nil {
+		after.HumanCheck = *req.HumanCheck
+		words = append(words, "the human check on new sailors "+onOff(*req.HumanCheck))
 	}
 	said := strings.Join(words, "; ")
 	if req.Check {
@@ -280,7 +312,48 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 			o.cfg.ChatChanged()
 		}
 	}
+	if newAsked && !o.setNewSailors(ctx, w, r, req, a) {
+		return
+	}
 	writeJSON(w, SettingsAnswer{Settings: settingsOf(sw), Ended: ended, Words: "Done: " + said + "." + linksWords(req, "stopped", ended)})
+}
+
+// newSailorsWords is the limit on new sailors in words: "20 new sailors
+// an address a day".
+func newSailorsWords(n int) string {
+	if n == 1 {
+		return "1 new sailor an address a day"
+	}
+	return fmt.Sprintf("%d new sailors an address a day", n)
+}
+
+// setNewSailors writes the settings for new sailors asked, the database
+// first, then the switches every begin reads. On a failure it has
+// answered, and returns false.
+func (o *Owner) setNewSailors(ctx context.Context, w http.ResponseWriter, r *http.Request, req SettingsRequest, a store.Action) bool {
+	sw, ns := o.cfg.Switches, o.cfg.NewSailors
+	if n := req.NewSailorsPerAddress; n != nil {
+		was := sw.NewSailorsPerAddress()
+		a.Detail = fmt.Sprint(*n)
+		if err := ns.SetNewSailorsPerAddress(ctx, *n, a); err != nil {
+			http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+			return false
+		}
+		sw.SetNewSailorsPerAddress(*n)
+		o.count(store.ActionNewSailors)
+		o.cfg.Log.Info("owner: new sailors an address a day set", "action", store.ActionNewSailors, "was", was, "now", *n, "from", r.RemoteAddr)
+	}
+	if on := req.HumanCheck; on != nil {
+		a.Detail = onOff(*on)
+		if err := ns.SetHumanCheck(ctx, *on, a); err != nil {
+			http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+			return false
+		}
+		sw.SetHumanCheck(*on)
+		o.count(store.ActionHumanCheck)
+		o.cfg.Log.Info("owner: the human check switched", "action", store.ActionHumanCheck, "on", *on, "from", r.RemoteAddr)
+	}
+	return true
 }
 
 // linksWords are a change's words for the links it stops, for a change
