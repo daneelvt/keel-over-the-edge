@@ -17,6 +17,7 @@ import {
   aLook,
   answerBorn,
   BORN,
+  checkToken,
   GAME,
   holdPasskeys,
   sailor,
@@ -213,7 +214,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   // Its name is free at once.
   const next = await browser.newContext();
   const begun = await next.request.post('/account/begin', {
-    data: { name: made.name, ...aLook(), born: BORN },
+    data: { name: made.name, ...aLook(), born: BORN, check: await checkToken(next.request) },
   });
   expect(begun.status()).toBe(200);
   await next.close();

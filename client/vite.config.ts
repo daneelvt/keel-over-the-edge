@@ -13,6 +13,9 @@ const key = process.env.KEEL_DEV_KEY;
 const playAddr = process.env.KEEL_PLAY_ADDR ?? '127.0.0.1:8080';
 // keel's listener for AI apps: the MCP address.
 const agentsAddr = process.env.KEEL_AGENTS_ADDR ?? '127.0.0.1:8081';
+// The browser tests' stand-in for Cloudflare Turnstile (tools/e2e), whose
+// script and token are on the page's own origin under /turnstile/.
+const turnstileAddr = process.env.KEEL_TURNSTILE_ADDR ?? '127.0.0.1:18088';
 
 // The net worker is bundled apart; its packages join the page's notice.
 const workerPackages = new Set<string>();
@@ -49,6 +52,8 @@ const server: ServerOptions = {
     },
     // The world's chunks, at the addresses the game connection hands out.
     '/w/': { target: `http://${playAddr}`, changeOrigin: false },
+    // The human check's stand-in, when keel is set up with it (tools/e2e).
+    '/turnstile/': { target: `http://${turnstileAddr}`, changeOrigin: false },
     // The game connection. Vite does not check a WebSocket's Origin before
     // proxying it; keel does.
     '/ws': { target: `ws://${playAddr}`, ws: true, changeOrigin: false },

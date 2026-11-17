@@ -237,6 +237,16 @@ export async function answerBorn(page: Page, month = 'April', year = '2001'): Pr
 }
 
 /**
+ * A token of the human check, as the start screen's widget gets one from
+ * tools/e2e's stand-in for Cloudflare Turnstile: good for one new sailor.
+ */
+export async function checkToken(request: APIRequestContext): Promise<string> {
+  const res = await request.post('/turnstile/issue', { data: { action: 'new-sailor' } });
+  expect(res.status(), await res.text()).toBe(200);
+  return ((await res.json()) as { token: string }).token;
+}
+
+/**
  * Makes a sailor in the context, as the start screen does, through the
  * server's routes, with a passkey of the test's own: its session's cookie
  * is the context's.
@@ -244,7 +254,7 @@ export async function answerBorn(page: Page, month = 'April', year = '2001'): Pr
 export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<Made> {
   const name = `${word} ${stamp()}`;
   const begun = await context.request.post('/account/begin', {
-    data: { name, ...aLook(), born: BORN },
+    data: { name, ...aLook(), born: BORN, check: await checkToken(context.request) },
   });
   expect(begun.status(), await begun.text()).toBe(200);
   const { passkey, answer } = createPasskey(await begun.json(), new URL(begun.url()).origin);
