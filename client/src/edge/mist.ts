@@ -42,6 +42,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { DOME_RADIUS, domeCentre } from '../render/materials';
+import { eachRender } from '../render/uploads';
 
 /** Koschmieder's constant: ln(1/0.02), the contrast threshold of 2%. */
 export const KOSCHMIEDER = 3.912;
@@ -52,28 +53,28 @@ export const MIST_SAMPLES = 16;
 /** What the mist is drawn with: its uniforms, which the scene sets each frame. */
 export const edgeLook = {
   /** The scene's origin in the world: metres east and north of the disk's centre. */
-  origin: uniform(new Vector2()),
+  origin: eachRender(uniform(new Vector2())),
   /** The band's inner edge and the lip, metres from the centre. */
-  band: uniform(7778.4),
-  lip: uniform(8334),
+  band: eachRender(uniform(7778.4)),
+  lip: eachRender(uniform(8334)),
   /** The mist's own extinction at the lip at the sea, per metre, over the clear air's. */
-  sigma: uniform(KOSCHMIEDER / 300 - KOSCHMIEDER / 6000),
+  sigma: eachRender(uniform(KOSCHMIEDER / 300 - KOSCHMIEDER / 6000)),
   /** Its scale height, metres. */
-  height: uniform(40),
+  height: eachRender(uniform(40)),
   /** Its colour, a display value, by the hour. */
-  colour: uniform(new Color(0.8, 0.83, 0.85)),
+  colour: eachRender(uniform(new Color(0.8, 0.83, 0.85))),
   /** 1 to draw the edge's mist, the lip and the falls, 0 for none (?edge=off). */
-  on: uniform(1),
+  on: eachRender(uniform(1)),
   /**
    * 1 while the camera is near enough the band and the drain to see them,
    * else 0: the turns of a loop (nearEdge) the drain's lines are worked out
    * in, and a sixteenth of the mist's, so that elsewhere they are not
    * worked out at all.
    */
-  near: uniform(0, 'int'),
+  near: eachRender(uniform(0, 'int')),
   /** The sea's last tiles before the brink tip outward by this, rad, and drop by this, m. */
-  tip: uniform(0.3),
-  sag: uniform(0.2),
+  tip: eachRender(uniform(0.3)),
+  sag: eachRender(uniform(0.2)),
 };
 
 /** The mist's numbers: the band, its density at the lip and its scale height. */

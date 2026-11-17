@@ -53,6 +53,7 @@ import { FORMS } from '../predict/weather';
 import { depthTo } from '../render/fog';
 import { basicMaterial, bendScene } from '../render/materials';
 import { look, skyColour, toLinear } from '../render/sky';
+import { instancesByAttribute, sendFirst, sendInstances } from '../render/uploads';
 
 /** A layer of a recipe's puffs. */
 export interface PuffLayer {
@@ -324,7 +325,9 @@ export class Clouds {
     );
     const seen = mix(hazed, edgeLook.colour, float(1).sub(exp(depthTo(positionWorld).negate())));
     m.colorNode = vec4(toLinear(seen), 1) as unknown as Node<'vec4'>;
-    this.mesh = new InstancedMesh(new IcosahedronGeometry(1, 1), m, PUFF_MOST);
+    this.mesh = instancesByAttribute(
+      new InstancedMesh(new IcosahedronGeometry(1, 1), m, PUFF_MOST),
+    );
     this.mesh.name = 'clouds';
     this.mesh.count = 0;
     // Its puffs are anywhere within kilometres: a stale bounding sphere
@@ -457,8 +460,8 @@ export class Clouds {
     this.count = n;
     this.mesh.count = n;
     this.mesh.visible = n > 0;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.#shade.needsUpdate = true;
+    sendInstances(this.mesh, n);
+    sendFirst(this.#shade, n);
   }
 
   /** Places the puffs for a frame: the anchor from the floating origin, and the seconds since they were laid out. */

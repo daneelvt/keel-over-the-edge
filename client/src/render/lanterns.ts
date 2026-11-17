@@ -26,7 +26,7 @@ import {
   DynamicDrawUsage,
   Euler,
   InstancedInterleavedBuffer,
-  InstancedMesh,
+  type Mesh,
   Quaternion,
   Vector3,
 } from 'three';
@@ -54,6 +54,7 @@ import { headingToRotationY } from './coords';
 import { depthTo } from './fog';
 import { bendScene, fallToEdge, glowMaterial } from './materials';
 import { look, toLinear } from './sky';
+import { instances } from './uploads';
 
 const DEG = Math.PI / 180;
 
@@ -147,7 +148,7 @@ const SPREAD = 1.5;
 const CLEAR = 0.2;
 
 export class Lanterns {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** Each lantern: its scene position, and the bearing it is seen from, in degrees. */
   readonly place = attr();
   /** Each lantern's lights, 1 or 0: port, starboard, stern; and its glow's strength. */
@@ -230,7 +231,7 @@ export class Lanterns {
     const strength = clamp(vShows.w.mul(vDim), 0, 1).mul(through);
     m.fragmentNode = vec4(toLinear(colour).mul(glow.mul(strength)), 1) as unknown as Node<'vec4'>;
 
-    this.mesh = new InstancedMesh(g, m, LANTERN_CAPACITY);
+    this.mesh = instances(g, m);
     this.mesh.name = 'lanterns';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;

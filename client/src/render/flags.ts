@@ -20,8 +20,8 @@ import {
   DynamicDrawUsage,
   Float32BufferAttribute,
   InstancedInterleavedBuffer,
-  InstancedMesh,
   InterleavedBufferAttribute,
+  type Mesh,
   NearestFilter,
   RGBAFormat,
   SRGBColorSpace,
@@ -45,6 +45,7 @@ import {
 import type { Node } from 'three/webgpu';
 import type { SignalDye, SignalFlag, TownFlags } from '../catalog/types.gen';
 import { litMaterial } from './materials';
+import { instances } from './uploads';
 
 /** A knot, m/s. */
 const KNOT = 1852 / 3600;
@@ -143,7 +144,7 @@ function flagGeometry(): BufferGeometry {
 }
 
 export class Flags {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** World time, s: what every phone's flags flap by. */
   readonly time = uniform(0);
   count = 0;
@@ -207,7 +208,7 @@ export class Flags {
       vec3(0.22, 0.18, 0.14),
       select(vAt.y.greaterThan(0), varying(first.xyz), varying(second.xyz)),
     ) as unknown as Node<'vec3'>;
-    this.mesh = new InstancedMesh(g, m, FLAG_CAPACITY);
+    this.mesh = instances(g, m);
     this.mesh.name = 'flags';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -366,7 +367,7 @@ function signalGeometry(): BufferGeometry {
 }
 
 export class SignalFlags {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** World time, s. */
   readonly time = uniform(0);
   /** The designs, by the catalog's index. */
@@ -453,7 +454,7 @@ export class SignalFlags {
     m.maskNode = vAt.x.lessThan(
       float(1).sub(vFork.mul(float(1).sub(vAt.y.abs().mul(2)))),
     ) as unknown as Node<'bool'>;
-    this.mesh = new InstancedMesh(g, m, capacity);
+    this.mesh = instances(g, m);
     this.mesh.name = 'signal flags';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
