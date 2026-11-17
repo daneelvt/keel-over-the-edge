@@ -1212,6 +1212,7 @@ test.describe('pictures', () => {
     ['gale', 'gale', 12],
   ] as const) {
     test(`the low tier, ${name}`, async ({ page }) => {
+      test.skip(project() === 'compat', 'the low tier on WebGPU is the webgpu project’s');
       await openLook(page, `sea=${sea}&tier=low`, false);
       await page.evaluate(async (hour) => {
         const k = globalThis.keel;
