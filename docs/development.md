@@ -156,7 +156,7 @@ credentials.
 | `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read, then the website deployed (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
-| `security.yaml` | Weekly | govulncheck and npm signatures on `main` | |
+| `security.yaml` | Weekly, and by hand | govulncheck and npm signatures on `main`; every fuzz target in the module for a minute each, a failing input kept as an artifact (see [What protects the game](#what-protects-the-game)) | `go test -run '^$' -fuzz '^FuzzBegin$' -fuzztime 60s ./internal/api` |
 
 Every workflow pins its actions to full commit hashes; the repository refuses
 any other. Each multi-job workflow a pull request runs ends in one job named
@@ -10274,6 +10274,126 @@ repository, as infra/MANUAL-STEPS.md says. Its metrics:
 `keel_agreement_webhooks_total{result}`, `keel_agreement_checks_total{result}`,
 `keel_agreement_signatures_total{how}` and
 `keel_agreement_github_errors_total`.
+
+## What protects the game
+
+Every limit on what a player, a machine sailor or an AI app may do, and
+every threat to the game and its machine, with what stops it and what
+checks that it still does. A change that moves a value, or the check that
+holds it, changes its row here too. "Test" is a Go test, or a Vitest or
+Playwright test by its title; "rule" is one of the manifests' rules
+(`tools/internal/manifests`, run on every entry point by `pr.infra` and
+before every release); "online" is a check of `go run ./tools/online`, run
+by hand against production ([Online](#online)); "verify" is a task of
+`infra/ansible/verify.yaml`, run by `machine.yaml` after every apply and by
+`machine-test.yaml`.
+
+### The limits
+
+| Limit | Where | Value | Held by |
+|---|---|---|---|
+| Requests per address | Traefik `per-address-rate`, keyed on `CF-Connecting-IP` (each address alone, IPv6 too) | 50 a second, burst 100 (local cluster 2,000 and 4,000) | `TestLimitsPerAddress`; rule "the game's routes limited per address"; online "one address is limited, and cannot forge CF-Connecting-IP" |
+| Game connections open per address | Traefik `per-address-connections`, on `/ws` | 200 (local cluster 4,096) | the same |
+| New sailors' bursts | Cloudflare's rate rule `accounts` (`infra/tofu/rules.tf`), per address and data centre, counted over 10 s only | 10 `POST /account/begin` in 10 s, blocked 10 s | `tools/accounts -check` (valid OpenTofu) and the owner's plan; nothing calls it |
+| New sailors per address | keel, at `POST /account/begin`, counted at `/account/finish`, by a keyed hash of the IPv4 address or IPv6 /56 | 20 in a rolling 24 hours, a setting on the world page (1–1,000); signing in never counted | TODO(lead) |
+| A human check on every new sailor | keel, at `POST /account/begin`, Cloudflare Turnstile verified by `siteverify` | every new sailor; fails closed; a switch on the world page | TODO(lead) |
+| New sailors in total | an alert | over 60 an hour warns (`NewSailorsSurge`); the check unavailable more than 3 times in 10 minutes warns (`HumanCheckUnavailable`) | `infra/cluster/monitoring/rules/tests/sailors.yaml` (`TestAlertRules`) |
+| A request's body, and its time | keel's play mux | 16 KB; 10 s to read, 30 s to answer (not on `/ws`) | `TestNewSailorRefusesMalformed` ("too large"), `TestBodyCutAtItsDeadline` |
+| A session before a game connection | the edge | always; an AI account's session refused | `TestNoSessionNoUpgrade`, `TestAIAccountRefused`; online "/ws refuses a request without a session" |
+| One game connection per account | the edge | a new one closes the old with 4001, "You are playing on another device." | `TestTakeover`; `connect.spec.ts` "another device takes the boat, and Take over takes it back" |
+| A game message's size | the edge (`SetReadLimit`) | 1 KB; one byte more closes with 1009 | `TestMessageTooBig` |
+| Game messages' rate | the edge, a token bucket per connection | 60 a second, burst 120; closed (1008) after 120 dropped in 10 s | `TestRate` |
+| Idle and slow connections | the edge | closed after 60 s without a message; a write's deadline 10 s | `TestIdle`, `TestStalledWriteDropped` |
+| Boats in the world | admission | 1,000 until load tests set `KEEL_BOAT_LIMIT`; past it a queue of at most 4,096, its place shown | `TestFull`, `edgetest.TestQueue`; `src/ui/queue.test.ts` (the line, gone when admitted) |
+| Machine sailors' boats | admission | at most half the limit, a quarter kept for them; people first when both wait | `TestAdmissionByKind`, `agentapi.TestMachineSailorsQueue` |
+| Spectators | the edge | 1,000 (`KEEL_SPECTATOR_LIMIT`), a queue of their own of at most 4,096 | `TestSpectatorQueue`, `TestSpectatorLimit` |
+| Priority accounts | admission | admitted at once, past the limit and the half | `TestPriorityNeverWaits`, `TestPriorityWaitsOnlyForASlot` |
+| A chat line's length | moderation, in chat's hub | 200 characters (code points); at most 4 KB of a line read | `TestCheckChatLengths`; `TestChatAboard` (201 refused as long, reaching nobody) |
+| Chat's rate | chat's limiter, per account | one every 2 s, burst 5, 30 a minute; refusals rest the sender | `TestBurstAndRefill`, `TestPerMinute`, `TestRest` |
+| Sailors' and boats' names | moderation | 3 to 20 characters, at most 80 bytes; one script; the word filter | `TestCheckName`, `TestLengthTable`, `TestChatWords` |
+| Notices from outside (the notice form) | keel, per address | 5 an hour | `TestNoticesAnHour` |
+| Sail-with-me links | keel, per account | 10 an hour | `TestLinksOften` |
+| The page's reports | keel, per session | 10 a minute, 8 KB each | `TestClientReports` |
+| A machine sailor's calls | agentapi, two token buckets per sailor | orders 2 a second, burst 5; looks 4 a second, burst 10; refused in the tool's result with the time to wait, never as HTTP 429 (an MCP client would read that as a failed call) | `TestBudgets`, `TestOverBudgetInTheResult` |
+| A machine sailor without calls | agentapi, then the simulation's grace | leaves after 3 minutes and a minute's grace | `TestAMachineSailorSails`, `TestASilentCrewGoesAshore`, `TestGrace` |
+| Machine sailors per owner | keel | one; the owner can raise an account's to 50 | `store.TestMachineCap`, `owner.TestMachineCap`, `TestApprovalRules` |
+| AI apps' registrations | oauth | 120 an hour in all | `TestRegistration` |
+| Client metadata documents | oauth | 30 fetched a minute in all, one at a time per client, cached; 5 KB, 3 s, no redirects, public HTTPS only | `TestDocumentCache`, `TestFetch`, `TestDeniedRanges`, `TestClientIDs` |
+| OAuth's token and revoke routes | Traefik's per-address rate only | 50 a second: an app refreshes every one of its users' tokens from its own servers, so a tighter limit per address would throttle every owner of that app; a stolen refresh token is bounded by rotation with reuse detection | `TestRefresh`, `TestCodeExchange` |
+| The play host's pages | keel | a Content Security Policy with Trusted Types on every page, `X-Frame-Options: DENY`; reported first, then enforced (`KEEL_PAGE_POLICY`) | TODO(lead) |
+| HSTS | Cloudflare (`infra/tofu/zone.tf`) | 180 days, subdomains included, no preload | online "the page answers, with HSTS, and is not cached at the edge"; TODO(lead) |
+| The browser that made a sailor | keel, the `__Host-keel-sailed` cookie | 400 days, renewed with the session, cleared on deletion and on a sign-in with a passkey no account has | TODO(lead) |
+
+Traefik counts each address on its own, IPv6 ones too: its grouping of
+IPv6 addresses works only by the connection's address or
+`X-Forwarded-For`, never by a header such as `CF-Connecting-IP`, and its
+limits are generous enough that a household's addresses do not matter.
+keel's own count of new sailors groups by /56, where it matters.
+
+### The threats
+
+| Threat | What stops it | Checked by |
+|---|---|---|
+| Traffic floods | Cloudflare in front; no inbound web port, the tunnel alone | online "a PUT is blocked at the edge", "another host is not served", "one address is limited…"; verify "Check the firewall drops what is not let in, and lets the tailnet in" |
+| Finding and attacking the machine | its address in no DNS record; no open port: web traffic by the tunnel, administration over Tailscale | verify "Check the firewall drops…"; the tailnet policy (`go run ./tools/tailnet -check`, `TestRepositoryPolicyKeepsItsRules`); `TestCloseOpenSSHOnlyFromTheTailnet`; rule "no address range but the internet" |
+| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants port 22 alone, its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
+| A node port or host port | ServiceLB off; no NodePort service; the forward chain drops new connections from outside | rules "nothing exposed on production's node", "fixed addresses for the forwards alone"; `TestProductionTraefik`; verify "Check the firewall drops…" |
+| Secrets in the repository or GitHub | none kept there: Infisical and Tailscale reached with GitHub's short-lived tokens, External Secrets brings the rest | rules "no Secret in the manifests", "production's Secrets from Infisical", "every Secret a workload needs is made"; `TestNoSecretInInfra`; gitleaks (`pr.secrets`); push protection (`tools/github -check`); `TestPlanGivesTheCredentialsOnlyToTofu`, `TestPlanShowsNoValue` |
+| A stolen GitHub session changing production | production's jobs in the `production` environment, approved by the owner, `main` only; Infisical and Tailscale trust that environment's identity alone | `TestLoadRepositorySettings`, `TestEnvironmentDrift`; `TestPromoteRefuses`. The identities' bindings are set by hand (infra/MANUAL-STEPS.md) |
+| A fork's pull request reaching production | no `pull_request_target`; outside contributors' workflows approved; the release's signer is `release.yaml` on `main` | rule "every source's signature checked"; `TestReleaseIdentity`; `TestRunRefusesAReleaseNotFromMain`; zizmor (`pr.actions`) |
+| CI reaching more than it should | Tailscale tags: CI reaches only its machine's port 22 | the tailnet policy's rules and tests |
+| OpenTofu's state revealing secrets | state and plans encrypted by OpenTofu with a passphrase from Infisical (`backend.tf`); the bucket private and versioned | `tools/accounts -check`; `TestBackups`. The bucket's settings are set by hand |
+| Secrets on disk | k3s encrypts Secrets at rest (secretbox) | verify "Check k3s is ready, encrypts secrets, and keeps its audit log" |
+| Compromised CI pushing a bad image | Flux applies only artifacts signed by `release.yaml` on `main`; images by digest; production moves only on an approved promote; actions pinned by hash; minimal permissions | rules "every source's signature checked", "every image pinned by digest", "nothing fetched at deploy time"; `TestPinnedDigests`, `TestWorkflowsVerifyAsFluxDoes`; verify "Wait for Flux's source, and its first three layers"; zizmor and the repository's pinned-actions setting |
+| Pods attacking each other or the database | NetworkPolicies, default deny in `keel`; the database reached by the game, the operator and the few listed in [What may talk to what](#what-may-talk-to-what) | rules "every namespace fenced for ingress", "no address range but the internet"; `TestClustersKeepTheirRulesTogether` |
+| A container breaking out | Pod Security Admission `restricted` everywhere but the listed exceptions: no root, read-only root filesystem, no capabilities, RuntimeDefault seccomp | rules "every namespace enforces restricted", "keel's Deployment"; verify "Check it refused none" |
+| Account takeover | passkeys only; sessions and recovery codes kept as SHA-256 (256 and 128 random bits: no slow hash or pepper needed); sessions revocable | `TestMakeAnAccount`, `TestSignIn`, `TestTokens`, `TestForgetAccount`, `TestSignOut`, `TestRecoveryCode`, `TestRecovery`, `TestHashTokenRefusesMalformed`; fuzzed (below) |
+| A player's cookie used across sites | `__Host-` cookies on the play host alone, Secure, HttpOnly, SameSite=Lax; the origin checked on the WebSocket upgrade and every state-changing request | `TestSessionCookie`, `TestOrigins`, `TestCrossOrigin`; online "a game connection from another origin is refused…" |
+| An AI token against the game, or a session against MCP | separate hosts; MCP accepts only tokens issued for its exact address and reads no cookie; the game reads no bearer token | `TestDoor`, `TestCodeExchange` and `TestAuthorizeRefusals` ("another resource"); `TestLoadRejects` (the agents' listener apart). That MCP reads no cookie and the game no `Authorization` header is held by the code alone |
+| A rogue AI app tricking an owner | a fresh passkey for every approval (5 minutes); the page shows the host the app returns to; exact redirect match; PKCE; `iss` in every answer; grants revocable at once | `TestApprovalRules`, `TestApprovalPage`, `TestRedirects`, `TestAuthorizeRefusals`, `TestMetadata`, `TestDoor`, `TestRevoke`; `approve/page.test.ts`; `oauth-approve.spec.ts` |
+| Stolen AI tokens | kept as SHA-256; access tokens an hour; refresh tokens rotated, a reuse ending the grant; every grant ending 90 days after approval; the owner stops or revokes from the world page | `TestTokenShape`, `TestCodeExchange`, `TestRefresh`, `TestGrantsEndedBy`, `owner.TestLifetime`, `TestStopAndStart`, `TestEveryDoorRefusesAStoppedAccount`, `TestAStopAtSea` |
+| Requests forged through client metadata documents | public HTTPS addresses only, checked at connect; no redirects; 5 KB and 3 s; the pod's egress policy | `TestClientIDs`, `TestDeniedRanges`, `TestFetch`; fuzzed |
+| Development passkeys or tokens online | no development environment: a local game's passkeys are made for its own host, its tokens for its own issuer and MCP address (`KEEL_PLAY_ORIGIN`) | `TestLoadValid`, `TestLoadRejects` |
+| Cloudflare's bot checks blocking AI apps | Bot Fight Mode and the AI bot rules off; a configuration rule `ai-apps` with no challenge at the MCP address and the token routes | `tools/accounts -check` and the owner's plan; online "a machine sailor's connection token calls handbook at the MCP address…" |
+| Cheating clients | outcomes decided on the server; controls clamped to each boat's range; only what the player could see sent | `TestControlsClamped`, `TestPackClamps`, `TestOrdersOutOfBounds`, `TestModifiedClient`, `TestAreaAndBands`, `TestChunksSecret`; fuzzed |
+| A player's text run as code in another's page | text only ever inserted as text, never markup (the Biome rule `build/no-html-sinks.grit`); names isolated for bidirectional text; the pages' policy with Trusted Types | `npx biome ci`; `chatwords.test.ts` "never markup…", `account.test.ts` "is text inside a <bdi>"; the policy's tests TODO(lead) |
+| Spam and abuse | the limits above, at Cloudflare, Traefik and keel; the human check; the filter; mute, block and report | the limits' rows; `TestChatAboard`, `TestBlockAboard`, `TestReportsAct` |
+| A bot farming accounts | the human check, the count per address and the total's alarm | TODO(lead); `TestAlertRules` |
+| Backups deleted with a stolen key | keys scoped to their bucket; Object Lock on the backups' buckets; a weekly dump to a second bucket | rules "the object stores", "the database's archive"; `TestBackupsAreProductions`, `TestQuietWindows`; the keys and the lock are set by hand (infra/MANUAL-STEPS.md) |
+| An unpatched machine | daily security updates; Kured's reboots; k3s upgraded from the repository; Renovate for the rest | rule "the k3s upgrade plan"; `TestK3sPin`, `TestRenovateFindsEveryPin`; `machine.yaml`'s `audit` (Lynis, kube-bench) |
+
+### Fuzzing
+
+Every decoder of what a client sends has a fuzz target, its seeds the
+tests' own bodies, run with every test:
+
+- the game connection: `FuzzDecodeClient`, `FuzzApplyEntries`
+  (`internal/protocol`); the page's own of the other boats' views
+  (`client/src/net/view.fuzz.test.ts`);
+- making a sailor and signing in: `FuzzBegin` (the body, the month of
+  birth, the look and the name, in the order begin checks them),
+  `FuzzPasskeyMade` and `FuzzPasskeyUsed` (the browser's answers, as
+  go-webauthn reads them), `FuzzClientReport` (`internal/api`);
+  `FuzzRecoveryCode`, `FuzzSessionCookie` (`internal/auth`);
+- AI apps: `FuzzAuthorize`, `FuzzTokenForm` (the token and revoke
+  forms), `FuzzRegister`, `FuzzRedirect`, `FuzzClientDocument`,
+  `FuzzParseToken` (every token's shape and checksum, the connection
+  token's among them) (`internal/oauth`); `FuzzToolArguments`, every
+  tool's arguments (`internal/agentapi`);
+- the rest: `FuzzParse` (the catalog), `FuzzRead` (the input log),
+  `FuzzCheckName`, `FuzzCheckChat`.
+
+`ci.yaml` fuzzes six of them for 30 s on every pull request (see
+[Checks](#checks)). `security.yaml`'s `fuzz` job fuzzes every one, found
+by `go test -list '^Fuzz' ./...` so a new target joins by itself, for a
+minute each, weekly and by hand; a failing input is kept as the run's
+`fuzz-failures` artifact. To replay one, put it in the package's
+`testdata/fuzz/<target>/` and run `go test -run '<target>/<file>'` there; to
+fuzz one here:
+
+```sh
+go test -run '^$' -fuzz '^FuzzAuthorize$' -fuzztime 60s ./internal/oauth
+```
 
 ## Commits
 
