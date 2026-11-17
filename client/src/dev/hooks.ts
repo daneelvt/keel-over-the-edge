@@ -158,6 +158,7 @@ import {
   drawnHeight,
   hexCentre as landHexCentre,
 } from '../workers/mesh/build';
+import { type CountOptions, FrameCounter, type FrameReport } from './counts';
 import { type DeckSceneName, deckScene } from './deckscenes';
 import { setSky } from './skypanel';
 
@@ -3777,6 +3778,80 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     frameCap(): { display: number; divisor: number; interval: number; halved: boolean } {
       const c = stage.cap;
       return { display: c.display, divisor: c.divisor, interval: c.interval, halved: c.halved };
+    },
+    /**
+     * Counts each drawn frame from now on (src/dev/counts.ts): the buffer
+     * writes and their bytes, the texture writes, the render passes, the
+     * compute dispatches, the draws and triangles, the main thread's work
+     * and the interval between frames. With gpu false only the work and the
+     * intervals, with nothing of the GPU's wrapped; with detail, which
+     * buffers are written and what each pass draws into. Starting again
+     * starts afresh.
+     */
+    countStart(options: CountOptions = {}): void {
+      if (stage.counter instanceof FrameCounter) {
+        stage.counter.detach();
+      }
+      stage.counter = new FrameCounter(options);
+    },
+    /** What the frames since countStart showed; counting stops, unless keep is set. */
+    countStop(keep = false): FrameReport | null {
+      const c = stage.counter;
+      if (!(c instanceof FrameCounter)) {
+        return null;
+      }
+      const report = c.report();
+      if (!keep) {
+        c.detach();
+        stage.counter = null;
+      }
+      return report;
+    },
+    /**
+     * Counts the next n drawn frames (countStart's options), and stops: drawn
+     * by the frame loop when it draws, or here, one an animation frame, when
+     * it does not (a frozen page, or one under test not yet thawed).
+     */
+    async countFrames(n: number, options: CountOptions = {}): Promise<FrameReport> {
+      hooks.countStart(options);
+      const c = stage.counter as FrameCounter;
+      const byHand = !stage.loopDraws || stage.frozen;
+      const started = performance.now();
+      // The first frame counted only starts the count.
+      while (c.frames < n) {
+        await new Promise((r) => requestAnimationFrame(r));
+        if (byHand) {
+          stage.renderOnce(performance.now());
+        }
+        if (performance.now() - started > 120_000) {
+          break;
+        }
+      }
+      return hooks.countStop() as FrameReport;
+    },
+    /**
+     * Keeps an object hidden whatever the scene sets its visible to, or lets
+     * it go back to what it was: for measuring what each part of the frame
+     * costs.
+     */
+    keepHidden(o: { visible: boolean } | null | undefined, on: boolean): void {
+      if (o === null || o === undefined) {
+        return;
+      }
+      const held = o as { visible: boolean; heldVisible?: boolean };
+      if (on && held.heldVisible === undefined) {
+        held.heldVisible = o.visible;
+        Object.defineProperty(o, 'visible', {
+          configurable: true,
+          get: () => false,
+          set: () => undefined,
+        });
+      } else if (!on && held.heldVisible !== undefined) {
+        const was = held.heldVisible;
+        delete (o as { visible?: boolean }).visible;
+        delete held.heldVisible;
+        o.visible = was;
+      }
     },
     /**
      * The bytes the GPU holds for the look's textures on the rung in use, as

@@ -77,6 +77,11 @@ export class Stage {
    * test draws only what a test asks for (renderOnce) until it is thawed.
    */
   loopDraws = true;
+  /**
+   * What counts each drawn frame's work on the GPU and the main thread,
+   * while a test asks (the test hooks); null on a player's page.
+   */
+  counter: { frame(gfx: Gfx, work: number): void } | null = null;
 
   readonly #container: HTMLElement;
   readonly #wanted: Wanted;
@@ -138,6 +143,11 @@ export class Stage {
     // The display's own rate, before anything is drawn.
     this.cap.probe();
     await gfx.renderer.setAnimationLoop((now: number) => this.#frame(now));
+  }
+
+  /** Whether the frame loop is stopped (freeze). */
+  get frozen(): boolean {
+    return this.#frozen;
   }
 
   /**
@@ -320,7 +330,9 @@ export class Stage {
     if (this.#captures.length > 0) {
       this.#copy(g.canvas);
     }
-    this.#hooks.drawn?.(g, performance.now() - start);
+    const work = performance.now() - start;
+    this.#hooks.drawn?.(g, work);
+    this.counter?.frame(g, work);
   }
 
   async #recover(reason: string): Promise<void> {
