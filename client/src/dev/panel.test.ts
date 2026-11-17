@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
+import { FrameCap } from '../game/cap';
 import { Fleet } from '../game/fleet';
 import { CHANGE, FLEET_META, SLOT, SLOT_FIELDS, slotAt, VIEW_SLOTS } from '../net/view';
 import { RECORDS, SIZES } from '../predict/layout.gen';
+import { Adaptive, ladder } from '../render/quality';
+import { Stats } from '../render/stats';
 import {
   airLines,
   applyState,
   forecastLines,
+  frameLines,
   inSeaState,
   netLines,
   type PanelWorld,
@@ -96,6 +100,41 @@ function stub(): PanelWorld & { calls: string[] } {
 }
 
 describe('the panel', () => {
+  test('says the frame’s numbers, and which rate is in force', () => {
+    const cap = new FrameCap();
+    for (let i = 0; i < 40; i++) {
+      cap.tick((i * 1000) / 60);
+    }
+    const quality = new Adaptive(ladder('low'), 3);
+    const world = {
+      stats: new Stats(),
+      stage: { cap, gfx: null, pixelRatio: () => 0.79 },
+      quality,
+      rung: quality.rung,
+      top: 'low' as const,
+      display: () => ({ dpr: 1, short: 1080 }),
+    };
+    const lines = frameLines(world);
+    expect(lines.map((l) => l.slice(0, 8))).toEqual([
+      'backend ',
+      'frame   ',
+      'work    ',
+      'display ',
+      'gpu     ',
+      'draws   ',
+      'scale   ',
+      'tier    ',
+    ]);
+    expect(lines[3]).toContain('60 Hz');
+    expect(lines[6]).toBe('scale   0.79 (floor 0.50 on 1080 px at 1)');
+    expect(lines[7]).toBe('tier    low at 3/6, loop, 60 a second, adaptive (wait 10 s)');
+    quality.set(0, quality.ladder.length);
+    cap.halved = quality.halved;
+    expect(frameLines({ ...world, rung: quality.rung }).at(-1)).toBe(
+      'tier    low at 6/6, loop, at half the rate, 30 a second (halved), adaptive (wait 10 s)',
+    );
+  });
+
   test('reads headings and winds in degrees and knots', () => {
     const w = stub();
     w.sandbox.states.current[RECORDS.state.heading] = -Math.PI / 2;
