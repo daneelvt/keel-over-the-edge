@@ -107,6 +107,9 @@ type Config struct {
 	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
 	// as pgx reads them. It holds a password: it is never logged.
 	DatabaseURL string
+	// NewSailors is how new sailors are let in: their addresses' key and
+	// the human check (newsailors.go). Its String leaves its secrets out.
+	NewSailors NewSailors
 }
 
 // String leaves the database's URL out, so a Config can be logged.
@@ -343,6 +346,8 @@ func Load(getenv func(string) string) (Config, error) {
 	default:
 		errs = append(errs, fmt.Errorf("KEEL_DEV_COMMANDS: %q is not 0 or 1", v))
 	}
+	ns, nsErrs := loadNewSailors(getenv)
+	c.NewSailors, errs = ns, append(errs, nsErrs...)
 	return c, errors.Join(errs...)
 }
 

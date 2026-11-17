@@ -43,6 +43,7 @@ func TestLoadValid(t *testing.T) {
 		AgentsAddr: "127.0.0.1:8081", AgentsURL: "https://keel.local:5173/mcp", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
 		BoatLimit: DefaultBoatLimit, SpectatorLimit: DefaultSpectatorLimit, CrewLimit: DefaultCrewLimit, AISilence: DefaultAISilence, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
 		StatusBoats: DefaultStatusBoats,
+		NewSailors:  NewSailors{AddressKeyMade: true, TurnstileVerifyURL: DefaultTurnstileVerifyURL, TurnstileScript: DefaultTurnstileScript},
 		// A zone loaded is a pointer of its own: the schedule is compared
 		// by what it says.
 		Schedule: c.Schedule,
@@ -66,29 +67,34 @@ func TestLoadValid(t *testing.T) {
 	}
 
 	c, err = Load(env(map[string]string{
-		"KEEL_PLAY_ORIGIN":     "https://play.keelovertheedge.com",
-		"KEEL_PLAY_ADDR":       ":8080",
-		"KEEL_AGENTS_ADDR":     ":8081",
-		"KEEL_INTERNAL_ADDR":   "0.0.0.0:9090",
-		"KEEL_METRICS_ADDR":    "0.0.0.0:9091",
-		"KEEL_LOG_LEVEL":       "debug",
-		"KEEL_TRACE_DIR":       "/tmp/traces",
-		"KEEL_REPLAY_DIR":      "/tmp/replays",
-		"KEEL_CLIENT_DIR":      "/srv/keel/client",
-		"KEEL_DEV_SAILORS":     "1000",
-		"KEEL_BOAT_LIMIT":      "2",
-		"KEEL_SPECTATOR_LIMIT": "1",
-		"KEEL_AI_SILENCE":      "90s",
-		"KEEL_BELL":            "0",
-		"KEEL_LAND":            "off",
-		"KEEL_WORLD_SEED":      "18446744073709551615",
-		"KEEL_WORLD_SCHEDULE":  "every=10m from=2026-11-01T00:00:00Z notice=4m ahead=3m",
-		"KEEL_WORLD_KEEP":      "2h",
-		"KEEL_PASSKEY_RP_ID":   "keelovertheedge.com",
-		"KEEL_AGENTS_URL":      "https://agents.keelovertheedge.com/mcp",
-		"KEEL_ACCESS_TEAM":     "keel.cloudflareaccess.com",
-		"KEEL_ACCESS_AUD":      "testaudience",
-		"KEEL_STATUS_BOATS":    "0",
+		"KEEL_PLAY_ORIGIN":          "https://play.keelovertheedge.com",
+		"KEEL_PLAY_ADDR":            ":8080",
+		"KEEL_AGENTS_ADDR":          ":8081",
+		"KEEL_INTERNAL_ADDR":        "0.0.0.0:9090",
+		"KEEL_METRICS_ADDR":         "0.0.0.0:9091",
+		"KEEL_LOG_LEVEL":            "debug",
+		"KEEL_TRACE_DIR":            "/tmp/traces",
+		"KEEL_REPLAY_DIR":           "/tmp/replays",
+		"KEEL_CLIENT_DIR":           "/srv/keel/client",
+		"KEEL_DEV_SAILORS":          "1000",
+		"KEEL_BOAT_LIMIT":           "2",
+		"KEEL_SPECTATOR_LIMIT":      "1",
+		"KEEL_AI_SILENCE":           "90s",
+		"KEEL_BELL":                 "0",
+		"KEEL_LAND":                 "off",
+		"KEEL_WORLD_SEED":           "18446744073709551615",
+		"KEEL_WORLD_SCHEDULE":       "every=10m from=2026-11-01T00:00:00Z notice=4m ahead=3m",
+		"KEEL_WORLD_KEEP":           "2h",
+		"KEEL_PASSKEY_RP_ID":        "keelovertheedge.com",
+		"KEEL_AGENTS_URL":           "https://agents.keelovertheedge.com/mcp",
+		"KEEL_ACCESS_TEAM":          "keel.cloudflareaccess.com",
+		"KEEL_ACCESS_AUD":           "testaudience",
+		"KEEL_STATUS_BOATS":         "0",
+		"KEEL_ADDRESS_KEY":          "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+		"KEEL_TURNSTILE_SITEKEY":    "1x00000000000000000000AA",
+		"KEEL_TURNSTILE_SECRET":     "1x0000000000000000000000000000000AA",
+		"KEEL_TURNSTILE_VERIFY_URL": "http://127.0.0.1:18088/turnstile/siteverify",
+		"KEEL_TURNSTILE_SCRIPT":     "/turnstile/api.js?render=explicit",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -101,6 +107,11 @@ func TestLoadValid(t *testing.T) {
 		BoatLimit: 2, SpectatorLimit: 1, CrewLimit: DefaultCrewLimit, AISilence: 90 * time.Second, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
 		Schedule: c.Schedule, WorldKeep: 2 * time.Hour,
 		AccessTeam: "keel.cloudflareaccess.com", AccessAUD: "testaudience",
+		NewSailors: NewSailors{
+			AddressKey:       []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+			TurnstileSiteKey: "1x00000000000000000000AA", TurnstileSecret: "1x0000000000000000000000000000000AA",
+			TurnstileVerifyURL: "http://127.0.0.1:18088/turnstile/siteverify", TurnstileScript: "/turnstile/api.js?render=explicit",
+		},
 	}
 	if c.Schedule.Every != 10*time.Minute {
 		t.Errorf("the schedule %v", c.Schedule)
