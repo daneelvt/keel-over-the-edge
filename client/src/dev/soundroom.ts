@@ -41,10 +41,14 @@ import type { SoundInput } from '../audio/voices';
 import { catalog } from '../catalog';
 import type { FogSignalDevice } from '../catalog/types.gen';
 
-/** The game's recordings' files, the tests' own too, by name: to try in any voice. */
+/**
+ * The game's recordings' files, the tests' own too, by name: to try in any
+ * voice. Files of their own, as the game's are, never inlined as data:
+ * addresses, which the page's policy does not let it fetch.
+ */
 const BUILT = import.meta.glob<string>('../../../art/sound/recorded/*.webm', {
   eager: true,
-  query: '?url',
+  query: '?url&no-inline',
   import: 'default',
 });
 

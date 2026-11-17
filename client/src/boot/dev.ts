@@ -6,10 +6,14 @@
 // room's page (sailors.html) instead; at #sounds, the sound room's
 // (sounds.html).
 
+import './policy';
 import './styles.css';
 import { CATALOG_VERSION } from '../catalog';
 import { browserEnv, type Capability, readCapabilities } from './capabilities';
+import { sendViolations } from './report';
 import { catalogsMatch, fetchVersion } from './version';
+
+sendViolations();
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,

@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The page's reports to the server (POST /api/client-report): the errors it
-// meets, and how long its start took. The route needs a session, so they
-// wait here until there is one: a returning player's as soon as their
-// sailor is known, a new player's once their sailor is made. A page that
-// never has one, the sandbox's or a visitor's who leaves, sends nothing.
+// meets, how long its start took, and what its policy refused (policy.ts).
+// The route needs a session, so the game's page holds them until there is
+// one: a returning player's as soon as their sailor is known, a new
+// player's once their sailor is made. A game's page that never has one,
+// the sandbox's or a visitor's who leaves, sends nothing. The other pages
+// with script send theirs at once, which the server takes only from a
+// browser signed in.
 //
 // No player's words leave the page: a message is cut before the first
 // thing quoted in it, an address in it becomes its file's name, and a
 // stack is its asset names and line numbers only. Five errors a page at
-// most, the same one once.
+// most, and five of what the policy refused, the same one once.
 
 import { BUILD } from './build';
+import { reportViolations, type Violation } from './policy';
 
 /** The start's stages, ms from the navigation's start; one not passed through is left out. */
 export interface Stages {
@@ -38,8 +42,9 @@ export interface Startup {
 /** The page's files not in this browser before; in it, from its cache; or served by the service worker. */
 export type Visit = 'first' | 'return' | 'worker';
 
-/** The most errors a page reports. */
+/** The most errors a page reports, and the most of what its policy refused. */
 export const ERRORS = 5;
+export const VIOLATIONS = 5;
 /** The most reports held waiting for a session. */
 export const HELD = 8;
 /** The longest message and stack sent: characters, and bytes. */
@@ -65,6 +70,7 @@ export class Reports {
   readonly #seen = new Set<string>();
   #open = false;
   #errors = 0;
+  #violations = 0;
 
   constructor(send: Send = post) {
     this.#send = send;
@@ -81,6 +87,24 @@ export class Reports {
     this.#seen.add(key);
     this.#errors++;
     this.#report({ build: BUILD, kind: 'error', message: m, ...(s === '' ? {} : { stack: s }) });
+  }
+
+  /** What the page's policy refused, or would have: at most VIOLATIONS a page, each once. */
+  policy(v: Violation): void {
+    const key = `policy\n${v.directive}\n${v.blocked}\n${v.source}:${v.line}`;
+    if (this.#violations >= VIOLATIONS || this.#seen.has(key)) {
+      return;
+    }
+    this.#seen.add(key);
+    this.#violations++;
+    this.#report({
+      build: BUILD,
+      kind: 'policy',
+      directive: v.directive,
+      ...(v.blocked === '' ? {} : { blocked: v.blocked }),
+      ...(v.source === '' ? {} : { source: v.source }),
+      ...(v.line > 0 ? { line: v.line } : {}),
+    });
   }
 
   /** The start, once revealed. */
@@ -173,6 +197,17 @@ export function cleanStack(stack: string): string {
     size += line.length + 1;
   }
   return out.join('\n');
+}
+
+/**
+ * Sends what the policy refuses on a page that does not wait for a
+ * session, the pages other than the game's, at once: the server takes
+ * them from a browser signed in, and refuses the rest.
+ */
+export function sendViolations(reports: Reports = new Reports()): Reports {
+  reports.open();
+  reportViolations((v) => reports.policy(v));
+  return reports;
 }
 
 /** Reports the page's errors, thrown and unhandled, from now on. */
