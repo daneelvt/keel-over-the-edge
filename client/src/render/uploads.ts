@@ -131,10 +131,20 @@ export function sendLess(renderer: WebGPURenderer): void {
  * by instanceIndex from attributes or textures of its own: three.js's
  * Mesh.count. An InstancedMesh's matrices, which such a mesh would leave at
  * the identity, are sent in full at every draw.
+ *
+ * three.js tells an instanced object's shaders apart by the object only
+ * while it draws more than one; at one, two such meshes whose materials
+ * look alike (the fleet's kinds' parts, named alike) would share one
+ * build, and with it the first one's instance attributes. Its material is
+ * told apart by the mesh instead, as an InstancedMesh's always is.
  */
 export function instances(geometry: BufferGeometry, material: Material | Material[]): Mesh {
   const mesh = new Mesh(geometry, material);
   mesh.count = 0;
+  for (const m of Array.isArray(material) ? material : [material]) {
+    const own = m.customProgramCacheKey.bind(m);
+    m.customProgramCacheKey = () => `${own()}|${mesh.uuid}`;
+  }
   return mesh;
 }
 

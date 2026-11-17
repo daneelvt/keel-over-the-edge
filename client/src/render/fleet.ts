@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The other boats, drawn many at once: for each kind, one instanced mesh for
+// The other boats, drawn many at once: for each kind, one InstancedMesh for
 // its solids (every material's, merged), one for its sail and one for its
 // headsail, every boat of that kind an instance, with its pose,
 // rig, sail and sailor in per-instance values that the parts' vertex nodes
@@ -62,6 +62,7 @@ import {
   FrontSide,
   Group,
   InstancedInterleavedBuffer,
+  InstancedMesh,
   LineSegments,
   type Material,
   type Mesh,
@@ -177,7 +178,6 @@ import { kiteRig, kiteRipple, kiteShown } from './sailshape';
 import { Shadows } from './shadows';
 import { packYards, squareVertex } from './squarerig';
 import { FLOW_LUFFING } from './telltales';
-import { instances } from './uploads';
 
 /** The winner's cockade's colours, linear. */
 const COCKADE_COLOURS = cockadeColours(catalog.world.committee.prizes.cockade);
@@ -202,7 +202,7 @@ const RIPPLES = 4;
 /** One level of detail: its meshes and their instances' values. */
 class Level {
   readonly group = new Group();
-  readonly meshes: Mesh[] = [];
+  readonly meshes: InstancedMesh[] = [];
   readonly pose = attr();
   readonly rig = attr();
   readonly sail = attr();
@@ -213,7 +213,7 @@ class Level {
   /** Each instance's downwind sail: its clew's angle, signed twist, ripple and hoist. */
   readonly kite = attr();
   /** The downwind sail's meshes, none for a kind without one; and how many boats drawn have it up. */
-  readonly kiteMeshes: Mesh[] = [];
+  readonly kiteMeshes: InstancedMesh[] = [];
   kites = 0;
   /** Each instance's sailor's row (fleetsailors.ts's first eight texels), which the rigid figures read. */
   readonly rows: SailorRows;
@@ -225,7 +225,7 @@ class Level {
   /** The sailors' triangles drawn, each boat's own look's. */
   sailorTriangles = 0;
   /** The rigid figures, every look's, one mesh; null until built. */
-  figures: Mesh | null = null;
+  figures: InstancedMesh | null = null;
 
   readonly nodes: Instances;
 
@@ -401,13 +401,13 @@ class Level {
     this.figures = this.add(geometry, m, 'sailor', n.opacity);
   }
 
-  add(geometry: BufferGeometry, m: Material, name: string, opacity?: Node<'float'>): Mesh {
+  add(geometry: BufferGeometry, m: Material, name: string, opacity?: Node<'float'>): InstancedMesh {
     // Faded boats are dithered: each fragment kept or dropped by a hash
     // against its instance's opacity, in the opaque pass.
     m.alphaHash = true;
     (m as unknown as { opacityNode: Node<'float'> }).opacityNode = opacity ?? this.nodes.rig.z;
     m.name = `fleet ${this.name} ${name}`;
-    const mesh = instances(geometry, m);
+    const mesh = new InstancedMesh(geometry, m, FLEET_CAPACITY);
     mesh.name = m.name;
     mesh.count = 0;
     // The parts place themselves from the instances' values: the
@@ -614,9 +614,9 @@ export class FleetView {
   /** The near boats' sailors, skinned; null until loaded. */
   nearSailors: NearSailors | null = null;
   /** The skinned sailors' mesh, in the near level. */
-  skinned: Mesh | null = null;
+  skinned: InstancedMesh | null = null;
   /** The pendants the near boats' skinned sailors wear, a draw of its own; and how many wear one this frame. */
-  pendants: Mesh | null = null;
+  pendants: InstancedMesh | null = null;
   wearing = 0;
   /** The near boat's parts, which the sailors are seated by; null until loaded. */
   parts: BoatParts | null = null;
@@ -883,7 +883,7 @@ export class FleetView {
 
   /** Takes the looks' figures anew, when a look has loaded; adds the geometries let go to old. */
   takePools(looks: FleetLooks, old: Set<BufferGeometry>): void {
-    const take = (mesh: Mesh | null, g: BufferGeometry | null): void => {
+    const take = (mesh: InstancedMesh | null, g: BufferGeometry | null): void => {
       if (mesh !== null && g !== null && mesh.geometry !== g) {
         old.add(mesh.geometry);
         mesh.geometry = g;
@@ -1587,7 +1587,7 @@ export class FleetViews {
 
   /** The draw calls the fleet's sailors make this frame. */
   sailorDraws(): number {
-    return this.sailorMeshes().filter((m) => m.count > 0).length;
+    return this.sailorMeshes().filter((m) => (m as InstancedMesh).count > 0).length;
   }
 
   /** The boats drawn at each level, every kind's, and those near drawn skinned. */
