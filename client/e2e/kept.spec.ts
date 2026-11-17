@@ -120,20 +120,24 @@ function cachesOf(): Promise<Record<string, string[]>> {
  * activated and in control.
  */
 async function workerBuild(): Promise<string> {
-  await page.waitForFunction(
-    async () => {
-      const reg = await navigator.serviceWorker.getRegistration();
-      return (
-        reg !== undefined &&
-        reg.installing === null &&
-        reg.waiting === null &&
-        reg.active?.state === 'activated' &&
-        navigator.serviceWorker.controller !== null
-      );
-    },
-    null,
-    { timeout: 90_000, polling: 250 },
-  );
+  // Polled from here: waitForFunction takes an async predicate's promise as
+  // a truthy answer at once, without waiting for what it resolves to.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const reg = await navigator.serviceWorker.getRegistration();
+          return (
+            reg !== undefined &&
+            reg.installing === null &&
+            reg.waiting === null &&
+            reg.active?.state === 'activated' &&
+            navigator.serviceWorker.controller !== null
+          );
+        }),
+      { timeout: 90_000, intervals: [250] },
+    )
+    .toBe(true);
   const url = await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? '');
   expect(new URL(url).pathname).toBe('/sw.js');
   const names = Object.keys(await cachesOf()).filter((n) => n.startsWith('keel-code-'));
