@@ -18,6 +18,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -218,12 +219,12 @@ func (v *viewer) heard(text string, within time.Duration) bool {
 
 // TestChatAboard: Ann sails with Bob and Cat aboard and Dan on his own
 // boat. A line reaches those aboard whose chat is on, and nobody else; a
-// line with a link is refused and its sender told; a line with a listed
-// word comes back to its sender as said and reaches nobody; a teen reads
-// nothing until opting in; the owner's switch stops every line at once and
-// on again they flow; a mute hides a sender's lines; a report copies the
-// lines before it and takes the next ten minutes. No line's text reaches
-// the log or a metric.
+// line with a link, or over 200 characters, is refused and its sender
+// told; a line with a listed word comes back to its sender as said and
+// reaches nobody; a teen reads nothing until opting in; the owner's switch
+// stops every line at once and on again they flow; a mute hides a
+// sender's lines; a report copies the lines before it and takes the next
+// ten minutes. No line's text reaches the log or a metric.
 func TestChatAboard(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cw := newChatWorld(t)
@@ -284,6 +285,17 @@ func TestChatAboard(t *testing.T) {
 		}
 		if a.heard("find me at kittiwake.com", time.Second) || a.heard("well shit", time.Second) {
 			t.Fatal("a refused line arrived")
+		}
+
+		// A line is at most 200 characters (moderation.MaxChat), counted
+		// as code points: 201 of two bytes each are refused as long, and
+		// reach nobody.
+		long := strings.Repeat("é", moderation.MaxChat+1)
+		if l := b.say(long, 6); l.GetRefused() != pb.ChatRefusal_CHAT_REFUSAL_LONG || l.GetId() != 0 {
+			t.Fatalf("201 characters: %v", l)
+		}
+		if a.heard(long, time.Second) {
+			t.Fatal("a line too long arrived")
 		}
 
 		// Cat opts in: she hears Ann from then on.
