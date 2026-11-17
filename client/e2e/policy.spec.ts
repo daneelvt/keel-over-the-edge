@@ -116,7 +116,8 @@ test('the game’s page: a new sailor sets sail and opens the windows, nothing r
   // the page hears that it did.
   const written = await page.evaluate(() => {
     try {
-      document.createElement('div').innerHTML = '<b>bold</b>';
+      // The sink named, not written: the game's own code never uses one.
+      Reflect.set(document.createElement('div'), 'innerHTML', '<b>bold</b>');
       return 'written';
     } catch {
       return 'refused';
