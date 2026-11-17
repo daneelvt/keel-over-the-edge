@@ -30,8 +30,8 @@ func jsonRequest(path string, body []byte) (*httptest.ResponseRecorder, *http.Re
 	return httptest.NewRecorder(), r
 }
 
-// sailorBody is a new sailor's body as the tests send it.
-const sailorBody = `{"name":"Ann Bonny","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`
+// fuzzSailorBody is a new sailor's body as the tests send it.
+const fuzzSailorBody = `{"name":"Ann Bonny","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`
 
 // FuzzBegin: POST /account/begin's body, read and checked in the order
 // beginAccount checks it (the body, the month of birth, the look, the
@@ -40,7 +40,7 @@ const sailorBody = `{"name":"Ann Bonny","look":"rover","version":"female","skin"
 // name accepted keeps to its length.
 func FuzzBegin(f *testing.F) {
 	for _, s := range []string{
-		sailorBody,
+		fuzzSailorBody,
 		`{"name":"  Ann   Bonny ","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`,
 		`{"name":"Ann","name":"Admin","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`,
 		`{"name":"Ann","look":"pirate-king","born":{"year":1990,"month":1}}`,
