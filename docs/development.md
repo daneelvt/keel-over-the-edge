@@ -5910,7 +5910,10 @@ used for nothing else. The under-13 answer stays its own cookie,
 `keel-young`.
 
 **The start screen** (`client/src/account`) leads with making a sailor and
-offers signing in beside it. Before anything is asked, it checks the
+offers signing in beside it; a browser with the mark (above) opens on the
+same panel the other way round, "Welcome back" with signing in first
+(autofill still on the name field) and **New sailor** second, which opens
+the form. A link's line stays at the head of either. Before anything is asked, it checks the
 browser can make a passkey (`inapp.ts`): an app's own browser (Instagram,
 Facebook, TikTok… by the marks in its user agent, kept in that one module)
 is asked to open the game in the phone's browser, with "Try here anyway"; a
@@ -6058,6 +6061,24 @@ first.
 check a new sailor would pass, `{"siteKey", "script"}`, or `null` when
 none is set up or the owner has it off. The page loads the script only for
 a new sailor's form.
+
+**On the start screen** (`client/src/account/humancheck.ts`), the script
+is added by the page's one script loader, `client/src/boot/scripts.ts`,
+its address made by the `keel` Trusted Types policy ([The page's
+policy](#the-pages-policy)): never for a player with a session, and for a
+browser with the mark only after **New sailor**. The widget is rendered
+into a slot under the look picker (`execution: "execute"`, `appearance:
+"interaction-only"`, `size: "flexible"`, `action: "new-sailor"`,
+`refresh-expired: "auto"`, the page's language) and run at once, so the
+token is usually there before the player taps Set sail; if not, Set sail
+says "Checking…" and waits. The token goes as `check` in the begin's body,
+and the widget is reset and run again after every answer from begin, and
+when a token expires. The widget's own failure, or a browser it cannot run
+in, shows its line with **Try again**; begin's 429, 403 and 503 have their
+lines in `reasons.ts`, the 429's with the sign-in key beside it. With
+`check: null` nothing is loaded and begin goes without a token. The slot
+reaches a little into the panel's padding, as the widget is 300 px wide at
+the least, and Set sail's row stays in view under it.
 
 **In the browser tests**, `tools/e2e` sets keel up with a stand-in for
 Turnstile (`tools/e2e/turnstile.go`), on the page's own origin under
@@ -7177,7 +7198,9 @@ the owner, unread, waits under the case as the player comes to sea
 
 **The pages**: the Rules of the sea (`rules.html`) carry chat's rules,
 staying safe (`safety.html`) muting, blocking and reporting, and
-`privacy.html` what chat keeps and for how long. The notice page,
+`privacy.html` what chat keeps and for how long, what the human check and
+the count of new sailors keep, and what the game keeps in the browser. The
+notice page,
 `report.html`, also at `/report` (`internal/api/client.go`), is for anyone,
 signed in or not: its form posts to `/api/notice`. The owner's contact
 address is a marked placeholder on the safety and privacy pages.

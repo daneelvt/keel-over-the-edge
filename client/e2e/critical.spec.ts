@@ -8,6 +8,12 @@
 // models, portraits and the land's chunks; not the game's connection, nor
 // the passkey's own requests. It fails over 4 MB.
 //
+// The human check's bytes are counted, as "human check": here tools/e2e's
+// stand-in for Cloudflare Turnstile, a few KB. Cloudflare's own api.js is
+// larger: 28.0 KB on the wire (Brotli; 86,968 bytes as code), behind a
+// redirect to its versioned address, fetched 17 November 2026; its widget's
+// frame comes on top, and only when the check runs.
+//
 // Counted as Cloudflare sends it: keel compresses nothing, and tools/e2e's
 // stand-in for Cloudflare's edge in front of it gzips what Cloudflare
 // would (Cloudflare's zstd is a little smaller), so the bytes counted are
@@ -42,6 +48,9 @@ import {
 
 /** The critical download's budget, bytes on the wire to the reveal. */
 const BUDGET = 4 * 1024 * 1024;
+
+/** Cloudflare Turnstile's own api.js on the wire, Brotli, as fetched on 17 November 2026: what the stand-in's script takes the place of. */
+const TURNSTILE_API_JS = 28_034;
 
 test('a new sailor’s download to the reveal is under 4 MB on the wire', async ({
   context,
@@ -102,6 +111,8 @@ test('a new sailor’s download to the reveal is under 4 MB on the wire', async 
       ),
     `| **All** | ${toReveal.length} | **${kb(total)}** | ${kb(sum(toReveal, 'before'))} | ${kb(sum(toReveal, 'raw'))} |`,
     '',
+    `The human check here is tools/e2e's stand-in, ${kb(sum(kinds.get('human check') ?? [], 'sent'))}; Cloudflare's own api.js is ${kb(TURNSTILE_API_JS)}, its widget's frame on top.`,
+    '',
     `From the navigation's start: the start screen at ${s(marks.start)}, Set sail tapped at ${s(first)}, the sailor made at ${s(marks.made)} (the passkey's part ${s(passkey)}), Set sail to sea at ${s(last)}, the reveal at **${s(marks.reveal)}**; ${s(reveal - last)} from the tap to the reveal, ${s(reveal - passkey)} without the passkey's part.`,
     '',
     '<details><summary>Every response to the reveal</summary>',
@@ -127,5 +138,7 @@ test('a new sailor’s download to the reveal is under 4 MB on the wire', async 
   // page's code with it.
   expect(kinds.get('land')?.length ?? 0, 'land chunks before the reveal').toBeGreaterThan(0);
   expect(kinds.get('scripts')?.length ?? 0).toBeGreaterThan(0);
+  // The human check's script and token, counted in the budget.
+  expect(kinds.get('human check')?.length ?? 0, 'the human check').toBeGreaterThan(1);
   expect(total, `the critical download is ${mb(total)}, over 4 MB`).toBeLessThanOrEqual(BUDGET);
 });

@@ -64,6 +64,11 @@ export function kindOf(path: string, type: string): string {
   if (path.startsWith('/api/')) {
     return 'API';
   }
+  // The human check's script and its token, tools/e2e's stand-in for
+  // Cloudflare Turnstile's on the page's own origin.
+  if (path.startsWith('/turnstile/')) {
+    return 'human check';
+  }
   const ext = /\.([a-z0-9]+)$/.exec(path)?.[1] ?? '';
   if (type === 'text/html') {
     return 'page';

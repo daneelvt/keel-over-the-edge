@@ -96,7 +96,31 @@ export interface NoSession {
   check: HumanCheck | null;
 }
 
-export type SessionCheck = { kind: 'sailor'; me: Me } | { kind: 'none' } | { kind: 'failed' };
+export type SessionCheck =
+  | { kind: 'sailor'; me: Me }
+  | ({ kind: 'none' } & Omit<NoSession, 'error'>)
+  | { kind: 'failed' };
+
+/**
+ * The 401's body as the start screen takes it: whether this browser has
+ * sailed, and the human check, null for none. An answer that cannot be
+ * read is a browser that has not sailed, with no check: the server then
+ * says what it wants at Set sail.
+ */
+export function noSession(body: unknown): Omit<NoSession, 'error'> {
+  const b = (body ?? {}) as { sailed?: unknown; check?: { siteKey?: unknown; script?: unknown } };
+  const c = b.check;
+  const check =
+    c !== null &&
+    typeof c === 'object' &&
+    typeof c.siteKey === 'string' &&
+    c.siteKey !== '' &&
+    typeof c.script === 'string' &&
+    c.script !== ''
+      ? { siteKey: c.siteKey, script: c.script }
+      : null;
+  return { sailed: b.sailed === true, check };
+}
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -105,7 +129,8 @@ export async function checkSession(fetcher: Fetch = fetch): Promise<SessionCheck
   try {
     const res = await fetcher('/api/me', { cache: 'no-store', credentials: 'same-origin' });
     if (res.status === 401) {
-      return { kind: 'none' };
+      const body: unknown = await res.json().catch(() => null);
+      return { kind: 'none', ...noSession(body) };
     }
     if (res.status !== 200) {
       return { kind: 'failed' };
@@ -127,8 +152,12 @@ export function retryDelay(attempt: number): number {
 
 export interface SailorPaths {
   fetch?: Fetch;
-  /** Shows the start screen; resolves with the sailor made or signed in there. */
-  start: () => Promise<Me>;
+  /**
+   * Shows the start screen, told whether this browser has sailed and the
+   * human check a new sailor passes; resolves with the sailor made or
+   * signed in there.
+   */
+  start: (none: Omit<NoSession, 'error'>) => Promise<Me>;
   /** Asks for a new passkey, the session the recovery code's; resolves once it is added. */
   addPasskey: (me: Me) => Promise<Me>;
   /** Shows that the server cannot be reached, or hides it with false. */
@@ -155,7 +184,7 @@ export async function resolveSailor(paths: SailorPaths): Promise<Me> {
     if (check.kind !== 'failed') {
       paths.backSoon(false);
       if (check.kind === 'none') {
-        return paths.start();
+        return paths.start({ sailed: check.sailed, check: check.check });
       }
       const me = check.me.addPasskey === true ? await paths.addPasskey(check.me) : check.me;
       return paths.sailor !== undefined ? paths.sailor(me) : me;

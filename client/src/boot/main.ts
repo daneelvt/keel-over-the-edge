@@ -827,9 +827,11 @@ async function start(): Promise<void> {
     world.start(),
     loadPhysics(fetch(wasmUrl)),
     resolveSailor({
-      start: () =>
+      start: ({ sailed, check }) =>
         usable(
           showStartScreen(document.body, {
+            sailed,
+            check,
             looks: catalog,
             boats: catalog,
             ...(stage === undefined ? {} : { stage }),

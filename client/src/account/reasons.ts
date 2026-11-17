@@ -53,6 +53,13 @@ export const REASONS: Readonly<Record<string, string>> = {
   young: 'Sorry, a sailor can’t be made.',
   answered: 'That is answered already.',
   rules: 'Accept the Rules of the sea first.',
+  // A new sailor's limits: how many come from one connection in a day,
+  // and the human check. Cloudflare's own 429, a page and not the
+  // server's JSON, reads as unavailable.
+  often:
+    'Lots of new sailors have come from this connection today. Sailed before? Sign in with your passkey.',
+  check: 'We couldn’t check this browser. Tap Set sail to try again.',
+  'check-unavailable': 'The check isn’t answering just now. Try again in a moment.',
   // Machine sailors.
   cap: 'You have as many machine sailors as you may.',
   'too-many-apps':
@@ -101,6 +108,13 @@ export function approveReasonText(code: string): string {
 export function machineReasonText(code: string): string {
   return MACHINE_REASONS[code] ?? reasonText(code);
 }
+
+/** The human check's own widget failed, or this browser cannot run it: said with Try again. */
+export const CHECK_FAILED =
+  'We couldn’t check this browser. Try again, or open the game in your usual browser.';
+
+/** Set sail tapped before the human check has answered: said until it does. */
+export const CHECKING = 'Checking…';
 
 /** Added to taken on the start screen: the player may be the sailor's. */
 export const TAKEN_SIGN_IN = 'If that’s you, sign in with your passkey.';

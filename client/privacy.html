@@ -6,16 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a242c" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-    <title>Chat and your privacy · Keel Over the Edge</title>
+    <title>Your privacy · Keel Over the Edge</title>
     <link rel="stylesheet" href="/src/pages/pages.css" />
   </head>
   <body class="words-body">
     <main class="words">
       <p class="words-game"><a href="/">Keel Over the Edge</a></p>
-      <h1>Chat and your privacy</h1>
+      <h1>Your privacy</h1>
       <p>
         Chat aboard is for the people on one boat, at the moment they are on it. This is what the game
-        keeps of it, and for how long.
+        keeps of it, and for how long; then what it keeps when you make a sailor, and in your browser.
       </p>
 
       <h2>Lines are not kept</h2>
@@ -76,6 +76,49 @@
         <li>
           The people you mute or block, until you end it on the account page or delete your sailor.
         </li>
+      </ul>
+
+      <h2>Checking you’re a person</h2>
+      <ul>
+        <li>
+          When you make a sailor, Cloudflare Turnstile checks that a person is making it, not a
+          program. Most of the time it asks you nothing. Signing in is never checked.
+        </li>
+        <li>
+          It looks at your browser and your connection, such as your address and how the page runs.
+          Cloudflare also uses what it sees to make its checks better:
+          <a href="https://www.cloudflare.com/turnstile-privacy-policy/">its privacy notice</a> says
+          how.
+        </li>
+        <li>The game asks Cloudflare only whether the check passed, and keeps nothing of it.</li>
+      </ul>
+
+      <h2>Counting new sailors</h2>
+      <ul>
+        <li>
+          So that one connection can’t make crowds of sailors, the game counts the sailors made from
+          each connection in a day.
+        </li>
+        <li>
+          It keeps your connection’s address only as a scrambled code, never the address itself, for
+          a day. Copies in the game’s backups are gone after 30 days.
+        </li>
+        <li>The code is used for nothing else.</li>
+      </ul>
+
+      <h2>What the game keeps in your browser</h2>
+      <ul>
+        <li>A cookie that keeps you signed in, for up to 400 days.</li>
+        <li>
+          A cookie that remembers this browser has had a sailor, so the game offers to sign you in
+          first. It stays when you sign out, for up to 400 days, and goes when you delete your
+          sailor.
+        </li>
+        <li>If a sailor couldn’t be made here, a cookie that remembers that answer for 30 days.</li>
+        <li>
+          Your settings, and small things like the news you’ve read and your course on the chart.
+        </li>
+        <li>The game shares none of these with anyone.</li>
       </ul>
 
       <h2>Questions</h2>

@@ -184,6 +184,8 @@
 }
 
 .start-problem {
+  /* Its height is its words', however many lines, in a panel that scrolls. */
+  flex-shrink: 0;
   min-height: 1.35em;
   margin: 0;
   color: var(--warn);
@@ -696,4 +698,65 @@
 .home-offer-keys > .start-sign-in {
   flex: 1;
   min-height: 40px;
+}
+
+/* The human check's widget, under the look and above Set sail's row: it
+   shows only when it must ask the player, 65 px tall and as wide as its
+   slot, 300 px at the least, so the slot reaches a little into the
+   panel's padding to fit a phone held upright. Scrolled into view as it
+   shows, it stops above Set sail's row, which stays in view. */
+.start-check {
+  margin-inline: -8px;
+  scroll-margin-bottom: 76px;
+}
+.start-check:empty {
+  display: none;
+}
+
+/* Try again, after the check failed: slim, under its line. */
+.start-again {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+/* A returning browser's panel held sideways on a phone: the name field
+   and Sign in side by side, the recovery code and New sailor under them,
+   so New sailor stays in view. */
+@media (orientation: landscape) and (max-height: 480px) {
+  form.start-panel.start-welcome {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 12px;
+    padding: 12px 18px 14px;
+  }
+  form.start-welcome h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+  form.start-welcome > .start-go {
+    grid-column: auto;
+    margin: 0;
+  }
+  form.start-welcome > .start-problem,
+  form.start-welcome > .start-faint {
+    order: 1;
+  }
+  form.start-welcome > .start-link,
+  form.start-welcome > .start-or {
+    order: 2;
+    grid-column: auto;
+  }
+  form.start-welcome > .start-or {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  form.start-welcome > .start-or > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }

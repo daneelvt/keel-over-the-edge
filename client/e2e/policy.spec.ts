@@ -6,10 +6,11 @@
 // page listened to for securitypolicyviolation from its first moment, and
 // any violation, or the browser's own words of one, fails the test.
 //
-// - The game's page: a new sailor made on the start screen sets sail, the
-//   chart's tabs (the list, the news, the log) and the menu's race window
-//   open, the service worker registers through the keel policy, and HTML
-//   written as a string is refused.
+// - The game's page: a new sailor made on the start screen, the human
+//   check's script loaded and run there, sets sail, the chart's tabs (the
+//   list, the news, the log) and the menu's race window open, the service
+//   worker registers through the keel policy, and HTML written as a string
+//   is refused.
 // - The dressing room: the sailors in a boat, their textures transcoded
 //   by workers started from the page's own file (a blob's worker would
 //   keep the policy, which the transcoder's functions made from strings
@@ -72,11 +73,16 @@ test('the game’s page: a new sailor sets sail and opens the windows, nothing r
   expect(policy).toContain('trusted-types keel default');
   expect(policy).toMatch(/style-src 'self' 'sha256-[A-Za-z0-9+/]+=*';/);
 
-  // A new sailor, made on the start screen. The human check, once the
-  // start screen loads it, runs here under the same policy: its stand-in
-  // in tools/e2e is served under /turnstile/ on this origin.
+  // A new sailor, made on the start screen. The human check runs here
+  // under the same policy, its script added through the keel policy: its
+  // stand-in in tools/e2e is served under /turnstile/ on this origin.
+  const script = page.waitForResponse((r) => new URL(r.url()).pathname === '/turnstile/api.js');
+  const token = page.waitForResponse((r) => new URL(r.url()).pathname === '/turnstile/issue');
   const field = page.getByLabel('Your sailor’s name');
   await expect(field).toBeVisible({ timeout: 60_000 });
+  expect((await script).status()).toBe(200);
+  expect((await token).status()).toBe(200);
+  await expect(page.locator('.start-check .turnstile-stand-in')).toHaveCount(1);
   await field.fill(`Policy ${stamp()}`);
   await answerBorn(page);
   await page.getByRole('button', { name: 'Set sail' }).click();

@@ -192,12 +192,13 @@ test('stopped at sea: put ashore, refused at sign-in, started again, signed in, 
   expect(id).not.toBeNull();
   const account = id ?? '';
 
-  // Stopped: the page says so, then goes back to the start screen.
+  // Stopped: the page says so, then goes back to the start screen, which
+  // offers signing in first: this browser has had a sailor.
   await owned(request, 'stop', { account, reason: 'a test at sea' });
   await expect(page.getByText('This sailor has been stopped.').first()).toBeVisible({
     timeout: 30_000,
   });
-  const start = page.getByRole('heading', { name: 'Keel Over the Edge' });
+  const start = page.getByRole('heading', { name: 'Welcome back' });
   await expect(start).toBeVisible({ timeout: 90_000 });
 
   // Its passkey is refused in the player's words.

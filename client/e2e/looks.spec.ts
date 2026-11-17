@@ -197,5 +197,26 @@ test('the first form keeps Set sail in view on a phone, upright and sideways', a
       const b = await radio.boundingBox();
       expect((b?.x ?? 0) + (b?.width ?? 0)).toBeLessThanOrEqual(viewport.width);
     }
+    // The human check asking the player: its box, 300 px wide at the least
+    // and 65 px tall, in its slot, brought into view as the page brings it.
+    // It fits the screen's width, and Set sail stays in view below it.
+    await page.locator('.start-check').evaluate((slot) => {
+      const asking = document.createElement('div');
+      asking.className = 'asking';
+      asking.style.cssText = 'width: 100%; min-width: 300px; height: 65px';
+      slot.append(asking);
+      slot.scrollIntoView({ block: 'nearest' });
+    });
+    const asking = await page.locator('.start-check .asking').boundingBox();
+    const after = await go.boundingBox();
+    expect(asking).not.toBeNull();
+    expect(after).not.toBeNull();
+    if (asking !== null && after !== null) {
+      expect(asking.x).toBeGreaterThanOrEqual(0);
+      expect(asking.x + asking.width).toBeLessThanOrEqual(viewport.width);
+      expect(asking.y).toBeGreaterThanOrEqual(0);
+      expect(asking.y + asking.height).toBeLessThanOrEqual(after.y);
+      expect(after.y + after.height).toBeLessThanOrEqual(viewport.height);
+    }
   }
 });
