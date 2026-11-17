@@ -39,6 +39,7 @@ import { LifeStore } from '../life/store';
 import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
 import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
+import { NO_LAYERS, PLAIN_SEA, type SeaLayer } from '../ocean/seamaterial';
 import { rainShare } from '../ocean/water';
 import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
@@ -1231,6 +1232,24 @@ export class SeaScene {
     }
   }
 
+  /**
+   * The sea's layers left out by hand (the tests, the measures of what each
+   * costs), or null for the tier's own look.
+   */
+  seaLayersOff: ReadonlySet<SeaLayer> | null = null;
+  /** Whether the tiles a hull may reach are drawn apart, set by hand; null for the tier's way. */
+  seaApart: boolean | null = null;
+
+  /**
+   * Leaves the sea's layers out by hand, and draws the tiles a hull may
+   * reach apart or not; null for the tier's own look. Resolves once drawn.
+   */
+  setSeaLayers(off: ReadonlySet<SeaLayer> | null, apart: boolean | null = null): Promise<void> {
+    this.seaLayersOff = off;
+    this.seaApart = apart;
+    return this.#apply(true);
+  }
+
   /** Moves to a rung of the ladder by hand (the developer panel, the tests). */
   setRung(index: number, why = 'set'): Promise<void> {
     this.quality?.set(performance.now(), index, why);
@@ -1311,6 +1330,8 @@ export class SeaScene {
           anisotropy: tier.anisotropy,
           foamMap: tier.foamMap,
           wakeWaves: tier.wakeWaves,
+          omit: this.seaLayersOff ?? (tier.sea === 'plain' ? PLAIN_SEA : NO_LAYERS),
+          apart: this.seaApart ?? tier.sea === 'plain',
         },
         ahead ? (o) => this.stage.compile(o) : null,
         this.stage.gfx?.renderer ?? null,

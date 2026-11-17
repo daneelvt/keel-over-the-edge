@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  alone,
   bySize,
   COUNT_NAMES,
   type CountsRow,
@@ -10,6 +11,7 @@ import {
   measured,
   measures,
   median,
+  merge,
   type Results,
   range,
   report,
@@ -99,6 +101,17 @@ describe('the numbers', () => {
     expect(s[2]).toBeCloseTo(-0.1);
   });
 
+  it("gives each step's share alone as what leaving its part out saved from the whole", () => {
+    const s = alone([
+      { name: 'Everything', ...measured([9.5]) },
+      { name: 'Sea: foam left out', ...measured([8.5]) },
+      { name: 'Sea: glints left out', ...measured([9.3]) },
+    ]);
+    expect(s[0]).toBeNaN();
+    expect(s[1]).toBeCloseTo(1);
+    expect(s[2]).toBeCloseTo(0.2);
+  });
+
   it('sums the writes by their size, with the owner that wrote it most', () => {
     const rows = bySize(before.counts?.rows[0]?.largest ?? []);
     expect(rows.map((r) => r.size)).toEqual([65536, 5440]);
@@ -140,6 +153,24 @@ describe('the tables', () => {
     expect(md).toContain('| Land hidden | 8.5 | 8.5 | none |');
     expect(md).toContain('| high × 1 | 800 (2) |');
     expect(md).toContain('| 5,440 | 3.0 | 15.9 | hull, and 1 more |');
+  });
+
+  it('puts results measured a section at a time together', () => {
+    const gpu: Results = {
+      meta: { ...meta('cccc'), date: '2026-11-19', dpr: { gpu: 2 } },
+      gpu: before.gpu as NonNullable<Results['gpu']>,
+    };
+    const rest: Results = {
+      meta: { ...meta('cccc'), chrome: '', dpr: { counts: 1 } },
+      counts: before.counts as NonNullable<Results['counts']>,
+      parts: before.parts as NonNullable<Results['parts']>,
+    };
+    const m = merge([gpu, rest]);
+    expect(m.gpu).toBe(before.gpu);
+    expect(m.counts).toBe(before.counts);
+    expect(m.meta.dpr).toEqual({ gpu: 2, counts: 1 });
+    expect(m.meta.date).toBe('2026-11-18');
+    expect(m.meta.chrome).toBe('157');
   });
 
   it('sets two sets of results side by side', () => {

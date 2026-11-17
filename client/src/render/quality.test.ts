@@ -124,6 +124,22 @@ describe('the tiers', () => {
   });
 });
 
+describe('the sea each tier draws', () => {
+  it('is whole on the high and medium tiers, and plain on the low', () => {
+    expect(TIERS.high.sea).toBe('whole');
+    expect(TIERS.medium.sea).toBe('whole');
+    expect(TIERS.low.sea).toBe('plain');
+  });
+
+  it('changes with the tier only, never with a step inside one', () => {
+    for (const top of ['high', 'medium', 'low'] as const) {
+      for (const r of ladder(top)) {
+        expect(TIERS[r.tier].sea).toBe(r.tier === 'low' ? 'plain' : 'whole');
+      }
+    }
+  });
+});
+
 describe('the ladder', () => {
   const names = (rungs: Rung[]) => rungs.map(rungName);
   const TOPS: TierName[] = ['high', 'medium', 'low'];

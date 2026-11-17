@@ -156,6 +156,7 @@ test.describe('the tiers', () => {
     if (project() === 'webgl2') {
       expect(info.tier).toBe('low');
       expect(info.detail).toBe('baked');
+      expect(info.sea).toBe('plain');
       expect(info.dispatches).toBe(0);
     } else if (project() === 'compat') {
       // Compatibility mode's limits, enforced: and the transform built to them.
@@ -164,6 +165,7 @@ test.describe('the tiers', () => {
       expect(info.vertexStorageTextures).toBe(0);
       expect(info.tier).toBe('medium');
       expect(info.detail).toBe('fft 128 × 1');
+      expect(info.sea).toBe('whole');
       // The detail band's four, and the wake's waves' four in one call.
       expect(info.dispatches).toBe(5);
     } else {
@@ -171,6 +173,7 @@ test.describe('the tiers', () => {
       expect(info.workgroup).toBeGreaterThanOrEqual(256);
       expect(info.tier).toBe('high');
       expect(info.detail).toBe('fft 256 × 2');
+      expect(info.sea).toBe('whole');
       expect(info.dispatches).toBe(9);
     }
   });
@@ -1277,8 +1280,55 @@ test.describe('adaptive quality', () => {
   });
 });
 
+test.describe('the low tier’s sea', () => {
+  test('keeps the hulls’ cut out of all but the tiles by a hull, and is shorter', async ({
+    page,
+  }) => {
+    await openLook(page, 'tier=low', false);
+    const plain = await page.evaluate(() => globalThis.keel.seaShaders());
+    // The whole look, every tile in one draw, as the tiers above draw it.
+    const whole = await page.evaluate(async () => {
+      const k = globalThis.keel;
+      await k.seaLayers([], false);
+      const s = await k.seaShaders();
+      await k.seaLayers(null);
+      return s;
+    });
+    // Throwing a fragment away is what the cut does: only where a hull may be.
+    expect(plain.tiles).not.toMatch(/\bdiscard\b/);
+    expect(plain.byHulls).toMatch(/\bdiscard\b/);
+    expect(whole.tiles).toMatch(/\bdiscard\b/);
+    expect(whole.byHulls).toBeNull();
+    // The rain's pocks and the shimmer read the pattern twice and once more.
+    const reads = (code: string): number => (code.match(/texture(Sample)?\w*\(/g) ?? []).length;
+    expect(reads(plain.tiles)).toBeLessThan(reads(whole.tiles));
+    expect(plain.tiles.length).toBeLessThan(whole.tiles.length * 0.9);
+  });
+});
+
 test.describe('pictures', () => {
   test.beforeEach(heavy);
+
+  // The low tier's look, as a weak laptop draws it, on every back end.
+  for (const [name, sea, hour] of [
+    ['day', 'breeze', 12],
+    ['dusk', 'breeze', 18.2],
+    ['gale', 'gale', 12],
+  ] as const) {
+    test(`the low tier, ${name}`, async ({ page }) => {
+      test.skip(project() === 'compat', 'the low tier on WebGPU is the webgpu project’s');
+      await openLook(page, `sea=${sea}&tier=low`, false);
+      await page.evaluate(async (hour) => {
+        const k = globalThis.keel;
+        k.setState({ heading: (330 * Math.PI) / 180 - 2 * Math.PI });
+        k.setSky(hour);
+        k.render();
+        await k.show();
+      }, hour);
+      expect(await page.evaluate(() => globalThis.keel.info().sea)).toBe('plain');
+      await expect.soft(page.locator('canvas.scene')).toHaveScreenshot(`low-${name}.png`);
+    });
+  }
 
   for (const sea of ['calm', 'breeze', 'fresh', 'gale']) {
     test(sea, async ({ page }) => {

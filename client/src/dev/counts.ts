@@ -130,6 +130,13 @@ export interface FrameReport {
   largest: Written[];
   /** With detail: three.js's render and compute calls a frame, by what they drew into. */
   passList: PassSeen[];
+  /**
+   * With detail, on WebGPU: the GPU's render passes a frame, by what began
+   * them: three.js's render call (as passList names it), or the command
+   * encoder's own label for the passes three.js makes itself (mipmapEncoder,
+   * clear, copyFramebufferToTexture).
+   */
+  gpuPassList: PassSeen[];
 }
 
 export interface CountOptions {
@@ -280,6 +287,11 @@ export class FrameCounter {
     { label: string; owner: string; size: number; count: number }
   >();
   readonly #passList = new Map<string, number>();
+  readonly #gpuPassList = new Map<string, number>();
+  /** The render calls under way, as passList names them, the innermost last. */
+  readonly #rendering: string[] = [];
+  /** The texture whose mipmaps are being made, if any. */
+  #mipmapping: string | null = null;
 
   constructor(options: CountOptions = {}) {
     this.gpu = options.gpu ?? true;
@@ -342,9 +354,10 @@ export class FrameCounter {
         bytesPerFrame: (w.count * w.size) / n,
       }))
       .sort((a, b) => b.bytesPerFrame - a.bytesPerFrame || b.perFrame - a.perFrame);
-    const passList = [...this.#passList.entries()]
-      .map(([label, count]) => ({ label, perFrame: count / n }))
-      .sort((a, b) => b.perFrame - a.perFrame);
+    const list = (m: Map<string, number>): PassSeen[] =>
+      [...m.entries()]
+        .map(([label, count]) => ({ label, perFrame: count / n }))
+        .sort((a, b) => b.perFrame - a.perFrame);
     return {
       backend: this.#backend,
       frames: f.length,
@@ -363,7 +376,8 @@ export class FrameCounter {
       work: of('work'),
       interval: of('interval'),
       largest,
-      passList,
+      passList: list(this.#passList),
+      gpuPassList: list(this.#gpuPassList),
     };
   }
 
@@ -402,6 +416,18 @@ export class FrameCounter {
 
   #pass(label: string): void {
     this.#passList.set(label, (this.#passList.get(label) ?? 0) + 1);
+  }
+
+  /** A GPU render pass begun by an encoder of that label. */
+  #gpuPass(encoder: string): void {
+    const inner = this.#rendering[this.#rendering.length - 1];
+    const label =
+      this.#mipmapping !== null
+        ? `${encoder}: ${this.#mipmapping}`
+        : encoder.startsWith('renderContext') && inner !== undefined
+          ? inner
+          : encoder;
+    this.#gpuPassList.set(label, (this.#gpuPassList.get(label) ?? 0) + 1);
   }
 
   #attach(gfx: Gfx): void {
@@ -461,6 +487,10 @@ export class FrameCounter {
             (orig) =>
               function (this: unknown, ...args: unknown[]) {
                 self.#passes++;
+                if (self.detail) {
+                  const label = (this as { label?: string }).label;
+                  self.#gpuPass(label === undefined || label === '' ? '?' : label);
+                }
                 return orig.apply(this, args);
               },
           ),
@@ -563,6 +593,7 @@ export class FrameCounter {
       _geometries?: object;
       _nodes?: object;
       inspector?: object;
+      backend?: { textureUtils?: object };
     };
     const self = this;
     const undo = this.#undo;
@@ -577,6 +608,33 @@ export class FrameCounter {
               const m = materialOf(ro.material);
               self.#owner = `${nameOf(ro.object)}${m === '' ? '' : ` [${m}]`}`;
               return orig.apply(this, args);
+            },
+        ),
+      );
+    }
+    const textures = r.backend?.textureUtils;
+    if (textures !== undefined) {
+      undo.push(
+        wrapMethod(
+          textures,
+          'generateMipmaps',
+          (orig) =>
+            function (this: unknown, ...args: unknown[]) {
+              const t = args[0] as {
+                name?: string;
+                id?: number;
+                image?: { width?: number; height?: number };
+              };
+              const size = `${t.image?.width ?? '?'}×${t.image?.height ?? '?'}`;
+              self.#mipmapping =
+                t.name !== undefined && t.name !== ''
+                  ? `${t.name} ${size}`
+                  : `texture ${t.id ?? '?'} ${size}`;
+              try {
+                return orig.apply(this, args);
+              } finally {
+                self.#mipmapping = null;
+              }
             },
         ),
       );
@@ -606,6 +664,7 @@ export class FrameCounter {
                 (args[3] as Named | null) ?? null,
               );
               self.#pass(label);
+              self.#rendering.push(label);
               self.#owner = `(start of ${label})`;
               return orig.apply(this, args);
             },
@@ -615,6 +674,7 @@ export class FrameCounter {
           'finishRender',
           (orig) =>
             function (this: unknown, ...args: unknown[]) {
+              self.#rendering.pop();
               self.#owner = '(between passes)';
               return orig.apply(this, args);
             },

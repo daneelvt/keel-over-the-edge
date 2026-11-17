@@ -49,6 +49,16 @@ export interface PartsResult {
   tiers: { tier: string; rung: string; steps: PartStep[] }[];
 }
 
+/**
+ * The sea's and the sky's layers, each left out alone: the frame with
+ * everything, then each step with one layer left out and the rest drawn.
+ */
+export interface LayersResult {
+  width: number;
+  height: number;
+  tiers: { tier: string; rung: string; steps: PartStep[] }[];
+}
+
 export interface CpuRow {
   boat: string;
   tier: string;
@@ -82,6 +92,8 @@ export interface CountsRow {
   counts: Record<CountName, { median: number; max: number }>;
   largest: WrittenRow[];
   passList: { label: string; perFrame: number }[];
+  /** The GPU's render passes a frame, by what began them (WebGPU). */
+  gpuPassList?: { label: string; perFrame: number }[];
 }
 
 export const COUNT_NAMES = [
@@ -118,8 +130,38 @@ export interface Results {
   ladder?: LadderResult;
   gpu?: GpuResult;
   parts?: PartsResult;
+  layers?: LayersResult;
   cpu?: CpuResult;
   counts?: CountsResult;
+}
+
+/**
+ * Results measured apart, a section or more each, as one: a section
+ * measured twice is the later one's. The first date, Chrome and back end
+ * are kept.
+ */
+export function merge(parts: readonly Results[]): Results {
+  const first = parts[0];
+  if (first === undefined) {
+    throw new Error('nothing to merge');
+  }
+  const out: Results = { meta: { ...first.meta, dpr: {}, args: [] } };
+  for (const r of parts) {
+    Object.assign(out.meta.dpr, r.meta.dpr);
+    out.meta.args.push(...r.meta.args);
+    if (out.meta.chrome === '') {
+      out.meta.chrome = r.meta.chrome;
+    }
+    if (r.meta.date < out.meta.date) {
+      out.meta.date = r.meta.date;
+    }
+    for (const k of ['ladder', 'gpu', 'parts', 'layers', 'cpu', 'counts'] as const) {
+      if (r[k] !== undefined) {
+        (out as unknown as Record<string, unknown>)[k] = r[k];
+      }
+    }
+  }
+  return out;
 }
 
 /** The median of values; NaN for none. */
@@ -227,6 +269,12 @@ export function shares(steps: readonly PartStep[]): number[] {
   return steps.map((s, i) => (i === 0 ? Number.NaN : (steps[i - 1] as PartStep).median - s.median));
 }
 
+/** The share of a step measured alone: the first step's interval less its own. */
+export function alone(steps: readonly PartStep[]): number[] {
+  const first = steps[0]?.median ?? Number.NaN;
+  return steps.map((s, i) => (i === 0 ? Number.NaN : first - s.median));
+}
+
 /** All the results as Markdown, ready for a pull request. */
 export function report(r: Results): string {
   const m = r.meta;
@@ -254,6 +302,20 @@ export function report(r: Results): string {
     for (const t of p.tiers) {
       const sh = shares(t.steps);
       out += `\n**The ${t.tier} tier's frame (${t.rung}) at ${p.width} × ${p.height}, its parts hidden one after another** (ms)\n\n`;
+      out += table(
+        ['Step', 'Median interval', 'Runs', "The part's share"],
+        t.steps.map((s, i) => {
+          const v = sh[i] as number;
+          return [s.name, fixed(s.median), range(s), i === 0 ? '' : v > 0.05 ? fixed(v) : 'none'];
+        }),
+      );
+    }
+  }
+  if (r.layers !== undefined) {
+    const p = r.layers;
+    for (const t of p.tiers) {
+      const sh = alone(t.steps);
+      out += `\n**The ${t.tier} tier's frame (${t.rung}) at ${p.width} × ${p.height}, each step with one part left out and the rest drawn** (ms)\n\n`;
       out += table(
         ['Step', 'Median interval', 'Runs', "The part's share"],
         t.steps.map((s, i) => {
@@ -339,6 +401,13 @@ export function report(r: Results): string {
         ['Pass', 'A frame'],
         row.passList.map((p) => [p.label, fixed(p.perFrame, 1)]),
       );
+      if (row.gpuPassList !== undefined && row.gpuPassList.length > 0) {
+        out += `\n**The GPU's render passes a frame, ${row.rung}**, by the render call or encoder that began them\n\n`;
+        out += table(
+          ['Begun by', 'A frame'],
+          row.gpuPassList.map((p) => [p.label, fixed(p.perFrame, 1)]),
+        );
+      }
     }
   }
   return out;
@@ -365,6 +434,11 @@ export function measures(r: Results): Map<string, Measure> {
   for (const t of r.parts?.tiers ?? []) {
     for (const s of t.steps) {
       put('parts', `${t.tier}: ${s.name}`, s.median);
+    }
+  }
+  for (const t of r.layers?.tiers ?? []) {
+    for (const s of t.steps) {
+      put('layers', `${t.tier}: ${s.name}`, s.median);
     }
   }
   for (const row of r.cpu?.rows ?? []) {
@@ -395,6 +469,7 @@ export function compare(before: Results, after: Results): string {
   const titles: Record<string, string> = {
     gpu: 'Each rung at a fixed size, median interval (ms)',
     parts: "The frame's parts hidden one after another, median interval (ms)",
+    layers: "The sea's and the sky's layers, each left out alone, median interval (ms)",
     cpu: "The main thread's work a drawn frame, 4× throttle (ms)",
     counts: 'Counts a drawn frame, medians',
   };

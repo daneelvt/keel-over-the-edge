@@ -22,6 +22,12 @@
 //   - parts: the high tier's frame and the low tier's at the same size,
 //     with its parts hidden one after another (PARTS below), each step's
 //     interval, and the share of the part it hid.
+//   - layers: the sea's layers (seamaterial.ts's SEA_LAYERS) and the
+//     sky's (sky.ts's SKY_LAYERS) at the parts section's size, on the high
+//     tier's first rung and the low tier's, each left out alone, its shader
+//     built without it, and the rest drawn; then the sea and the sky each
+//     built bare and each hidden, and the antialiasing off. A layer's share
+//     is the frame with everything less the frame without it.
 //   - cpu: the main thread's work a drawn frame (the scene's update and
 //     three.js's draw), median and 90th percentile, at 1,366 × 768 under
 //     Chrome's 4× CPU throttle, in the jolly boat and in the tall ship
@@ -34,9 +40,13 @@
 // Options: --port (Vite's, default 5292), --runs (default 3: each number is
 // the median of the runs' medians), --backend webgl2 (WebGPU by default),
 // --headed, --settle and --measure (ms, each step's), --rungs (the gpu
-// section's, as 0,5,6,10; all by default), --boats, --json (writes every
+// section's, as 0,5,6,10; all by default), --boats, --layers (the layers
+// section's, as glints,foam; all by default), --tiers (the parts and
+// layers sections', as low; high,low by default), --json (writes every
 // number), --md (writes the tables), --compare (an earlier --json, printed
-// before → after; with --after, two files compared and nothing run).
+// before → after; with --after, two files compared and nothing run),
+// --from (earlier --json files, a section each or more, put together and
+// printed, with nothing run: sections can be measured one at a time).
 //
 // Timings vary run to run and with whatever else the machine is doing:
 // measure before and after in one sitting, with nothing else running.
@@ -62,8 +72,10 @@ import {
   type GpuResult,
   type GpuRow,
   type LadderResult,
+  type LayersResult,
   measured,
   median,
+  merge,
   type PartStep,
   type PartsResult,
   type Results,
@@ -122,7 +134,7 @@ export const PARTS: Part[] = [
   },
 ];
 
-const SECTIONS = ['ladder', 'gpu', 'parts', 'cpu', 'counts'] as const;
+const SECTIONS = ['ladder', 'gpu', 'parts', 'layers', 'cpu', 'counts'] as const;
 type Section = (typeof SECTIONS)[number];
 
 /** The device pixel ratios the ladder is read at. */
@@ -147,10 +159,13 @@ interface Options {
   measure: number;
   rungs: number[] | null;
   boats: string[];
+  layers: string[] | null;
+  tiers: string[] | null;
   json: string | null;
   md: string | null;
   compare: string | null;
   after: string | null;
+  from: string[];
 }
 
 function options(): Options {
@@ -165,10 +180,13 @@ function options(): Options {
       measure: { type: 'string' },
       rungs: { type: 'string' },
       boats: { type: 'string' },
+      layers: { type: 'string' },
+      tiers: { type: 'string' },
       json: { type: 'string' },
       md: { type: 'string' },
       compare: { type: 'string' },
       after: { type: 'string' },
+      from: { type: 'string' },
     },
   });
   const only = (values.only ?? SECTIONS.join(',')).split(',').filter((s) => s !== '');
@@ -191,10 +209,13 @@ function options(): Options {
     measure: Number(values.measure ?? 3000),
     rungs: values.rungs === undefined ? null : values.rungs.split(',').map(Number),
     boats: (values.boats ?? 'jolly-boat,tall-ship').split(','),
+    layers: values.layers === undefined ? null : values.layers.split(','),
+    tiers: values.tiers === undefined ? null : values.tiers.split(','),
     json: values.json ?? null,
     md: values.md ?? null,
     compare: values.compare ?? null,
     after: values.after ?? null,
+    from: values.from === undefined ? [] : values.from.split(','),
   };
 }
 
@@ -401,7 +422,7 @@ async function gpuSection(o: Options, base: string, seen: Seen): Promise<GpuResu
 async function partsSection(o: Options, base: string, seen: Seen): Promise<PartsResult> {
   const browser = await launch(o, true);
   seen.chrome = browser.version();
-  const tiers = o.backend === 'webgl2' ? ['low'] : ['high', 'low'];
+  const tiers = o.tiers ?? (o.backend === 'webgl2' ? ['low'] : ['high', 'low']);
   const found = new Map<string, { rung: string; steps: Map<string, number[]> }>();
   let width = 0;
   let height = 0;
@@ -430,6 +451,103 @@ async function partsSection(o: Options, base: string, seen: Seen): Promise<Parts
         for (const part of PARTS) {
           await page.evaluate(part.hide);
           await step(part.name);
+        }
+        await closePage(page);
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  return {
+    width,
+    height,
+    tiers: [...found.entries()].map(([tier, t]) => ({
+      tier,
+      rung: t.rung,
+      steps: [...t.steps.entries()].map(([name, v]): PartStep => ({ name, ...measured(v) })),
+    })),
+  };
+}
+
+/** A step of the layers section: what it leaves out, done in the page, and put back after. */
+interface LayerStep {
+  name: string;
+  off: () => Promise<void>;
+  on: () => Promise<void>;
+}
+
+async function layerSteps(page: Page, only: string[] | null): Promise<LayerStep[]> {
+  const names = await page.evaluate(() => globalThis.keel.layerNames());
+  const pick = (all: string[]): string[] =>
+    only === null ? all : all.filter((l) => only.includes(l));
+  const sea =
+    (off: string[] | null, apart: boolean | null = null) =>
+    (): Promise<void> =>
+      page.evaluate(([off, apart]) => globalThis.keel.seaLayers(off, apart), [off, apart] as const);
+  const sky = (off: string[]) => () => page.evaluate((off) => globalThis.keel.skyLayers(off), off);
+  const hide =
+    (what: 'sea' | 'sky', on: boolean): (() => Promise<void>) =>
+    () =>
+      page.evaluate(
+        ([what, on]) => {
+          const k = globalThis.keel;
+          const w = k.world;
+          for (const m of what === 'sea' ? [w.ocean.tiles.mesh, w.ocean.far.mesh] : [w.sky.mesh]) {
+            k.keepHidden(m, on);
+          }
+        },
+        [what, on] as const,
+      );
+  const aa = (a: 'fxaa' | 'none') => () =>
+    page.evaluate((a) => globalThis.keel.world.stage.setAntialias(a), a);
+  return [
+    // The whole look, every tile in one draw; and the tiles a hull may
+    // reach drawn apart, with the hulls' cut in their shader alone.
+    { name: 'Sea: whole, in one', off: sea([], false), on: sea(null) },
+    { name: 'Sea: whole, hulls apart', off: sea([], true), on: sea(null) },
+    ...pick(names.sea).map((l) => ({ name: `Sea: ${l} left out`, off: sea([l]), on: sea(null) })),
+    { name: 'Sea: every layer left out', off: sea(names.sea), on: sea(null) },
+    { name: 'Sea hidden', off: hide('sea', true), on: hide('sea', false) },
+    ...pick(names.sky).map((l) => ({ name: `Sky: ${l} left out`, off: sky([l]), on: sky([]) })),
+    { name: 'Sky: every layer left out', off: sky(names.sky), on: sky([]) },
+    { name: 'Sky hidden', off: hide('sky', true), on: hide('sky', false) },
+    { name: 'Antialiasing off', off: aa('none'), on: aa('fxaa') },
+  ];
+}
+
+async function layersSection(o: Options, base: string, seen: Seen): Promise<LayersResult> {
+  const browser = await launch(o, true);
+  seen.chrome = browser.version();
+  const tiers = o.tiers ?? (o.backend === 'webgl2' ? ['low'] : ['high', 'low']);
+  const found = new Map<string, { rung: string; steps: Map<string, number[]> }>();
+  let width = 0;
+  let height = 0;
+  try {
+    for (let run = 0; run < o.runs; run++) {
+      for (const tier of tiers) {
+        const page = await openSandbox(browser, o, base, BIG);
+        seen.dpr.layers = await page.evaluate(() => window.devicePixelRatio);
+        await holdBig(page);
+        const { index, name } = await firstOf(page, tier);
+        await setRung(page, index);
+        const t = found.get(tier) ?? { rung: name, steps: new Map<string, number[]>() };
+        found.set(tier, t);
+        const step = async (label: string): Promise<void> => {
+          const r = await timed(page, o.settle, o.measure);
+          width = r.width;
+          height = r.height;
+          const v = t.steps.get(label) ?? [];
+          v.push(r.interval.median);
+          t.steps.set(label, v);
+          say(
+            `layers run ${run + 1}, ${tier}: ${label}: ${r.interval.median.toFixed(2)} ms over ${r.frames} frames`,
+          );
+        };
+        await step('Everything');
+        for (const s of await layerSteps(page, o.layers)) {
+          await s.off();
+          await step(s.name);
+          await s.on();
         }
         await closePage(page);
       }
@@ -552,6 +670,7 @@ async function countsSection(o: Options, base: string, seen: Seen): Promise<Coun
       counts,
       largest: last.largest,
       passList: last.passList,
+      gpuPassList: last.gpuPassList,
     };
   });
   return { width, height, rows };
@@ -580,6 +699,11 @@ async function main(): Promise<void> {
     process.stdout.write(compare(before, after));
     return;
   }
+  if (o.from.length > 0) {
+    const results = merge(o.from.map((f) => JSON.parse(readFileSync(f, 'utf8')) as Results));
+    finish(o, results);
+    return;
+  }
   const browsing = o.only.some((s) => s !== 'ladder');
   const vite = browsing ? await startVite(o.port) : null;
   const base = `http://localhost:${o.port}`;
@@ -605,6 +729,8 @@ async function main(): Promise<void> {
         results.gpu = await gpuSection(o, base, seen);
       } else if (s === 'parts') {
         results.parts = await partsSection(o, base, seen);
+      } else if (s === 'layers') {
+        results.layers = await layersSection(o, base, seen);
       } else if (s === 'cpu') {
         results.cpu = await cpuSection(o, base, seen);
       } else {
@@ -617,6 +743,11 @@ async function main(): Promise<void> {
   }
   results.meta.chrome = seen.chrome;
   results.meta.dpr = seen.dpr;
+  finish(o, results);
+}
+
+/** Prints the results' tables, writes them where asked, and compares them with earlier ones. */
+function finish(o: Options, results: Results): void {
   const md = report(results);
   process.stdout.write(md);
   if (o.json !== null) {
