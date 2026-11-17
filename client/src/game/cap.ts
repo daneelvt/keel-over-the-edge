@@ -50,6 +50,12 @@ export class FrameCap {
   forced: number | null = null;
   /** Whether adaptive quality halved the rate: at most 30 frames a second, whatever the limit. */
   halved = false;
+  /**
+   * A display's rate that overrides the measured one, Hz (the browser tests
+   * on a software GPU, whose animation frames come so late that even a
+   * probe reads the display slow).
+   */
+  forcedRate: number | null = null;
 
   readonly #intervals = new Float64Array(WINDOW);
   readonly #sorted = new Float64Array(WINDOW);
@@ -76,7 +82,7 @@ export class FrameCap {
    * frames come at when that is faster or nothing was probed yet.
    */
   get display(): number {
-    return Math.max(this.#display, this.#hz);
+    return this.forcedRate ?? Math.max(this.#display, this.#hz);
   }
 
   /** The most frames a second drawn now: the limit, or the half rate. */

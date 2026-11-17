@@ -1105,10 +1105,12 @@ test.describe('adaptive quality', () => {
     await openLook(page, 'sea=fresh', !softwareGPU);
     // Slowed on the main thread, nothing a rung changes helps: the last rung
     // at half the rate. Slowed by the pixels drawn, as a GPU that shades only
-    // so many a second: a rung that holds 60. On a software GPU every frame is
-    // slow already, and windows are made to hold a dozen of its frames.
+    // so many a second: a rung that holds 60. On a software GPU the main
+    // thread's slowing, with windows made to hold a dozen of its frames, and
+    // the display taken as 60 Hz: its animation frames come so late that
+    // even a probe reads the display slow. Its timing is not judged.
     const cases = softwareGPU
-      ? [{ ms: 0, byPixels: false, halved: true }]
+      ? [{ ms: 40, byPixels: false, halved: true }]
       : [
           { ms: 20, byPixels: false, halved: true },
           { ms: 40, byPixels: true, halved: false },
@@ -1131,13 +1133,14 @@ test.describe('adaptive quality', () => {
             }
             times.sort((a, b) => a - b);
             k.qualityTiming(Math.max(250, 12 * (times[2] ?? 0)), null);
+            k.capFrames(null, 60);
           }
           const drawn: number[] = [];
           w.onDrawn = () => drawn.push(performance.now());
           const start = performance.now();
           k.thaw();
-          // Ten seconds to settle and three to hold; on a software GPU, until the half rate comes.
-          const budget = software ? 90_000 : 13_000;
+          // Ten seconds to settle and three to hold; on a software GPU, until the half rate.
+          const budget = software ? 60_000 : 13_000;
           while (performance.now() - start < budget) {
             await k.frames(5);
             if (software && k.frameCap().halved) {
@@ -1167,6 +1170,7 @@ test.describe('adaptive quality', () => {
             cap,
           };
           k.slowFrames(0);
+          k.capFrames(null);
           k.adapt(false);
           k.freeze(100);
           return out;

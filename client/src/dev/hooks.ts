@@ -1759,9 +1759,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
 
-    /** Draws only every n-th animation frame; null for the measured cap. */
-    capFrames(n: number | null): void {
+    /** Draws only every n-th animation frame, null for the measured cap; and takes the display's rate as hz, null for the measured one. */
+    capFrames(n: number | null, hz: number | null = null): void {
       stage.cap.forced = n;
+      stage.cap.forcedRate = hz;
     },
     settings(change: Partial<Settings>): void {
       game.settings.set(change);
