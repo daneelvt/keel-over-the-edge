@@ -4025,7 +4025,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       target.dispose();
       m.dispose();
       const maker = new FieldMaker(c.patch);
-      maker.set(world.catalogSea, c.inputs);
+      maker.set(world.catalogSea, c.follower.inputs);
       const f = maker.at(world.ocean.frame.time, newFields(n));
       const cpu = new Array<number>(n * n * 4);
       for (let i = 0; i < n * n; i++) {
@@ -4034,7 +4034,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         cpu[i * 4 + 2] = f.convergence[i] ?? 0;
         cpu[i * 4 + 3] = f.height[i] ?? 0;
       }
-      return { size: n, gpu: Array.from(got), cpu, variance: c.inputs.variance };
+      return { size: n, gpu: Array.from(got), cpu, variance: c.follower.inputs.variance };
     },
     /**
      * The tiles seen from straight above the boat, each pixel's numbers of

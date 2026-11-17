@@ -58,6 +58,7 @@ import type { ChunkBuilding, ChunkTown } from '../workers/mesh/chunk';
 import { artUrl } from './boat';
 import { headingToRotationY } from './coords';
 import { horizonDistance, litMaterial } from './materials';
+import { instancesByAttribute, sendFirst, sendInstances } from './uploads';
 
 /** A storey's height, m, as the kits build them and the generator reckons. */
 export const STOREY = 3;
@@ -181,7 +182,7 @@ class Draw {
     ['townWall', 'townRoof', 'townShutter', 'townShape'].forEach((name, k) => {
       g.setAttribute(name, new InterleavedBufferAttribute(this.buffer, 4, k * 4));
     });
-    this.mesh = new InstancedMesh(g, material, capacity);
+    this.mesh = instancesByAttribute(new InstancedMesh(g, material, capacity));
     this.mesh.name = name;
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -711,8 +712,8 @@ export class Towns {
       });
       d.mesh.count = list.length;
       d.mesh.visible = list.length > 0;
-      d.mesh.instanceMatrix.needsUpdate = true;
-      d.buffer.needsUpdate = true;
+      sendInstances(d.mesh, list.length);
+      sendFirst(d.buffer, list.length);
       draws++;
       triangles += ((geometry.index?.count ?? 0) / 3) * list.length;
       if (isProps) {
@@ -739,8 +740,8 @@ export class Towns {
     });
     this.#far.mesh.count = far.length;
     this.#far.mesh.visible = far.length > 0;
-    this.#far.mesh.instanceMatrix.needsUpdate = true;
-    this.#far.buffer.needsUpdate = true;
+    sendInstances(this.#far.mesh, far.length);
+    sendFirst(this.#far.buffer, far.length);
     if (far.length > 0) {
       draws++;
       triangles += ((this.#far.mesh.geometry.index?.count ?? 0) / 3) * far.length;

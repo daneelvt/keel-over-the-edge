@@ -36,6 +36,7 @@ import type { Node, UniformNode } from 'three/webgpu';
 import type { WeatherGusts, WeatherWater } from '../catalog/types.gen';
 import { RECORDS, WEATHER } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
+import { eachRender } from '../render/uploads';
 import { WaterSigns } from './water';
 
 const OCTAVES = WEATHER.octaves;
@@ -127,13 +128,13 @@ export class GustField {
       this.#frame.push(new Vector4());
     }
     this.uniforms = {
-      low: uniformArray(this.#low, 'vec4'),
-      high: uniformArray(this.#high, 'vec4'),
-      frac: uniformArray(this.#frac, 'vec4'),
-      frame: uniformArray(this.#frame, 'vec4'),
-      spells: uniform(0),
-      strength: uniform(0),
-      front: uniform(new Vector4()),
+      low: eachRender(uniformArray(this.#low, 'vec4')),
+      high: eachRender(uniformArray(this.#high, 'vec4')),
+      frac: eachRender(uniformArray(this.#frac, 'vec4')),
+      frame: eachRender(uniformArray(this.#frame, 'vec4')),
+      spells: eachRender(uniform(0)),
+      strength: eachRender(uniform(0)),
+      front: eachRender(uniform(new Vector4())),
     };
   }
 

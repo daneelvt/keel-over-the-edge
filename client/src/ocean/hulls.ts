@@ -47,6 +47,7 @@ import {
 import type { Node, UniformNode } from 'three/webgpu';
 import { BOAT_KINDS } from '../predict/layout.gen';
 import { DOME_RADIUS, domeCentre } from '../render/materials';
+import { eachRender } from '../render/uploads';
 
 /** The most hulls the sea is kept out of: the player's own and the nearest others. */
 export const HULLS = 8;
@@ -205,11 +206,11 @@ export class HullVolumes {
   /** Each kind's bridgedeck: its fore and after ends, half-width and underside; a half-width of 0 for none. */
   readonly #decks: Vector4[] = Array.from({ length: HULL_SHAPES }, () => new Vector4());
   readonly #shape = uniform(new Vector4(2, 0, 0, 0));
-  readonly #placesNode = uniformArray(this.#places, 'vec4');
-  readonly #tiltsNode = uniformArray(this.#tilts, 'vec4');
-  readonly #stationsNode = uniformArray(this.#stations, 'vec4');
-  readonly #shapesNode = uniformArray(this.#shapes, 'vec4');
-  readonly #decksNode = uniformArray(this.#decks, 'vec4');
+  readonly #placesNode = eachRender(uniformArray(this.#places, 'vec4'));
+  readonly #tiltsNode = eachRender(uniformArray(this.#tilts, 'vec4'));
+  readonly #stationsNode = eachRender(uniformArray(this.#stations, 'vec4'));
+  readonly #shapesNode = eachRender(uniformArray(this.#shapes, 'vec4'));
+  readonly #decksNode = eachRender(uniformArray(this.#decks, 'vec4'));
   #n = 0;
   readonly #ready: boolean[] = new Array<boolean>(HULL_SHAPES).fill(false);
 

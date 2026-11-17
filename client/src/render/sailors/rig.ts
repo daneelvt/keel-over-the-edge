@@ -10,13 +10,10 @@
 // The figure's space is its file's: x to its left, y up, z forward, the
 // origin on the ground between its feet. Nothing here allocates once made.
 
-import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three';
+import { Matrix4, type Object3D, Quaternion, type Vector3 } from 'three';
 
 const q = new Quaternion();
-const v = new Vector3();
-const s1 = new Vector3(1, 1, 1);
 const m = new Matrix4();
-const local = new Matrix4();
 
 export class Rig {
   readonly names: string[];
@@ -103,22 +100,116 @@ export class Rig {
     this.pos.set(this.restPos);
   }
 
-  /** Each bone's matrix in the figure's space, from the pose. */
+  /**
+   * Each bone's matrix in the figure's space, from the pose: its parent's
+   * times its own turn and place, worked as Matrix4's compose and multiply
+   * work them, less the terms a turn and a place make 0 or 1 (so to the
+   * same bits), with no matrices copied in and out.
+   */
   fk(): void {
-    const { order, parent, quat, pos, world } = this;
+    const order = this.order;
     for (let k = 0; k < order.length; k++) {
-      const i = order[k] as number;
-      q.fromArray(quat, 4 * i);
-      v.fromArray(pos, 3 * i);
-      local.compose(v, q, s1);
-      const p = parent[i] as number;
-      if (p < 0) {
-        m.multiplyMatrices(this.base, local);
-      } else {
-        m.fromArray(world, 16 * p).multiply(local);
-      }
-      m.toArray(world, 16 * i);
+      this.#bone(order[k] as number);
     }
+  }
+
+  /**
+   * fk() for a bone and the bones below it alone, after a change to its
+   * pose: the rest are as they were.
+   */
+  fkFrom(i: number): void {
+    let branch = this.#branches[i];
+    if (branch === undefined) {
+      const below = new Uint8Array(this.names.length);
+      below[i] = 1;
+      const list: number[] = [];
+      for (const b of this.order) {
+        const p = this.parent[b] as number;
+        if (b === i || (p >= 0 && below[p] === 1)) {
+          below[b] = 1;
+          list.push(b);
+        }
+      }
+      branch = Int32Array.from(list);
+      this.#branches[i] = branch;
+    }
+    for (let k = 0; k < branch.length; k++) {
+      this.#bone(branch[k] as number);
+    }
+  }
+
+  /** Each bone's branch for fkFrom, made at its first use. */
+  readonly #branches: (Int32Array | undefined)[] = [];
+
+  #bone(i: number): void {
+    const { parent, quat, pos, world } = this;
+    const base = this.base.elements;
+    const qi = 4 * i;
+    const x = quat[qi] as number;
+    const y = quat[qi + 1] as number;
+    const z = quat[qi + 2] as number;
+    const w = quat[qi + 3] as number;
+    const x2 = x + x;
+    const y2 = y + y;
+    const z2 = z + z;
+    const xx = x * x2;
+    const xy = x * y2;
+    const xz = x * z2;
+    const yy = y * y2;
+    const yz = y * z2;
+    const zz = z * z2;
+    const wx = w * x2;
+    const wy = w * y2;
+    const wz = w * z2;
+    // The bone's own: a turn and a place, its last row 0, 0, 0, 1.
+    const b11 = 1 - (yy + zz);
+    const b21 = xy + wz;
+    const b31 = xz - wy;
+    const b12 = xy - wz;
+    const b22 = 1 - (xx + zz);
+    const b32 = yz + wx;
+    const b13 = xz + wy;
+    const b23 = yz - wx;
+    const b33 = 1 - (xx + yy);
+    const b14 = pos[3 * i] as number;
+    const b24 = pos[3 * i + 1] as number;
+    const b34 = pos[3 * i + 2] as number;
+    const p = parent[i] as number;
+    const a: ArrayLike<number> = p < 0 ? base : world;
+    const o = p < 0 ? 0 : 16 * p;
+    const a11 = a[o] as number;
+    const a21 = a[o + 1] as number;
+    const a31 = a[o + 2] as number;
+    const a41 = a[o + 3] as number;
+    const a12 = a[o + 4] as number;
+    const a22 = a[o + 5] as number;
+    const a32 = a[o + 6] as number;
+    const a42 = a[o + 7] as number;
+    const a13 = a[o + 8] as number;
+    const a23 = a[o + 9] as number;
+    const a33 = a[o + 10] as number;
+    const a43 = a[o + 11] as number;
+    const a14 = a[o + 12] as number;
+    const a24 = a[o + 13] as number;
+    const a34 = a[o + 14] as number;
+    const a44 = a[o + 15] as number;
+    const t = 16 * i;
+    world[t] = a11 * b11 + a12 * b21 + a13 * b31;
+    world[t + 4] = a11 * b12 + a12 * b22 + a13 * b32;
+    world[t + 8] = a11 * b13 + a12 * b23 + a13 * b33;
+    world[t + 12] = a11 * b14 + a12 * b24 + a13 * b34 + a14;
+    world[t + 1] = a21 * b11 + a22 * b21 + a23 * b31;
+    world[t + 5] = a21 * b12 + a22 * b22 + a23 * b32;
+    world[t + 9] = a21 * b13 + a22 * b23 + a23 * b33;
+    world[t + 13] = a21 * b14 + a22 * b24 + a23 * b34 + a24;
+    world[t + 2] = a31 * b11 + a32 * b21 + a33 * b31;
+    world[t + 6] = a31 * b12 + a32 * b22 + a33 * b32;
+    world[t + 10] = a31 * b13 + a32 * b23 + a33 * b33;
+    world[t + 14] = a31 * b14 + a32 * b24 + a33 * b34 + a34;
+    world[t + 3] = a41 * b11 + a42 * b21 + a43 * b31;
+    world[t + 7] = a41 * b12 + a42 * b22 + a43 * b32;
+    world[t + 11] = a41 * b13 + a42 * b23 + a43 * b33;
+    world[t + 15] = a41 * b14 + a42 * b24 + a43 * b34 + a44;
   }
 
   /** Where a bone is in the figure's space, from the last fk(). */

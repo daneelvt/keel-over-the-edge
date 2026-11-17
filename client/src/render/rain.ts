@@ -23,7 +23,7 @@ import {
   DynamicDrawUsage,
   InstancedBufferAttribute,
   InstancedInterleavedBuffer,
-  InstancedMesh,
+  type Mesh,
   Vector3,
 } from 'three';
 import {
@@ -49,6 +49,7 @@ import type { Node } from 'three/webgpu';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import { basicMaterial, bendScene } from './materials';
 import { look, toLinear } from './sky';
+import { instances } from './uploads';
 
 /** The box of streaks about the camera, m: across, up, along. */
 export const RAIN_BOX = { across: 70, up: 30 } as const;
@@ -104,7 +105,7 @@ function streakVertex(p: Node<'vec3'>, a: Node<'vec3'>, w: Node<'float'>): Node<
 
 /** The streaks at the boat: one draw. */
 export class Streaks {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** The box's place in the drops' frame, 0 to 1 each way, and its centre in the scene. */
   readonly phase = uniform(new Vector3());
   readonly centre = uniform(new Vector3());
@@ -149,7 +150,7 @@ export class Streaks {
     const along = corner.y.mul(float(1).sub(corner.y)).mul(4).mul(near);
     const colour = mix(look.cloudTop, look.skyHorizon, 0.4);
     m.fragmentNode = vec4(toLinear(colour), along.mul(STREAK_ALPHA)) as unknown as Node<'vec4'>;
-    this.mesh = new InstancedMesh(quad(), m, STREAKS_MOST);
+    this.mesh = instances(quad(), m);
     this.mesh.name = 'streaks';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -198,7 +199,7 @@ export class Streaks {
 
 /** The curtains under the clouds that rain: one draw. */
 export class Curtains {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** The world's time, s, which carries the streaks down; and the anchor from the floating origin. */
   readonly time = uniform(0);
   readonly anchor = uniform(new Vector3());
@@ -256,7 +257,7 @@ export class Curtains {
         .mul(0.8),
     );
     m.fragmentNode = vec4(toLinear(colour), ends.mul(CURTAIN_ALPHA)) as unknown as Node<'vec4'>;
-    this.mesh = new InstancedMesh(quad(), m, CURTAIN_MOST);
+    this.mesh = instances(quad(), m);
     this.mesh.name = 'curtains';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;

@@ -19,6 +19,8 @@
 
 import {
   type AnimationClip,
+  type BufferAttribute,
+  type BufferGeometry,
   LoadingManager,
   type Matrix4,
   Mesh,
@@ -33,6 +35,7 @@ import transcoderWasm from 'three/addons/libs/basis/basis_transcoder.wasm?url';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { positionGeometry, userData, varying, vec3 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../../catalog';
@@ -205,4 +208,96 @@ export async function loadSailor(
 export async function loadClips(url: string, renderer: WebGPURenderer): Promise<SailorClips> {
   const gltf = await gltfLoader(renderer).loadAsync(url);
   return { clips: gltf.animations, places: placesOf(gltf.scene) };
+}
+
+/** Whether two meshes' geometries can be put one after the other: the same attributes, of the same kinds. */
+function sameLayout(a: BufferGeometry, b: BufferGeometry): boolean {
+  const names = Object.keys(a.attributes);
+  if (
+    names.length !== Object.keys(b.attributes).length ||
+    (a.index === null) !== (b.index === null) ||
+    a.groups.length > 0 ||
+    b.groups.length > 0 ||
+    Object.keys(a.morphAttributes).length > 0 ||
+    Object.keys(b.morphAttributes).length > 0
+  ) {
+    return false;
+  }
+  return names.every((n) => {
+    const x = a.attributes[n] as BufferAttribute;
+    const y = b.attributes[n] as BufferAttribute | undefined;
+    return (
+      y !== undefined &&
+      x.itemSize === y.itemSize &&
+      x.normalized === y.normalized &&
+      x.array.constructor === y.array.constructor
+    );
+  });
+}
+
+/** Whether two skeletons are the same bones, bound alike (the loader makes one a mesh). */
+function sameSkeleton(a: Skeleton, b: Skeleton): boolean {
+  return (
+    a === b ||
+    (a.bones.length === b.bones.length &&
+      a.bones.every((bone, i) => bone === b.bones[i]) &&
+      a.boneInverses.every((m, i) => m.equals(b.boneInverses[i] as Matrix4)))
+  );
+}
+
+/**
+ * A level's skinned meshes as one, where they can be: the same material,
+ * skeleton, binding, parent and place, their geometries put one after the
+ * other in the file's order. One draw a pass for the figure, not one a
+ * part; what each draws is the same. A level that cannot be is left as it
+ * is.
+ */
+export function oneMesh(model: SailorModel): SailorModel {
+  const parts = model.meshes;
+  const first = parts[0];
+  if (
+    parts.length < 2 ||
+    model.skeleton === null ||
+    !(first instanceof SkinnedMesh) ||
+    first.parent === null
+  ) {
+    return model;
+  }
+  for (const m of parts) {
+    if (
+      !(m instanceof SkinnedMesh) ||
+      !sameSkeleton(m.skeleton, first.skeleton) ||
+      m.material !== first.material ||
+      m.parent !== first.parent ||
+      !m.bindMatrix.equals(first.bindMatrix) ||
+      !m.matrix.equals(first.matrix) ||
+      !m.position.equals(first.position) ||
+      !m.quaternion.equals(first.quaternion) ||
+      !m.scale.equals(first.scale) ||
+      !sameLayout(m.geometry, first.geometry)
+    ) {
+      return model;
+    }
+  }
+  const geometry = mergeGeometries(parts.map((m) => m.geometry));
+  if (geometry === null) {
+    return model;
+  }
+  const one = new SkinnedMesh(geometry, first.material);
+  one.name = 'figure';
+  one.position.copy(first.position);
+  one.quaternion.copy(first.quaternion);
+  one.scale.copy(first.scale);
+  one.userData = first.userData;
+  one.frustumCulled = first.frustumCulled;
+  one.castShadow = first.castShadow;
+  one.receiveShadow = first.receiveShadow;
+  one.bind(first.skeleton, first.bindMatrix);
+  const parent = first.parent;
+  parent.add(one);
+  for (const m of parts) {
+    m.removeFromParent();
+    m.geometry.dispose();
+  }
+  return { ...model, meshes: [one] };
 }

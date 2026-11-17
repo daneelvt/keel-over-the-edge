@@ -189,7 +189,7 @@ export class Springs {
           .multiply(qn)
           .normalize()
           .toArray(rig.quat, 4 * j);
-        rig.fk();
+        rig.fkFrom(j);
       }
     }
     this.#fresh = false;

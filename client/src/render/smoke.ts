@@ -18,7 +18,7 @@ import {
   BufferGeometry,
   DynamicDrawUsage,
   InstancedInterleavedBuffer,
-  InstancedMesh,
+  type Mesh,
 } from 'three';
 import {
   attribute,
@@ -35,6 +35,7 @@ import {
 import type { Node } from 'three/webgpu';
 import type { TownSmoke } from '../catalog/types.gen';
 import { basicMaterial, bendScene } from './materials';
+import { instances, sendFirst } from './uploads';
 
 /** The puffs drawn at most. */
 export const PUFF_CAPACITY = 1024;
@@ -83,7 +84,7 @@ export function smokes(seed: number, night: boolean, cat: TownSmoke): boolean {
 }
 
 export class Smoke {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** Each puff: its scene position and width; its strength and the light on it. */
   readonly place = attr();
   readonly shade = attr();
@@ -137,7 +138,7 @@ export class Smoke {
         .mul(vShade.y),
       soft.mul(vShade.x).mul(look.strength),
     ) as unknown as Node<'vec4'>;
-    this.mesh = new InstancedMesh(g, m, PUFF_CAPACITY);
+    this.mesh = instances(g, m);
     this.mesh.name = 'smoke';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -179,8 +180,8 @@ export class Smoke {
     this.count = n;
     this.mesh.count = n;
     this.mesh.visible = n > 0;
-    this.place.needsUpdate = true;
-    this.shade.needsUpdate = true;
+    sendFirst(this.place, n);
+    sendFirst(this.shade, n);
   }
 }
 
@@ -216,8 +217,8 @@ export class Puffs extends Smoke {
     this.mesh.count = this.count;
     this.mesh.visible = this.count > 0;
     if (this.count > 0) {
-      this.place.needsUpdate = true;
-      this.shade.needsUpdate = true;
+      sendFirst(this.place, this.count);
+      sendFirst(this.shade, this.count);
     }
   }
 }

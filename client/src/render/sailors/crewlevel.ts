@@ -34,7 +34,7 @@ import {
   type Color,
   DataTexture,
   FloatType,
-  InstancedMesh,
+  type Mesh,
   NearestFilter,
   RGBAFormat,
   type Texture,
@@ -59,6 +59,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { catalog } from '../../catalog';
+import { instances } from '../uploads';
 import { cockadeColours } from './cockade';
 import type { FleetLooks } from './fleetlooks';
 import { ROW_HEAD, SailorRows, skinRow } from './fleetsailors';
@@ -169,9 +170,9 @@ export class CrewLevel {
   /** The people's rows, grown as more are drawn. */
   rows: SailorRows;
   readonly #rowsUsers: { value: Texture }[] = [];
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** The pendants its people wear, a draw of its own; null for a level too far to show them. */
-  readonly pendants: InstancedMesh | null = null;
+  readonly pendants: Mesh | null = null;
   /** How many of the rows written since the last commit wear a pendant; and of those committed. */
   #wearing = 0;
   wearing = 0;
@@ -206,7 +207,7 @@ export class CrewLevel {
     g.setAttribute('position', new BufferAttribute(new Float32Array(3 * vertices), 3));
     // Read by nothing but the material's default normal, which the vertex node replaces.
     g.setAttribute('normal', new BufferAttribute(new Float32Array(3 * vertices), 3));
-    this.mesh = new InstancedMesh(g, material, LEVEL_MOST);
+    this.mesh = instances(g, material);
     this.mesh.name = `crew ${name}`;
     this.mesh.count = 0;
     this.mesh.visible = false;
@@ -215,7 +216,7 @@ export class CrewLevel {
     if (pendants) {
       const m = pendantMaterial(pendantNodes(this.rows.texture, this.#rowsUsers, looks));
       m.name = `crew ${name} pendants`;
-      this.pendants = new InstancedMesh(noPendants(), m, LEVEL_MOST);
+      this.pendants = instances(noPendants(), m);
       this.pendants.name = m.name;
       this.pendants.count = 0;
       this.pendants.visible = false;

@@ -92,7 +92,7 @@ export const shardFiles: Record<string, string[][]> = {
   // look: out of the last shard, which ran to its 20 minutes.
   webgl2: [
     ['ending', 'features', 'forecast', 'freecam', 'look', 'machine-mark', 'layout'],
-    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind', 'sailors'],
+    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind', 'sailors', 'uploads'],
   ],
   // About 7 minutes each on SwiftShader, 34.5 in all (November 2026; a slow
   // runner takes half as long again).
@@ -104,7 +104,7 @@ export const shardFiles: Record<string, string[][]> = {
     // files on two runners: out of the last shard, which ran past its 20
     // minutes with the catamaran's twelve.
     ['forecast', 'wind', 'land', 'seabirds', 'crew-cruisers'],
-    ['edge', 'features', 'sail', 'sky'],
+    ['edge', 'features', 'sail', 'sky', 'uploads'],
     ['fog', 'look', 'pilot', 'weather', 'crew'],
     // The sailors' file grows with every look: alone, as the layout's
     // with it came near its 20 minutes on a slow runner; the layout's runs

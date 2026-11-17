@@ -14,8 +14,8 @@ import {
   DynamicDrawUsage,
   Float32BufferAttribute,
   InstancedInterleavedBuffer,
-  InstancedMesh,
   InterleavedBufferAttribute,
+  type Mesh,
 } from 'three';
 import {
   attribute,
@@ -36,6 +36,7 @@ import type { BirdLook } from '../catalog/types.gen';
 import type { BirdSink } from '../life/draw';
 import { headingToRotationY } from './coords';
 import { basicMaterial } from './materials';
+import { instances, sendFirst } from './uploads';
 
 /** The birds drawn at most in a frame. */
 export const BIRDS = 1024;
@@ -88,7 +89,7 @@ export interface BirdsStats {
 }
 
 export class Birds implements BirdSink {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** World time, s, within the hour: the wings' beat. */
   readonly time = uniform(0);
   /** The daylight on them, 0 to 1. */
@@ -171,7 +172,7 @@ export class Birds implements BirdSink {
     const n = this.#count;
     this.mesh.count = n;
     this.mesh.visible = n > 0;
-    this.#data.needsUpdate = true;
+    sendFirst(this.#data, n);
     this.stats.birds = n;
     this.stats.draws = n > 0 ? 1 : 0;
   }
@@ -182,7 +183,7 @@ export class Birds implements BirdSink {
   }
 
   /** The birds: a body and two wings of two panels each, flapping on the GPU. */
-  #make(): [InstancedMesh, InstancedInterleavedBuffer] {
+  #make(): [Mesh, InstancedInterleavedBuffer] {
     // x across the wings (a unit span), z from tail (+) to bill (−); uv.x
     // the wing's share out, uv.y the part: 0 body, 1 wing, 2 tip.
     const v: number[] = [];
@@ -274,7 +275,7 @@ export class Birds implements BirdSink {
       vBody,
       select(vPart.lessThan(1.5), vWing, vec3(vTip, vTip, vTip)),
     ).mul(this.light) as unknown as Node<'vec3'>;
-    const mesh = new InstancedMesh(g, m, BIRDS);
+    const mesh = instances(g, m);
     mesh.name = 'birds';
     mesh.count = 0;
     mesh.visible = false;

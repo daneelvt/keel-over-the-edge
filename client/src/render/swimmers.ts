@@ -30,7 +30,6 @@ import {
   Float32BufferAttribute,
   FloatType,
   InstancedInterleavedBuffer,
-  InstancedMesh,
   InterleavedBufferAttribute,
   Mesh,
   NearestFilter,
@@ -65,6 +64,7 @@ import { hexRgb } from './birds';
 import { artUrl } from './boat';
 import { headingToRotationY } from './coords';
 import { basicMaterial } from './materials';
+import { instances } from './uploads';
 
 /** The animals drawn at most in a frame. */
 export const SWIMMERS = 96;
@@ -124,7 +124,7 @@ export interface SwimmersStats {
 }
 
 export class Swimmers {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** World time, s, within the hour. */
   readonly time = uniform(0);
   /** The daylight on them, 0 to 1; the sun's direction in the scene; the water's colour they are seen through. */
@@ -153,7 +153,7 @@ export class Swimmers {
     // A stand-in until the bodies are loaded: nothing drawn.
     const g = new BufferGeometry();
     g.setAttribute('position', new Float32BufferAttribute(new Float32Array(9), 3));
-    this.mesh = new InstancedMesh(g, basicMaterial(), SWIMMERS);
+    this.mesh = instances(g, basicMaterial());
     this.mesh.name = 'swimmers';
     this.mesh.count = 0;
     this.mesh.visible = false;

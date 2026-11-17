@@ -89,6 +89,7 @@ import {
 import { headingToRotationY, type ScenePoint } from './coords';
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
+import { mergeStill } from './merge';
 import { Pennant } from './pennant';
 import { type PrizeRig, prizeRig } from './prizes';
 import type { Gfx } from './renderer';
@@ -194,6 +195,32 @@ const DEG = Math.PI / 180;
 
 /** The node whose meshes are the stern gallery's panes, lit by night. */
 export const GALLERY = 'gallery';
+
+/** The nodes whose meshes are shaped or lit by their name: none of theirs is merged. */
+const APART = new Set([GALLERY, 'jib', 'kite', 'pennant', 'sail', 'telltales']);
+
+/** The nodes the boat or its sailor moves, or finds by name: what hangs from each is merged apart, in its frame. */
+const MOVED = new Set([
+  'aboard',
+  'board-root',
+  'boom',
+  'company',
+  'extension',
+  'rail',
+  'rudder',
+  'rudder-port',
+  'rudder-starboard',
+  'sailor',
+  'seats',
+  'sheet',
+  'sheet-boom',
+  'tiller',
+  'trapeze',
+  'ways',
+  'wheel',
+  'wheel-port',
+  'wheel-starboard',
+]);
 /** The gallery's lamplight, display values, at its brightest. */
 export const LAMPLIGHT = [1.6, 0.95, 0.45] as const;
 /**
@@ -535,6 +562,20 @@ export class Boat {
     if (this.#squareSails.length > 0) {
       squareCloth = squarePrint(this.#squareSails);
     }
+    // The still parts that share a material, one draw each material: only
+    // parts the file leaves unnamed (mesh_…), none shaped, none under a node
+    // whose meshes are found by name (a sail's, the gallery's); those that
+    // hang from a node the boat moves are merged in its frame.
+    const dropped = new Set(this.#yards.map((y) => y.node));
+    mergeStill(model, {
+      kept: (m) =>
+        !/^mesh_\d/.test(m.name) ||
+        this.#squareMeshes.has(m) ||
+        this.#headsails.has(m) ||
+        this.#kites.has(m),
+      apart: (o) => APART.has(o.name),
+      moves: (o) => MOVED.has(o.name) || o.name in YARDS_NODES || dropped.has(o),
+    });
     model.traverse((o) => {
       if (o instanceof Mesh) {
         o.material = this.#replace(

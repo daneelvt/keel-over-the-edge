@@ -51,6 +51,7 @@ import {
   type Node,
   type NodeMaterial,
 } from 'three/webgpu';
+import { eachRender } from './uploads';
 
 /** The dome's radius, in metres. */
 export const DOME_RADIUS = 2500;
@@ -69,7 +70,7 @@ export function horizonDistance(h: number): number {
  * The boat's position in the scene (x and z, relative to the floating
  * origin): the point the world drops away from. Set once a frame.
  */
-export const domeCentre = uniform(new Vector2());
+export const domeCentre = eachRender(uniform(new Vector2()));
 
 /** A scene position, dropped by the dome. */
 export const bendScene = /* @__PURE__ */ Fn(([p]: [Node<'vec3'>]) => {
@@ -120,7 +121,7 @@ export function litMaterial(
  * A sail's glow on its shaded side, daylight through its cloth: the cloth's
  * colour by this, in linear values, which the hour sets (sky.ts).
  */
-export const sailGlowColour = uniform(new Vector3(0.42, 0.4, 0.36));
+export const sailGlowColour = eachRender(uniform(new Vector3(0.42, 0.4, 0.36)));
 
 /** The glow of a sail's cloth: its texture, or the node that samples it. */
 export function sailGlow(cloth: Texture | Node<'vec4'>): Node<'vec3'> {

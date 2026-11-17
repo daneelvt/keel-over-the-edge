@@ -97,7 +97,7 @@ import {
   modesOf,
   newSpectrumInputs,
   type Patch,
-  type SpectrumInputs,
+  SpectrumFollower,
   spectrumInputs,
   spreadNorm,
   stepOf,
@@ -247,8 +247,8 @@ class Cascade {
   readonly out: [StorageTexture, StorageTexture];
   /** Which of them the last frame wrote. */
   current = 0;
-  /** The spectrum's inputs at the last frame. */
-  readonly inputs: SpectrumInputs = newSpectrumInputs();
+  /** The spectrum under the wind of the sea below the boat. */
+  readonly follower: SpectrumFollower;
 
   readonly #sea: WeatherSea;
   readonly #steps: DataTexture;
@@ -268,15 +268,14 @@ class Cascade {
   readonly #fold = uniform(new Vector4(0.5, 1, 0, 0));
   /** The texture nodes the material samples, which follow the output last written. */
   readonly #samplers: { value: StorageTexture }[] = [];
-  /** What the inputs were computed from. */
-  #from = [Number.NaN, 0, 0, 0];
-  /** What the band last made was made from: its time, its spectrum, and its fold. */
-  #made: number[] = [];
+  /** What the band last made was made from: its time, its spectrum, and its fold; NaN for nothing made. */
+  readonly #made = new Float64Array(7).fill(Number.NaN);
 
   constructor(sea: WeatherSea, patch: Patch, foamy: boolean, anisotropy: number, scratch: Scratch) {
     this.#sea = sea;
     this.patch = patch;
     this.foamy = foamy;
+    this.follower = new SpectrumFollower(sea, patch);
     const n = patch.size;
     this.#steps = stepTexture(patch);
     this.#table = floatTexture(transformTable(n), n, 1);
@@ -476,13 +475,7 @@ class Cascade {
   step(renderer: WebGPURenderer, f: DetailFrame, foam: FoamLook): void {
     const p = this.patch;
     const n = p.size;
-    const u = f.under;
-    const from = this.#from;
-    if (from[0] !== u.speed || from[1] !== u.fetch || from[2] !== u.east || from[3] !== u.north) {
-      this.#from = [u.speed, u.fetch, u.east, u.north];
-      spectrumInputs(this.#sea, p, u, this.inputs);
-    }
-    const s = this.inputs;
+    const s = this.follower.follow(f.under);
     this.#level.value = s.level * s.fit * spreadNorm(this.#sea.spreading);
     this.#peak.value = s.peak;
     this.#toward.value.set(s.east, s.north);
@@ -515,15 +508,13 @@ class Cascade {
     if (same) {
       return;
     }
-    this.#made = [
-      this.#time.value,
-      this.#level.value,
-      s.peak,
-      s.east,
-      s.north,
-      foam.threshold,
-      foam.chop,
-    ];
+    key[0] = this.#time.value;
+    key[1] = this.#level.value;
+    key[2] = s.peak;
+    key[3] = s.east;
+    key[4] = s.north;
+    key[5] = foam.threshold;
+    key[6] = foam.chop;
     const into = 1 - this.current;
     renderer.compute(this.#spectrum, [n / 8, n / 8, 1]);
     renderer.compute(this.#rows, [1, n, 1]);
@@ -548,12 +539,12 @@ class Cascade {
 
   /** Forgets what was made: the next frame makes the band again (a new device has none of it). */
   forget(): void {
-    this.#made = [];
+    this.#made.fill(Number.NaN);
   }
 
   /** Forgets the foam: the next frames start from clear water. */
   clear(): void {
-    this.#made = [];
+    this.#made.fill(Number.NaN);
     for (const t of this.out) {
       t.dispose();
     }

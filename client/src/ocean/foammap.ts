@@ -231,7 +231,11 @@ export class FoamMap {
       const steps = floor(min(kept, 1).mul(255).add(noise.mul(0.996)).add(0.002)).mul(1 / 255);
       return vec4(inside.select(steps, vec2(0)), 0, 1);
     })() as unknown as Node<'vec4'>;
+    // Drawn first, in the stamps' pass: one pass a frame, not two.
     this.#quad = new QuadMesh(material);
+    this.#quad.renderOrder = -1;
+    this.#quad.frustumCulled = false;
+    this.#scene.add(this.#quad);
 
     // The stamps: each hull's track along its waterline, and the white
     // water behind its transom, added to the map.
@@ -536,12 +540,9 @@ export class FoamMap {
     const before = renderer.getRenderTarget();
     const cleared = renderer.autoClear;
     renderer.setRenderTarget(into);
-    this.#quad.render(renderer);
-    if (n > 0) {
-      renderer.autoClear = false;
-      renderer.render(this.#scene, this.#camera);
-      renderer.autoClear = cleared;
-    }
+    renderer.autoClear = true;
+    renderer.render(this.#scene, this.#camera);
+    renderer.autoClear = cleared;
     renderer.setRenderTarget(before);
     this.current = 1 - this.current;
     for (const s of this.#samplers) {

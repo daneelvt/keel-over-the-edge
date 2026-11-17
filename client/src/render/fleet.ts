@@ -231,7 +231,8 @@ class Level {
 
   constructor(
     readonly name: string,
-    capacity: number,
+    /** The most boats the level draws: its instanced meshes hold as many, and send as many each draw. */
+    readonly capacity: number,
   ) {
     this.group.name = name;
     this.rows = new SailorRows(ROW_HEAD, capacity, `fleet ${name} sailors`);
@@ -407,7 +408,7 @@ class Level {
     m.alphaHash = true;
     (m as unknown as { opacityNode: Node<'float'> }).opacityNode = opacity ?? this.nodes.rig.z;
     m.name = `fleet ${this.name} ${name}`;
-    const mesh = new InstancedMesh(geometry, m, FLEET_CAPACITY);
+    const mesh = new InstancedMesh(geometry, m, this.capacity);
     mesh.name = m.name;
     mesh.count = 0;
     // The parts place themselves from the instances' values: the
@@ -918,7 +919,7 @@ export class FleetView {
   /** Writes boat b, of this kind, into the level it is drawn at. */
   write(b: DrawnBoat, near: boolean, origin: FloatingOrigin, ease: number, dt: number): void {
     const level = near ? this.near : this.far;
-    if (level.count < FLEET_CAPACITY) {
+    if (level.count < level.capacity) {
       const n = level.count++;
       this.#hookSide = 0;
       this.#write(level, n, b, origin, ease, near, dt);
