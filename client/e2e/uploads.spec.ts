@@ -27,20 +27,21 @@ interface Counted {
 /**
  * The most a frame may ask, by back end and tier: buffers written and KB a
  * frame (medians over the frames), render passes and draws. The sandbox
- * sent about 800 buffers and 800 KB a frame before uniforms were grouped
- * and sent only when they change; now about 355 and 225 KB on the high
- * tier, 280 and 215 KB on the low, and 180 and 215 KB on WebGL 2.
+ * sent about 800 buffers and 800 KB a frame on the high tier, and 670 and
+ * 670 KB on the low, before what objects share was grouped and sent only
+ * when it changes; now about 365 and 150 KB on the high tier, 290 and
+ * 135 KB on the low, and 185 and 135 KB on WebGL 2.
  */
 const LIMITS: Record<
   string,
   Record<string, { writes: number; kb: number; passes: number; draws: number }>
 > = {
   webgpu: {
-    high: { writes: 400, kb: 250, passes: 32, draws: 80 },
-    low: { writes: 320, kb: 250, passes: 6, draws: 55 },
+    high: { writes: 420, kb: 200, passes: 32, draws: 80 },
+    low: { writes: 330, kb: 180, passes: 6, draws: 55 },
   },
   webgl2: {
-    low: { writes: 220, kb: 250, passes: 6, draws: 55 },
+    low: { writes: 230, kb: 180, passes: 6, draws: 55 },
   },
 };
 
