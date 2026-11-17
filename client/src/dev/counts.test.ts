@@ -42,6 +42,7 @@ class FakeQueue {
   writeTexture(): void {}
 }
 class FakeEncoder {
+  label = 'mipmapEncoder';
   beginRenderPass(): object {
     return {};
   }
@@ -113,6 +114,8 @@ describe('FrameCounter', () => {
       bytesPerFrame: 128,
     });
     expect(r.width).toBe(640);
+    // A pass three.js begins itself is named by its encoder.
+    expect(r.gpuPassList).toEqual([{ label: 'mipmapEncoder', perFrame: 2 }]);
     c.detach();
     expect(FakeQueue.prototype.writeBuffer).toBe(own);
     expect(Object.hasOwn(FakeEncoder.prototype, 'beginRenderPass')).toBe(true);

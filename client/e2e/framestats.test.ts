@@ -10,6 +10,7 @@ import {
   measured,
   measures,
   median,
+  merge,
   type Results,
   range,
   report,
@@ -140,6 +141,24 @@ describe('the tables', () => {
     expect(md).toContain('| Land hidden | 8.5 | 8.5 | none |');
     expect(md).toContain('| high × 1 | 800 (2) |');
     expect(md).toContain('| 5,440 | 3.0 | 15.9 | hull, and 1 more |');
+  });
+
+  it('puts results measured a section at a time together', () => {
+    const gpu: Results = {
+      meta: { ...meta('cccc'), date: '2026-11-19', dpr: { gpu: 2 } },
+      gpu: before.gpu as NonNullable<Results['gpu']>,
+    };
+    const rest: Results = {
+      meta: { ...meta('cccc'), chrome: '', dpr: { counts: 1 } },
+      counts: before.counts as NonNullable<Results['counts']>,
+      parts: before.parts as NonNullable<Results['parts']>,
+    };
+    const m = merge([gpu, rest]);
+    expect(m.gpu).toBe(before.gpu);
+    expect(m.counts).toBe(before.counts);
+    expect(m.meta.dpr).toEqual({ gpu: 2, counts: 1 });
+    expect(m.meta.date).toBe('2026-11-18');
+    expect(m.meta.chrome).toBe('157');
   });
 
   it('sets two sets of results side by side', () => {
