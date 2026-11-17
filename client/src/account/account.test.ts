@@ -297,3 +297,15 @@ describe('the session check', () => {
     expect(retryDelay(10)).toBe(30_000);
   });
 });
+
+describe('the start screen over the sea', () => {
+  test('blurs nothing behind its panels, and reads on its own colour', () => {
+    const css = readFileSync(new URL('./start.css', import.meta.url), 'utf8');
+    // A blur behind a panel is drawn again every frame the live sea moves.
+    for (const m of css.matchAll(/backdrop-filter:\s*([^;]+);/g)) {
+      expect(m[1]).toBe('none');
+    }
+    const panel = /--panel:\s*rgb\(\d+ \d+ \d+ \/ (\d+)%\)/.exec(css);
+    expect(Number(panel?.[1])).toBeGreaterThanOrEqual(90);
+  });
+});
