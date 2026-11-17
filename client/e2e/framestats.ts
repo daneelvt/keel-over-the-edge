@@ -92,6 +92,8 @@ export interface CountsRow {
   counts: Record<CountName, { median: number; max: number }>;
   largest: WrittenRow[];
   passList: { label: string; perFrame: number }[];
+  /** The GPU's render passes a frame, by what began them (WebGPU). */
+  gpuPassList?: { label: string; perFrame: number }[];
 }
 
 export const COUNT_NAMES = [
@@ -131,6 +133,35 @@ export interface Results {
   layers?: LayersResult;
   cpu?: CpuResult;
   counts?: CountsResult;
+}
+
+/**
+ * Results measured apart, a section or more each, as one: a section
+ * measured twice is the later one's. The first date, Chrome and back end
+ * are kept.
+ */
+export function merge(parts: readonly Results[]): Results {
+  const first = parts[0];
+  if (first === undefined) {
+    throw new Error('nothing to merge');
+  }
+  const out: Results = { meta: { ...first.meta, dpr: {}, args: [] } };
+  for (const r of parts) {
+    Object.assign(out.meta.dpr, r.meta.dpr);
+    out.meta.args.push(...r.meta.args);
+    if (out.meta.chrome === '') {
+      out.meta.chrome = r.meta.chrome;
+    }
+    if (r.meta.date < out.meta.date) {
+      out.meta.date = r.meta.date;
+    }
+    for (const k of ['ladder', 'gpu', 'parts', 'cpu', 'counts'] as const) {
+      if (r[k] !== undefined) {
+        (out as unknown as Record<string, unknown>)[k] = r[k];
+      }
+    }
+  }
+  return out;
 }
 
 /** The median of values; NaN for none. */
@@ -370,6 +401,13 @@ export function report(r: Results): string {
         ['Pass', 'A frame'],
         row.passList.map((p) => [p.label, fixed(p.perFrame, 1)]),
       );
+      if (row.gpuPassList !== undefined && row.gpuPassList.length > 0) {
+        out += `\n**The GPU's render passes a frame, ${row.rung}**, by the render call or encoder that began them\n\n`;
+        out += table(
+          ['Begun by', 'A frame'],
+          row.gpuPassList.map((p) => [p.label, fixed(p.perFrame, 1)]),
+        );
+      }
     }
   }
   return out;
