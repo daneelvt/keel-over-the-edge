@@ -5912,8 +5912,9 @@ used for nothing else. The under-13 answer stays its own cookie,
 **The start screen** (`client/src/account`) leads with making a sailor and
 offers signing in beside it; a browser with the mark (above) opens on the
 same panel the other way round, "Welcome back" with signing in first
-(autofill still on the name field) and **New sailor** second, which opens
-the form. A link's line stays at the head of either. Before anything is asked, it checks the
+(no name to type: the key opens the passkey prompt, which lists the
+browser's passkeys; autofill runs only on the new-sailor form's name field)
+and **New sailor** second, which opens the form. A link's line stays at the head of either. Before anything is asked, it checks the
 browser can make a passkey (`inapp.ts`): an app's own browser (Instagram,
 Facebook, TikTok… by the marks in its user agent, kept in that one module)
 is asked to open the game in the phone's browser, with "Try here anyway"; a

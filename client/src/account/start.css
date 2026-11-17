@@ -720,31 +720,36 @@
   padding: 0 14px;
 }
 
-/* A returning browser's panel held sideways on a phone: the name field
-   and Sign in side by side, the recovery code and New sailor under them,
-   so New sailor stays in view. */
+/* A returning browser's panel held sideways on a phone: Sign in and New
+   sailor side by side, each with its line under it (the passkey's words,
+   the recovery code), so New sailor stays in view. */
 @media (orientation: landscape) and (max-height: 480px) {
   form.start-panel.start-welcome {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 12px;
+    align-items: start;
     padding: 12px 18px 14px;
   }
   form.start-welcome h1 {
     margin: 0;
     font-size: 1.5rem;
   }
-  form.start-welcome > .start-go {
-    grid-column: auto;
+  form.start-welcome > .start-go,
+  form.start-welcome > .start-faint {
+    grid-column: 1;
     margin: 0;
   }
-  form.start-welcome > .start-problem,
-  form.start-welcome > .start-faint {
+  form.start-welcome > .start-or,
+  form.start-welcome > .start-link {
+    grid-column: 2;
+  }
+  form.start-welcome > .start-go,
+  form.start-welcome > .start-or {
     order: 1;
   }
-  form.start-welcome > .start-link,
-  form.start-welcome > .start-or {
+  form.start-welcome > .start-faint,
+  form.start-welcome > .start-link {
     order: 2;
-    grid-column: auto;
   }
   form.start-welcome > .start-or {
     margin: 0;

@@ -522,20 +522,20 @@ test('a browser that has had a sailor opens on signing in; New sailor opens the 
   expect(mark?.httpOnly).toBe(true);
 
   const seen = checkRequests(page);
-  const autofill = page.waitForRequest((r) =>
-    r.url().endsWith('/signin/begin?mediation=conditional'),
-  );
+  let autofills = 0;
+  page.on('request', (r) => {
+    if (r.url().endsWith('/signin/begin?mediation=conditional')) {
+      autofills++;
+    }
+  });
   await page.goto(GAME);
   const panel = page.locator('.start-panel');
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({
     timeout: 30_000,
   });
-  // The browser's offer of its passkeys still runs on the name field.
-  await autofill;
-  await expect(page.getByLabel('Your sailor’s name')).toHaveAttribute(
-    'autocomplete',
-    'username webauthn',
-  );
+  // No name to type: the key alone opens the passkey prompt.
+  await expect(page.getByLabel('Your sailor’s name')).toHaveCount(0);
+  expect(autofills).toBe(0);
   // Signing in first, the recovery code, and New sailor second; nothing of the form.
   expect(await panel.getByRole('button').allTextContents()).toEqual([
     'Sign in with a passkey',

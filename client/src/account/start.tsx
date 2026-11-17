@@ -107,7 +107,6 @@ export const NEW_SAILOR = 'New sailor';
 export function WelcomeBack({
   lines,
   warning,
-  field,
   problem,
   busy,
   signIn,
@@ -118,8 +117,6 @@ export function WelcomeBack({
   lines: JSX.Element | null;
   /** The browser's own warning about passkeys, if any. */
   warning: JSX.Element | null;
-  /** The name field, where the browser offers the passkeys it holds. */
-  field: JSX.Element;
   problem: string;
   busy: boolean;
   signIn: () => void;
@@ -140,7 +137,6 @@ export function WelcomeBack({
       <h1 id="start-title">{WELCOME_BACK}</h1>
       {lines}
       {warning}
-      {field}
       <p id="start-problem" class="start-problem" aria-live="polite">
         {problem}
       </p>
@@ -324,7 +320,9 @@ export function StartScreen({
   }, [stage, picking]);
   useEffect(() => () => stage?.hide(), [stage]);
   useEffect(() => {
-    if (formShown) {
+    // A returning browser's panel has no name field to offer passkeys on:
+    // its key opens the prompt, which lists them.
+    if (formShown && !welcome) {
       startAutofill();
     }
     return stopAutofill;
@@ -645,7 +643,6 @@ export function StartScreen({
         <WelcomeBack
           lines={lines}
           warning={warning}
-          field={field}
           problem={problem}
           busy={busy !== ''}
           signIn={() => void signInNow()}

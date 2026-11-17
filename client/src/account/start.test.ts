@@ -190,7 +190,6 @@ describe('a returning browser’s panel', () => {
       WelcomeBack({
         lines: h('p', { class: 'start-watching' }, 'To watch, make a sailor.'),
         warning: null,
-        field: h('input', { id: 'start-name', autocomplete: 'username webauthn' }),
         problem: '',
         busy,
         signIn: () => {},
@@ -199,10 +198,9 @@ describe('a returning browser’s panel', () => {
       }),
     );
 
-  test('Welcome back, signing in first with the browser’s offer on the name field, New sailor second', () => {
+  test('Welcome back, signing in first with no name to type, New sailor second', () => {
     expect(parts(panel(false))).toEqual([
       'heading Welcome back',
-      'field username webauthn',
       'submit Sign in with a passkey',
       'button Lost your passkey? Use your recovery code',
       'button New sailor',
