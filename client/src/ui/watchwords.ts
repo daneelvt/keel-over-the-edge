@@ -219,6 +219,9 @@ export function fleetShareText(url: string): string {
 /** On the start screen, to a visitor who came by a link to watch. */
 export const MAKE_TO_WATCH = 'Make a sailor, and you will be watching.';
 
+/** The same, to a browser that has had a sailor, shown signing in first. */
+export const SIGN_IN_TO_WATCH = 'Sign in, and you will be watching.';
+
 /** On the player's own panel, once a sailor followed from a refused link may be watched. */
 export function nowWatchableText(name: string): string {
   return `${name} is sailing, and can be watched now.`;

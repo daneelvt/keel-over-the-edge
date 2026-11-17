@@ -9,7 +9,7 @@ import { SailingAs } from '../ui/menu';
 import { PlayerText } from '../ui/player';
 import { AccountSailor } from './account';
 import { drawLook } from './looks';
-import { checkSession, type Fetch, type Me, resolveSailor, retryDelay } from './me';
+import { checkSession, type Fetch, type Me, noSession, resolveSailor, retryDelay } from './me';
 import type { AccountData } from './passkeys';
 import { inkFile } from './portraits';
 import { displayForm, lengthProblem, nameLength, REASONS, reasonText } from './reasons';
@@ -205,6 +205,8 @@ describe('the session check', () => {
     expect(await checkSession(async () => answer(200, ann))).toEqual({ kind: 'sailor', me: ann });
     expect(await checkSession(async () => answer(401, { error: 'session' }))).toEqual({
       kind: 'none',
+      sailed: false,
+      check: null,
     });
     expect(await checkSession(async () => answer(503, 'down'))).toEqual({ kind: 'failed' });
     expect(await checkSession(async () => answer(200, 'not json'))).toEqual({ kind: 'failed' });
@@ -213,6 +215,30 @@ describe('the session check', () => {
         throw new TypeError('offline');
       }),
     ).toEqual({ kind: 'failed' });
+  });
+
+  test('without a session: whether this browser has sailed, and the human check', async () => {
+    const check = { siteKey: '1x00000000000000000000AA', script: '/turnstile/api.js' };
+    expect(
+      await checkSession(async () => answer(401, { error: 'session', sailed: true, check })),
+    ).toEqual({ kind: 'none', sailed: true, check });
+    expect(
+      await checkSession(async () => answer(401, { error: 'session', sailed: false, check: null })),
+    ).toEqual({ kind: 'none', sailed: false, check: null });
+    // What cannot be read is a browser that has not sailed, with no check.
+    for (const body of [
+      'not json',
+      { sailed: 'yes', check: { siteKey: '', script: '/turnstile/api.js' } },
+      { sailed: 1, check: { siteKey: 'k' } },
+      { check: 'k' },
+    ]) {
+      expect(await checkSession(async () => answer(401, body))).toEqual({
+        kind: 'none',
+        sailed: false,
+        check: null,
+      });
+    }
+    expect(noSession(null)).toEqual({ sailed: false, check: null });
   });
 
   test('chooses the sea, the start screen or "Back soon"', async () => {
@@ -228,8 +254,10 @@ describe('the session check', () => {
       };
       const me = await resolveSailor({
         fetch: fetcher,
-        start: async () => {
-          log.push('start');
+        start: async (none) => {
+          log.push(
+            `start${none.sailed ? ', sailed' : ''}${none.check === null ? '' : ', checked'}`,
+          );
           return { ...ann, name: 'New' };
         },
         addPasskey: async (me) => {
@@ -248,6 +276,12 @@ describe('the session check', () => {
       me: { ...ann, name: 'New' },
       log: ['hidden', 'start'],
     });
+    // The start screen is told what the 401 said.
+    expect(
+      await run([
+        () => answer(401, { sailed: true, check: { siteKey: 'k', script: '/turnstile/api.js' } }),
+      ]),
+    ).toEqual({ me: { ...ann, name: 'New' }, log: ['hidden', 'start, sailed, checked'] });
     // A session the recovery code made: a passkey first.
     expect(await run([() => answer(200, { ...ann, addPasskey: true })])).toEqual({
       me: { ...ann, addPasskey: false },
