@@ -8,7 +8,7 @@
 // terrain made from seed 1. Developer commands are on (POST
 // /debug/wind and /debug/weather on keel's internal listener).
 //
-//	go run ./tools/e2e [-lag 200ms,2%] [-limit N] [-sailors N]
+//	go run ./tools/e2e [-lag 200ms,2%] [-limit N] [-sailors N] [-client dir [-rule=false]] [-land]
 //	go run ./tools/e2e -tls dir      write a throwaway certificate for localhost into dir, and exit
 //
 // Beside keel it runs the lag proxy (tools/lag) on 127.0.0.1:18090, in
@@ -21,6 +21,16 @@
 // that says why not: what /readyz last answered and keel's last words. WebKit sends a Secure cookie
 // to https only, even on localhost, so its tests reach keel through a Vite
 // serving https with the certificate -tls writes.
+//
+// With -client, keel serves the built page from dir (KEEL_CLIENT_DIR, a
+// path from the repository's root), as the image does, for the tests of
+// the page as players load it, behind a stand-in for Cloudflare's edge on
+// 127.0.0.1:18088, the page's origin http://localhost:18088, which
+// compresses what Cloudflare would (edge.go; -rule=false as it did before
+// the zone's Compression Rule); POST /restart?client=dir then
+// starts keel again serving another build, as a deploy does. With -land,
+// keel sails the world's land, as the page's first download fetches the
+// chunks in sight of the start.
 package main
 
 import (
@@ -67,8 +77,12 @@ const (
 	agentsAddr   = "127.0.0.1:18081"
 	internalAddr = "127.0.0.1:19090"
 	origin       = "http://localhost:5181"
-	lagAddr      = "127.0.0.1:18090"
-	controlAddr  = "127.0.0.1:19099"
+	// With -client, Cloudflare's stand-in in front of keel, and so the
+	// page's origin.
+	edgeAddr    = "127.0.0.1:18088"
+	builtOrigin = "http://localhost:18088"
+	lagAddr     = "127.0.0.1:18090"
+	controlAddr = "127.0.0.1:19099"
 )
 
 func main() {
@@ -83,6 +97,9 @@ func run() error {
 	tlsDir := flag.String("tls", "", "write a self-signed certificate for localhost into this directory, and exit")
 	limit := flag.Int("limit", 0, "keel's boat limit (KEEL_BOAT_LIMIT); its default if 0")
 	sailors := flag.Int("sailors", 0, "scripted sailors for keel to sail (KEEL_DEV_SAILORS)")
+	clientDir := flag.String("client", "", "serve the built page from this directory, a path from the repository's root (KEEL_CLIENT_DIR)")
+	land := flag.Bool("land", false, "sail the world's land (KEEL_LAND=on)")
+	rule := flag.Bool("rule", true, "with -client, compress the models as the zone's Compression Rule does; false, as Cloudflare did before it")
 	flag.Parse()
 	if *tlsDir != "" {
 		return writeCert(*tlsDir)
@@ -124,12 +141,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	env := append(os.Environ(),
+	page, err := pageEnv(root, *clientDir)
+	if err != nil {
+		return err
+	}
+	env := append(os.Environ(), page...)
+	env = append(env,
 		"KEEL_DATABASE_URL="+dbURL,
-		"KEEL_PLAY_ORIGIN="+origin,
-		// The lagged server's page and WebKit's, on https, make and use
-		// passkeys too.
-		"KEEL_PASSKEY_ORIGINS=http://localhost:5182,https://localhost:5183",
 		"KEEL_PLAY_ADDR="+playAddr,
 		"KEEL_AGENTS_ADDR="+agentsAddr,
 		"KEEL_INTERNAL_ADDR="+internalAddr,
@@ -137,10 +155,10 @@ func run() error {
 		"KEEL_DEV_COMMANDS=1",
 		// A restart in a test needs no time for the bell to be seen.
 		"KEEL_BELL=0s",
-		// The page draws no land yet: the tests sail open sea, as production
-		// does, on a world whose terrain is still made (from a fixed seed, in
-		// a time that does not change from run to run), stored and loaded.
-		"KEEL_LAND=off",
+		// The tests sail open sea, but for -land's, on a world whose terrain
+		// is made all the same (from a fixed seed, in a time that does not
+		// change from run to run), stored and loaded.
+		"KEEL_LAND="+onOff(*land),
 		"KEEL_WORLD_SEED=1",
 		fmt.Sprintf("KEEL_DEV_SAILORS=%d", *sailors),
 	)
@@ -158,8 +176,13 @@ func run() error {
 		return err
 	}
 	go client.Proxy(ctx, ln, playAddr, lag)
+	if *clientDir != "" {
+		front := &http.Server{Addr: edgeAddr, Handler: edge(playAddr, *rule)}
+		go front.ListenAndServe()
+		defer front.Close()
+	}
 
-	k := &keelProc{path: keel, env: env, ready: "http://" + internalAddr + "/readyz", wait: readyWait}
+	k := &keelProc{path: keel, env: env, ready: "http://" + internalAddr + "/readyz", wait: readyWait, root: root, served: *clientDir != ""}
 	if err := k.start(); err != nil {
 		return err
 	}
@@ -170,6 +193,11 @@ func run() error {
 			return
 		}
 		var down time.Duration
+		client := r.URL.Query().Get("client")
+		if client != "" && !k.served {
+			http.Error(w, "client: keel serves no built page (no -client)", http.StatusBadRequest)
+			return
+		}
 		if d := r.URL.Query().Get("down"); d != "" {
 			var err error
 			if down, err = time.ParseDuration(d); err != nil || down < 0 || down > 5*time.Minute {
@@ -177,7 +205,7 @@ func run() error {
 				return
 			}
 		}
-		if err := k.restart(down); err != nil {
+		if err := k.restart(down, client); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -193,6 +221,50 @@ func run() error {
 		k.stop()
 		return nil
 	}
+}
+
+// pageEnv is where the page is served from, and so its origin: Vite's,
+// with keel behind it, or, given a directory of the built page, keel's
+// play listener.
+func pageEnv(root, client string) ([]string, error) {
+	if client == "" {
+		return []string{
+			"KEEL_PLAY_ORIGIN=" + origin,
+			// The lagged server's page and WebKit's, on https, make and use
+			// passkeys too.
+			"KEEL_PASSKEY_ORIGINS=http://localhost:5182,https://localhost:5183",
+		}, nil
+	}
+	dir, err := builtDir(root, client)
+	if err != nil {
+		return nil, err
+	}
+	return []string{"KEEL_PLAY_ORIGIN=" + builtOrigin, "KEEL_CLIENT_DIR=" + dir}, nil
+}
+
+// builtDir is a built page's directory, given from the repository's root
+// or absolute: one inside the repository that holds index.html.
+func builtDir(root, client string) (string, error) {
+	dir := client
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(root, dir)
+	}
+	rel, err := filepath.Rel(root, dir)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("-client %s: not inside the repository", client)
+	}
+	dir = filepath.Join(root, rel)
+	if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
+		return "", fmt.Errorf("-client %s: no built page there (vite build in client/ first): %w", client, err)
+	}
+	return dir, nil
+}
+
+func onOff(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
 }
 
 // holdWeather holds the world's weather to one endless spell of the
@@ -235,6 +307,10 @@ type keelProc struct {
 	// ready is keel's /readyz, and wait how long a restart waits for it.
 	ready string
 	wait  time.Duration
+	// root is the repository's, which a restart's client directory is
+	// given from; served, whether keel serves a built page.
+	root   string
+	served bool
 	// said keeps keel's last lines of output, for a restart that fails.
 	said tail
 
@@ -298,10 +374,20 @@ func (k *keelProc) stop() {
 	}
 }
 
-// restart stops keel and starts it again after down, and waits until it
-// is ready. If it is not ready within the wait, or exits meanwhile, the
-// error says what /readyz last answered and what keel last said.
-func (k *keelProc) restart(down time.Duration) error {
+// restart stops keel and starts it again after down, serving the built
+// page from client if given (and from then on), and waits until it is
+// ready. If it is not ready within the wait, or exits meanwhile, the error
+// says what /readyz last answered and what keel last said.
+func (k *keelProc) restart(down time.Duration, client string) error {
+	if client != "" {
+		dir, err := builtDir(k.root, client)
+		if err != nil {
+			return err
+		}
+		k.mu.Lock()
+		k.env = withEnv(k.env, "KEEL_CLIENT_DIR", dir)
+		k.mu.Unlock()
+	}
 	k.stop()
 	time.Sleep(down)
 	k.said.reset()
@@ -324,6 +410,14 @@ func (k *keelProc) restart(down time.Duration) error {
 		return fmt.Errorf("%w; keel's last words:\n%s", err, strings.Join(words, "\n"))
 	}
 	return err
+}
+
+// withEnv is env with name set to value, in place of any it had.
+func withEnv(env []string, name, value string) []string {
+	out := slices.DeleteFunc(slices.Clone(env), func(e string) bool {
+		return strings.HasPrefix(e, name+"=")
+	})
+	return append(out, name+"="+value)
 }
 
 // errExited is waitReady's error when keel exits before it is ready.

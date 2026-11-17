@@ -51,6 +51,7 @@ import type { Countdown } from './countdown';
 import { WeatherDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
 import { useLog } from './loglazy';
+import { useModal } from './modal';
 import { OPENING, useNews } from './newslazy';
 import { checkUnread, type NewsSource, unread } from './newsread';
 import type { NewsStory } from './newswords';
@@ -938,6 +939,22 @@ export function ChartScreen({
   const chart = sea.chart;
   const surface = useGestures(sea);
   const labels = useRef<HTMLDivElement | null>(null);
+  // A window over the whole screen: Escape puts away a box open on it
+  // first, then closes it, the focus going back to the pocket chart.
+  const screen = useModal<HTMLDivElement>(
+    () => {
+      if (chart.picked.peek() !== null) {
+        chart.picked.value = null;
+      } else if (chart.tapped.peek() !== null) {
+        chart.tapped.value = null;
+      } else if (chart.marked.peek() !== null) {
+        chart.marked.value = null;
+      } else {
+        chart.show(null);
+      }
+    },
+    { back: '.pocket-chart' },
+  );
   // The labels' layer is the chart's before its first frame: the chart is
   // drawn as soon as it opens, and an effect run after the paint would let
   // that frame, slow on a software GPU, lay its race and course labels
@@ -948,7 +965,6 @@ export function ChartScreen({
   }, [chart]);
   // How far down the top reaches, strip, countdown and notice: the boxes
   // and the key keep below it.
-  const screen = useRef<HTMLDivElement | null>(null);
   const top = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const s = screen.current;
@@ -976,7 +992,14 @@ export function ChartScreen({
   const rp = useReplayParts(replaying);
   const replay = replaying && rp !== null && host !== null ? { rp, host } : null;
   return (
-    <div class="chart-screen" data-mode={mode} ref={screen}>
+    <div
+      class="chart-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-label="The chart"
+      data-mode={mode}
+      ref={screen}
+    >
       <div class="chart-surface" ref={surface} hidden={mode !== 'chart'} />
       <div class="chart-labels" ref={labels} hidden={mode !== 'chart'} />
       <header class="chart-top" ref={top}>
@@ -1106,15 +1129,16 @@ export function PocketChart({
                 {z}
               </span>
             ))}
-            {caption.lines.map((l, i) => (
+            {caption.lines.map((l, i) => [
+              i > 0 ? ' ' : null,
               <span
                 key={i}
                 class={`pocket-line${i > 0 ? ` pocket-left${closing ? ' closing' : ''}` : ''}`}
                 data-readout={i > 0 ? 'falls' : undefined}
               >
                 {l}
-              </span>
-            ))}
+              </span>,
+            ])}
           </span>
         </button>
         {pusher ? (

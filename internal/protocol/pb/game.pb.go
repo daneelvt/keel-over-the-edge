@@ -1374,7 +1374,10 @@ type Ping struct {
 	// How much the client draws: 1 the low tier, 2 medium, 3 high; 0 unknown.
 	Tier uint32 `protobuf:"varint,5,opt,name=tier,proto3" json:"tier,omitempty"`
 	// The pixel ratio the client draws at, in hundredths; 0 unknown.
-	RenderScale   uint32 `protobuf:"varint,6,opt,name=render_scale,json=renderScale,proto3" json:"render_scale,omitempty"`
+	RenderScale uint32 `protobuf:"varint,6,opt,name=render_scale,json=renderScale,proto3" json:"render_scale,omitempty"`
+	// The bytes the page fetched over HTTP since its last Ping (models, land,
+	// code), as they came over the wire: none for a file a cache served.
+	FetchedBytes  uint32 `protobuf:"varint,7,opt,name=fetched_bytes,json=fetchedBytes,proto3" json:"fetched_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1447,6 +1450,13 @@ func (x *Ping) GetTier() uint32 {
 func (x *Ping) GetRenderScale() uint32 {
 	if x != nil {
 		return x.RenderScale
+	}
+	return 0
+}
+
+func (x *Ping) GetFetchedBytes() uint32 {
+	if x != nil {
+		return x.FetchedBytes
 	}
 	return 0
 }
@@ -10182,14 +10192,15 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05order\x18\b \x01(\rR\x05order\x12\x10\n" +
 	"\x03way\x18\t \x01(\rR\x03way\x12\x12\n" +
 	"\x04reef\x18\n" +
-	" \x01(\rR\x04reef\"\xb0\x01\n" +
+	" \x01(\rR\x04reef\"\xd5\x01\n" +
 	"\x04Ping\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\x19\n" +
 	"\back_tick\x18\x02 \x01(\x03R\aackTick\x12\x15\n" +
 	"\x06rtt_ms\x18\x03 \x01(\rR\x05rttMs\x12\x19\n" +
 	"\bframe_ms\x18\x04 \x01(\rR\aframeMs\x12\x12\n" +
 	"\x04tier\x18\x05 \x01(\rR\x04tier\x12!\n" +
-	"\frender_scale\x18\x06 \x01(\rR\vrenderScale\"\x9c\a\n" +
+	"\frender_scale\x18\x06 \x01(\rR\vrenderScale\x12#\n" +
+	"\rfetched_bytes\x18\a \x01(\rR\ffetchedBytes\"\x9c\a\n" +
 	"\aCommand\x12)\n" +
 	"\x06resync\x18\x01 \x01(\v2\x0f.keel.v1.ResyncH\x00R\x06resync\x12#\n" +
 	"\x04roam\x18\x02 \x01(\v2\r.keel.v1.RoamH\x00R\x04roam\x12&\n" +

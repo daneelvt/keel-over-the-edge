@@ -40,7 +40,8 @@ function Step({
   on: boolean;
 }) {
   const n = Math.abs(degrees);
-  const label = `${n === 1 ? 'One degree' : `${n} degrees`} to ${degrees < 0 ? 'port' : 'starboard'}`;
+  // Named by the figure it shows, its arrow said in words.
+  const label = `${n}° to ${degrees < 0 ? 'port' : 'starboard'}`;
   return (
     <button
       type="button"
@@ -53,7 +54,9 @@ function Step({
         redraw();
       }}
     >
-      {degrees < 0 ? `◂${n}` : `${n}▸`}
+      {degrees < 0 ? <span aria-hidden="true">◂</span> : null}
+      {n}
+      {degrees < 0 ? null : <span aria-hidden="true">▸</span>}
     </button>
   );
 }
@@ -325,7 +328,7 @@ export function Pilot({
         }}
       >
         <span class="pilot-hinge" aria-hidden="true" />
-        <span class="pilot-name">Autopilot</span>
+        <span class="pilot-name">Autopilot</span>{' '}
         {open ? (
           <FoldDecal />
         ) : (

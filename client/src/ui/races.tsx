@@ -17,7 +17,8 @@
 import './races.css';
 import { batch, effect } from '@preact/signals';
 import { render } from 'preact';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useModal } from './modal';
 import { MachineMark, PlayerText } from './player';
 import {
   type CourseTold,
@@ -190,21 +191,6 @@ function Choice<T extends string | number>({
   );
 }
 
-/** Takes the focus into a window as it opens, and lets Escape close it. */
-function useWindow(close: () => void) {
-  const ref = useRef<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    ref.current?.focus();
-  }, []);
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      close();
-    }
-  };
-  return { ref, onKeyDown };
-}
-
 /** The courses offered to a boat, buoy courses first. */
 export function coursesFor(make: MakeChoices, boat: string): CourseTold[] {
   const b = make.boats.find((x) => x.id === boat);
@@ -219,15 +205,15 @@ export function MakeRace({ view, close }: { view: RacesView; close: () => void }
   useEffect(() => {
     void view.refresh();
   }, [view]);
-  const win = useWindow(close);
+  const win = useModal(close);
   return (
     <section
       class="panel race-window race-make"
       role="dialog"
+      aria-modal="true"
       aria-labelledby="race-make-title"
       tabIndex={-1}
-      ref={win.ref}
-      onKeyDown={win.onKeyDown}
+      ref={win}
       data-panel="make-race"
     >
       <h2 id="race-make-title">{MAKE_A_RACE}</h2>
@@ -522,15 +508,15 @@ export function RaceShare({
       .then(draw)
       .catch(() => {});
   }, [card, words]);
-  const win = useWindow(close);
+  const win = useModal(close);
   return (
     <section
       class="panel race-window race-share"
       role="dialog"
+      aria-modal="true"
       aria-labelledby="race-share-title"
       tabIndex={-1}
-      ref={win.ref}
-      onKeyDown={win.onKeyDown}
+      ref={win}
       data-panel="race-share"
     >
       <h2 id="race-share-title">Your race is made</h2>
@@ -736,7 +722,7 @@ export function RaceCardPanel({
       clearInterval(t);
     };
   }, [code, view]);
-  const win = useWindow(close);
+  const win = useModal(close);
 
   const act = (verb: RaceVerb, body?: unknown) => {
     if (busy) {
@@ -771,10 +757,10 @@ export function RaceCardPanel({
       <section
         class="panel race-window race-card"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="race-card-title"
         tabIndex={-1}
-        ref={win.ref}
-        onKeyDown={win.onKeyDown}
+        ref={win}
         data-panel="race-card"
       >
         {head}
@@ -802,10 +788,10 @@ export function RaceCardPanel({
     <section
       class="panel race-window race-card"
       role="dialog"
+      aria-modal="true"
       aria-labelledby="race-card-title"
       tabIndex={-1}
-      ref={win.ref}
-      onKeyDown={win.onKeyDown}
+      ref={win}
       data-panel="race-card"
       data-code={card.code}
     >

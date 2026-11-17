@@ -672,6 +672,8 @@ export type ToWorker =
     }
   /** The page's frame time's 95th percentile, ms, for the server's metrics. */
   | { type: 'frame'; ms: number }
+  /** The bytes the page fetched over HTTP since it last said, for the next Ping. */
+  | { type: 'fetched'; bytes: number }
   /** How much the page draws: its tier (1 low … 3 high) and its pixel ratio, for the server's metrics. */
   | { type: 'quality'; tier: number; scale: number }
   /** Stop waiting: the network is back, or the page is shown again. */

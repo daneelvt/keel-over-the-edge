@@ -62,6 +62,7 @@ import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
 import { type CatBoat, type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
 import { type HullSolid, hullSolid } from './solid';
+import { stillNow } from './still';
 import { trapezeOf, wireNode } from './trapeze';
 import { turnIn, wheelNodes, wheelOf, wheelTurnOf } from './wheel';
 import { namesYachtClips, yachtOf } from './yacht';
@@ -131,7 +132,10 @@ export class BoatSailor {
   readonly #moment: SailorMoment;
   readonly #rope: Mesh;
   readonly #ropePoints = [new Vector3(), new Vector3(), new Vector3()];
-  readonly #still: boolean;
+  /** Under reduced motion, read every frame: a change while playing is followed. */
+  get #still(): boolean {
+    return stillNow();
+  }
   readonly #machine: boolean;
   /** A machine's lantern's glow, where its file puts the lantern; and the lantern at rest against its bone. */
   readonly #glow: Mesh | null = null;
@@ -209,8 +213,6 @@ export class BoatSailor {
       this.#glow = lanternGlow(deck.meshes[0]?.userData.hair as Color, this.#glowStrength);
       model.add(this.#glow);
     }
-    this.#still =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.#moment = {
       dt: 0,
       time: 0,
@@ -507,6 +509,7 @@ export class BoatSailor {
     }
     const mo = this.#moment;
     mo.dt = dt;
+    mo.still = this.#still;
     mo.time = this.#time;
     mo.offset = pose.sailor;
     mo.aft = pose.sailorAft;

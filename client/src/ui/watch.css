@@ -124,7 +124,7 @@
 .watch-question h2 {
   margin: 0 0 8px;
   font:
-    20px "IM Fell English SC",
+    1.25rem "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
@@ -144,6 +144,17 @@
   justify-content: center;
 }
 
+/* At sea, the list's words a step under the start screen's, as the
+   screen at sea's are. */
+.hud .watch-panel,
+.hud .watch-share-panel {
+  font-size: 0.9375rem;
+}
+
+.watch-share-panel {
+  --text: 0.0625rem;
+}
+
 /*
  * The list and the card, wherever they are shown: at most 480 px wide
  * and the screen's height less 16 px above and below. The top (the
@@ -157,6 +168,8 @@
   box-sizing: border-box;
   max-height: calc(100dvh - 32px);
   overflow: hidden;
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
 }
 
 .start-panel.watch-panel {
@@ -294,7 +307,7 @@
 
 .watch-facts,
 .watch-lively {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .watch-lively {
@@ -374,7 +387,7 @@
 .watch-card-part h3 {
   margin: 10px 0 2px;
   color: var(--faint);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -413,7 +426,7 @@
 .watch-sight {
   margin: 0;
   padding-left: 18px;
-  font-size: 14px;
+  font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
 
@@ -446,7 +459,7 @@
 
   .watch-panel .watch-head h2 {
     flex: none;
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 
   .watch-head .watch-search {
@@ -547,7 +560,7 @@
 .watch-share-panel h2 {
   margin: 0;
   font:
-    20px "IM Fell English SC",
+    1.25rem "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);

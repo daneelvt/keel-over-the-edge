@@ -308,11 +308,12 @@ function Day({
         type="button"
         class="log-day"
         aria-expanded={open}
-        aria-label={`${dayLong(d.date)}: ${remarksLine(lines)}`}
+        title={dayLong(d.date)}
         onClick={toggle}
       >
-        <span class="log-day-date">{dayCell(d.date)}</span>
-        <span class="log-day-remarks">{remarksLine(lines)}</span>
+        {/* Named by what it shows, spaced as it reads. */}
+        <span class="log-day-date">{dayCell(d.date)}</span>{' '}
+        <span class="log-day-remarks">{remarksLine(lines)}</span>{' '}
         <span class="log-day-run">{runCell(d.runM)}</span>
       </button>
       {open ? (

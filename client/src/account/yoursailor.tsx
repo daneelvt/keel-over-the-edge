@@ -11,18 +11,22 @@
 // it is setting sail until the page's cover takes over. With the boat still
 // in the water, Set sail sails it on where it lies; under it, Start again
 // at Port Royal takes it out and sets sail at the start; and every way off
-// the screen that would take it out asks first (takeout.tsx).
+// the screen that would take it out asks first (takeout.tsx). From a third
+// day of play, the offer to play from the home screen stands under Set
+// sail (boot/homescreen.ts).
 //
 // The name is shown, never asked for or changed here: every account is
 // made with its named sailor on the first form, so none reaches this
 // screen without one.
 
 import { sailFullScreen } from '../boot/fullscreen';
+import { homeScreen } from '../boot/homescreen';
 import { MAKE_A_RACE } from '../ui/racewords';
 import { START_AGAIN, STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
 import type { BoatChooser } from './boatchooser';
 import { BoatLookChooser, ChangeBoat, YourBoat } from './boats';
 import type { LookChooser } from './chooser';
+import { HomeOffer } from './homeoffer';
 import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
 import { Picker } from './picker';
@@ -161,6 +165,7 @@ export function YourSailor({
       ) : null}
       <LetWatch voyage={voyage} />
       <SetSail name={me.name} voyage={voyage} sail={sail} />
+      <HomeOffer home={homeScreen()} />
       {atSea && out !== undefined ? (
         <button
           type="button"

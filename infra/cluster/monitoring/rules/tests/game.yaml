@@ -213,3 +213,37 @@ tests:
               pod: keel-1
             exp_annotations:
               description: "It is throttled in 20% of its CPU periods. The Game dashboard shows whether the tick suffers."
+
+  - name: the pages report three errors a minute for half an hour
+    interval: 1m
+    input_series:
+      - series: keel_client_errors_total{build="abc123"}
+        values: 0+3x40
+    alert_rule_test:
+      - eval_time: 12m
+        groupname: game
+        alertname: ClientErrors
+        exp_alerts: []
+      - eval_time: 25m
+        groupname: game
+        alertname: ClientErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              summary: "Players' pages report more than one error a minute."
+            exp_annotations:
+              description: "The pages report 3 errors a minute. The Game dashboard shows them by build, and keel's log has each (\"a page's error\"), with its message and its stack."
+
+  - name: the pages report an error every five minutes from each of two builds
+    interval: 1m
+    input_series:
+      - series: keel_client_errors_total{build="abc123"}
+        values: 0+0.2x40
+      - series: keel_client_errors_total{build="def456"}
+        values: 0+0.2x40
+    alert_rule_test:
+      - eval_time: 30m
+        groupname: game
+        alertname: ClientErrors
+        exp_alerts: []

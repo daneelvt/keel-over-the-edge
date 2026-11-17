@@ -4,6 +4,7 @@
 // game's first download holds none of them.
 
 import { useEffect, useState } from 'preact/hooks';
+import { lazyFailed } from '../boot/updated';
 
 type Machines = typeof import('./machines');
 
@@ -14,6 +15,8 @@ export function loadMachines(): Promise<Machines> {
   if (loading === null) {
     loading = import('./machines').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }

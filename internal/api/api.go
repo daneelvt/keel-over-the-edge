@@ -238,6 +238,7 @@ func Handler(cfg Config) http.Handler {
 	a.registerShipmates(mux, required)
 	a.registerLogs(mux, required)
 	a.registerRaces(mux, required)
+	a.registerClientReports(mux, required)
 	if cfg.Watch != nil {
 		mux.Handle("GET /api/watch", required(a.watchList))
 		mux.Handle("GET /api/watch/sailor", required(a.watchSailor))
@@ -368,6 +369,8 @@ type api struct {
 	links linkTimes
 	// notices are the notices from each address in the last hour.
 	notices notices
+	// reports are the page's reports' limits and counts.
+	reports clientReports
 }
 
 func versionHandler(v Version) http.Handler {

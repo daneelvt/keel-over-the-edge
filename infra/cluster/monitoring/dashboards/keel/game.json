@@ -1197,7 +1197,217 @@
       "gridPos": {
         "x": 0,
         "y": 37,
-        "w": 8,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Data an hour at sea, by role",
+      "description": "What a player's hour at sea takes, sailing or watching: each connection's bytes each minute, both ways over the game connection and what its page fetched over HTTP (models, land, code), as an hour; the median and the 90th percentile over the last hour.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, role) (rate(keel_edge_minute_bytes_bucket{direction=\"all\"}[1h]))) * 60",
+          "legendFormat": "{{role}}, median",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.9, sum by (le, role) (rate(keel_edge_minute_bytes_bucket{direction=\"all\"}[1h]))) * 60",
+          "legendFormat": "{{role}}, 90th",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 71,
+      "gridPos": {
+        "x": 6,
+        "y": 37,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Start-up, first and return visits",
+      "description": "From the link to the reveal, as the pages report it once their sailor is known: the median and the 90th percentile over the last hour, and the median to the start screen, by visit: first, return (from the browser's cache) or worker (served by the service worker).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, visit) (rate(keel_client_startup_seconds_bucket{stage=\"reveal\"}[1h])))",
+          "legendFormat": "{{visit}}, reveal, median",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.9, sum by (le, visit) (rate(keel_client_startup_seconds_bucket{stage=\"reveal\"}[1h])))",
+          "legendFormat": "{{visit}}, reveal, 90th",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, visit) (rate(keel_client_startup_seconds_bucket{stage=\"start\"}[1h])))",
+          "legendFormat": "{{visit}}, start screen, median",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 72,
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors in the pages, by build",
+      "description": "Errors the players' pages met and reported, a minute, by the build they ran. ClientErrors warns past one a minute for 15 minutes; keel's log has each (\"a page's error\").",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (build) (rate(keel_client_errors_total[$__rate_interval])) * 60",
+          "legendFormat": "{{build}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 73,
+      "gridPos": {
+        "x": 18,
+        "y": 37,
+        "w": 6,
         "h": 7
       }
     },

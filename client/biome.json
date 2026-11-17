@@ -4,6 +4,7 @@
     "includes": [
       "**",
       "!dist",
+      "!test-results",
       "!src/catalog/*.gen.*",
       "!src/predict/*.gen.*",
       "!src/net/gen",

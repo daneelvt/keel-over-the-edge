@@ -9,6 +9,11 @@
 // one more reef, F shakes one out, as Shift and R do where F flies the free
 // camera. Keys are read by their place on the keyboard (KeyboardEvent.code),
 // whatever its layout.
+//
+// A slider with the focus answers its own arrows, as a slider should: on
+// the helm ← and → steer; on the sheet ← and ↓ ease it, → and ↑ trim it,
+// and Page Up and Page Down trim and ease it a tenth at a time. The other
+// keys do as they do anywhere.
 
 import type { HelmInput } from './helm';
 import { clamp } from './helm';
@@ -20,6 +25,9 @@ import type { SheetInput } from './sheet';
 export const HELM_KEY_TIME = 0.6;
 /** Seconds for a held key to move the sheet over its whole range. */
 export const SHEET_KEY_TIME = 2;
+
+/** How far Page Up and Page Down move the sheet, of its whole range. */
+export const SHEET_PAGE_STEP = 0.1;
 
 /** Degrees Q and E turn the autopilot's target, and with Shift. */
 export const PILOT_STEP = 1;
@@ -56,8 +64,35 @@ const KEYS: Record<string, Action> = {
   KeyF: 'shakeOut',
 };
 
+/** Where the keys go: the page (or the scene), or the helm or the sheet with the focus. */
+export type KeyFocus = 'page' | 'helm' | 'sheet';
+
+/** The arrows on a focused slider: the helm's steer, the sheet's ease and trim. */
+const ON_HELM: Record<string, Action> = { ArrowLeft: 'port', ArrowRight: 'starboard' };
+const ON_SHEET: Record<string, Action> = {
+  ArrowLeft: 'ease',
+  ArrowDown: 'ease',
+  ArrowRight: 'trim',
+  ArrowUp: 'trim',
+};
+
+/** The action of a key where the focus is. */
+function actionOf(code: string, on: KeyFocus): Action | undefined {
+  if (on === 'helm') {
+    return ON_HELM[code] ?? KEYS[code];
+  }
+  if (on === 'sheet') {
+    return ON_SHEET[code] ?? KEYS[code];
+  }
+  return KEYS[code];
+}
+
+type Held = 'port' | 'starboard' | 'trim' | 'ease';
+
 export class KeyInput {
   readonly #held = { port: false, starboard: false, trim: false, ease: false };
+  /** What each key held down does, as it did where the focus was when it went down. */
+  readonly #holding = new Map<string, Held>();
   readonly #helm: HelmInput;
   readonly #sheet: SheetInput;
   readonly #pilot: PilotActions | null;
@@ -75,9 +110,16 @@ export class KeyInput {
     this.#reef = reef;
   }
 
-  /** A key went down, with Shift or not; returns whether it is one of the game's. */
-  down(code: string, shift = false): boolean {
-    const a = KEYS[code];
+  /** A key went down, with Shift or not, the focus on on; returns whether it is one of the game's. */
+  down(code: string, shift = false, on: KeyFocus = 'page'): boolean {
+    if (on === 'sheet' && (code === 'PageUp' || code === 'PageDown')) {
+      const s = this.#sheet;
+      s.take();
+      const step = code === 'PageUp' ? -SHEET_PAGE_STEP : SHEET_PAGE_STEP;
+      s.target = clamp(s.target + step, 0, 1);
+      return true;
+    }
+    const a = actionOf(code, on);
     if (a === undefined) {
       return false;
     }
@@ -94,6 +136,7 @@ export class KeyInput {
           this.#helm.take();
         }
         this.#held[a] = true;
+        this.#holding.set(code, a);
         break;
       case 'trim':
       case 'ease':
@@ -101,6 +144,7 @@ export class KeyInput {
           this.#sheet.take();
         }
         this.#held[a] = true;
+        this.#holding.set(code, a);
         break;
       case 'pilot':
         p?.togglePilot();
@@ -133,24 +177,31 @@ export class KeyInput {
 
   /** A key came up; returns whether it is one of the game's. */
   up(code: string): boolean {
-    const a = KEYS[code];
+    const a = this.#holding.get(code) ?? KEYS[code];
+    this.#holding.delete(code);
     if (a === undefined) {
       return false;
     }
     if (a === 'port' || a === 'starboard' || a === 'trim' || a === 'ease') {
-      const steering = this.steering;
-      this.#held[a] = false;
-      if (steering && !this.steering && this.#helm.centreOnRelease) {
-        this.#helm.centre();
-      }
+      this.#let(a);
     }
     return true;
   }
 
+  /** Lets go of what a key held. */
+  #let(a: Held): void {
+    const steering = this.steering;
+    this.#held[a] = false;
+    if (steering && !this.steering && this.#helm.centreOnRelease) {
+      this.#helm.centre();
+    }
+  }
+
   /** Lets go of every key (the page lost focus). */
   release(): void {
-    for (const code of ['ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS']) {
-      this.up(code);
+    this.#holding.clear();
+    for (const a of ['port', 'starboard', 'trim', 'ease'] as const) {
+      this.#let(a);
     }
   }
 

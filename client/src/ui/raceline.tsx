@@ -26,6 +26,7 @@ import {
   type LineView,
   lineView,
   ordinal,
+  RaceLive,
   resultWords,
 } from './racelinewords';
 import type { RacesView } from './raceslazy';
@@ -214,6 +215,10 @@ export function RaceLine({ src }: { src: RaceSource }) {
   const el = useRef<HTMLDivElement | null>(null);
   useSideways(el);
   const call = src.racing.call.value;
+  // Its events alone are said, each once; the rest stays on the screen.
+  const live = useRef<RaceLive | null>(null);
+  live.current ??= new RaceLive();
+  const said = live.current.read(v, call);
   // A boat watched has the race bar at the foot instead.
   const watching = src.racing.eye.value > 0 && src.racing.number() === 0;
   if (v === null || watching) {
@@ -223,10 +228,12 @@ export function RaceLine({ src }: { src: RaceSource }) {
     <div
       class={`panel racer-line${call?.warn ? ' rl-warn' : ''}${v.kind === 'before' && v.over ? ' rl-over-line' : ''}`}
       ref={el}
-      role="status"
       data-readout="race-line"
       data-state={call !== null ? 'call' : v.kind}
     >
+      <span class="visually-hidden" role="status" data-readout="race-said">
+        {said}
+      </span>
       <button
         type="button"
         class="rl-words"

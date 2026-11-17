@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'vitest';
 import { DOUBLE_TAP_MS, HELM_TRAVEL, HelmInput } from './helm';
-import { HELM_KEY_TIME, KeyInput, SHEET_KEY_TIME } from './keys';
+import { HELM_KEY_TIME, KeyInput, SHEET_KEY_TIME, SHEET_PAGE_STEP } from './keys';
 import { MAX_REEF, ReefInput, reefLevel } from './reef';
 import { SHEET_TRAVEL, SheetInput } from './sheet';
 
@@ -160,6 +160,93 @@ describe('the keyboard', () => {
     k.update(0.1);
     expect(h.target).toBeGreaterThan(0);
     k.up('KeyD');
+    expect(h.target).toBe(0);
+  });
+
+  test('on the focused sheet the arrows trim and ease it, and the helm stays', () => {
+    const h = new HelmInput();
+    const s = new SheetInput();
+    let helmTaken = 0;
+    h.onTake = () => helmTaken++;
+    const k = new KeyInput(h, s);
+    // → and ↑ trim (haul in), ← and ↓ ease.
+    expect(k.down('ArrowRight', false, 'sheet')).toBe(true);
+    k.update(SHEET_KEY_TIME / 5);
+    expect(s.target).toBeCloseTo(0.3, 12);
+    expect(h.target).toBe(0);
+    expect(helmTaken).toBe(0);
+    k.up('ArrowRight');
+    k.update(1);
+    expect(s.target).toBeCloseTo(0.3, 12);
+    k.down('ArrowUp', false, 'sheet');
+    k.update(SHEET_KEY_TIME / 10);
+    k.up('ArrowUp');
+    expect(s.target).toBeCloseTo(0.2, 12);
+    k.down('ArrowLeft', false, 'sheet');
+    k.update(SHEET_KEY_TIME / 5);
+    k.up('ArrowLeft');
+    k.down('ArrowDown', false, 'sheet');
+    k.update(SHEET_KEY_TIME / 10);
+    k.up('ArrowDown');
+    expect(s.target).toBeCloseTo(0.5, 12);
+    expect(h.target).toBe(0);
+    expect(helmTaken).toBe(0);
+    // The letters do as anywhere: D steers.
+    k.down('KeyD', false, 'sheet');
+    expect(helmTaken).toBe(1);
+    k.up('KeyD');
+  });
+
+  test('on the focused sheet Page Up trims and Page Down eases a tenth, kept to its range', () => {
+    const s = new SheetInput();
+    let taken = 0;
+    s.onTake = () => taken++;
+    const k = new KeyInput(new HelmInput(), s);
+    expect(k.down('PageUp', false, 'sheet')).toBe(true);
+    expect(s.target).toBeCloseTo(0.5 - SHEET_PAGE_STEP, 12);
+    expect(taken).toBe(1);
+    for (let i = 0; i < 12; i++) {
+      k.down('PageDown', false, 'sheet');
+    }
+    expect(s.target).toBe(1);
+    // Elsewhere the Page keys are not the game's.
+    expect(k.down('PageUp')).toBe(false);
+    expect(s.target).toBe(1);
+  });
+
+  test('on the focused helm ← and → steer, and ↑ and ↓ do nothing', () => {
+    const h = new HelmInput();
+    const s = new SheetInput();
+    const k = new KeyInput(h, s);
+    k.down('ArrowRight', false, 'helm');
+    k.update(HELM_KEY_TIME / 4);
+    expect(h.target).toBeCloseTo(0.5, 12);
+    k.up('ArrowRight');
+    k.down('ArrowLeft', false, 'helm');
+    k.update(HELM_KEY_TIME / 2);
+    k.up('ArrowLeft');
+    expect(h.target).toBeCloseTo(-0.5, 12);
+    expect(k.down('ArrowUp', false, 'helm')).toBe(false);
+    expect(s.target).toBe(0.5);
+  });
+
+  test('a key let go after the focus moved lets go of what it held', () => {
+    const h = new HelmInput();
+    const s = new SheetInput();
+    const k = new KeyInput(h, s);
+    // → went down on the sheet, trimming; the focus moved before it came up.
+    k.down('ArrowRight', false, 'sheet');
+    k.update(SHEET_KEY_TIME / 10);
+    k.up('ArrowRight');
+    k.update(1);
+    expect(s.target).toBeCloseTo(0.4, 12);
+    expect(h.target).toBe(0);
+    // And everything held lets go as the page loses the focus.
+    k.down('ArrowDown', false, 'sheet');
+    k.down('ArrowLeft');
+    k.release();
+    k.update(1);
+    expect(s.target).toBeCloseTo(0.4, 12);
     expect(h.target).toBe(0);
   });
 });

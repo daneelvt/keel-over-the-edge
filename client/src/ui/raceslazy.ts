@@ -10,6 +10,7 @@
 import { type Signal, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import type { Fetch } from '../account/me';
+import { lazyFailed } from '../boot/updated';
 import type { Notices } from './notices';
 import {
   forgetWatchedRace,
@@ -192,6 +193,8 @@ export function loadRaces(): Promise<Races> {
   if (loading === null) {
     loading = import('./races').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }

@@ -66,6 +66,7 @@ import {
 } from './chatwords';
 import { type ChatSheet, chatReadOnly, type DeckView, selfOf } from './decklazy';
 import { plain, type Words } from './deckwords';
+import { useModal } from './modal';
 import { PlayerText } from './player';
 import { REPORT_SHIPMATE_DETAIL } from './shipmatewords';
 
@@ -607,6 +608,55 @@ function ReportForm({ deck, sheet }: { deck: DeckView; sheet: ChatSheet }) {
   );
 }
 
+/**
+ * The one question before a block: Cancel takes the focus, Escape is
+ * Cancel, and the screen behind is inert while it is asked.
+ */
+function BlockQuestion({
+  deck,
+  sheet,
+  close,
+}: {
+  deck: DeckView;
+  sheet: ChatSheet;
+  close: () => void;
+}) {
+  const chat = deck.chat;
+  const ref = useModal(close, { inert: true, focus: '[data-stay]' });
+  return (
+    <section
+      class="panel deck-window deck-question chat-sheet"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="chat-block"
+      ref={ref}
+    >
+      <h2 id="chat-block">
+        <Said words={blockWords(sheet.name)} />
+      </h2>
+      <p>
+        {BLOCK_DETAIL}
+        {skipperOf(deck, sheet.name) ? ` ${BLOCK_ASHORE}` : ''}
+      </p>
+      <div class="deck-keys">
+        <button
+          type="button"
+          class="plate-key key-main"
+          onClick={() => {
+            chat.block(sheet.who, sheet.name, true);
+            close();
+          }}
+        >
+          {BLOCK}
+        </button>
+        <button type="button" class="plate-key" data-stay onClick={close}>
+          {CANCEL}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** The sheet of mute, block and report, about one person; or its one question before a block; or the report's form. */
 export function ChatSheetWindow({ deck, sheet }: { deck: DeckView; sheet: ChatSheet }) {
   const chat = deck.chat;
@@ -628,36 +678,7 @@ export function ChatSheetWindow({ deck, sheet }: { deck: DeckView; sheet: ChatSh
   }
   const tie = chat.log.tieOf(sheet.name);
   if (sheet.step === 'block') {
-    return (
-      <section
-        class="panel deck-window deck-question chat-sheet"
-        role="alertdialog"
-        aria-labelledby="chat-block"
-      >
-        <h2 id="chat-block">
-          <Said words={blockWords(sheet.name)} />
-        </h2>
-        <p>
-          {BLOCK_DETAIL}
-          {skipperOf(deck, sheet.name) ? ` ${BLOCK_ASHORE}` : ''}
-        </p>
-        <div class="deck-keys">
-          <button
-            type="button"
-            class="plate-key key-main"
-            onClick={() => {
-              chat.block(sheet.who, sheet.name, true);
-              close();
-            }}
-          >
-            {BLOCK}
-          </button>
-          <button type="button" class="plate-key" onClick={close}>
-            {CANCEL}
-          </button>
-        </div>
-      </section>
-    );
+    return <BlockQuestion deck={deck} sheet={sheet} close={close} />;
   }
   return (
     <section class="panel deck-window chat-sheet" role="dialog" aria-labelledby="chat-sheet">

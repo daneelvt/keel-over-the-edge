@@ -360,3 +360,10 @@
   color: var(--gold);
   font-style: normal;
 }
+
+/* Less motion asked for: a hat raised in a cheer at once, not turned. */
+@media (prefers-reduced-motion: reduce) {
+  .rb-hat {
+    transition: none;
+  }
+}

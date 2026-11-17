@@ -1,26 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The size of the game's first download: what dist/index.html loads before
-// the game can start (its scripts, the modules they preload, its styles),
-// the models the scene loads at once, and the net worker, which starts on
-// the way to sea, gzipped. Reported against the
-// 4 MB critical set; enforced from the phase that readies the game for
-// phones. Then the player's own sailor, which loads once their look is
-// known, before or beside the first frame: the texture transcoder and the
-// largest look's deck and far levels and clips. And the approval page's,
-// which AI apps open, often on a phone's data: its page, script and
-// styles, held under 30 KB. And the log's chunk, loaded when the log is
-// first opened, held under 60 KB; and the news sheet's, loaded when the
-// news is first opened, held under 20 KB.
+// The sizes of the game's parts loaded apart from its first download,
+// gzipped, against their budgets: the approval page, which AI apps open,
+// often on a phone's data: its page, script and styles, held under 30 KB;
+// the log's chunk, loaded when the log is first opened, held under 60 KB;
+// and the news sheet's, loaded when the news is first opened, held under
+// 20 KB. And a sailor's files' budgets, which build/size.test.ts holds the
+// art to. The first download itself, every byte on the wire to the reveal,
+// is counted by a browser test of the built page (e2e/critical.spec.ts).
 //
 //   node build/size.ts   (after vite build, in client/)
 
 import { appendFileSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
-
-/** The critical download's budget, in bytes. */
-export const BUDGET = 4 * 1024 * 1024;
 
 /**
  * A sailor's files' budgets, gzipped, in bytes, a look and version: its deck
@@ -29,7 +22,7 @@ export const BUDGET = 4 * 1024 * 1024;
  * boat in view), its clips (when a boat with it first comes near), and its
  * clips at a wheel with them on a boat steered by one; and what
  * the first download carries of sailors: one look's deck, far and clips,
- * the one every boat is drawn with. And its portraits, as files (images
+ * the player's own. And its portraits, as files (images
  * gain nothing by gzip): the colour portrait's base (AVIF) and mask
  * together, every look and version's together, and the inked portrait.
  */
@@ -47,11 +40,6 @@ export const SAILOR_BUDGETS = {
   portraits: 200 * 1024,
   ink: 40 * 1024,
 };
-
-/** Whether a built asset is the texture transcoder's, which loads with the first sailor. */
-export function transcoderAsset(name: string): boolean {
-  return /^basis_transcoder[-.]/.test(name);
-}
 
 /** The log's budget, in bytes gzipped: its script and styles, loaded when the log is first opened. */
 export const LOG_BUDGET = 60 * 1024;
@@ -88,56 +76,10 @@ export function eagerAssets(html: string): string[] {
 
 const gzipped = (file: string): number => gzipSync(readFileSync(file), { level: 9 }).length;
 
-/**
- * The models the game loads as its scene starts: those its first download
- * names. The developer page's (the dressing room's sailors) are in the
- * build's assets too, and are not the game's.
- */
-export function eagerModels(models: string[], scripts: string[]): string[] {
-  return models.filter((m) => scripts.some((s) => s.includes(m)));
-}
-
 function main(): void {
   const dist = 'dist';
-  const files = eagerAssets(readFileSync(join(dist, 'index.html'), 'utf8'));
-  // The boats' models load as the scene starts, and the net worker as the
-  // game connects.
   const assets = readdirSync(join(dist, 'assets'));
-  const scripts = files
-    .filter((f) => f.endsWith('.js'))
-    .map((f) => readFileSync(join(dist, f), 'utf8'));
-  const models = eagerModels(
-    assets.filter((f) => f.endsWith('.glb')),
-    scripts,
-  );
-  for (const f of assets) {
-    if (models.includes(f) || /^worker-.*\.js$/.test(f)) {
-      files.push(`assets/${f}`);
-    }
-  }
-  let total = 0;
-  const rows = files.sort().map((f) => {
-    const size = gzipped(join(dist, f));
-    total += size;
-    return `| ${f} | ${(size / 1024).toFixed(1)} KB |`;
-  });
-  const lines = [
-    '### The first download, gzipped',
-    '',
-    '| File | Size |',
-    '|------|------|',
-    ...rows,
-    `| **Total** | **${(total / 1024).toFixed(1)} KB**, ${((100 * total) / BUDGET).toFixed(1)}% of 4 MB |`,
-    '',
-  ];
-  const transcoder = assets
-    .filter(transcoderAsset)
-    .reduce((n, f) => n + gzipped(join(dist, 'assets', f)), 0);
-  const ownLook = largestLook();
-  lines.push(
-    `The player's own sailor, once their look is known: the transcoder **${(transcoder / 1024).toFixed(1)} KB** and the largest look **${(ownLook / 1024).toFixed(1)} KB**, **${((transcoder + ownLook) / 1024).toFixed(1)} KB** in all.`,
-    '',
-  );
+  const lines: string[] = ['### The parts loaded apart', ''];
   const approveHtml = join(dist, 'approve.html');
   const approve = [
     gzipped(approveHtml),
@@ -174,25 +116,6 @@ function main(): void {
     process.stderr.write('size: the approval page is over its budget\n');
     process.exitCode = 1;
   }
-}
-
-/** The largest person's look's deck and far levels and clips together, gzipped: any player's own. */
-function largestLook(): number {
-  const art = join('..', 'art', 'sailors');
-  let most = 0;
-  for (const look of readdirSync(art, { withFileTypes: true })) {
-    if (!look.isDirectory() || ['test', 'vendor', 'machine'].includes(look.name)) {
-      continue;
-    }
-    for (const f of readdirSync(join(art, look.name))) {
-      const v = /^([a-z]+)\.deck\.glb$/.exec(f)?.[1];
-      if (v !== undefined) {
-        const at = (level: string) => gzipped(join(art, look.name, `${v}${level}.glb`));
-        most = Math.max(most, at('.deck') + at('.far') + at('.clips'));
-      }
-    }
-  }
-  return most;
 }
 
 if (process.argv[1]?.endsWith('size.ts')) {

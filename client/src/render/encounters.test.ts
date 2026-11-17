@@ -9,7 +9,7 @@ import { describe, expect, test } from 'vitest';
 import { KNOCK, knockOf } from '../audio/knock';
 import { catalog } from '../catalog';
 import { ARTICLES, articleName, bumpLine, tackText } from '../ui/verdict';
-import { ChaseCamera, SHAKE_REDUCED, SHAKE_TIME } from './camera';
+import { ChaseCamera, SHAKE_TIME } from './camera';
 import { wedgeOutline } from './dirtyair';
 import { type Approach, approaching, type Seen } from './rightofway';
 
@@ -53,14 +53,14 @@ describe('the shake', () => {
     return most;
   };
 
-  test('is a third as large under reduced motion, and gone after its time', () => {
+  test('is none at all under reduced motion, and gone after its time', () => {
     const full = new ChaseCamera();
     full.shake(3, 0);
     const reduced = new ChaseCamera();
     reduced.reducedMotion = true;
     reduced.shake(3, 0);
     expect(largest(full)).toBeGreaterThan(0.05);
-    expect(largest(reduced) / largest(full)).toBeCloseTo(SHAKE_REDUCED, 6);
+    expect(largest(reduced)).toBe(0);
     expect(full.shakeAt(1000 * SHAKE_TIME + 1)).toBe(0);
   });
 

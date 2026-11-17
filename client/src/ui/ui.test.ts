@@ -20,6 +20,7 @@ import {
 } from './format';
 import {
   HudModel,
+  helmText,
   SAIL_CLEAR,
   SAIL_SHOW,
   SailHold,
@@ -525,5 +526,40 @@ describe('the sail on the sheet', () => {
       model.frame(t * 1000, t, pose, out, wind(5, 0), 0, 0.6, 0, 0.6);
     }
     expect(written.at(-1)).toBe('Sheet 60%, luffing: trim in');
+  });
+
+  test('the helm’s words for assistive technology: the rudder asked for, written only as the whole degree changes', () => {
+    expect(helmText(0)).toBe('Helm amidships');
+    expect(helmText(-0.3, 40)).toBe('Helm 12° to port');
+    expect(helmText(0.3, 40)).toBe('Helm 12° to starboard');
+    expect(helmText(-1, 35)).toBe('Helm 35° to port');
+    expect(helmText(0.01, 40)).toBe('Helm amidships');
+    const model = new HudModel();
+    const written: string[] = [];
+    const el = {
+      setAttribute(name: string, v: string) {
+        if (name === 'aria-valuetext') {
+          written.push(v);
+        }
+      },
+    } as unknown as HTMLElement;
+    model.helmText.attach(el);
+    model.setKind({
+      controls: { sheet: { name: 'Sheet', trim: 'Trim', ease: 'Ease' }, reef: ['', '', ''] },
+      physics: { rig: { reefs: [1, 0.8, 0.6] }, foils: { rudderAngle: 30 } },
+    });
+    const pose = newPose();
+    const out = outOf(LUFFING);
+    let t = 0;
+    for (const helm of [0, 0.001, -0.4, -0.401, -0.41, -0.45, 0.45]) {
+      t += 1 / 60;
+      model.frame(t * 1000, t, pose, out, wind(5, 0), helm, 0.5, helm, 0.5);
+    }
+    expect(written).toEqual([
+      'Helm amidships',
+      'Helm 12° to port',
+      'Helm 14° to port',
+      'Helm 14° to starboard',
+    ]);
   });
 });

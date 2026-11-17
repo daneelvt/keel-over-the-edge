@@ -94,6 +94,18 @@ spec:
             summary: "keel's CPU limit is holding it back."
           annotations:
             description: "It is throttled in {{ $value | humanizePercentage }} of its CPU periods. The Game dashboard shows whether the tick suffers."
+        - alert: ClientErrors
+          # The players' pages' own reports of errors they met: more than
+          # one a minute for a quarter of an hour is a fault in a build,
+          # not a phone's bad moment.
+          expr: sum(rate(keel_client_errors_total[5m])) * 60 > 1
+          for: 15m
+          labels:
+            severity: warning
+            component: game
+            summary: "Players' pages report more than one error a minute."
+          annotations:
+            description: "The pages report {{ $value | humanize }} errors a minute. The Game dashboard shows them by build, and keel's log has each (\"a page's error\"), with its message and its stack."
     - name: world
       rules:
         - alert: WorldNextNotReady

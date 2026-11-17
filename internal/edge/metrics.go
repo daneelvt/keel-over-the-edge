@@ -215,6 +215,7 @@ type metrics struct {
 	knocks                        [len(knockNames)]prometheus.Counter
 	deck                          [decks_]prometheus.Counter
 	aboard                        prometheus.Gauge
+	minute                        minuteObservers
 }
 
 // knock counts what a knocker was told.
@@ -304,6 +305,7 @@ func newMetrics(m *obs.Metrics) metrics {
 		x.deck[i] = m.EdgeDeck.WithLabelValues(n)
 	}
 	x.aboard = m.EdgeAboard
+	x.minute = newMinuteObservers(m)
 	return x
 }
 

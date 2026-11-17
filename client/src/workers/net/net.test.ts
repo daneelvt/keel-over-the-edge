@@ -116,6 +116,21 @@ describe('the session', () => {
     expect((pings[9] ?? 0) - (pings[8] ?? 0)).toBe(PING_EVERY);
   });
 
+  test('a Ping tells the bytes the page fetched since the last, once', () => {
+    const s = welcomed();
+    const ping = (now: number) =>
+      s
+        .time(now)
+        .out.map(decodeClient)
+        .find((m) => m.body.case === 'ping');
+    s.fetchedBytes += 120_000;
+    s.fetchedBytes += 3_000;
+    const first = ping(s.deadline());
+    expect(first?.body.case === 'ping' && first.body.value.fetchedBytes).toBe(123_000);
+    const next = ping(s.deadline());
+    expect(next?.body.case === 'ping' && next.body.value.fetchedBytes).toBe(0);
+  });
+
   test('an empty Input after 100 ms of silence, with the newest snapshot’s tick', () => {
     const s = welcomed();
     for (let i = 0; i < 8; i++) {

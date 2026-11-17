@@ -7,6 +7,7 @@
 // own where it is not yet.
 
 import { useEffect, useState } from 'preact/hooks';
+import { lazyFailed } from '../boot/updated';
 
 /** The sheet's words while its code loads. */
 export const OPENING = 'Opening the news…';
@@ -20,6 +21,8 @@ export function loadNews(): Promise<NewsModule> {
   if (loading === null) {
     loading = import('./news').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }
