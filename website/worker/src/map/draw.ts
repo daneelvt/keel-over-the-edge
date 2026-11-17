@@ -29,7 +29,7 @@ import { fell, fellItalic } from '../../gen/glyphs.gen.ts';
 import type { Status, StatusMap, Weather } from '../status';
 import { type Px, type View, wholeDisk, wholeDiskDistance } from './camera';
 import { linearOpacity, SheetContext } from './canvas';
-import { BOATS, GRID, LIP, PAPER, surfaceTop, WEATHER } from './look';
+import { BOATS, GREEN, GRID, LIP, PAPER, rigOf, WEATHER } from './look';
 import { advanceOf, escapeXml, n1, Svg, textAt } from './svg';
 
 /** The table the chart lies on (ChartView's TABLE). */
@@ -392,25 +392,6 @@ function inkCoasts(
   svg.path(rocks, { stroke: look.ink, width: 4 * ring, cap: 'round' });
 }
 
-/** A boat's figures for the map: its hulls, its masts and how it is rigged, by its catalog id. */
-interface Rig {
-  hulls: 1 | 2;
-  /** Fore-and-aft sails: main, and a jib before the mast. */
-  jib: boolean;
-  /** Square-rigged masts, or 0 for a fore-and-aft rig. */
-  masts: number;
-}
-
-const RIGS: Record<string, Rig> = {
-  'jolly-boat': { hulls: 1, jib: false, masts: 0 },
-  skiff: { hulls: 1, jib: false, masts: 0 },
-  keelboat: { hulls: 1, jib: true, masts: 0 },
-  yacht: { hulls: 1, jib: true, masts: 0 },
-  'beach-cat': { hulls: 2, jib: false, masts: 0 },
-  catamaran: { hulls: 2, jib: true, masts: 0 },
-  'tall-ship': { hulls: 1, jib: true, masts: 3 },
-};
-
 /**
  * A boat on the map, small and inked: its hull as seen from the side, its
  * sail standing over it, the bow toward where it heads on the screen, and
@@ -426,7 +407,7 @@ function inkBoat(
   cloth: string,
 ): void {
   const kind = BOATS.find((k) => k.id === b.boat);
-  const rig = RIGS[b.boat] ?? { hulls: 1, jib: false, masts: 0 };
+  const rig = rigOf(b.boat);
   const length = 6 + 1.9 * Math.sqrt(kind?.lengthOverall ?? 5);
   const h = (b.heading * Math.PI) / 180;
   const [x, y] = view.project(b.east, b.north);
@@ -457,7 +438,7 @@ function inkBoat(
   };
   let hulls = hull(0);
   if (rig.hulls === 2) {
-    hulls += hull(-way * length * 0.12).replace(/Z$/, 'Z');
+    hulls += hull(-way * length * 0.12);
   }
   const mastAt = x - way * length * 0.05;
   const top = y - draught * 0.5 - length * 1.05;
@@ -737,8 +718,8 @@ export function drawMapOf(of: MapOf): { svg: string; drawn: Drawn } {
   paintPaper(canvasOf(paper), look, [], []);
   if (map !== null) {
     // The land a pale green, as the chart's models of it read from afar:
-    // the paper's colour and the grass's.
-    inkCoasts(drawn, svg, view, map, look, extent, over(look.paper, surfaceTop('grass'), 0.4));
+    // the paper's colour and the plants'.
+    inkCoasts(drawn, svg, view, map, look, extent, over(look.paper, GREEN, 0.4));
     const sheet = new SheetContext(svg, view, WEATHER_PIXELS, extent, {
       roman: fell,
       italic: fellItalic,
