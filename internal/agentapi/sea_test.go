@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -185,6 +187,40 @@ func TestOneWaitAtATime(t *testing.T) {
 		}
 		if got := <-first; got != wordsSuperseded {
 			t.Fatalf("the first wait: %q", got)
+		}
+	})
+}
+
+// TestOverBudgetInTheResult: orders past the budget's burst are refused
+// in the tool's result, not by the transport: an answer like any other,
+// marked an error, saying the limit, that nothing changed, how long to
+// wait and the order the boat holds; once that wait is over, an order is
+// taken again.
+func TestOverBudgetInTheResult(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, 8, 12, 0)
+		a := sailor(1, "Iron Mary")
+		h.call(t, a, "steer", map[string]any{"wind_angle": 90})
+		var text string
+		refused := false
+		for i := range 2 * DefaultLimits.OrderBurst {
+			text, refused = h.call(t, a, "trim", map[string]any{"boom": 20 + i})
+			if refused {
+				break
+			}
+		}
+		wait := regexp.MustCompile(`Wait (\d+\.\d) s\.`).FindStringSubmatch(text)
+		if !refused || wait == nil || !strings.Contains(text, "Too many orders: the limit is 2 a second, 5 at once. Nothing was changed.") ||
+			!strings.Contains(text, "Your boat holds its last order (") {
+			t.Fatalf("an order past the burst: refused %v, %q", refused, text)
+		}
+		secs, _ := strconv.ParseFloat(wait[1], 64)
+		if secs <= 0 || secs > 1/float64(DefaultLimits.Orders) {
+			t.Fatalf("told to wait %v s", secs)
+		}
+		time.Sleep(time.Duration(secs * float64(time.Second)))
+		if text, refused := h.call(t, a, "trim", map[string]any{"boom": 30}); refused {
+			t.Fatalf("an order after the wait: %q", text)
 		}
 	})
 }

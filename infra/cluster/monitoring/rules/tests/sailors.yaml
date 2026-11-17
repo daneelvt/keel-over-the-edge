@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The new sailors' alerts (apps/keel/rules.yaml, group sailors), each made
+# to fire and shown quiet first. go test runs them with vmalert-tool
+# unittest, against the rules as production renders them.
+evaluation_interval: 1m
+tests:
+  - name: sailors made at a steady pace, then many more in an hour
+    interval: 1m
+    input_series:
+      # One every two minutes for two hours, then three a minute.
+      - series: keel_accounts_created_total
+        values: 0+0.5x120 63+3x60
+    alert_rule_test:
+      - eval_time: 110m
+        groupname: sailors
+        alertname: NewSailorsSurge
+        exp_alerts: []
+      - eval_time: 150m
+        groupname: sailors
+        alertname: NewSailorsSurge
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              summary: "Many more new sailors than usual are being made."
+            exp_annotations:
+              description: "105 sailors were made in the last hour. The Game dashboard shows them beside the human checks and the sailors refused by address: a crowd from one post passes its checks; many refused, or checks refused, is someone farming accounts. The world page sets the new sailors allowed from one address."
+
+  - name: the human check fails for a few minutes, then answers again
+    interval: 1m
+    input_series:
+      - series: keel_human_checks_total{result="unavailable"}
+        values: 0x10 0+1x10 10x30
+      - series: keel_human_checks_total{result="passed"}
+        values: 0+5x50
+    alert_rule_test:
+      - eval_time: 12m
+        groupname: sailors
+        alertname: HumanCheckUnavailable
+        exp_alerts: []
+      - eval_time: 19m
+        groupname: sailors
+        alertname: HumanCheckUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              summary: "The human check cannot be asked: no new sailor can be made."
+            exp_annotations:
+              description: "8 new sailors in the last 10 minutes were turned away because Cloudflare's check did not answer. keel's log says why. If it lasts, switch the human check off on the world page, and on again once Cloudflare answers."
+      - eval_time: 40m
+        groupname: sailors
+        alertname: HumanCheckUnavailable
+        exp_alerts: []

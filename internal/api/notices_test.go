@@ -3,9 +3,11 @@
 package api
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -52,5 +54,57 @@ func TestNoticesSwitched(t *testing.T) {
 	}
 	if _, body := get(t, c, srv.URL+"/api/me", cookie); !strings.Contains(body, `"noticesOff":["great-discoveries"]`) {
 		t.Errorf("changed by the refused requests: %s", body)
+	}
+}
+
+// noticeDesk keeps the notices sent from outside, and nothing else of
+// chat's.
+type noticeDesk struct {
+	Chatting
+	mu   sync.Mutex
+	kept int
+}
+
+func (d *noticeDesk) Notice(context.Context, store.Notice) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.kept++
+	return nil
+}
+
+// TestNoticesAnHour: the notice form takes five notices an hour from one
+// address, as Cloudflare names it, and refuses the sixth as too often,
+// keeping nothing; another address is not held by the first's count.
+func TestNoticesAnHour(t *testing.T) {
+	desk := &noticeDesk{}
+	srv := newTestServer(t, noDatabase{}, func(c *Config) { c.Chat = desk })
+	send := func(addr string) (int, string) {
+		t.Helper()
+		req, _ := http.NewRequest("POST", srv.URL+"/api/notice",
+			strings.NewReader(`{"who":"A parent","contact":"parent@example.com","reason":"bullying","what":"Unkind words at sea"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("CF-Connecting-IP", addr)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, strings.TrimSpace(string(b))
+	}
+	for i := range NoticesAnHour {
+		if status, body := send("198.51.100.7"); status != http.StatusNoContent {
+			t.Fatalf("notice %d: %d %s", i+1, status, body)
+		}
+	}
+	if status, body := send("198.51.100.7"); status != http.StatusTooManyRequests || body != `{"error":"often"}` {
+		t.Fatalf("the sixth from one address: %d %s", status, body)
+	}
+	if status, _ := send("203.0.113.9"); status != http.StatusNoContent {
+		t.Fatalf("from another address: %d", status)
+	}
+	if desk.kept != NoticesAnHour+1 {
+		t.Fatalf("%d notices kept", desk.kept)
 	}
 }

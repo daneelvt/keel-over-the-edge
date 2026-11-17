@@ -128,6 +128,28 @@ spec:
             summary: "One of keel's jobs keeps failing."
           annotations:
             description: "The job {{ $labels.name }} has failed for half an hour without a run that succeeded. Its runs, and why each failed, are on the world page."
+    # New sailors: how many are made, and whether the human check that
+    # every new sailor passes can be asked. Warnings to the owner's page:
+    # a crowd from one post is welcome, a farm of accounts is not, and
+    # only a look tells them apart. 60 an hour is a starting value.
+    - name: sailors
+      rules:
+        - alert: NewSailorsSurge
+          expr: sum(increase(keel_accounts_created_total[1h])) > 60
+          labels:
+            severity: warning
+            component: game
+            summary: "Many more new sailors than usual are being made."
+          annotations:
+            description: "{{ $value | humanize }} sailors were made in the last hour. The Game dashboard shows them beside the human checks and the sailors refused by address: a crowd from one post passes its checks; many refused, or checks refused, is someone farming accounts. The world page sets the new sailors allowed from one address."
+        - alert: HumanCheckUnavailable
+          expr: sum(increase(keel_human_checks_total{result="unavailable"}[10m])) > 3
+          labels:
+            severity: warning
+            component: game
+            summary: "The human check cannot be asked: no new sailor can be made."
+          annotations:
+            description: "{{ $value | humanize }} new sailors in the last 10 minutes were turned away because Cloudflare's check did not answer. keel's log says why. If it lasts, switch the human check off on the world page, and on again once Cloudflare answers."
     # Reports of what players said or did. A report that a child may be
     # at risk pages the owner while it waits; the queue waiting a day
     # warns. Their component is their own: GameDown holds them back
