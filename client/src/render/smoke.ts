@@ -35,7 +35,7 @@ import {
 import type { Node } from 'three/webgpu';
 import type { TownSmoke } from '../catalog/types.gen';
 import { basicMaterial, bendScene } from './materials';
-import { instances } from './uploads';
+import { instances, sendFirst } from './uploads';
 
 /** The puffs drawn at most. */
 export const PUFF_CAPACITY = 1024;
@@ -180,8 +180,8 @@ export class Smoke {
     this.count = n;
     this.mesh.count = n;
     this.mesh.visible = n > 0;
-    this.place.needsUpdate = true;
-    this.shade.needsUpdate = true;
+    sendFirst(this.place, n);
+    sendFirst(this.shade, n);
   }
 }
 
@@ -217,8 +217,8 @@ export class Puffs extends Smoke {
     this.mesh.count = this.count;
     this.mesh.visible = this.count > 0;
     if (this.count > 0) {
-      this.place.needsUpdate = true;
-      this.shade.needsUpdate = true;
+      sendFirst(this.place, this.count);
+      sendFirst(this.shade, this.count);
     }
   }
 }

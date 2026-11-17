@@ -54,7 +54,7 @@ import { headingToRotationY } from './coords';
 import { depthTo } from './fog';
 import { bendScene, fallToEdge, glowMaterial } from './materials';
 import { look, toLinear } from './sky';
-import { instances } from './uploads';
+import { instances, sendFirst } from './uploads';
 
 const DEG = Math.PI / 180;
 
@@ -349,8 +349,8 @@ export class Lanterns {
   commit(fovY: number, height: number): void {
     this.perPixel.value = (2 * Math.tan((fovY * DEG) / 2)) / Math.max(height, 1);
     this.mesh.count = this.count;
-    this.place.needsUpdate = true;
-    this.shows.needsUpdate = true;
+    sendFirst(this.place, this.count);
+    sendFirst(this.shows, this.count);
   }
 }
 

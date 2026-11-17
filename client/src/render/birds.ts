@@ -36,7 +36,7 @@ import type { BirdLook } from '../catalog/types.gen';
 import type { BirdSink } from '../life/draw';
 import { headingToRotationY } from './coords';
 import { basicMaterial } from './materials';
-import { instances } from './uploads';
+import { instances, sendFirst } from './uploads';
 
 /** The birds drawn at most in a frame. */
 export const BIRDS = 1024;
@@ -172,7 +172,7 @@ export class Birds implements BirdSink {
     const n = this.#count;
     this.mesh.count = n;
     this.mesh.visible = n > 0;
-    this.#data.needsUpdate = true;
+    sendFirst(this.#data, n);
     this.stats.birds = n;
     this.stats.draws = n > 0 ? 1 : 0;
   }
