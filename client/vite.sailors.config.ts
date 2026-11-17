@@ -17,6 +17,8 @@ export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   base: '/',
   publicDir: false,
+  // The build's ID, as the game's: the page's reports name it.
+  define: { __KEEL_BUILD__: JSON.stringify(process.env.KEEL_BUILD ?? 'dev') },
   build: {
     outDir: fileURLToPath(new URL('./dist', import.meta.url)),
     // The game's build is there already.
