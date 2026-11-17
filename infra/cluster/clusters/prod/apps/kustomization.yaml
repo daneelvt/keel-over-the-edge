@@ -2,7 +2,7 @@
 # The game in production: the base's sizes, which are production's, the
 # players' address and their passkeys' domain, the MCP address, the
 # database's passwords and the backups' keys from Infisical, the website's
-# status's Access settings from Infisical, the
+# status's Access settings and new sailors' keys from Infisical, the
 # contributor agreement keeper's GitHub App, the weekly restore test, and
 # cloudflared, which carries players' and AI apps' traffic in from
 # Cloudflare.
@@ -16,6 +16,7 @@ resources:
   - database-roles.yaml
   - agreement-secrets.yaml
   - keel-access.yaml
+  - keel-new-sailors.yaml
   - backup-keys.yaml
 components:
   - ../../../apps/archive
@@ -102,6 +103,40 @@ patches:
             secretKeyRef:
               name: keel-access
               key: KEEL_ACCESS_AUD
+              optional: true
+  # New sailors' address key and the human check's keys, from
+  # keel-new-sailors (keel-new-sailors.yaml); each missing, keel starts
+  # without it.
+  - target:
+      kind: Deployment
+      name: keel
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: KEEL_ADDRESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: keel-new-sailors
+              key: KEEL_ADDRESS_KEY
+              optional: true
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: KEEL_TURNSTILE_SITEKEY
+          valueFrom:
+            secretKeyRef:
+              name: keel-new-sailors
+              key: KEEL_TURNSTILE_SITEKEY
+              optional: true
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: KEEL_TURNSTILE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: keel-new-sailors
+              key: KEEL_TURNSTILE_SECRET
               optional: true
   # The contributor agreement keeper's players' origin is keel's, from its
   # configuration: one place for it (a change to keel's configuration

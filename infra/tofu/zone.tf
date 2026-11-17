@@ -29,6 +29,10 @@ locals {
     pre_render               = "off"
     replace_insecure_js      = "off"
     webmcp_enabled           = "off"
+
+    # CF-Connecting-IP carries a player's own IPv6 address, never a made-up
+    # IPv4 one in its place: keel counts new sailors by an IPv6 /56.
+    pseudo_ipv4 = "off"
   }
 
   # HSTS for a day while the way in settles, so a mistake lasts no longer;

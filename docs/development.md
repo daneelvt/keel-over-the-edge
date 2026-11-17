@@ -4560,6 +4560,7 @@ of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
 `settings`, `links on|off`, `boarding on|off`, `linklife 24h`, `chat
 on|off`, `shipmates on|off`, `spectators on|off`, `countries BR,AU` (`""` clears them),
+`newsailors N`, `humancheck on|off`,
 `reports`, `report ID` and `act ID ACTION` (see [Reports](#reports)); text,
 or `-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
 `lifetime`, `links off`, `linklife`, `chat off` and `act` only say what
@@ -4596,6 +4597,16 @@ none). Chat off for everyone silences spectators too. The settings'
 routes take `"chat"`, `"shipmateMessages"`, `"spectatorChat"` and
 `"chatCountries"` too; each change is recorded, then every game
 connection is told how chat stands for it.
+
+**New sailors' settings** are a group of their own on the same card, New
+sailors: the human check on or off (`human_check`, on to start; off is
+asked once, "The human check off? New sailors come in unchecked until it
+is on again"), and how many new sailors one address may make in 24 hours
+(`new_sailors_per_address`, 20 to start, 1 to 1000). The routes take
+`"humanCheck"` and `"newSailorsPerAddress"`; `keel admin humancheck
+on|off` and `newsailors N` the same. Each change is recorded
+(`human-check`, `new-sailors`) and takes effect at the next begin; see
+[New sailors](#new-sailors-the-count-and-the-human-check).
 
 ### Reports
 
@@ -5475,6 +5486,10 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_ACCESS_TEAM` | none | The Cloudflare Access team's domain the website's status is behind, as `keel.cloudflareaccess.com`. With `KEEL_ACCESS_AUD`, `GET /api/status` answers only requests Access signed for its application; with either unset it is not served at all (see [`/api/status`](#apistatus)). Production's come from Infisical, written there by OpenTofu |
 | `KEEL_ACCESS_AUD` | none | The Access application's audience tag |
 | `KEEL_STATUS_BOATS` | 12 | The most boats the website's map shows, from 0 to 100 |
+| `KEEL_ADDRESS_KEY` | made at start | The key new sailors' addresses are kept under, as an HMAC, for the day they count: base64 of 32 bytes or more; unset, one is made at each start and the counts start again (see [New sailors](#new-sailors-the-count-and-the-human-check)) |
+| `KEEL_TURNSTILE_SITEKEY`, `KEEL_TURNSTILE_SECRET` | none | The Turnstile widget's site key and secret, both or neither: with them every new sailor passes the human check; with one alone keel does not start |
+| `KEEL_TURNSTILE_VERIFY_URL` | Cloudflare's | Turnstile's `siteverify`: https, or http on a loopback address for a test's stand-in |
+| `KEEL_TURNSTILE_SCRIPT` | Cloudflare's, `?render=explicit` | The widget's script the page loads: https, or a path on the page's origin |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…`, `?front`, `?system=…&in=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
@@ -5560,6 +5575,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_db_query_duration_seconds{query}`, `keel_db_query_errors_total{query}` | Each query's time and failures, by its sqlc name (`other` for the rest) |
 | `keel_db_schema_version` | The newest migration the database has had |
 | `keel_accounts_created_total`, `keel_names_refused_total{reason}` | Accounts made, and new sailors' names refused by reason (`short`, `long`, `characters`, `scripts`, `words`, `taken`) |
+| `keel_human_checks_total{result}`, `keel_new_sailors_refused_total{reason}` | New sailors' human checks by result (`passed`, `refused`, `spent`, `unavailable`, `off`), and new sailors refused before their passkey by reason (`address`, `check`) |
 | `keel_ceremonies_total{kind, result}` | Ceremonies with the browser's passkey prompt: `create`, `signin`, `add`, `confirm`, `approve`; `begun`, `finished`, `refused` (the answer not accepted), `expired`, `again` (its state gone: used, never begun, or another build's), `stopped` (the passkey good, its account stopped) |
 | `keel_signins_total{mediation}` | Sign-ins with a passkey: by the browser's `prompt`, or offered on the name field (`conditional`) |
 | `keel_recovery_used_total`, `keel_accounts_deleted_total{by}`, `keel_clone_warnings_total` | Recovery codes used; accounts deleted, by their `player` or the `owner`; sign-ins whose passkey's count did not go up (logged, never refused) |
@@ -5778,12 +5794,15 @@ and `POST /logout`; removing a passkey, a new recovery code and deleting
 are 403 `confirm` without a passkey confirmed in the last 5 minutes. Nothing
 the API answers is cached. A path with dot segments or repeated slashes is
 404, never redirected. Every request passes, in order: the request ID
-and the access log; the client's address (a place kept: players reach the
-server directly for now); read and write deadlines of 10 s and 30 s,
+and the access log; the client's address, `CF-Connecting-IP` or the
+connection's, never logged (see [New sailors](#new-sailors-the-count-and-the-human-check));
+read and write deadlines of 10 s and 30 s,
 except on routes marked long-lived (none yet); a 16 KB limit on the body;
 Go's `http.CrossOriginProtection`, which refuses a browser's unsafe request
 from another origin (`Sec-Fetch-Site`, or else `Origin` against `Host`);
-the session; and limits on how often a client may ask (a place kept).
+the session; and limits on how often a client may ask, each in its
+route's handler (new sailors from one address, notices, links, the page's
+reports).
 
 ### Accounts and passkeys
 
@@ -5871,6 +5890,20 @@ holds are never kept. A session's last-seen time, and its account's, are
 written at most once an hour. An account is kept until its player deletes
 it.
 
+**The browser's mark.** A second cookie, `__Host-keel-sailed=1`, says this
+browser has had a sailor (`internal/auth/sailed.go`): `Secure`,
+`HttpOnly`, `SameSite=Lax`, for `/`, 400 days. It is set with every new
+session (a sailor made, a sign-in, the recovery code) and set again
+whenever the session cookie is, so it lasts as long; signing out keeps it
+(a signed-out browser still made a sailor). The player's deletion clears
+it, and so does a sign-in answered `unknown-passkey`, the first moment keel
+can tell a browser its account was deleted by the owner. Only keel reads
+it: `GET /api/me`'s 401 says `"sailed"` (below), and the start screen leads
+with signing in. It is set by the server, so no browser shortens it as
+Safari does cookies a script writes (7 days); it is a security cookie,
+used for nothing else. The under-13 answer stays its own cookie,
+`keel-young`.
+
 **The start screen** (`client/src/account`) leads with making a sailor and
 offers signing in beside it. Before anything is asked, it checks the
 browser can make a passkey (`inapp.ts`): an app's own browser (Instagram,
@@ -5937,6 +5970,111 @@ The client checks a name's length only, counting as the server does
 is the server's count of a table of names, written by
 `go test ./internal/moderation -run LengthTable -args -update`, and the
 client's tests read it.
+
+### New sailors: the count and the human check
+
+`POST /account/begin` lets a new sailor go on to the passkey prompt only
+past two limits (`internal/api/newsailors.go`), after the cheap refusals
+(the under-13 cookie, a session, the body, the age, the look, the name's
+rules) and before the name is looked up:
+
+1. **The count.** How many sailors were made from the request's address
+   in the last 24 hours, from the table `new_sailor_from`. At the owner's
+   number (20 to start) the answer is 429 `{"error":"often"}` with
+   `Retry-After`, the seconds until the oldest of them leaves the day. A
+   sailor counts when it is made, at `POST /account/finish`, which writes
+   the row in the account's own transaction: a prompt closed costs
+   nothing, and ceremonies begun side by side can make a few more than the
+   number, each passing its own check. Signing in and the recovery code
+   are never limited.
+2. **The human check**, Cloudflare Turnstile, while it is set up and the
+   owner has it on. The body's `check` is the page's token (at most 2,048
+   characters); `internal/humancheck` posts it to Turnstile's `siteverify`
+   with the secret, the address and a fresh idempotency key, within 5 s,
+   sending once more with the same key after a network error or a 5xx. It
+   passes only if Cloudflare says `success`, for the play host, for the
+   action `new-sailor`. No token, a refused one or one used before: 403
+   `{"error":"check"}`. Cloudflare not answering in time: 503
+   `{"error":"check-unavailable"}`, and no new sailor until it answers or
+   the owner switches the check off (failing closed). A token is spent
+   whatever begin answers next, so the page asks for a fresh one each try.
+
+The order keeps every refusal that costs nothing ahead of Cloudflare's
+call: a name refused by its rules, or an address that has made its day's
+sailors, spends no check; a name taken is answered after the check.
+`keel_human_checks_total{result}` counts the checks (`passed`, `refused`,
+`spent`, `unavailable`, and `off` when none is made) and
+`keel_new_sailors_refused_total{reason}` the sailors refused (`address`,
+`check`) beside `keel_accounts_created_total`.
+
+**The address** is the middleware's second step (`internal/api/address.go`):
+`CF-Connecting-IP` when it holds an address, else the connection's own,
+which is the honest answer on the local cluster and in tests; an IPv4
+address carried in IPv6 is the IPv4 address. keel trusts the header because
+only Traefik reaches it and only cloudflared reaches Traefik, and
+Cloudflare replaces one a player sends. An IPv4 address counts alone, an
+IPv6 address by its /56 (`AddressPrefix`), a household's or office's whole
+network; the zone's `pseudo_ipv4` is off, so the header carries the real
+IPv6 address. The address is never logged; the notice form's own limit
+reads it too. Tests set the header to be many addresses.
+
+**The address key.** The table keeps each address only as the HMAC-SHA256
+of its prefix's bytes under `KEEL_ADDRESS_KEY` (base64 of 32 bytes or
+more; production's is 44 letters and digits made by OpenTofu,
+`infra/tofu/newsailors.tf`, kept in Infisical and the pod alone), and a
+time, with no account: a row says only that a sailor was made from
+somewhere, then. Unset, keel makes a key as it starts and warns that the
+counts start again (tools/dev, tests, the local cluster); a malformed one
+stops keel. A new key resets every count, which is harmless. The
+`new-sailors` job deletes the rows a day old every hour; backups keep them
+30 days.
+
+**Its keys** are `KEEL_TURNSTILE_SITEKEY` and `KEEL_TURNSTILE_SECRET`,
+both or neither: neither, no check is made (logged at start: tools/dev and
+the Go tests); one without the other stops keel.
+`KEEL_TURNSTILE_VERIFY_URL` (siteverify's, Cloudflare's by default) and
+`KEEL_TURNSTILE_SCRIPT` (the widget's script the page loads,
+`https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit` by
+default, or a path on the page's origin) point tests at a stand-in.
+Production's widget, `play`, is OpenTofu's (managed mode), its site key and
+secret written to Infisical `/keel/` and brought to keel by the
+ExternalSecret `keel-new-sailors`. The local cluster uses Cloudflare's
+test keys, `1x00000000000000000000AA` and
+`1x0000000000000000000000000000000AA`, which pass the test token
+`XXXX.DUMMY.TOKEN.XXXX` on any host and load the real script; with a test
+secret Cloudflare answers the host `example.com` and no action, which keel
+then expects instead. The Go tools that make sailors (the load bot, the
+smoke checks) send that token. The local cluster has one address for
+everyone, so a load bot run there needs `keel admin newsailors 1000`
+first.
+
+**`GET /api/me` without a session** answers 401 `{"error":"session",
+"sailed", "check"}`: whether the browser has the mark (above), and the
+check a new sailor would pass, `{"siteKey", "script"}`, or `null` when
+none is set up or the owner has it off. The page loads the script only for
+a new sailor's form.
+
+**In the browser tests**, `tools/e2e` sets keel up with a stand-in for
+Turnstile (`tools/e2e/turnstile.go`), on the page's own origin under
+`/turnstile/`: on `127.0.0.1:18088`, which is the built page's origin, and
+which Vite's dev server sends `/turnstile/` to (`KEEL_TURNSTILE_ADDR`
+moves it). Its `api.js` defines `render`, `execute`, `reset`, `remove`,
+`getResponse`, `isExpired` and `ready`, and gives the token
+`XXXX.DUMMY.TOKEN.XXXX` after asking `POST /turnstile/issue`, which keeps
+the page's host and the widget's action; its `siteverify` passes the token
+once for each given, and refuses it repeated. `POST
+/turnstile/next?answer=refused|spent|unavailable` makes the next check
+answer so. `helpers.checkToken()` gets a token through the routes, as
+`helpers.sailor()` does. `go run ./tools/e2e -check=false` checks no one.
+tools/e2e also sets 1000 new sailors an address a day: every test's
+sailors come from the loopback address. No pull request's test calls
+Cloudflare: it supports automated browsers only with its test keys.
+
+To try the real widget by hand, run keel with the test keys and the
+default script (the local cluster does); `2x00000000000000000000AB` as the
+site key always fails, `3x00000000000000000000FF` always asks the visitor
+to act, and the secret `2x0000000000000000000000000000000AA` refuses every
+token.
 
 ### AI apps and machine sailors
 
@@ -8313,6 +8451,8 @@ go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changi
 | The B2 key that writes the dumps | The owner | `keel-backups` `/keel/B2_DUMPS_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-dumps` | No |
 | The B2 key that reads the backups | The owner | `keel-backups` `/keel-restore/B2_RESTORE_KEY_ID`, `…_KEY` | External Secrets → `keel-restore/keel-b2-read` | No |
 | The local bucket's B2 key | The owner | `keel-backups` `/local/B2_KEY_ID`, `…_KEY`; copied to `.dev/backups.env` | `tools/cluster`, on the owner's Mac | No |
+| The Turnstile widget's secret, and its site key (not secret) | Cloudflare, for OpenTofu | `keel-cluster` `/keel/TURNSTILE_SECRET`, `/keel/TURNSTILE_SITEKEY` | External Secrets → `keel/keel-new-sailors` | Yes, encrypted |
+| The key new sailors' addresses are kept under | OpenTofu, ephemeral | `keel-cluster` `/keel/ADDRESS_KEY` | External Secrets → `keel/keel-new-sailors` | No |
 | The website's Access service token, its ID and secret | Cloudflare, for OpenTofu | OpenTofu's state, as sensitive outputs; the Worker's secrets `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET` | `accounts`' apply, which hands them to `wrangler deploy` on its standard input; the Worker, calling `/api/status` | Yes, encrypted |
 
 The backups' keys are in a project of their own because the `accounts`
@@ -8590,6 +8730,11 @@ writes the header itself on every other. On the local cluster nothing
 writes the header, so every request counts as one address's: the amounts
 there are 2000, 4000 and 4096, for the load bot's hundreds of boats.
 
+New sailors are counted by keel itself, by an IPv6 /56 rather than each
+address ([New sailors](#new-sailors-the-count-and-the-human-check)):
+Traefik's grouping of IPv6 addresses works only from the connection's
+address, never from a header.
+
 ### Checking it from outside
 
 ```sh
@@ -8610,6 +8755,11 @@ another origin; 160 requests at once from one address meeting Traefik's
 refused by Cloudflare or meeting the 429 again; another
 host refused; a game connection open for ten minutes, past Cloudflare's
 100-second idle limit and Traefik's 60-second read timeout.
+
+Its sailors cannot pass production's human check: Cloudflare refuses the
+test token outside its test keys, and supports no automated browser. Switch
+the check off for the run and on again after (`keel admin humancheck off`,
+then `on`); with it on, the checks that make a sailor fail saying so.
 
 ### When something outside is down
 

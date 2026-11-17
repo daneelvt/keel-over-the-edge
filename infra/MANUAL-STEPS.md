@@ -409,6 +409,7 @@ Check:
      | Account | Workers KV Storage | Edit |
      | Zone | Workers Routes | Edit |
      | Zone | Single Redirect | Edit |
+     | Account | Turnstile | Edit |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
      zone, `keelovertheedge.com`.
@@ -430,6 +431,10 @@ Check:
    and its custom domain at the apex; and the redirects (www. to the apex,
    the apex's `/play` to the game). A token made before them is **edited** to add them (Account API
    Tokens → `accounts` → Edit): its value stays the same.
+
+   The last, Turnstile, makes the human check's widget for new sailors
+   (`infra/tofu/newsailors.tf`); a token made before it is edited the same
+   way.
 3. Cloudflare shows the token once. In `keel-accounts`, Production,
    `accounts`, **Add Secret** `CLOUDFLARE_API_TOKEN`.
 4. On the zone's **Overview**, copy the **Account ID** and **Zone ID** as

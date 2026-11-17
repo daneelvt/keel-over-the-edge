@@ -85,8 +85,10 @@ The tailnet policy is written from `infra/tailnet/policy.hujson` by the
       infra/MANUAL-STEPS.md section 11's check, and nothing else;
       `keel-cluster`: `/keel/DB_PASSWORD`, `/keel/DB_READER_PASSWORD`,
       `/keel/DB_GRAFANA_PASSWORD`, `/monitoring/DB_GRAFANA_PASSWORD`,
-      `/monitoring/GRAFANA_ADMIN_PASSWORD`, `/cloudflared/TUNNEL_TOKEN` and
-      `/keel/DB_AGREEMENT_PASSWORD`, all written by `accounts`; and in
+      `/monitoring/GRAFANA_ADMIN_PASSWORD`, `/cloudflared/TUNNEL_TOKEN`,
+      `/keel/DB_AGREEMENT_PASSWORD`, `/keel/ADDRESS_KEY`,
+      `/keel/TURNSTILE_SITEKEY` and `/keel/TURNSTILE_SECRET`, all written by
+      `accounts`; and in
       `/keel-agreement/`, put there by hand, `GITHUB_APP_PRIVATE_KEY`,
       `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_SECRET` and
       `CONTACT_EMAIL` (infra/MANUAL-STEPS.md section 15); nothing else
@@ -104,6 +106,9 @@ change says they are as the repository says. The rest is checked here.
       `keelovertheedge.com`; no token under **My Profile → API Tokens**
 - [ ] **Zero Trust → Networks → Tunnels**: `keel-prod` alone, Healthy,
       with two connectors
+- [ ] **Turnstile**: one widget, `play`, for `play.keelovertheedge.com`
+      alone, mode Managed, no pre-clearance; made by `accounts`, so a
+      second `accounts plan` shows no change to it
 - [ ] The zone: DNSSEC **Active** (`dig DS keelovertheedge.com +short`
       answers); no record but those `accounts` made
 - [ ] **Members**: the owner alone
