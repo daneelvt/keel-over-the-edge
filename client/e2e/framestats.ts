@@ -155,7 +155,7 @@ export function merge(parts: readonly Results[]): Results {
     if (r.meta.date < out.meta.date) {
       out.meta.date = r.meta.date;
     }
-    for (const k of ['ladder', 'gpu', 'parts', 'cpu', 'counts'] as const) {
+    for (const k of ['ladder', 'gpu', 'parts', 'layers', 'cpu', 'counts'] as const) {
       if (r[k] !== undefined) {
         (out as unknown as Record<string, unknown>)[k] = r[k];
       }
