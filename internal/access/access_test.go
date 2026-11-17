@@ -91,7 +91,7 @@ func sign(t *testing.T, k *rsa.PrivateKey, kid string, claims map[string]any) st
 	return in + "." + b64(sig)
 }
 
-const aud = "4714c1358e65fe4b408ad6d432a5f878f08194bdb4752441fd56faefa9b2b6f2"
+const aud = "testaudience"
 
 // TestCheck: a token Access signed for the application passes; a wrong
 // audience, a wrong issuer, an expired token, one not yet valid, one
