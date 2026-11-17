@@ -124,7 +124,7 @@ import {
   seaMaterial,
 } from '../render/materials';
 import { prizeCode } from '../render/prizes';
-import { rungName, TIERS } from '../render/quality';
+import { pixelRatioOf, rungName, TIERS } from '../render/quality';
 import { type CrewMove, moveAt } from '../render/sailors/crewrules';
 import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { pendantsLoaded } from '../render/sailors/pendant';
@@ -1458,6 +1458,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       game.helm.target = 0;
       game.sheet.target = 0.5;
       world.windowMs = null;
+      world.screenShort = null;
       if (world.quality !== null) {
         world.quality.enabled = false;
       }
@@ -3732,8 +3733,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         q.wait = wait;
       }
     },
-    /** Makes every drawn frame take at least ms of the main thread's time; 0 stops. */
-    slowFrames(ms: number): void {
+    /**
+     * Makes every drawn frame take at least ms of the main thread's time; 0
+     * stops. With byPixels, ms on the top rung of the ladder, and on a lower
+     * one less by its share of the top's pixels: a device whose GPU can shade
+     * only so many pixels a second, as a laptop's built-in graphics.
+     */
+    slowFrames(ms: number, byPixels = false): void {
       const prev = world.onFrame as ((() => void) & { base?: (() => void) | null }) | null;
       // The frame's own callback, under any slowing put on it before.
       const base = prev !== null && 'base' in prev ? (prev.base ?? null) : prev;
@@ -3741,16 +3747,36 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         world.onFrame = base;
         return;
       }
+      const top = world.quality?.ladder[0];
       world.onFrame = Object.assign(
         () => {
           base?.();
-          const until = performance.now() + ms;
+          const share =
+            byPixels && top !== undefined
+              ? (stage.pixelRatio() / pixelRatioOf(world.top, top, world.display())) ** 2
+              : 1;
+          const until = performance.now() + ms * share;
           while (performance.now() < until) {
             // Busy, as a slow phone is.
           }
         },
         { base },
       );
+    },
+    /**
+     * Adaptive quality as on a first visit: nothing remembered, the ladder's
+     * top at the full rate, the first seconds' short windows; on a display
+     * whose shorter side is short CSS pixels, or the screen's (null).
+     */
+    async qualityAfresh(short: number | null = null): Promise<void> {
+      world.screenShort = short;
+      world.windowMs = null;
+      await world.qualityAfresh();
+    },
+    /** The frame cap: the display's rate, the divisor drawn at, and whether adaptive quality halved the rate. */
+    frameCap(): { display: number; divisor: number; interval: number; halved: boolean } {
+      const c = stage.cap;
+      return { display: c.display, divisor: c.divisor, interval: c.interval, halved: c.halved };
     },
     /**
      * The bytes the GPU holds for the look's textures on the rung in use, as

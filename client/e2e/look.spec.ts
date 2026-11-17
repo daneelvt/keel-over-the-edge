@@ -982,7 +982,8 @@ test.describe('shadows', () => {
     const [on, off] = await page.evaluate(() => {
       const k = globalThis.keel;
       const rungs = k.info().rungs;
-      const lit = rungs.findIndex((r) => r.includes('0.7, shadows'));
+      // The last rung with shadows, and the next, alike but for them.
+      const lit = rungs.map((r) => r.includes('shadows')).lastIndexOf(true);
       return [lit, lit + 1];
     });
     const take = async (rung: number, boat: boolean) => {
@@ -1095,6 +1096,105 @@ test.describe('budgets', () => {
 });
 
 test.describe('adaptive quality', () => {
+  test('a slow page settles within ten seconds of drawing, then holds an even rate', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    // On a software GPU, the low tier's ladder: no shaders to change on the way down.
+    await openLook(page, 'sea=fresh', !softwareGPU);
+    // Slowed on the main thread, nothing a rung changes helps: the last rung
+    // at half the rate. Slowed by the pixels drawn, as a GPU that shades only
+    // so many a second: a rung that holds 60. On a software GPU every frame is
+    // slow already, and windows are made to hold a dozen of its frames.
+    const cases = softwareGPU
+      ? [{ ms: 0, byPixels: false, halved: true }]
+      : [
+          { ms: 20, byPixels: false, halved: true },
+          { ms: 40, byPixels: true, halved: false },
+        ];
+    for (const c of cases) {
+      const r = await page.evaluate(
+        async ({ ms, byPixels, software }) => {
+          const k = globalThis.keel;
+          const w = k.world;
+          k.slowFrames(ms, byPixels);
+          // A first visit, on a display of 1,080 lines: the floor at half its pixels.
+          await k.qualityAfresh(1080);
+          if (software) {
+            const times: number[] = [];
+            for (let i = 0; i < 5; i++) {
+              const t0 = performance.now();
+              k.render();
+              await k.show();
+              times.push(performance.now() - t0);
+            }
+            times.sort((a, b) => a - b);
+            k.qualityTiming(Math.max(250, 12 * (times[2] ?? 0)), null);
+          }
+          const drawn: number[] = [];
+          w.onDrawn = () => drawn.push(performance.now());
+          const start = performance.now();
+          k.thaw();
+          // Ten seconds to settle and three to hold; on a software GPU, until the half rate comes.
+          const budget = software ? 90_000 : 13_000;
+          while (performance.now() - start < budget) {
+            await k.frames(5);
+            if (software && k.frameCap().halved) {
+              break;
+            }
+          }
+          w.onDrawn = null;
+          const steps = (w.quality?.log ?? [])
+            .filter((s) => s.at >= start)
+            .map((s) => ({ at: s.at - start, from: s.from, to: s.to, why: s.why }));
+          const last = steps.at(-1)?.at ?? 0;
+          // The intervals between frames drawn from half a second after the last step.
+          const intervals: number[] = [];
+          for (let i = 1; i < drawn.length; i++) {
+            if ((drawn[i - 1] as number) - start > last + 500) {
+              intervals.push((drawn[i] as number) - (drawn[i - 1] as number));
+            }
+          }
+          intervals.sort((a, b) => a - b);
+          const cap = k.frameCap();
+          const out = {
+            steps,
+            log: k.qualityLog().slice(-steps.length),
+            rungs: w.quality?.ladder.length ?? 0,
+            p90: intervals[Math.max(0, Math.ceil(0.9 * intervals.length) - 1)] ?? 0,
+            frames: intervals.length,
+            cap,
+          };
+          k.slowFrames(0);
+          k.adapt(false);
+          k.freeze(100);
+          return out;
+        },
+        { ...c, software: softwareGPU },
+      );
+      test.info().annotations.push({
+        type: `slowed ${c.ms} ms${c.byPixels ? ' by pixels' : ''}`,
+        description: `${r.log.join('; ')}; p90 ${r.p90.toFixed(1)} ms over ${r.frames} frames, cap ${r.cap.interval.toFixed(1)} ms`,
+      });
+      const downs = r.steps.filter((s) => s.why === 'slow');
+      expect(downs.length).toBeGreaterThan(0);
+      // Far too slow: big steps, not a rung at a time.
+      expect(downs.length).toBeLessThan(5);
+      expect(r.cap.halved).toBe(c.halved);
+      if (c.halved) {
+        expect(r.steps.at(-1)?.to).toBe(r.rungs);
+      }
+      if (!softwareGPU) {
+        expect(r.steps.at(-1)?.at ?? 0).toBeLessThan(10_000);
+        expect(r.p90).toBeLessThan(1.15 * r.cap.interval);
+      }
+    }
+    await page.evaluate(() => globalThis.keel.qualityAfresh(null));
+    await page.evaluate(() => globalThis.keel.adapt(false));
+    expect(errors).toEqual([]);
+  });
+
   test('steps down a slow page to the low tier, and up again when it is fast', {
     tag: '@long',
   }, async ({ page }) => {

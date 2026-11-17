@@ -97,6 +97,77 @@ describe('the frame cap', () => {
     expect(followed).toBeLessThan(1000);
   });
 
+  test.each([
+    [60, 30],
+    [120, 30],
+    [90, 30],
+    [144, 28.8],
+  ])('halved, a %d Hz display draws at %d Hz, still every n-th refresh', (hz, rate) => {
+    const cap = new FrameCap();
+    cap.halved = true;
+    const r = run(hz, 10, 60, cap);
+    expect(r.steps).toBe(300);
+    expect(Math.abs(r.drawn - rate * 10)).toBeLessThanOrEqual(3);
+    expect(cap.interval).toBeCloseTo(1000 / rate, 6);
+  });
+
+  test('halves only where that draws less often: not with the menu’s 30, nor at 30 Hz', () => {
+    const cap = new FrameCap();
+    expect(cap.halvable).toBe(true);
+    run(60, 1, 60, cap);
+    expect(cap.halvable).toBe(true);
+    cap.limit = 30;
+    expect(cap.halvable).toBe(false);
+    const slow = run(30, 1).cap;
+    expect(slow.halvable).toBe(false);
+    // Halved with the menu's 30 already chosen, nothing changes.
+    const both = new FrameCap();
+    both.halved = true;
+    expect(Math.abs(run(60, 10, 30, both).drawn - 300)).toBeLessThanOrEqual(3);
+  });
+
+  /**
+   * Animation frames on a 60 Hz display for a page whose drawn frames take
+   * work ms: the next is called for at the first refresh after the work is
+   * done. Returns the intervals between drawn frames once the rate is known.
+   */
+  function slowPage(work: number, halved: boolean): number[] {
+    const cap = new FrameCap();
+    cap.halved = halved;
+    const refresh = 1000 / 60;
+    // The display probed first, as the stage does.
+    cap.probe();
+    let now = 0;
+    let last = -1;
+    const intervals: number[] = [];
+    for (let i = 0; i < 600; i++) {
+      if (cap.tick(now)) {
+        if (last >= 0 && i > 120) {
+          intervals.push(Math.round(now - last));
+        }
+        last = now;
+        now = Math.ceil((now + work) / refresh - 1e-9) * refresh;
+        if (now - last < refresh / 2) {
+          now += refresh;
+        }
+      } else {
+        now += refresh;
+      }
+    }
+    return intervals;
+  }
+
+  test('a frame that takes longer than its refreshes is followed at once, not n frames on', () => {
+    // At the full rate, 20 ms frames show for two refreshes each: an even 30.
+    expect(new Set(slowPage(20, false))).toEqual(new Set([33]));
+    // Halved, the same: drawn at every second refresh, not every third.
+    expect(new Set(slowPage(20, true))).toEqual(new Set([33]));
+    // Fast frames halved: every second refresh.
+    expect(new Set(slowPage(5, true))).toEqual(new Set([33]));
+    // Frames of 40 ms: every third refresh, at either rate.
+    expect(new Set(slowPage(40, true))).toEqual(new Set([50]));
+  });
+
   test('a forced divisor overrides the measured one', () => {
     const cap = new FrameCap();
     cap.forced = 3;
