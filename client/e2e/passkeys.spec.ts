@@ -17,6 +17,7 @@ import {
   aLook,
   answerBorn,
   BORN,
+  checkToken,
   GAME,
   holdPasskeys,
   sailor,
@@ -213,7 +214,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   // Its name is free at once.
   const next = await browser.newContext();
   const begun = await next.request.post('/account/begin', {
-    data: { name: made.name, ...aLook(), born: BORN },
+    data: { name: made.name, ...aLook(), born: BORN, check: await checkToken(next.request) },
   });
   expect(begun.status()).toBe(200);
   await next.close();
@@ -253,10 +254,15 @@ test('Chrome’s own authenticator: a passkey made and used at localhost, forgot
   expect(made[0]?.isResidentCredential).toBe(true);
 
   // Signed out, and in again with it: Chrome's own prompt, its origin
-  // checked against the relying party.
+  // checked against the relying party. The browser has made a sailor, so
+  // the screen welcomes it back, and its key opens the prompt.
   const out = await page.request.post('/logout');
   expect(out.status()).toBe(204);
   await page.reload();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
   await signedIn(page, context);
 
   // Deleted through the routes, the page tells Chrome to forget it.

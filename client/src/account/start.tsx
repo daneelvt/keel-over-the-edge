@@ -14,6 +14,12 @@
 // Set sail, with whether others may watch the voyage: beside the machine
 // sailors for one who has any, alone for one who has none.
 //
+// A browser that has had a sailor (the server's mark, told in the session
+// check's answer) opens on the same panel the other way round: Welcome
+// back, signing in first, and New sailor second, which opens the form.
+// The form runs the human check while the player chooses (humancheck.ts),
+// and Set sail waits for it.
+//
 // The page checks only the name's length; the server applies the rest and
 // says why it refuses, which is shown in words beside the field. A prompt
 // the player closes says nothing and leaves the form as it was. A browser
@@ -24,20 +30,21 @@ import { type JSX, render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { drawLook, type Looks } from '../catalog/looks';
 import { loadRaces, type RacesView } from '../ui/raceslazy';
-import { MAKE_TO_RACE } from '../ui/racewords';
+import { MAKE_TO_RACE, SIGN_IN_TO_RACE } from '../ui/racewords';
 import { UpdateLine } from '../ui/updateline';
 import { useWatch } from '../ui/watchlazy';
-import { type ListLink, MAKE_TO_WATCH } from '../ui/watchwords';
+import { type ListLink, MAKE_TO_WATCH, SIGN_IN_TO_WATCH } from '../ui/watchwords';
 import { BoatChooser } from './boatchooser';
 import { LookChooser } from './chooser';
 import { AgeQuestion, BornFields } from './firstasks';
 import { bornOf, CANT_BE_MADE, youngCookie } from './firstwords';
 import type { BoatCatalog } from './fleet';
+import { NewSailorCheck } from './humancheck';
 import { type InApp, passkeySupport, type Support } from './inapp';
 import { useMachines } from './lazy';
 import { type Voyage, voyage } from './letwatch';
 import type { LookStage } from './lookstage';
-import { checkSession, type Fetch, type Me } from './me';
+import { checkSession, type Fetch, type HumanCheck, type Me } from './me';
 import {
   codeForm,
   makeSailor,
@@ -49,7 +56,14 @@ import {
   useRecoveryCode,
 } from './passkeys';
 import { chosen, Picker, type PickerState, StageFront, shuffled, undone } from './picker';
-import { lengthProblem, MAX_NAME, reasonText, TAKEN_SIGN_IN } from './reasons';
+import {
+  CHECK_FAILED,
+  CHECKING,
+  lengthProblem,
+  MAX_NAME,
+  reasonText,
+  TAKEN_SIGN_IN,
+} from './reasons';
 import { AddPasskey, RecoveredNotice, RecoveryCode, SetSailOrMake } from './recovery';
 import { TakeOut } from './takeout';
 import { YourSailor } from './yoursailor';
@@ -78,6 +92,71 @@ export interface StartProps {
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
+  /** Whether this browser has had a sailor: signing in is offered first. */
+  sailed?: boolean;
+  /** The human check a new sailor passes; none, or null, for none. */
+  check?: HumanCheck | null;
+}
+
+/** The returning browser's panel: its title, and the key that opens the new-sailor form. */
+export const WELCOME_BACK = 'Welcome back';
+export const NEW_HERE = 'New here?';
+export const NEW_SAILOR = 'New sailor';
+
+/** The returning browser's panel: signing in first, the new-sailor form second. */
+export function WelcomeBack({
+  lines,
+  warning,
+  problem,
+  busy,
+  signIn,
+  lost,
+  newSailor,
+}: {
+  /** What a link the page was opened at says, at the panel's head. */
+  lines: JSX.Element | null;
+  /** The browser's own warning about passkeys, if any. */
+  warning: JSX.Element | null;
+  problem: string;
+  busy: boolean;
+  signIn: () => void;
+  lost: () => void;
+  newSailor: () => void;
+}) {
+  return (
+    <form
+      key="welcome"
+      class="start-panel start-welcome"
+      onSubmit={(e) => {
+        e.preventDefault();
+        signIn();
+      }}
+      aria-labelledby="start-title"
+      noValidate
+    >
+      <h1 id="start-title">{WELCOME_BACK}</h1>
+      {lines}
+      {warning}
+      <p id="start-problem" class="start-problem" aria-live="polite">
+        {problem}
+      </p>
+      <button type="submit" class="start-go" disabled={busy}>
+        Sign in with a passkey
+      </button>
+      <p class="start-text start-faint" aria-live="polite">
+        {busy ? 'Choose your passkey.' : 'Your passkey: your phone’s face, fingerprint or PIN.'}
+      </p>
+      <button type="button" class="start-link" onClick={lost}>
+        Lost your passkey? Use your recovery code
+      </button>
+      <div class="start-or">
+        <span>{NEW_HERE}</span>
+        <button type="button" class="start-sign-in" disabled={busy} onClick={newSailor}>
+          {NEW_SAILOR}
+        </button>
+      </div>
+    </form>
+  );
 }
 
 /** Whether a failed ceremony is passed over in silence: the prompt closed, or autofill turned down. */
@@ -112,8 +191,12 @@ export function StartScreen({
   watching = false,
   racing = false,
   races,
+  sailed = false,
+  check = null,
 }: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
+  // A returning browser's panel, until New sailor opens the form.
+  const [welcome, setWelcome] = useState(sailed);
   const [support, setSupport] = useState<Support | null>(null);
   const [anyway, setAnyway] = useState(false);
   const [name, setName] = useState('');
@@ -130,7 +213,12 @@ export function StartScreen({
   const look = pick.look;
   const [problem, setProblem] = useState('');
   const [taken, setTaken] = useState(false);
-  const [busy, setBusy] = useState<'' | 'create' | 'sign-in' | 'code'>('');
+  // Too many new sailors from this connection: signing in offered beside the line.
+  const [often, setOften] = useState(false);
+  const [busy, setBusy] = useState<'' | 'check' | 'create' | 'sign-in' | 'code'>('');
+  // The human check, run while the new-sailor form shows; its widget's slot.
+  const human = useMemo(() => (check === null ? null : new NewSailorCheck(check)), []);
+  const slot = useRef<HTMLDivElement>(null);
   const [code, setCode] = useState('');
   const autofill = useRef<AbortController | null>(null);
 
@@ -215,9 +303,11 @@ export function StartScreen({
 
   const blocked = support?.kind === 'none' || (support?.kind === 'in-app' && !anyway);
   const formShown = view.kind === 'form' && support !== null && !blocked && !young;
+  // The new-sailor form, the check's slot in it; not the returning browser's panel.
+  const making = formShown && !welcome;
   // The picker's stage behind the form while it is shown, with its look;
   // the cover back over the page once it is not.
-  const picking = view.kind === 'form' && !blocked && !young;
+  const picking = view.kind === 'form' && !blocked && !young && !welcome;
   useEffect(() => {
     if (stage !== undefined && picking) {
       stage.show(look);
@@ -230,18 +320,36 @@ export function StartScreen({
   }, [stage, picking]);
   useEffect(() => () => stage?.hide(), [stage]);
   useEffect(() => {
-    if (formShown) {
+    // A returning browser's panel has no name field to offer passkeys on:
+    // its key opens the prompt, which lists them.
+    if (formShown && !welcome) {
       startAutofill();
     }
     return stopAutofill;
-  }, [formShown]);
+  }, [formShown, welcome]);
+  // The check's script loaded, and its widget run, only once the form shows.
+  useEffect(() => {
+    const el = slot.current;
+    if (human === null || !making || el === null) {
+      return;
+    }
+    void human.mount(el);
+    return () => human.unmount();
+  }, [making]);
 
   const failed = (res: Outcome<unknown>) => {
     if (!res.ok && !quiet(res.reason, false)) {
       setProblem(reasonText(res.reason));
       setTaken(res.reason === 'taken');
+      setOften(res.reason === 'often');
     }
     startAutofill();
+  };
+
+  const clearProblem = () => {
+    setProblem('');
+    setTaken(false);
+    setOften(false);
   };
 
   const submit = async (e: Event) => {
@@ -262,10 +370,27 @@ export function StartScreen({
       return;
     }
     stopAutofill();
+    clearProblem();
+    // The check's token, waited for if the widget has not given it yet.
+    let token: string | null = null;
+    if (human !== null) {
+      setBusy('check');
+      token = await human.token();
+      if (token === null) {
+        // The widget failed: its line says so, with Try again.
+        setBusy('');
+        startAutofill();
+        return;
+      }
+    }
     setBusy('create');
-    setProblem('');
-    setTaken(false);
-    const res = await makeSailor(name, look, born, reach);
+    const res = await makeSailor(
+      name,
+      look,
+      born,
+      reach,
+      human === null || token === null ? undefined : { token, answered: () => human.spent() },
+    );
     setBusy('');
     if (res.ok) {
       setView({ kind: 'code', me: res.value.me, code: res.value.recoveryCode });
@@ -282,8 +407,7 @@ export function StartScreen({
     }
     stopAutofill();
     setBusy('sign-in');
-    setProblem('');
-    setTaken(false);
+    clearProblem();
     const res = await signIn(false, undefined, reach);
     setBusy('');
     if (res.ok) {
@@ -461,6 +585,89 @@ export function StartScreen({
     );
   }
 
+  // What a link the page was opened at says, at the head of either panel.
+  const lines =
+    watching || racing ? (
+      <>
+        {watching ? (
+          <p class="start-text start-watching" data-readout="make-to-watch">
+            {welcome ? SIGN_IN_TO_WATCH : MAKE_TO_WATCH}
+          </p>
+        ) : null}
+        {racing ? (
+          <p class="start-text start-watching" data-readout="make-to-race">
+            {welcome ? SIGN_IN_TO_RACE : MAKE_TO_RACE}
+          </p>
+        ) : null}
+      </>
+    ) : null;
+  const warning =
+    support?.kind === 'maybe' ? (
+      <p class="start-warning" role="note">
+        This browser may not be able to make a passkey. If Set sail fails, try your phone’s own
+        browser.
+      </p>
+    ) : null;
+  const field = (
+    <>
+      <label class="start-label" for="start-name">
+        Your sailor’s name
+      </label>
+      <input
+        id="start-name"
+        class="start-name"
+        name="name"
+        type="text"
+        autocomplete="username webauthn"
+        autocapitalize="words"
+        spellcheck={false}
+        enterkeyhint="go"
+        maxLength={MAX_NAME}
+        placeholder={stage === undefined || welcome ? undefined : 'Your sailor’s name'}
+        value={name}
+        aria-invalid={problem !== ''}
+        aria-describedby="start-problem"
+        onInput={(e) => setName(e.currentTarget.value)}
+      />
+    </>
+  );
+  const toRecover = () => {
+    stopAutofill();
+    clearProblem();
+    setView({ kind: 'recover' });
+  };
+
+  if (welcome) {
+    return (
+      <div class="start">
+        <WelcomeBack
+          lines={lines}
+          warning={warning}
+          problem={problem}
+          busy={busy !== ''}
+          signIn={() => void signInNow()}
+          lost={toRecover}
+          newSailor={() => {
+            clearProblem();
+            setWelcome(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  const checkFailed = human?.state.value === 'failed';
+  const signInKey = (
+    <button
+      type="button"
+      class="start-sign-in"
+      disabled={busy !== ''}
+      onClick={() => void signInNow()}
+    >
+      Sign in with a passkey
+    </button>
+  );
+
   return (
     <div class={stage === undefined ? 'start' : 'start picking'}>
       {stage === undefined ? null : <StageFront looks={looks} look={pick.look} stage={stage} />}
@@ -472,41 +679,9 @@ export function StartScreen({
         noValidate
       >
         <h1 id="start-title">Keel Over the Edge</h1>
-        {watching ? (
-          <p class="start-text start-watching" data-readout="make-to-watch">
-            {MAKE_TO_WATCH}
-          </p>
-        ) : null}
-        {racing ? (
-          <p class="start-text start-watching" data-readout="make-to-race">
-            {MAKE_TO_RACE}
-          </p>
-        ) : null}
-        {support?.kind === 'maybe' ? (
-          <p class="start-warning" role="note">
-            This browser may not be able to make a passkey. If Set sail fails, try your phone’s own
-            browser.
-          </p>
-        ) : null}
-        <label class="start-label" for="start-name">
-          Your sailor’s name
-        </label>
-        <input
-          id="start-name"
-          class="start-name"
-          name="name"
-          type="text"
-          autocomplete="username webauthn"
-          autocapitalize="words"
-          spellcheck={false}
-          enterkeyhint="go"
-          maxLength={MAX_NAME}
-          placeholder={stage === undefined ? undefined : 'Your sailor’s name'}
-          value={name}
-          aria-invalid={problem !== ''}
-          aria-describedby="start-problem"
-          onInput={(e) => setName(e.currentTarget.value)}
-        />
+        {lines}
+        {warning}
+        {field}
         <BornFields
           id="start-born"
           month={month}
@@ -517,9 +692,15 @@ export function StartScreen({
           describedBy="start-problem"
         />
         <p id="start-problem" class="start-problem" aria-live="polite">
-          {problem}
+          {checkFailed && problem === '' ? CHECK_FAILED : problem}
           {taken ? ` ${TAKEN_SIGN_IN}` : null}
         </p>
+        {checkFailed && problem === '' ? (
+          <button type="button" class="start-sign-in start-again" onClick={() => human?.retry()}>
+            Try again
+          </button>
+        ) : null}
+        {often ? signInKey : null}
         <Picker
           looks={looks}
           look={pick.look}
@@ -527,6 +708,7 @@ export function StartScreen({
           shuffle={() => setPick(shuffled(looks, pick, random))}
           undo={pick.before === null ? null : () => setPick(undone(pick))}
           figure={stage !== undefined}
+          below={human === null ? null : <div ref={slot} class="start-check" />}
           actions={
             <button type="submit" class="start-go" disabled={busy !== ''}>
               Set sail
@@ -534,32 +716,21 @@ export function StartScreen({
           }
         />
         <p class="start-text start-faint" aria-live="polite">
-          {busy === 'create'
-            ? 'Your phone will ask to save a passkey for Keel Over the Edge.'
-            : busy === 'sign-in'
-              ? 'Choose your passkey.'
-              : 'Your sailor is kept with a passkey: your phone’s face, fingerprint or PIN.'}
+          {busy === 'check'
+            ? CHECKING
+            : busy === 'create'
+              ? 'Your phone will ask to save a passkey for Keel Over the Edge.'
+              : busy === 'sign-in'
+                ? 'Choose your passkey.'
+                : 'Your sailor is kept with a passkey: your phone’s face, fingerprint or PIN.'}
         </p>
-        <div class="start-or">
-          <span>Sailed before?</span>
-          <button
-            type="button"
-            class="start-sign-in"
-            disabled={busy !== ''}
-            onClick={() => void signInNow()}
-          >
-            Sign in with a passkey
-          </button>
-        </div>
-        <button
-          type="button"
-          class="start-link"
-          onClick={() => {
-            stopAutofill();
-            setProblem('');
-            setView({ kind: 'recover' });
-          }}
-        >
+        {often ? null : (
+          <div class="start-or">
+            <span>Sailed before?</span>
+            {signInKey}
+          </div>
+        )}
+        <button type="button" class="start-link" onClick={toRecover}>
           Lost your passkey? Use your recovery code
         </button>
       </form>

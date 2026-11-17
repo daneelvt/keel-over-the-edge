@@ -5,9 +5,11 @@
 // boarding switched on or off for everyone; and chat's switches beside
 // them, as one group: chat for everyone, shipmates' messages, spectators
 // reading machine sailors' chat, each with its state and its key, then the
-// countries where chat is off. Each change is first checked, then
-// confirmed in the card with what it would do and how many live links it
-// ends, so that no stray click cuts every crew off or silences everyone.
+// countries where chat is off; and new sailors' settings, how many one
+// address may make in a day and the human check's switch. Each change is
+// first checked, then confirmed in the card with what it would do and how
+// many live links it ends, so that no stray click cuts every crew off or
+// silences everyone.
 
 import { useEffect, useState } from 'preact/hooks';
 import { control, getJSON, type SailSettings, type SettingsAnswer } from './api';
@@ -69,9 +71,44 @@ export function touchesLinks(body: Partial<SailSettings>): boolean {
   return body.linkLifetime !== undefined || body.links !== undefined;
 }
 
-/** The question a change asks before keel's words, or "": chat off asks plainly. */
+/** The question a change asks before keel's words, or "": chat off and the human check off ask plainly. */
 export function changeQuestion(body: Partial<SailSettings>): string {
-  return body.chat === false ? 'Chat off for everyone? Every line stops at once.' : '';
+  if (body.chat === false) {
+    return 'Chat off for everyone? Every line stops at once.';
+  }
+  if (body.humanCheck === false) {
+    return 'The human check off? New sailors come in unchecked until it is on again.';
+  }
+  return '';
+}
+
+/** The bounds of new sailors one address may make in a day, as keel holds them. */
+export const MIN_NEW_SAILORS = 1;
+export const MAX_NEW_SAILORS = 1000;
+
+/** The number of new sailors typed, or 0 while it is not one keel takes. */
+export function newSailorsOf(typed: string): number {
+  const n = Number(typed);
+  return typed.trim() !== '' && Number.isInteger(n) && n >= MIN_NEW_SAILORS && n <= MAX_NEW_SAILORS
+    ? n
+    : 0;
+}
+
+/** The limit on new sailors in words: "20 a day from one address". */
+export function newSailorsWords(n: number): string {
+  return `${n} a day from one address`;
+}
+
+/** The human check's switch, as the group shows it. */
+export function humanCheckSwitch(s: SailSettings): ChatSwitch {
+  return {
+    field: 'human-check',
+    name: 'Human check on new sailors',
+    on: s.humanCheck,
+    key: s.humanCheck ? 'Switch the check off' : 'Switch the check on',
+    body: { humanCheck: !s.humanCheck },
+    what: `the human check on new sailors switched ${onOff(!s.humanCheck)}`,
+  };
 }
 
 /** One of chat's switches for everyone, as the group shows it: its name, its field, whether it is on, and the change its key asks. */
@@ -131,6 +168,7 @@ export function SailWithSettings({ act }: { act: Act }) {
   const [amount, setAmount] = useState('');
   const [unit, setUnit] = useState<Unit>('hours');
   const [countries, setCountries] = useState('');
+  const [perAddress, setPerAddress] = useState('');
   const [asked, setAsked] = useState<Asked | null>(null);
   const [checking, setChecking] = useState(false);
   const [sending, setSending] = useState(false);
@@ -181,6 +219,9 @@ export function SailWithSettings({ act }: { act: Act }) {
         setAmount('');
         if (c.body.chatCountries !== undefined) {
           setCountries('');
+        }
+        if (c.body.newSailorsPerAddress !== undefined) {
+          setPerAddress('');
         }
       }
       read();
@@ -330,6 +371,65 @@ export function SailWithSettings({ act }: { act: Act }) {
       {!typedCountries.ok ? (
         <p class="small" data-field="chat-countries-why">
           Two letters each, as ISO 3166 has them, comma separated: BR, AU.
+        </p>
+      ) : null}
+      <section class="chat-switches" aria-label="New sailors" data-field="new-sailors">
+        <h3>New sailors</h3>
+        {[humanCheckSwitch(settings)].map((s) => (
+          <div class="switch-row" key={s.field} data-switch={s.field}>
+            <span class="switch-name">{s.name}</span>
+            <span class={`switch-state ${s.on ? 'on' : 'off'}`} data-field={s.field}>
+              {onOff(s.on)}
+            </span>
+            <button
+              type="button"
+              name={s.field}
+              class={s.on ? 'danger' : ''}
+              disabled={checking}
+              onClick={() => check(s.body, s.what)}
+            >
+              {s.key}
+            </button>
+          </div>
+        ))}
+        <div class="switch-row" data-switch="new-sailors-per-address">
+          <span class="switch-name">New sailors</span>
+          <span class="switch-state wide" data-field="new-sailors-per-address">
+            {newSailorsWords(settings.newSailorsPerAddress)}
+          </span>
+        </div>
+      </section>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const n = newSailorsOf(perAddress);
+          check({ newSailorsPerAddress: n }, `new sailors set to ${newSailorsWords(n)}`);
+        }}
+      >
+        <input
+          type="number"
+          name="new-sailors-per-address"
+          min={MIN_NEW_SAILORS}
+          max={MAX_NEW_SAILORS}
+          step={1}
+          aria-label="New sailors one address may make in a day"
+          value={perAddress}
+          onInput={(e) => {
+            setPerAddress(e.currentTarget.value);
+            setAsked(null);
+          }}
+        />
+        <button
+          type="submit"
+          name="set-new-sailors-per-address"
+          disabled={newSailorsOf(perAddress) === 0 || checking}
+        >
+          Set new sailors a day
+        </button>
+      </form>
+      {perAddress.trim() !== '' && newSailorsOf(perAddress) === 0 ? (
+        <p class="small" data-field="new-sailors-why">
+          From 1 to 1000 a day.
         </p>
       ) : null}
       {why !== '' ? <p class="small error">{why}</p> : null}

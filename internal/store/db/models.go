@@ -277,6 +277,11 @@ type Mute struct {
 	MadeAt    time.Time
 }
 
+type NewSailorFrom struct {
+	Key    []byte
+	MadeAt time.Time
+}
+
 type NewsItem struct {
 	WorldID      pgtype.UUID
 	ID           pgtype.UUID
@@ -579,24 +584,26 @@ type Session struct {
 }
 
 type Setting struct {
-	One              bool
-	GrantLifetime    pgtype.Interval
-	LinkLifetime     pgtype.Interval
-	Links            bool
-	Boarding         bool
-	Chat             bool
-	ShipmateMessages bool
-	ChatCountries    []string
-	SpectatorChat    bool
-	LogFrom          time.Time
-	RaceAhead        int16
-	RaceDaily        int16
-	RaceMade         int16
-	RaceOwned        int16
-	RaceCutoff       pgtype.Interval
-	HarbourEvery     int16
-	HarbourBoats     []string
-	GreenhornUs      int16
+	One                  bool
+	GrantLifetime        pgtype.Interval
+	LinkLifetime         pgtype.Interval
+	Links                bool
+	Boarding             bool
+	Chat                 bool
+	ShipmateMessages     bool
+	ChatCountries        []string
+	SpectatorChat        bool
+	LogFrom              time.Time
+	RaceAhead            int16
+	RaceDaily            int16
+	RaceMade             int16
+	RaceOwned            int16
+	RaceCutoff           pgtype.Interval
+	HarbourEvery         int16
+	HarbourBoats         []string
+	GreenhornUs          int16
+	NewSailorsPerAddress int16
+	HumanCheck           bool
 }
 
 type Shipmate struct {

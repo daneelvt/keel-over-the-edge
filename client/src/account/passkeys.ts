@@ -292,17 +292,34 @@ export interface Made {
 }
 
 /**
+ * The human check's token, sent with the first step, and what to do once
+ * the server has answered it: each token is good for one answer, so a
+ * fresh one is asked for after every answer, whatever it was.
+ */
+export interface CheckToken {
+  token: string;
+  answered: () => void;
+}
+
+/**
  * Makes a sailor: the name, look and when its player was born checked by
- * the server, the passkey made by the browser's prompt, and the account
- * made with it.
+ * the server, with the human check's token where there is a check, the
+ * passkey made by the browser's prompt, and the account made with it.
  */
 export async function makeSailor(
   name: string,
   look: Look,
   born: Born,
   reach: Reach = browserReach(),
+  check?: CheckToken,
 ): Promise<Outcome<Made>> {
-  const begun = await call(reach.fetch, '/account/begin', { name, ...look, born });
+  const begun = await call(reach.fetch, '/account/begin', {
+    name,
+    ...look,
+    born,
+    ...(check === undefined ? {} : { check: check.token }),
+  });
+  check?.answered();
   if (begun.status !== 200 || begun.body === null) {
     return { ok: false, reason: reasonOf(begun) };
   }

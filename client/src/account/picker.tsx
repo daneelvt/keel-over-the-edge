@@ -81,6 +81,8 @@ export interface PickerProps {
   figure?: boolean;
   /** Buttons beside Shuffle: the screen's own, such as Set sail. */
   actions?: ComponentChildren;
+  /** The screen's own, under the look and above its buttons: the human check's slot. */
+  below?: ComponentChildren;
 }
 
 /** Where a swipe began, by pointer: the picker's look goes on by a swipe across it. */
@@ -94,6 +96,7 @@ export function Picker({
   undo,
   figure = false,
   actions,
+  below,
 }: PickerProps) {
   const p = partsOf(looks, look);
   const { name, place } = placeWords(looks, look);
@@ -164,6 +167,7 @@ export function Picker({
         {lookWords(looks, look)}
       </p>
       <p class="picker-note">{PICKER_NOTE}</p>
+      {below}
       <div class="picker-actions">
         <button type="button" class="picker-shuffle" onClick={shuffle}>
           Shuffle

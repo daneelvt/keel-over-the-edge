@@ -10,6 +10,7 @@
 
 import { PREFIX } from '../sw/worker';
 import { browserEnv, installed } from './fullscreen';
+import { scriptURL } from './policy';
 
 declare const __KEEL_SW__: boolean;
 
@@ -46,11 +47,14 @@ function pageEnv(): WorkerEnv {
 }
 
 /**
- * Registers the worker: the one place the page does, so that a policy on
- * script addresses (Trusted Types) has one call to cover.
+ * Registers the worker: the one place the page does, its address made by
+ * the page's Trusted Types policy (policy.ts).
  */
 export function register(): Promise<ServiceWorkerRegistration> {
-  return navigator.serviceWorker.register(WORKER_URL, { scope: '/', updateViaCache: 'none' });
+  return navigator.serviceWorker.register(scriptURL(WORKER_URL), {
+    scope: '/',
+    updateViaCache: 'none',
+  });
 }
 
 /** The parts of the storage manager asked. */

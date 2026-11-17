@@ -119,8 +119,10 @@ resource "cloudflare_ruleset" "firewall" {
   ]
 }
 
-# Accounts are made with no human check yet: a burst of them from one
-# address is stopped at the edge. Signing in is never limited. The free plan's one rate rule: its expression may
+# A burst of new accounts from one address is stopped at the edge, before
+# keel's own limits (a human check on every new sailor, and a count of
+# those made from each address over a day). Signing in is never limited.
+# The free plan's one rate rule: its expression may
 # name the path alone, not the host, so it counts the path on every host:
 # only play. answers it, and the website's /account/begin is a page not
 # found anyway. Counting is per address (and per Cloudflare data

@@ -58,6 +58,7 @@
 // F flies the free camera off the boat and back, Escape brings it back: in
 // the sandbox for anyone, online for an account with the owner's flag.
 
+import './policy';
 import './game.css';
 import { effect, signal } from '@preact/signals';
 import { sailFromQuery } from '../account/comeaboardwords';
@@ -176,6 +177,7 @@ import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
 import { homeScreen } from './homescreen';
 import { lookStage } from './lookstage';
+import { reportViolations } from './policy';
 import { raceSea } from './racesea';
 import { pageStart, Reports, reportErrors, type Stages } from './report';
 import { startWorker, takeOverFirst } from './sw';
@@ -825,9 +827,11 @@ async function start(): Promise<void> {
     world.start(),
     loadPhysics(fetch(wasmUrl)),
     resolveSailor({
-      start: () =>
+      start: ({ sailed, check }) =>
         usable(
           showStartScreen(document.body, {
+            sailed,
+            check,
             looks: catalog,
             boats: catalog,
             ...(stage === undefined ? {} : { stage }),
@@ -1709,6 +1713,7 @@ function connect(online: Online): void {
 // first moment; and Chrome's offer to install, should it come.
 const reports = new Reports();
 reportErrors(reports);
+reportViolations((v) => reports.policy(v));
 const fetched = watchFetched();
 homeScreen();
 

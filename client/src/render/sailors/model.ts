@@ -8,7 +8,8 @@
 // uses to carry it: it is never read as occlusion).
 //
 // The atlas and mask are KTX2 (Basis Universal), transcoded in a worker to
-// what the GPU offers; the transcoder loads with the first sailor.
+// what the GPU offers (started from a file of the page's own:
+// transcoder.ts); the transcoder loads with the first sailor.
 //
 // Where a pose seats the figure in the dinghy is in the files too, as named
 // empty nodes: `place` in the far level's, for the pose it is made in, and
@@ -39,6 +40,7 @@ import type { Cockade } from '../../catalog/types.gen';
 import { type CockadePlace, cockadeColours, cockadeCoords, cockadePlace } from './cockade';
 import type { SailorColours } from './material';
 import { sailorMaterial } from './material';
+import { type Transcoding, transcodeFromFile } from './transcoder';
 
 /** The winner's cockade's colours, linear. */
 const COCKADE_COLOURS = cockadeColours(catalog.world.committee.prizes.cockade);
@@ -93,6 +95,8 @@ function ktx2For(renderer: WebGPURenderer): KTX2Loader {
     // Vite gives the transcoder's files names of its own.
     manager.setURLModifier((url) => TRANSCODER[url] ?? url);
     ktx2 = new KTX2Loader(manager).setTranscoderPath(TRANSCODER_PATH);
+    // Its workers from a file of the page's own, not a blob (transcoder.ts).
+    transcodeFromFile(ktx2 as unknown as Transcoding);
   }
   if (ktx2Renderer !== renderer) {
     ktx2.detectSupport(renderer);

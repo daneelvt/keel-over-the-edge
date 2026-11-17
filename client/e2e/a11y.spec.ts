@@ -85,6 +85,19 @@ test('the start screen has no serious finding', async ({ page }) => {
   expect(await findings(page, 'the start screen')).toEqual([]);
 });
 
+test('the start screen of a browser that has had a sailor has no serious finding', async ({
+  context,
+  page,
+}) => {
+  await sailor(context, 'Back');
+  expect((await context.request.post('/logout')).status()).toBe(204);
+  await page.goto(GAME);
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({
+    timeout: 30_000,
+  });
+  expect(await findings(page, 'the start screen, welcomed back')).toEqual([]);
+});
+
 test('at sea, the screen, the menu, the question before going home, the log and the news have no serious finding', async ({
   context,
   page,

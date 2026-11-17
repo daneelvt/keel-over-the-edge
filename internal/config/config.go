@@ -62,6 +62,10 @@ type Config struct {
 	// listener then serves; it must hold index.html. Unset, another server
 	// serves the page, as Vite does in development.
 	ClientDir string
+	// PolicyReport sends the pages' Content Security Policy as a report
+	// only (KEEL_PAGE_POLICY=report): the browser says what it would
+	// refuse, and refuses nothing. Unset, or enforce, it is enforced.
+	PolicyReport bool
 	// BoatLimit is the most boats the world holds at once; beyond it,
 	// players wait in a queue.
 	BoatLimit int
@@ -107,6 +111,9 @@ type Config struct {
 	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
 	// as pgx reads them. It holds a password: it is never logged.
 	DatabaseURL string
+	// NewSailors is how new sailors are let in: their addresses' key and
+	// the human check (newsailors.go). Its String leaves its secrets out.
+	NewSailors NewSailors
 }
 
 // String leaves the database's URL out, so a Config can be logged.
@@ -343,7 +350,25 @@ func Load(getenv func(string) string) (Config, error) {
 	default:
 		errs = append(errs, fmt.Errorf("KEEL_DEV_COMMANDS: %q is not 0 or 1", v))
 	}
+	ns, nsErrs := loadNewSailors(getenv)
+	c.NewSailors, errs = ns, append(errs, nsErrs...)
+	if err := c.pagePolicy(getenv("KEEL_PAGE_POLICY")); err != nil {
+		errs = append(errs, err)
+	}
 	return c, errors.Join(errs...)
+}
+
+// pagePolicy reads KEEL_PAGE_POLICY: enforce, the default, or report.
+func (c *Config) pagePolicy(v string) error {
+	switch v {
+	case "", "enforce":
+		c.PolicyReport = false
+	case "report":
+		c.PolicyReport = true
+	default:
+		return fmt.Errorf("KEEL_PAGE_POLICY: %q is not enforce or report", v)
+	}
+	return nil
 }
 
 // Access reports whether the website's status is behind Access: both its

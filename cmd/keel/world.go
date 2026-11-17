@@ -102,6 +102,9 @@ type process struct {
 	// owner's hand on them, across worlds.
 	ties    *aboard.Ties
 	reports *review.Service
+	// newSailors are the limits on making a new sailor: the address key
+	// and the human check, made as keel starts.
+	newSailors *api.NewSailors
 	// shipmates is shipmates, across worlds; who is a shipmate is held in
 	// ties.
 	shipmates *shipmates.Service
@@ -463,11 +466,16 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Deck:     h.game,
 		Chat:     chatting{p},
 		Ashore:   h.game,
+
+		NewSailors: p.newSailors,
 	}
 	if p.shipmates != nil {
 		playCfg.Shipmates = p.shipmates
 	}
 	playCfg.Logs = logs
+	// The pages' policies: enforced, or reported only.
+	playCfg.PolicyReport = cfg.PolicyReport
+	playCfg.CheckOrigin = checkOrigin(cfg)
 	playCfg.Races = h.races
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})

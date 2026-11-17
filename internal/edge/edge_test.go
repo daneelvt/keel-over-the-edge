@@ -492,17 +492,30 @@ func TestHeldTenMinutes(t *testing.T) {
 	})
 }
 
+// TestMessageTooBig: a message of 1 KB is read (and these bytes, being no
+// message, refused as such); one byte more closes the connection as too
+// big, counted.
 func TestMessageTooBig(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
 		token, _ := s.Sailor("Ann")
-		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
-		if err != nil {
-			t.Fatal(err)
+		if edge.DefaultLimits.ReadLimit != 1024 {
+			t.Fatalf("the read limit is %d bytes", edge.DefaultLimits.ReadLimit)
 		}
-		ws.Write(t.Context(), websocket.MessageBinary, make([]byte, 2000))
-		if code := closedWith(t, ws); code != websocket.StatusMessageTooBig {
-			t.Fatalf("closed with %d", code)
+		for _, c := range []struct {
+			size int64
+			want websocket.StatusCode
+		}{{edge.DefaultLimits.ReadLimit, websocket.StatusUnsupportedData}, {edge.DefaultLimits.ReadLimit + 1, websocket.StatusMessageTooBig}} {
+			ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+			if err != nil {
+				t.Fatal(err)
+			}
+			msg := make([]byte, c.size)
+			msg[0] = 9 // no kind of message
+			ws.Write(t.Context(), websocket.MessageBinary, msg)
+			if code := closedWith(t, ws); code != c.want {
+				t.Fatalf("%d bytes: closed with %d", c.size, code)
+			}
 		}
 		synctest.Wait()
 		if n := count(t, s, "closes", "1009"); n != 1 {

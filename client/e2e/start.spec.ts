@@ -9,6 +9,12 @@
 // sailor kept across a reload, where its Set sail shows that voyage's
 // choice. The page draws nothing (?draw=off): a form is the test.
 //
+// The human check: its script loaded only with the new-sailor form, its
+// token sent with Set sail and a fresh one asked for after every answer,
+// against tools/e2e's stand-in for Cloudflare Turnstile; the server's
+// refusals and the widget's own failure in words. And a browser that has
+// had a sailor: signing in first, New sailor second, a link's line kept.
+//
 // And the way to sea: the page's cover over everything from its first
 // frame, the start screen on it, Set sail answered at once, and the screen
 // at sea seen only once the cover has gone, with the world's sky, the
@@ -376,4 +382,203 @@ test('the cover from the first frame until the world is ready, then the world re
   expect(r?.waits[0]?.waiting).toBe('boat');
   expect(r?.waits[r.waits.length - 1]?.waiting).toBe('ready');
   expect(await page.evaluate(() => globalThis.keel.covered())).toBe(false);
+});
+
+/** The human check's requests: its script, and each token its widget asks for. */
+function checkRequests(page: Page): { script: number; tokens: number } {
+  const seen = { script: 0, tokens: 0 };
+  page.on('request', (r) => {
+    const path = new URL(r.url()).pathname;
+    if (path === '/turnstile/api.js') {
+      seen.script++;
+    } else if (path === '/turnstile/issue') {
+      seen.tokens++;
+    }
+  });
+  return seen;
+}
+
+test('the human check: run with the form, its token sent with Set sail, a fresh one after every answer', async ({
+  page,
+  browser,
+}) => {
+  const seen = checkRequests(page);
+  const sent: { check?: string }[] = [];
+  page.on('request', (r) => {
+    if (r.url().endsWith('/account/begin')) {
+      sent.push(r.postDataJSON() as { check?: string });
+    }
+  });
+  await openStart(page);
+  // Loaded once, rendered into its slot under the look, and run at once.
+  await expect(page.locator('.start-check .turnstile-stand-in')).toHaveCount(1);
+  await expect.poll(() => seen.tokens).toBe(1);
+  expect(seen.script).toBe(1);
+
+  // A name taken: refused after the check, which spent its token.
+  const other = await browser.newContext();
+  const taken = (await sailor(other, 'Checked')).name;
+  await other.close();
+  await makeAs(page, taken);
+  await expect(page.locator('#start-problem')).toHaveText(/is taken/);
+  await expect.poll(() => seen.tokens).toBe(2);
+  // Then a name that will do: the fresh token passes.
+  await makeAs(page, freshName('Checked'));
+  await expect(page.getByRole('heading', { name: 'Keep your recovery code' })).toBeVisible({
+    timeout: 30_000,
+  });
+  expect(sent.map((b) => b.check)).toEqual(['XXXX.DUMMY.TOKEN.XXXX', 'XXXX.DUMMY.TOKEN.XXXX']);
+  expect(seen.script).toBe(1);
+
+  // With a session the start screen is not shown, and the check never loads.
+  const again = checkRequests(page);
+  await page.reload();
+  await expect(page.locator('.your-sailor')).toBeVisible({ timeout: 90_000 });
+  expect(again).toEqual({ script: 0, tokens: 0 });
+});
+
+test('too many from here, the check refused or not answering: each in words, the sign-in key beside the first', async ({
+  page,
+}) => {
+  const seen = checkRequests(page);
+  const answers: [number, unknown][] = [
+    [429, { error: 'often' }],
+    [403, { error: 'check' }],
+    [503, { error: 'check-unavailable' }],
+    // Cloudflare's own, a page: the harbour's line.
+    [429, '<!doctype html><title>Too Many Requests</title>'],
+  ];
+  let next = 0;
+  await page.route('**/account/begin', async (route) => {
+    const [status, body] = answers[next++] ?? [500, {}];
+    await (typeof body === 'string'
+      ? route.fulfill({ status, contentType: 'text/html', body })
+      : route.fulfill({ status, json: body, headers: { 'Retry-After': '3600' } }));
+  });
+  await openStart(page);
+  const problem = page.locator('#start-problem');
+  await makeAs(page, freshName('Often'));
+  await expect(problem).toHaveText(
+    'Lots of new sailors have come from this connection today. Sailed before? Sign in with your passkey.',
+  );
+  // The sign-in key straight under the line, the one below the form gone.
+  const beside = page.locator('#start-problem + .start-sign-in');
+  await expect(beside).toHaveText('Sign in with a passkey');
+  await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toHaveCount(1);
+  await expect(page.locator('.start-or')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Set sail' }).click();
+  await expect(problem).toHaveText('We couldn’t check this browser. Tap Set sail to try again.');
+  await expect(beside).toHaveCount(0);
+  await expect(page.locator('.start-or')).toBeVisible();
+  await page.getByRole('button', { name: 'Set sail' }).click();
+  await expect(problem).toHaveText('The check isn’t answering just now. Try again in a moment.');
+  await page.getByRole('button', { name: 'Set sail' }).click();
+  await expect(problem).toHaveText('The harbour cannot answer just now. Try again in a moment.');
+  // A token for the form, and a fresh one after each of the four answers.
+  await expect.poll(() => seen.tokens).toBe(5);
+  expect(next).toBe(4);
+});
+
+test('the widget’s own failure: its line and Try again, then the check runs again', async ({
+  page,
+}) => {
+  // The stand-in's widget cannot get its token: its error, as Turnstile's.
+  await page.route('**/turnstile/issue', (route) => route.fulfill({ status: 500, body: 'down' }));
+  await openStart(page);
+  const problem = page.locator('#start-problem');
+  await expect(problem).toHaveText(
+    'We couldn’t check this browser. Try again, or open the game in your usual browser.',
+  );
+  // Set sail sends nothing while it has failed.
+  let begun = 0;
+  page.on('request', (r) => {
+    if (r.url().endsWith('/account/begin')) {
+      begun++;
+    }
+  });
+  await makeAs(page, freshName('Failed'));
+  await expect(problem).toHaveText(/We couldn’t check this browser\. Try again, or open/);
+  expect(begun).toBe(0);
+  await page.unroute('**/turnstile/issue');
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(problem).toHaveText('');
+  await page.getByRole('button', { name: 'Set sail' }).click();
+  await expect(page.getByRole('heading', { name: 'Keep your recovery code' })).toBeVisible({
+    timeout: 30_000,
+  });
+  expect(begun).toBe(1);
+});
+
+test('a browser that has had a sailor opens on signing in; New sailor opens the form and its check', async ({
+  context,
+  page,
+}) => {
+  // A sailor made here, then signed out: the browser keeps its mark.
+  await sailor(context, 'Returning');
+  expect((await context.request.post('/logout')).status()).toBe(204);
+  const mark = (await context.cookies()).find((c) => c.name === '__Host-keel-sailed');
+  expect(mark?.httpOnly).toBe(true);
+
+  const seen = checkRequests(page);
+  let autofills = 0;
+  page.on('request', (r) => {
+    if (r.url().endsWith('/signin/begin?mediation=conditional')) {
+      autofills++;
+    }
+  });
+  await page.goto(GAME);
+  const panel = page.locator('.start-panel');
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({
+    timeout: 30_000,
+  });
+  // No name to type: the key alone opens the passkey prompt.
+  await expect(page.getByLabel('Your sailor’s name')).toHaveCount(0);
+  expect(autofills).toBe(0);
+  // Signing in first, the recovery code, and New sailor second; nothing of the form.
+  expect(await panel.getByRole('button').allTextContents()).toEqual([
+    'Sign in with a passkey',
+    'Lost your passkey? Use your recovery code',
+    'New sailor',
+  ]);
+  await expect(panel.locator('.start-go')).toHaveText('Sign in with a passkey');
+  await expect(page.getByRole('group', { name: 'When were you born?' })).toHaveCount(0);
+  await expect(page.locator('.start-check')).toHaveCount(0);
+  expect(seen.script).toBe(0);
+
+  // New sailor: today's form, and the check loaded with it.
+  await page.getByRole('button', { name: 'New sailor' }).click();
+  await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'When were you born?' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Set sail' })).toBeVisible();
+  await expect(page.locator('.start-check .turnstile-stand-in')).toHaveCount(1);
+  await expect.poll(() => seen.script).toBe(1);
+  await expect.poll(() => seen.tokens).toBe(1);
+  await makeAs(page, freshName('Second'));
+  await expect(page.getByRole('heading', { name: 'Keep your recovery code' })).toBeVisible({
+    timeout: 30_000,
+  });
+});
+
+test('a link opened by a browser that has had a sailor keeps its line above signing in', async ({
+  context,
+  page,
+}) => {
+  await sailor(context, 'Linked');
+  expect((await context.request.post('/logout')).status()).toBe(204);
+  for (const [query, words] of [
+    ['w=k3x7q2mbwa', 'Sign in, and you will be watching.'],
+    ['r=abcdefghij', 'Sign in, and you can enter the race.'],
+  ] as const) {
+    await page.goto(`${GAME}&${query}`);
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({
+      timeout: 30_000,
+    });
+    const line = page.locator('.start-watching');
+    await expect(line).toHaveText(words);
+    const lineBox = await line.boundingBox();
+    const keyBox = await page.locator('.start-go').boundingBox();
+    expect(lineBox?.y ?? 0).toBeLessThan(keyBox?.y ?? 0);
+  }
 });

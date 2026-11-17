@@ -362,6 +362,9 @@ export const WATCH_LATER = 'You can watch it from the start.';
 /** On the start screen, to a visitor who came by a race's link. */
 export const MAKE_TO_RACE = 'Make a sailor, and you can enter the race.';
 
+/** The same, to a browser that has had a sailor, shown signing in first. */
+export const SIGN_IN_TO_RACE = 'Sign in, and you can enter the race.';
+
 /** The keys of races ashore. */
 export const MAKE_A_RACE = 'Make a race';
 export const MAKE_IT = 'Make it';

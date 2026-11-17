@@ -8,7 +8,7 @@
 // terrain made from seed 1. Developer commands are on (POST
 // /debug/wind and /debug/weather on keel's internal listener).
 //
-//	go run ./tools/e2e [-lag 200ms,2%] [-limit N] [-sailors N] [-client dir [-rule=false]] [-land]
+//	go run ./tools/e2e [-lag 200ms,2%] [-limit N] [-sailors N] [-client dir [-rule=false]] [-land] [-check=false]
 //	go run ./tools/e2e -tls dir      write a throwaway certificate for localhost into dir, and exit
 //
 // Beside keel it runs the lag proxy (tools/lag) on 127.0.0.1:18090, in
@@ -31,6 +31,13 @@
 // starts keel again serving another build, as a deploy does. With -land,
 // keel sails the world's land, as the page's first download fetches the
 // chunks in sight of the start.
+//
+// Every new sailor passes the human check, against a stand-in for
+// Cloudflare Turnstile under /turnstile/ on 127.0.0.1:18088 (turnstile.go),
+// which Vite sends /turnstile/ to, so the script is on the page's own
+// origin either way; -check=false makes keel check no one. One address
+// may make 1000 new sailors a day, the most keel allows, since every test
+// makes its sailors from the loopback address.
 package main
 
 import (
@@ -100,6 +107,7 @@ func run() error {
 	clientDir := flag.String("client", "", "serve the built page from this directory, a path from the repository's root (KEEL_CLIENT_DIR)")
 	land := flag.Bool("land", false, "sail the world's land (KEEL_LAND=on)")
 	rule := flag.Bool("rule", true, "with -client, compress the models as the zone's Compression Rule does; false, as Cloudflare did before it")
+	check := flag.Bool("check", true, "check every new sailor against the stand-in for Cloudflare Turnstile")
 	flag.Parse()
 	if *tlsDir != "" {
 		return writeCert(*tlsDir)
@@ -165,6 +173,9 @@ func run() error {
 	if *limit > 0 {
 		env = append(env, fmt.Sprintf("KEEL_BOAT_LIMIT=%d", *limit))
 	}
+	if *check {
+		env = append(env, turnstileEnv()...)
+	}
 	migrate := exec.CommandContext(ctx, keel, "migrate")
 	migrate.Env, migrate.Stdout, migrate.Stderr = env, os.Stderr, os.Stderr
 	if err := migrate.Run(); err != nil {
@@ -176,17 +187,23 @@ func run() error {
 		return err
 	}
 	go client.Proxy(ctx, ln, playAddr, lag)
+	// The stand-ins for Cloudflare: Turnstile always, and with -client its
+	// edge in front of keel.
+	frontMux := http.NewServeMux()
+	newTurnstile().routes(frontMux)
 	if *clientDir != "" {
-		front := &http.Server{Addr: edgeAddr, Handler: edge(playAddr, *rule)}
-		go front.ListenAndServe()
-		defer front.Close()
+		frontMux.Handle("/", edge(playAddr, *rule))
 	}
+	front := &http.Server{Addr: edgeAddr, Handler: frontMux}
+	go front.ListenAndServe()
+	defer front.Close()
 
 	k := &keelProc{path: keel, env: env, ready: "http://" + internalAddr + "/readyz", wait: readyWait, root: root, served: *clientDir != ""}
 	if err := k.start(); err != nil {
 		return err
 	}
 	go holdWeather(ctx)
+	go everyNewSailor(ctx)
 	control := &http.Server{Addr: controlAddr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/restart" {
 			http.NotFound(w, r)
@@ -293,6 +310,28 @@ func holdWeather(ctx context.Context) {
 					res.Body.Close()
 					fmt.Fprintf(os.Stderr, "e2e: the weather held to %s\n", id)
 					return
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// everyNewSailor lets one address make as many new sailors a day as keel
+// allows, once keel is ready: every test's sailors come from the loopback
+// address. It is kept in the database, so it holds across a restart.
+func everyNewSailor(ctx context.Context) {
+	for ctx.Err() == nil {
+		if res, err := http.Get("http://" + internalAddr + "/readyz"); err == nil {
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				res, err := http.Post("http://"+internalAddr+"/owner/api/settings", "application/json",
+					strings.NewReader(`{"newSailorsPerAddress":1000}`))
+				if err == nil {
+					res.Body.Close()
+					if res.StatusCode == http.StatusOK {
+						return
+					}
 				}
 			}
 		}

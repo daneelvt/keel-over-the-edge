@@ -156,7 +156,7 @@ credentials.
 | `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read, then the website deployed (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
-| `security.yaml` | Weekly | govulncheck and npm signatures on `main` | |
+| `security.yaml` | Weekly, and by hand | govulncheck and npm signatures on `main`; every fuzz target in the module for a minute each, a failing input kept as an artifact (see [What protects the game](#what-protects-the-game)) | `go test -run '^$' -fuzz '^FuzzBegin$' -fuzztime 60s ./internal/api` |
 
 Every workflow pins its actions to full commit hashes; the repository refuses
 any other. Each multi-job workflow a pull request runs ends in one job named
@@ -4560,6 +4560,7 @@ of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
 `settings`, `links on|off`, `boarding on|off`, `linklife 24h`, `chat
 on|off`, `shipmates on|off`, `spectators on|off`, `countries BR,AU` (`""` clears them),
+`newsailors N`, `humancheck on|off`,
 `reports`, `report ID` and `act ID ACTION` (see [Reports](#reports)); text,
 or `-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
 `lifetime`, `links off`, `linklife`, `chat off` and `act` only say what
@@ -4596,6 +4597,16 @@ none). Chat off for everyone silences spectators too. The settings'
 routes take `"chat"`, `"shipmateMessages"`, `"spectatorChat"` and
 `"chatCountries"` too; each change is recorded, then every game
 connection is told how chat stands for it.
+
+**New sailors' settings** are a group of their own on the same card, New
+sailors: the human check on or off (`human_check`, on to start; off is
+asked once, "The human check off? New sailors come in unchecked until it
+is on again"), and how many new sailors one address may make in 24 hours
+(`new_sailors_per_address`, 20 to start, 1 to 1000). The routes take
+`"humanCheck"` and `"newSailorsPerAddress"`; `keel admin humancheck
+on|off` and `newsailors N` the same. Each change is recorded
+(`human-check`, `new-sailors`) and takes effect at the next begin; see
+[New sailors](#new-sailors-the-count-and-the-human-check).
 
 ### Reports
 
@@ -5462,6 +5473,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
+| `KEEL_PAGE_POLICY` | `enforce` | `enforce`: the pages' Content Security Policy refuses what it does not allow; `report`: sent as `Content-Security-Policy-Report-Only`, refusing nothing (see [The page's policy](#the-pages-policy)). Production's overlay sets `report` until a week of reports leaves nothing unexplained |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it. Machine sailors sail at most half of them, with half of that kept for them |
 | `KEEL_SPECTATOR_LIMIT` | 1000 | The most players watching boats at once, from 0 to 100,000; beyond it they wait in a queue of their own of up to 4,096. A priority account, an owner watching their own machine sailor and a player waiting for a boat never wait (see [Watching a boat](#watching-a-boat)) |
 | `KEEL_CREW_LIMIT` | 1000 | The most players aboard boats not their own at once, from 1 to 100,000: each is a connection encoded as a spectator's is. A knock let aboard past it is refused (see [Sailing together](#sailing-together)) |
@@ -5475,6 +5487,10 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_ACCESS_TEAM` | none | The Cloudflare Access team's domain the website's status is behind, as `keel.cloudflareaccess.com`. With `KEEL_ACCESS_AUD`, `GET /api/status` answers only requests Access signed for its application; with either unset it is not served at all (see [`/api/status`](#apistatus)). Production's come from Infisical, written there by OpenTofu |
 | `KEEL_ACCESS_AUD` | none | The Access application's audience tag |
 | `KEEL_STATUS_BOATS` | 12 | The most boats the website's map shows, from 0 to 100 |
+| `KEEL_ADDRESS_KEY` | made at start | The key new sailors' addresses are kept under, as an HMAC, for the day they count: base64 of 32 bytes or more; unset, one is made at each start and the counts start again (see [New sailors](#new-sailors-the-count-and-the-human-check)) |
+| `KEEL_TURNSTILE_SITEKEY`, `KEEL_TURNSTILE_SECRET` | none | The Turnstile widget's site key and secret, both or neither: with them every new sailor passes the human check; with one alone keel does not start |
+| `KEEL_TURNSTILE_VERIFY_URL` | Cloudflare's | Turnstile's `siteverify`: https, or http on a loopback address for a test's stand-in |
+| `KEEL_TURNSTILE_SCRIPT` | Cloudflare's, `?render=explicit` | The widget's script the page loads: https, or a path on the page's origin |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…`, `?front`, `?system=…&in=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
@@ -5560,6 +5576,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_db_query_duration_seconds{query}`, `keel_db_query_errors_total{query}` | Each query's time and failures, by its sqlc name (`other` for the rest) |
 | `keel_db_schema_version` | The newest migration the database has had |
 | `keel_accounts_created_total`, `keel_names_refused_total{reason}` | Accounts made, and new sailors' names refused by reason (`short`, `long`, `characters`, `scripts`, `words`, `taken`) |
+| `keel_human_checks_total{result}`, `keel_new_sailors_refused_total{reason}` | New sailors' human checks by result (`passed`, `refused`, `spent`, `unavailable`, `off`), and new sailors refused before their passkey by reason (`address`, `check`) |
 | `keel_ceremonies_total{kind, result}` | Ceremonies with the browser's passkey prompt: `create`, `signin`, `add`, `confirm`, `approve`; `begun`, `finished`, `refused` (the answer not accepted), `expired`, `again` (its state gone: used, never begun, or another build's), `stopped` (the passkey good, its account stopped) |
 | `keel_signins_total{mediation}` | Sign-ins with a passkey: by the browser's `prompt`, or offered on the name field (`conditional`) |
 | `keel_recovery_used_total`, `keel_accounts_deleted_total{by}`, `keel_clone_warnings_total` | Recovery codes used; accounts deleted, by their `player` or the `owner`; sign-ins whose passkey's count did not go up (logged, never refused) |
@@ -5584,6 +5601,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_client_rtt_seconds`, `keel_client_frame_seconds` | The phones' round trips and 95th percentile frame times, from their pings |
 | `keel_edge_minute_bytes{role,direction}` | Each game connection's bytes in a whole minute at sea, `sailing` or `watching`: `in`, `out`, `fetched` (what its page fetched over HTTP, from its pings) and `all` (the three together); see [The page's reports and data use](#the-pages-reports-and-data-use) |
 | `keel_client_errors_total{build}` | Errors the pages reported, by the build they ran (the first eight builds by name, `other` after) |
+| `keel_client_policy_violations_total{directive}` | What the pages' Content Security Policy refused, or would have as a report, as the pages reported it, by directive (`other` for one keel does not know); see [The page's policy](#the-pages-policy) |
 | `keel_client_startup_seconds{stage,visit}`, `keel_client_startup_bytes{visit}` | The pages' start-up, from the navigation's start to each stage (`shell`, `cover`, `start`, `tap`, `reveal`), and the bytes they fetched before the reveal, by visit: `first`, `return` (from the browser's cache) or `worker` (served by the service worker) |
 | `keel_http_cross_origin_refused_total` | Requests refused as cross-origin |
 | `go_*`, `process_*` | The runtime and the process |
@@ -5614,6 +5632,9 @@ of 8 KB at most, `{build, kind, …}`, with its build as `BUILD` has it
   from the browser's cache, nothing of it over the wire: `return`;
   otherwise `first`), which works with or without a service worker; and
   the tier it draws at.
+- `policy`: what the page's Content Security Policy refused, or would have
+  as a report: `directive`, `blocked`, `source` and `line` (see
+  [The page's policy](#the-pages-policy)).
 
 The route needs a session, as every game route does: the page holds its
 reports in memory (eight at most) until its sailor is known, a returning
@@ -5778,12 +5799,15 @@ and `POST /logout`; removing a passkey, a new recovery code and deleting
 are 403 `confirm` without a passkey confirmed in the last 5 minutes. Nothing
 the API answers is cached. A path with dot segments or repeated slashes is
 404, never redirected. Every request passes, in order: the request ID
-and the access log; the client's address (a place kept: players reach the
-server directly for now); read and write deadlines of 10 s and 30 s,
+and the access log; the client's address, `CF-Connecting-IP` or the
+connection's, never logged (see [New sailors](#new-sailors-the-count-and-the-human-check));
+read and write deadlines of 10 s and 30 s,
 except on routes marked long-lived (none yet); a 16 KB limit on the body;
 Go's `http.CrossOriginProtection`, which refuses a browser's unsafe request
 from another origin (`Sec-Fetch-Site`, or else `Origin` against `Host`);
-the session; and limits on how often a client may ask (a place kept).
+the session; and limits on how often a client may ask, each in its
+route's handler (new sailors from one address, notices, links, the page's
+reports).
 
 ### Accounts and passkeys
 
@@ -5871,8 +5895,26 @@ holds are never kept. A session's last-seen time, and its account's, are
 written at most once an hour. An account is kept until its player deletes
 it.
 
+**The browser's mark.** A second cookie, `__Host-keel-sailed=1`, says this
+browser has had a sailor (`internal/auth/sailed.go`): `Secure`,
+`HttpOnly`, `SameSite=Lax`, for `/`, 400 days. It is set with every new
+session (a sailor made, a sign-in, the recovery code) and set again
+whenever the session cookie is, so it lasts as long; signing out keeps it
+(a signed-out browser still made a sailor). The player's deletion clears
+it, and so does a sign-in answered `unknown-passkey`, the first moment keel
+can tell a browser its account was deleted by the owner. Only keel reads
+it: `GET /api/me`'s 401 says `"sailed"` (below), and the start screen leads
+with signing in. It is set by the server, so no browser shortens it as
+Safari does cookies a script writes (7 days); it is a security cookie,
+used for nothing else. The under-13 answer stays its own cookie,
+`keel-young`.
+
 **The start screen** (`client/src/account`) leads with making a sailor and
-offers signing in beside it. Before anything is asked, it checks the
+offers signing in beside it; a browser with the mark (above) opens on the
+same panel the other way round, "Welcome back" with signing in first
+(no name to type: the key opens the passkey prompt, which lists the
+browser's passkeys; autofill runs only on the new-sailor form's name field)
+and **New sailor** second, which opens the form. A link's line stays at the head of either. Before anything is asked, it checks the
 browser can make a passkey (`inapp.ts`): an app's own browser (Instagram,
 Facebook, TikTok… by the marks in its user agent, kept in that one module)
 is asked to open the game in the phone's browser, with "Try here anyway"; a
@@ -5937,6 +5979,129 @@ The client checks a name's length only, counting as the server does
 is the server's count of a table of names, written by
 `go test ./internal/moderation -run LengthTable -args -update`, and the
 client's tests read it.
+
+### New sailors: the count and the human check
+
+`POST /account/begin` lets a new sailor go on to the passkey prompt only
+past two limits (`internal/api/newsailors.go`), after the cheap refusals
+(the under-13 cookie, a session, the body, the age, the look, the name's
+rules) and before the name is looked up:
+
+1. **The count.** How many sailors were made from the request's address
+   in the last 24 hours, from the table `new_sailor_from`. At the owner's
+   number (20 to start) the answer is 429 `{"error":"often"}` with
+   `Retry-After`, the seconds until the oldest of them leaves the day. A
+   sailor counts when it is made, at `POST /account/finish`, which writes
+   the row in the account's own transaction: a prompt closed costs
+   nothing, and ceremonies begun side by side can make a few more than the
+   number, each passing its own check. Signing in and the recovery code
+   are never limited.
+2. **The human check**, Cloudflare Turnstile, while it is set up and the
+   owner has it on. The body's `check` is the page's token (at most 2,048
+   characters); `internal/humancheck` posts it to Turnstile's `siteverify`
+   with the secret, the address and a fresh idempotency key, within 5 s,
+   sending once more with the same key after a network error or a 5xx. It
+   passes only if Cloudflare says `success`, for the play host, for the
+   action `new-sailor`. No token, a refused one or one used before: 403
+   `{"error":"check"}`. Cloudflare not answering in time: 503
+   `{"error":"check-unavailable"}`, and no new sailor until it answers or
+   the owner switches the check off (failing closed). A token is spent
+   whatever begin answers next, so the page asks for a fresh one each try.
+
+The order keeps every refusal that costs nothing ahead of Cloudflare's
+call: a name refused by its rules, or an address that has made its day's
+sailors, spends no check; a name taken is answered after the check.
+`keel_human_checks_total{result}` counts the checks (`passed`, `refused`,
+`spent`, `unavailable`, and `off` when none is made) and
+`keel_new_sailors_refused_total{reason}` the sailors refused (`address`,
+`check`) beside `keel_accounts_created_total`.
+
+**The address** is the middleware's second step (`internal/api/address.go`):
+`CF-Connecting-IP` when it holds an address, else the connection's own,
+which is the honest answer on the local cluster and in tests; an IPv4
+address carried in IPv6 is the IPv4 address. keel trusts the header because
+only Traefik reaches it and only cloudflared reaches Traefik, and
+Cloudflare replaces one a player sends. An IPv4 address counts alone, an
+IPv6 address by its /56 (`AddressPrefix`), a household's or office's whole
+network; the zone's `pseudo_ipv4` is off, so the header carries the real
+IPv6 address. The address is never logged; the notice form's own limit
+reads it too. Tests set the header to be many addresses.
+
+**The address key.** The table keeps each address only as the HMAC-SHA256
+of its prefix's bytes under `KEEL_ADDRESS_KEY` (base64 of 32 bytes or
+more; production's is 44 letters and digits made by OpenTofu,
+`infra/tofu/newsailors.tf`, kept in Infisical and the pod alone), and a
+time, with no account: a row says only that a sailor was made from
+somewhere, then. Unset, keel makes a key as it starts and warns that the
+counts start again (tools/dev, tests, the local cluster); a malformed one
+stops keel. A new key resets every count, which is harmless. The
+`new-sailors` job deletes the rows a day old every hour; backups keep them
+30 days.
+
+**Its keys** are `KEEL_TURNSTILE_SITEKEY` and `KEEL_TURNSTILE_SECRET`,
+both or neither: neither, no check is made (logged at start: tools/dev and
+the Go tests); one without the other stops keel.
+`KEEL_TURNSTILE_VERIFY_URL` (siteverify's, Cloudflare's by default) and
+`KEEL_TURNSTILE_SCRIPT` (the widget's script the page loads,
+`https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit` by
+default, or a path on the page's origin) point tests at a stand-in.
+Production's widget, `play`, is OpenTofu's (managed mode), its site key and
+secret written to Infisical `/keel/` and brought to keel by the
+ExternalSecret `keel-new-sailors`. The local cluster uses Cloudflare's
+test keys, `1x00000000000000000000AA` and
+`1x0000000000000000000000000000000AA`, which pass the test token
+`XXXX.DUMMY.TOKEN.XXXX` on any host and load the real script; with a test
+secret Cloudflare answers the host `example.com` and no action, which keel
+then expects instead. The Go tools that make sailors (the load bot, the
+smoke checks) send that token. The local cluster has one address for
+everyone, so a load bot run there needs `keel admin newsailors 1000`
+first.
+
+**`GET /api/me` without a session** answers 401 `{"error":"session",
+"sailed", "check"}`: whether the browser has the mark (above), and the
+check a new sailor would pass, `{"siteKey", "script"}`, or `null` when
+none is set up or the owner has it off. The page loads the script only for
+a new sailor's form.
+
+**On the start screen** (`client/src/account/humancheck.ts`), the script
+is added by the page's one script loader, `client/src/boot/scripts.ts`,
+its address made by the `keel` Trusted Types policy ([The page's
+policy](#the-pages-policy)): never for a player with a session, and for a
+browser with the mark only after **New sailor**. The widget is rendered
+into a slot under the look picker (`execution: "execute"`, `appearance:
+"interaction-only"`, `size: "flexible"`, `action: "new-sailor"`,
+`refresh-expired: "auto"`, the page's language) and run at once, so the
+token is usually there before the player taps Set sail; if not, Set sail
+says "Checking…" and waits. The token goes as `check` in the begin's body,
+and the widget is reset and run again after every answer from begin, and
+when a token expires. The widget's own failure, or a browser it cannot run
+in, shows its line with **Try again**; begin's 429, 403 and 503 have their
+lines in `reasons.ts`, the 429's with the sign-in key beside it. With
+`check: null` nothing is loaded and begin goes without a token. The slot
+reaches a little into the panel's padding, as the widget is 300 px wide at
+the least, and Set sail's row stays in view under it.
+
+**In the browser tests**, `tools/e2e` sets keel up with a stand-in for
+Turnstile (`tools/e2e/turnstile.go`), on the page's own origin under
+`/turnstile/`: on `127.0.0.1:18088`, which is the built page's origin, and
+which Vite's dev server sends `/turnstile/` to (`KEEL_TURNSTILE_ADDR`
+moves it). Its `api.js` defines `render`, `execute`, `reset`, `remove`,
+`getResponse`, `isExpired` and `ready`, and gives the token
+`XXXX.DUMMY.TOKEN.XXXX` after asking `POST /turnstile/issue`, which keeps
+the page's host and the widget's action; its `siteverify` passes the token
+once for each given, and refuses it repeated. `POST
+/turnstile/next?answer=refused|spent|unavailable` makes the next check
+answer so. `helpers.checkToken()` gets a token through the routes, as
+`helpers.sailor()` does. `go run ./tools/e2e -check=false` checks no one.
+tools/e2e also sets 1000 new sailors an address a day: every test's
+sailors come from the loopback address. No pull request's test calls
+Cloudflare: it supports automated browsers only with its test keys.
+
+To try the real widget by hand, run keel with the test keys and the
+default script (the local cluster does); `2x00000000000000000000AB` as the
+site key always fails, `3x00000000000000000000FF` always asks the visitor
+to act, and the secret `2x0000000000000000000000000000000AA` refuses every
+token.
 
 ### AI apps and machine sailors
 
@@ -7034,7 +7199,9 @@ the owner, unread, waits under the case as the player comes to sea
 
 **The pages**: the Rules of the sea (`rules.html`) carry chat's rules,
 staying safe (`safety.html`) muting, blocking and reporting, and
-`privacy.html` what chat keeps and for how long. The notice page,
+`privacy.html` what chat keeps and for how long, what the human check and
+the count of new sailors keep, and what the game keeps in the browser. The
+notice page,
 `report.html`, also at `/report` (`internal/api/client.go`), is for anyone,
 signed in or not: its form posts to `/api/notice`. The owner's contact
 address is a marked placeholder on the safety and privacy pages.
@@ -8313,6 +8480,8 @@ go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changi
 | The B2 key that writes the dumps | The owner | `keel-backups` `/keel/B2_DUMPS_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-dumps` | No |
 | The B2 key that reads the backups | The owner | `keel-backups` `/keel-restore/B2_RESTORE_KEY_ID`, `…_KEY` | External Secrets → `keel-restore/keel-b2-read` | No |
 | The local bucket's B2 key | The owner | `keel-backups` `/local/B2_KEY_ID`, `…_KEY`; copied to `.dev/backups.env` | `tools/cluster`, on the owner's Mac | No |
+| The Turnstile widget's secret, and its site key (not secret) | Cloudflare, for OpenTofu | `keel-cluster` `/keel/TURNSTILE_SECRET`, `/keel/TURNSTILE_SITEKEY` | External Secrets → `keel/keel-new-sailors` | Yes, encrypted |
+| The key new sailors' addresses are kept under | OpenTofu, ephemeral | `keel-cluster` `/keel/ADDRESS_KEY` | External Secrets → `keel/keel-new-sailors` | No |
 | The website's Access service token, its ID and secret | Cloudflare, for OpenTofu | OpenTofu's state, as sensitive outputs; the Worker's secrets `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET` | `accounts`' apply, which hands them to `wrangler deploy` on its standard input; the Worker, calling `/api/status` | Yes, encrypted |
 
 The backups' keys are in a project of their own because the `accounts`
@@ -8590,6 +8759,11 @@ writes the header itself on every other. On the local cluster nothing
 writes the header, so every request counts as one address's: the amounts
 there are 2000, 4000 and 4096, for the load bot's hundreds of boats.
 
+New sailors are counted by keel itself, by an IPv6 /56 rather than each
+address ([New sailors](#new-sailors-the-count-and-the-human-check)):
+Traefik's grouping of IPv6 addresses works only from the connection's
+address, never from a header.
+
 ### Checking it from outside
 
 ```sh
@@ -8600,7 +8774,7 @@ go run ./tools/online -page client/dist/index.html      # and the page's bytes a
 
 It changes nothing lasting: the one sailor it makes, with a passkey of its
 own, named `Zz Online …`, it deletes at the end, its game connection open
-(closed then with 4003). It checks: HSTS; the
+(closed then with 4003). It checks: HSTS for six months; the page's policy (enforced or a report) and X-Frame-Options; the
 asset cached at the edge and the page not; nothing injected into the page,
 asked for as a browser asks;
 `/api/version` naming the build `prod` holds; HEAD; a PUT blocked by
@@ -8610,6 +8784,11 @@ another origin; 160 requests at once from one address meeting Traefik's
 refused by Cloudflare or meeting the 429 again; another
 host refused; a game connection open for ten minutes, past Cloudflare's
 100-second idle limit and Traefik's 60-second read timeout.
+
+Its sailors cannot pass production's human check: Cloudflare refuses the
+test token outside its test keys, and supports no automated browser. Switch
+the check off for the run and on again after (`keel admin humancheck off`,
+then `on`); with it on, the checks that make a sailor fail saying so.
 
 ### When something outside is down
 
@@ -9687,8 +9866,9 @@ Its caches:
 **When.** The page registers `/sw.js` once the world is revealed, or after
 20 s on the start screen, whichever comes first, so it never competes with
 the first download; only in a built page, never under Vite, `?test` or
-`?sandbox` (`client/src/boot/sw.ts`, one function, `register()`, for a
-policy on script addresses to cover). Where the game runs installed (from
+`?sandbox` (`client/src/boot/sw.ts`, one function, `register()`, its
+address made by the page's Trusted Types policy: see
+[The page's policy](#the-pages-policy)). Where the game runs installed (from
 its icon), the page asks once for persistent storage
 (`navigator.storage.persist()`), granted there without a question.
 
@@ -9747,6 +9927,126 @@ made with `KEEL_SW=off`: after a navigation no worker and no `keel-`
 caches). By hand: `npx vite build`, then `go run ./tools/e2e -client
 client/dist` and `http://localhost:18088/` in Chrome, DevTools open as
 above.
+
+### The page's policy
+
+Every page the `play.` listener serves by name sends a **Content Security
+Policy** and `X-Frame-Options: DENY` (`internal/api/policy.go`). The
+policies are built when keel reads the page's files at start
+(`api.OpenPage`, `Page.register`): each inline `<style>` (today the
+game's cover, in `index.html`) is allowed by the SHA-256 of its text as the
+build wrote it, so an edit to the cover changes its hash with it. Nothing
+else inline is allowed: no inline script, no `style` attribute, no
+handler. Each page gets one of three:
+
+| Page | Policy |
+|------|--------|
+| The game, `/` (`index.html`) | `default-src 'none'; script-src 'self' 'wasm-unsafe-eval' <check>; worker-src 'self' blob:; connect-src 'self' wss://<play host> blob:; img-src 'self' blob: data:; style-src 'self' 'sha256-<cover>'; font-src 'self'; manifest-src 'self'; frame-src <check>; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; require-trusted-types-for 'script'; trusted-types keel default` |
+| `sailors.html`, `sounds.html`, `dev.html`, `report.html` (and `/report`) | The same without the human check's origin and `frame-src` |
+| `rules.html`, `safety.html`, `privacy.html` (no script) | `default-src 'none'; style-src 'self' <hashes>; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` |
+
+A page is one with script when it holds a `<script>` element. `<play
+host>` is `KEEL_PLAY_ORIGIN`'s host, `ws://` for an `http://` origin
+(tests); `<check>` is the human check's origin (`api.Config.CheckOrigin`),
+left out with no check. `worker-src blob:` is for workers the page makes
+from `blob:`s of its own (the capability probe's); `connect-src blob:` for
+the textures inside the sailors' models; `'wasm-unsafe-eval'` for the
+physics, meshopt's decoder and the Basis transcoder. No `'unsafe-eval'`:
+three.js's `KTX2Loader` builds its transcoder's worker as a `blob:`, which
+would keep the page's policy, and the transcoder (Emscripten's embind)
+makes its functions from strings, so every sailor's texture would fail.
+`client/src/render/sailors/transcoder.ts` has the loader start each worker
+from a file of the page's own instead, `transcoderworker.js`, which runs
+that `blob:` (only a `blob:` of this origin, named after the `#` of its
+address) under no policy, as every worker started from a file of the
+page's is. The approval page (`internal/oauth`), the world page
+(`internal/owner`) and the agreement page (`internal/agreement`) keep
+policies of their own; `Page.Serve`, which serves the first two, sends
+none. The page's other files (assets, icons, `sw.js`) send none either: a
+worker started from a file of its own has no policy, and one started from a
+`blob:` has the page's.
+
+**Trusted Types.** The pages with script enforce Trusted Types: no plain
+string may reach a sink that loads script (a `<script>`'s `src`, `new
+Worker`, the service worker's `register`) or writes HTML
+(`innerHTML` and the rest). `client/src/boot/policy.ts`, imported first by
+every page's entry (`boot/main.ts`, `boot/sailors.ts`, `boot/sounds.ts`,
+`boot/dev.ts`, `pages/report.ts`), makes the two policies the header
+allows:
+
+- `keel`, through `scriptURL(address)`: this origin's `/assets/` and
+  `/sw.js`, the human check's script at
+  `https://challenges.cloudflare.com/turnstile/`, and its stand-in under
+  `/turnstile/` on this origin (tools/e2e's). It throws for anything else.
+  `boot/sw.ts`'s `register()` uses it, and so must any code of the game's
+  that adds a script.
+- `default`, which the browser asks for any plain string reaching a sink,
+  as libraries pass them: a script address of this origin (Vite's
+  workers), a `blob:` this origin made (three.js's transcoder), or the
+  check's path at Cloudflare (its script reloading itself). It refuses
+  every other address, and every string of HTML or script.
+
+A browser without Trusted Types gets plain strings, and the policy's other
+directives still hold. A worker started from a `blob:` keeps the page's
+policy, and what the policy refuses there is heard by the worker, not the
+page: no report reaches keel from it, so a new `blob:` worker is tested
+under the enforced policy (below), never left to the reports. The capability probe (`boot/capabilities.ts`)
+starts an empty worker from a `blob:` of its own, not `data:`, which
+`worker-src` refuses.
+
+**Adding a source.** A new origin, path or kind of address is three
+changes, each tested: the directive in `internal/api/policy.go` (and its
+text in `policy_test.go`), the address in `policy.ts`'s `keelAllows` or
+`defaultAllows` if script loads from it (and `policy.test.ts`), and a run
+of `policy.spec.ts` on the built page. Prefer a file of the page's own
+under `/assets/` to another origin, and never write HTML as a string (the
+Biome rule `build/no-html-sinks.grit` holds that too).
+
+**Report mode.** `KEEL_PAGE_POLICY` is `enforce` (the default: tests, the
+local cluster) or `report`, which sends every policy as
+`Content-Security-Policy-Report-Only`: the browser refuses nothing and
+tells the page what it would have. Production goes out with `report`
+(`infra/cluster/clusters/prod/apps/kustomization.yaml`); once a week of
+reports leaves nothing unexplained, that line is taken out and the policy
+is enforced.
+
+**Reading the violations.** Each page listens for
+`securitypolicyviolation` from its first moment (`policy.ts`) and sends
+each as a page's report of kind `policy` (see
+[The page's reports and data use](#the-pages-reports-and-data-use)): the
+directive, what was refused (an address's origin and path, never its
+query; `data` or `blob` for those; the browser's word for what has no
+address, `inline`, `eval`, `trusted-types-sink`), and the asset and line
+that asked, never the sample the browser quotes. Five a page, each once.
+The game's page holds them until it has a session; the other pages send
+theirs at once, which keel takes only from a browser signed in. keel
+counts them by directive, `keel_client_policy_violations_total{directive}`
+(any directive it does not know as `other`), and logs each at info, `a
+page's policy`, with `page_build`, `directive`, `blocked`, `source` and
+`line`: in production, in Grafana's Explore on VictoriaLogs (see
+[The logs](#the-logs)),
+`kubernetes.pod_namespace:keel msg:"a page's policy" | stats by (directive, blocked, source) count()`. In a browser, DevTools' console
+shows each refusal (or `[Report Only]`) with the code that asked.
+`go run ./tools/online` checks the live page carries its policy, enforced
+or reported, with Trusted Types and `X-Frame-Options: DENY`.
+
+**Testing it.** Go: each page's policy word for word, the hash of the
+cover in `client/index.html` (and `client/dist/index.html`, if built), the
+report mode's header, `X-Frame-Options`, no policy from `Page.Serve` or
+for assets (`internal/api/policy_test.go`); the reports' kind
+(`clientreport_test.go`). Vitest: every address each policy allows and
+refuses, HTML and script refused, the report's fields
+(`client/src/boot/policy.test.ts`). In the browser, the policy can only
+be tested on the built page (Vite's development server injects `<style>`
+tags and sends no policy): `policy.spec.ts` in the `built` project, with
+the policy enforced and a listener that fails the test on any violation,
+makes a sailor on the start screen and sets sail, opens the chart's tabs
+and the menu's race window, sees the service worker register and a string
+of HTML refused; opens the dressing room (sailors in a boat, their
+textures transcoded); and the developer page, the sound room, the notice
+page and the pages without script. By hand: `npx vite build`, then
+`KEEL_PAGE_POLICY=report go run ./tools/e2e -client client/dist` and
+`http://localhost:18088/` with DevTools' console open.
 
 ## Art
 
@@ -10274,6 +10574,126 @@ repository, as infra/MANUAL-STEPS.md says. Its metrics:
 `keel_agreement_webhooks_total{result}`, `keel_agreement_checks_total{result}`,
 `keel_agreement_signatures_total{how}` and
 `keel_agreement_github_errors_total`.
+
+## What protects the game
+
+Every limit on what a player, a machine sailor or an AI app may do, and
+every threat to the game and its machine, with what stops it and what
+checks that it still does. A change that moves a value, or the check that
+holds it, changes its row here too. "Test" is a Go test, or a Vitest or
+Playwright test by its title; "rule" is one of the manifests' rules
+(`tools/internal/manifests`, run on every entry point by `pr.infra` and
+before every release); "online" is a check of `go run ./tools/online`, run
+by hand against production ([Online](#online)); "verify" is a task of
+`infra/ansible/verify.yaml`, run by `machine.yaml` after every apply and by
+`machine-test.yaml`.
+
+### The limits
+
+| Limit | Where | Value | Held by |
+|---|---|---|---|
+| Requests per address | Traefik `per-address-rate`, keyed on `CF-Connecting-IP` (each address alone, IPv6 too) | 50 a second, burst 100 (local cluster 2,000 and 4,000) | `TestLimitsPerAddress`; rule "the game's routes limited per address"; online "one address is limited, and cannot forge CF-Connecting-IP" |
+| Game connections open per address | Traefik `per-address-connections`, on `/ws` | 200 (local cluster 4,096) | the same |
+| New sailors' bursts | Cloudflare's rate rule `accounts` (`infra/tofu/rules.tf`), per address and data centre, counted over 10 s only | 10 `POST /account/begin` in 10 s, blocked 10 s | `tools/accounts -check` (valid OpenTofu) and the owner's plan; nothing calls it |
+| New sailors per address | keel, at `POST /account/begin`, counted at `/account/finish`, by a keyed hash of the IPv4 address or IPv6 /56 | 20 in a rolling 24 hours, a setting on the world page (1–1,000); signing in never counted | `TestNewSailorsPerAddress` (the 21st refused with `Retry-After` and no check spent, another address let in, the owner's number taking effect, a new server still refusing, a day later let in again), `TestSigningInNeverLimited`, `TestNewSailorsFrom`, `TestNewSailorsJob` (rows a day old deleted), `TestAdminNewSailors`, `owner.TestNewSailorSettings`, `TestAddress`, `TestAddressKeyed`, `FuzzAddress` |
+| A human check on every new sailor | keel, at `POST /account/begin`, Cloudflare Turnstile verified by `siteverify` | every new sailor; fails closed; a switch on the world page | `TestHumanCheck` (no token, too long, refused, spent, wrong host, wrong action, Cloudflare down or slow, the switch off with the count still held), `TestBeginsOrder`, `TestMeWithoutSession`; `humancheck.TestAnswers`, `TestRetry`, `TestUnreachable`, `TestSlow`, `FuzzAnswer`; `TestTurnstilePair`; `TestTurnstileStandIn` |
+| New sailors in total | an alert | over 60 an hour warns (`NewSailorsSurge`); the check unavailable more than 3 times in 10 minutes warns (`HumanCheckUnavailable`) | `infra/cluster/monitoring/rules/tests/sailors.yaml` (`TestAlertRules`) |
+| A request's body, and its time | keel's play mux | 16 KB; 10 s to read, 30 s to answer (not on `/ws`) | `TestNewSailorRefusesMalformed` ("too large"), `TestBodyCutAtItsDeadline` |
+| A session before a game connection | the edge | always; an AI account's session refused | `TestNoSessionNoUpgrade`, `TestAIAccountRefused`; online "/ws refuses a request without a session" |
+| One game connection per account | the edge | a new one closes the old with 4001, "You are playing on another device." | `TestTakeover`; `connect.spec.ts` "another device takes the boat, and Take over takes it back" |
+| A game message's size | the edge (`SetReadLimit`) | 1 KB; one byte more closes with 1009 | `TestMessageTooBig` |
+| Game messages' rate | the edge, a token bucket per connection | 60 a second, burst 120; closed (1008) after 120 dropped in 10 s | `TestRate` |
+| Idle and slow connections | the edge | closed after 60 s without a message; a write's deadline 10 s | `TestIdle`, `TestStalledWriteDropped` |
+| Boats in the world | admission | 1,000 until load tests set `KEEL_BOAT_LIMIT`; past it a queue of at most 4,096, its place shown | `TestFull`, `edgetest.TestQueue`; `src/ui/queue.test.ts` (the line, gone when admitted) |
+| Machine sailors' boats | admission | at most half the limit, a quarter kept for them; people first when both wait | `TestAdmissionByKind`, `agentapi.TestMachineSailorsQueue` |
+| Spectators | the edge | 1,000 (`KEEL_SPECTATOR_LIMIT`), a queue of their own of at most 4,096 | `TestSpectatorQueue`, `TestSpectatorLimit` |
+| Priority accounts | admission | admitted at once, past the limit and the half | `TestPriorityNeverWaits`, `TestPriorityWaitsOnlyForASlot` |
+| A chat line's length | moderation, in chat's hub | 200 characters (code points); at most 4 KB of a line read | `TestCheckChatLengths`; `TestChatAboard` (201 refused as long, reaching nobody) |
+| Chat's rate | chat's limiter, per account | one every 2 s, burst 5, 30 a minute; refusals rest the sender | `TestBurstAndRefill`, `TestPerMinute`, `TestRest` |
+| Sailors' and boats' names | moderation | 3 to 20 characters, at most 80 bytes; one script; the word filter | `TestCheckName`, `TestLengthTable`, `TestChatWords` |
+| Notices from outside (the notice form) | keel, per address | 5 an hour | `TestNoticesAnHour` |
+| Sail-with-me links | keel, per account | 10 an hour | `TestLinksOften` |
+| The page's reports | keel, per session | 10 a minute, 8 KB each | `TestClientReports` |
+| A machine sailor's calls | agentapi, two token buckets per sailor | orders 2 a second, burst 5; looks 4 a second, burst 10; refused in the tool's result with the time to wait, never as HTTP 429 (an MCP client would read that as a failed call) | `TestBudgets`, `TestOverBudgetInTheResult` |
+| A machine sailor without calls | agentapi, then the simulation's grace | leaves after 3 minutes and a minute's grace | `TestAMachineSailorSails`, `TestASilentCrewGoesAshore`, `TestGrace` |
+| Machine sailors per owner | keel | one; the owner can raise an account's to 50 | `store.TestMachineCap`, `owner.TestMachineCap`, `TestApprovalRules` |
+| AI apps' registrations | oauth | 120 an hour in all | `TestRegistration` |
+| Client metadata documents | oauth | 30 fetched a minute in all, one at a time per client, cached; 5 KB, 3 s, no redirects, public HTTPS only | `TestDocumentCache`, `TestFetch`, `TestDeniedRanges`, `TestClientIDs` |
+| OAuth's token and revoke routes | Traefik's per-address rate only | 50 a second: an app refreshes every one of its users' tokens from its own servers, so a tighter limit per address would throttle every owner of that app; a stolen refresh token is bounded by rotation with reuse detection | `TestRefresh`, `TestCodeExchange` |
+| The play host's pages | keel | a Content Security Policy with Trusted Types on every page, `X-Frame-Options: DENY`; reported first, then enforced (`KEEL_PAGE_POLICY`) | `TestPagePolicies`, `TestPagePoliciesReported`, `TestCoverHash`, `TestStyleHashes`, `TestClientPolicyReports`; `src/boot/policy.test.ts`; `policy.spec.ts` (every page with the policy enforced, nothing refused); online "the page answers, with HSTS, and is not cached at the edge" |
+| HSTS | Cloudflare (`infra/tofu/zone.tf`) | 180 days, subdomains included, no preload | online "the page answers, with HSTS, and is not cached at the edge" (at least six months) |
+| The browser that made a sailor | keel, the `__Host-keel-sailed` cookie | 400 days, renewed with the session, cleared on deletion and on a sign-in with a passkey no account has | `TestSailedMarker` (set at finish, sign-in and recovery; renewed with the session; kept on sign-out; cleared on deletion and on an unknown passkey) |
+
+Traefik counts each address on its own, IPv6 ones too: its grouping of
+IPv6 addresses works only by the connection's address or
+`X-Forwarded-For`, never by a header such as `CF-Connecting-IP`, and its
+limits are generous enough that a household's addresses do not matter.
+keel's own count of new sailors groups by /56, where it matters.
+
+### The threats
+
+| Threat | What stops it | Checked by |
+|---|---|---|
+| Traffic floods | Cloudflare in front; no inbound web port, the tunnel alone | online "a PUT is blocked at the edge", "another host is not served", "one address is limited…"; verify "Check the firewall drops what is not let in, and lets the tailnet in" |
+| Finding and attacking the machine | its address in no DNS record; no open port: web traffic by the tunnel, administration over Tailscale | verify "Check the firewall drops…"; the tailnet policy (`go run ./tools/tailnet -check`, `TestRepositoryPolicyKeepsItsRules`); `TestCloseOpenSSHOnlyFromTheTailnet`; rule "no address range but the internet" |
+| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants port 22 alone, its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
+| A node port or host port | ServiceLB off; no NodePort service; the forward chain drops new connections from outside | rules "nothing exposed on production's node", "fixed addresses for the forwards alone"; `TestProductionTraefik`; verify "Check the firewall drops…" |
+| Secrets in the repository or GitHub | none kept there: Infisical and Tailscale reached with GitHub's short-lived tokens, External Secrets brings the rest | rules "no Secret in the manifests", "production's Secrets from Infisical", "every Secret a workload needs is made"; `TestNoSecretInInfra`; gitleaks (`pr.secrets`); push protection (`tools/github -check`); `TestPlanGivesTheCredentialsOnlyToTofu`, `TestPlanShowsNoValue` |
+| A stolen GitHub session changing production | production's jobs in the `production` environment, approved by the owner, `main` only; Infisical and Tailscale trust that environment's identity alone | `TestLoadRepositorySettings`, `TestEnvironmentDrift`; `TestPromoteRefuses`. The identities' bindings are set by hand (infra/MANUAL-STEPS.md) |
+| A fork's pull request reaching production | no `pull_request_target`; outside contributors' workflows approved; the release's signer is `release.yaml` on `main` | rule "every source's signature checked"; `TestReleaseIdentity`; `TestRunRefusesAReleaseNotFromMain`; zizmor (`pr.actions`) |
+| CI reaching more than it should | Tailscale tags: CI reaches only its machine's port 22 | the tailnet policy's rules and tests |
+| OpenTofu's state revealing secrets | state and plans encrypted by OpenTofu with a passphrase from Infisical (`backend.tf`); the bucket private and versioned | `tools/accounts -check`; `TestBackups`. The bucket's settings are set by hand |
+| Secrets on disk | k3s encrypts Secrets at rest (secretbox) | verify "Check k3s is ready, encrypts secrets, and keeps its audit log" |
+| Compromised CI pushing a bad image | Flux applies only artifacts signed by `release.yaml` on `main`; images by digest; production moves only on an approved promote; actions pinned by hash; minimal permissions | rules "every source's signature checked", "every image pinned by digest", "nothing fetched at deploy time"; `TestPinnedDigests`, `TestWorkflowsVerifyAsFluxDoes`; verify "Wait for Flux's source, and its first three layers"; zizmor and the repository's pinned-actions setting |
+| Pods attacking each other or the database | NetworkPolicies, default deny in `keel`; the database reached by the game, the operator and the few listed in [What may talk to what](#what-may-talk-to-what) | rules "every namespace fenced for ingress", "no address range but the internet"; `TestClustersKeepTheirRulesTogether` |
+| A container breaking out | Pod Security Admission `restricted` everywhere but the listed exceptions: no root, read-only root filesystem, no capabilities, RuntimeDefault seccomp | rules "every namespace enforces restricted", "keel's Deployment"; verify "Check it refused none" |
+| Account takeover | passkeys only; sessions and recovery codes kept as SHA-256 (256 and 128 random bits: no slow hash or pepper needed); sessions revocable | `TestMakeAnAccount`, `TestSignIn`, `TestTokens`, `TestForgetAccount`, `TestSignOut`, `TestRecoveryCode`, `TestRecovery`, `TestHashTokenRefusesMalformed`; fuzzed (below) |
+| A player's cookie used across sites | `__Host-` cookies on the play host alone, Secure, HttpOnly, SameSite=Lax; the origin checked on the WebSocket upgrade and every state-changing request | `TestSessionCookie`, `TestOrigins`, `TestCrossOrigin`; online "a game connection from another origin is refused…" |
+| An AI token against the game, or a session against MCP | separate hosts; MCP accepts only tokens issued for its exact address and reads no cookie; the game reads no bearer token | `TestDoor`, `TestCodeExchange` and `TestAuthorizeRefusals` ("another resource"); `TestLoadRejects` (the agents' listener apart). That MCP reads no cookie and the game no `Authorization` header is held by the code alone |
+| A rogue AI app tricking an owner | a fresh passkey for every approval (5 minutes); the page shows the host the app returns to; exact redirect match; PKCE; `iss` in every answer; grants revocable at once | `TestApprovalRules`, `TestApprovalPage`, `TestRedirects`, `TestAuthorizeRefusals`, `TestMetadata`, `TestDoor`, `TestRevoke`; `approve/page.test.ts`; `oauth-approve.spec.ts` |
+| Stolen AI tokens | kept as SHA-256; access tokens an hour; refresh tokens rotated, a reuse ending the grant; every grant ending 90 days after approval; the owner stops or revokes from the world page | `TestTokenShape`, `TestCodeExchange`, `TestRefresh`, `TestGrantsEndedBy`, `owner.TestLifetime`, `TestStopAndStart`, `TestEveryDoorRefusesAStoppedAccount`, `TestAStopAtSea` |
+| Requests forged through client metadata documents | public HTTPS addresses only, checked at connect; no redirects; 5 KB and 3 s; the pod's egress policy | `TestClientIDs`, `TestDeniedRanges`, `TestFetch`; fuzzed |
+| Development passkeys or tokens online | no development environment: a local game's passkeys are made for its own host, its tokens for its own issuer and MCP address (`KEEL_PLAY_ORIGIN`) | `TestLoadValid`, `TestLoadRejects` |
+| Cloudflare's bot checks blocking AI apps | Bot Fight Mode and the AI bot rules off; a configuration rule `ai-apps` with no challenge at the MCP address and the token routes | `tools/accounts -check` and the owner's plan; online "a machine sailor's connection token calls handbook at the MCP address…" |
+| Cheating clients | outcomes decided on the server; controls clamped to each boat's range; only what the player could see sent | `TestControlsClamped`, `TestPackClamps`, `TestOrdersOutOfBounds`, `TestModifiedClient`, `TestAreaAndBands`, `TestChunksSecret`; fuzzed |
+| A player's text run as code in another's page | text only ever inserted as text, never markup (the Biome rule `build/no-html-sinks.grit`); names isolated for bidirectional text; the pages' policy with Trusted Types | `npx biome ci`; `chatwords.test.ts` "never markup…", `account.test.ts` "is text inside a <bdi>"; `TestPagePolicies`, `policy.spec.ts` |
+| Spam and abuse | the limits above, at Cloudflare, Traefik and keel; the human check; the filter; mute, block and report | the limits' rows; `TestChatAboard`, `TestBlockAboard`, `TestReportsAct` |
+| A bot farming accounts | the human check, the count per address and the total's alarm | `TestNewSailorsPerAddress`, `TestHumanCheck`; `TestAlertRules` |
+| Backups deleted with a stolen key | keys scoped to their bucket; Object Lock on the backups' buckets; a weekly dump to a second bucket | rules "the object stores", "the database's archive"; `TestBackupsAreProductions`, `TestQuietWindows`; the keys and the lock are set by hand (infra/MANUAL-STEPS.md) |
+| An unpatched machine | daily security updates; Kured's reboots; k3s upgraded from the repository; Renovate for the rest | rule "the k3s upgrade plan"; `TestK3sPin`, `TestRenovateFindsEveryPin`; `machine.yaml`'s `audit` (Lynis, kube-bench) |
+
+### Fuzzing
+
+Every decoder of what a client sends has a fuzz target, its seeds the
+tests' own bodies, run with every test:
+
+- the game connection: `FuzzDecodeClient`, `FuzzApplyEntries`
+  (`internal/protocol`); the page's own of the other boats' views
+  (`client/src/net/view.fuzz.test.ts`);
+- making a sailor and signing in: `FuzzBegin` (the body, the month of
+  birth, the look and the name, in the order begin checks them),
+  `FuzzPasskeyMade` and `FuzzPasskeyUsed` (the browser's answers, as
+  go-webauthn reads them), `FuzzClientReport` (`internal/api`);
+  `FuzzRecoveryCode`, `FuzzSessionCookie` (`internal/auth`);
+- AI apps: `FuzzAuthorize`, `FuzzTokenForm` (the token and revoke
+  forms), `FuzzRegister`, `FuzzRedirect`, `FuzzClientDocument`,
+  `FuzzParseToken` (every token's shape and checksum, the connection
+  token's among them) (`internal/oauth`); `FuzzToolArguments`, every
+  tool's arguments (`internal/agentapi`);
+- the rest: `FuzzParse` (the catalog), `FuzzRead` (the input log),
+  `FuzzCheckName`, `FuzzCheckChat`.
+
+`ci.yaml` fuzzes six of them for 30 s on every pull request (see
+[Checks](#checks)). `security.yaml`'s `fuzz` job fuzzes every one, found
+by `go test -list '^Fuzz' ./...` so a new target joins by itself, for a
+minute each, weekly and by hand; a failing input is kept as the run's
+`fuzz-failures` artifact. To replay one, put it in the package's
+`testdata/fuzz/<target>/` and run `go test -run '<target>/<file>'` there; to
+fuzz one here:
+
+```sh
+go test -run '^$' -fuzz '^FuzzAuthorize$' -fuzztime 60s ./internal/oauth
+```
 
 ## Commits
 

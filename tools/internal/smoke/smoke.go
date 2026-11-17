@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -157,6 +158,9 @@ func SailorNamed(ctx context.Context, client *http.Client, base, name string) (s
 		return "", nil, nil, err
 	}
 	opts, err := Post(ctx, &c, base, "/account/begin", body, http.StatusOK)
+	if he, ok := errors.AsType[*HTTPError](err); ok && he.Status == http.StatusForbidden && strings.Contains(string(he.Body), `"check"`) {
+		return "", nil, nil, fmt.Errorf("%w: %w", ErrHumanCheck, err)
+	}
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -185,6 +189,23 @@ func SailorNamed(ctx context.Context, client *http.Client, base, name string) (s
 
 // Post sends a JSON body, or none for nil, to one of the game's routes,
 // and returns the answer's body if its status is want.
+// HTTPError is an answer other than the one wanted.
+type HTTPError struct {
+	Path   string
+	Status int
+	Text   string
+	Body   []byte
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("smoke: POST %s answered %s: %s", e.Path, e.Text, e.Body)
+}
+
+// ErrHumanCheck is a sailor refused by the human check: a server with real
+// Turnstile keys refuses the test token the tools send. Switch the check
+// off for the run (keel admin humancheck off), and on again after.
+var ErrHumanCheck = errors.New("smoke: the human check refused the tool's sailor (keel admin humancheck off for the run, then on)")
+
 func Post(ctx context.Context, c *http.Client, base, path string, body []byte, want int) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+path, bytes.NewReader(body))
 	if err != nil {
@@ -200,7 +221,7 @@ func Post(ctx context.Context, c *http.Client, base, path string, body []byte, w
 	defer res.Body.Close()
 	reply, _ := io.ReadAll(res.Body)
 	if res.StatusCode != want {
-		return nil, fmt.Errorf("smoke: POST %s answered %s: %s", path, res.Status, reply)
+		return nil, &HTTPError{Path: path, Status: res.StatusCode, Text: res.Status, Body: reply}
 	}
 	return reply, nil
 }

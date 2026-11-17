@@ -84,8 +84,14 @@ type Config struct {
 	Game http.Handler
 	// Page, if not nil, is the game's built page, served at / and
 	// /assets/. Without it, as in development, another server serves the
-	// page and sends the rest here.
+	// page and sends the rest here. Its pages' policies are built from
+	// Origin, CheckOrigin and PolicyReport (policy.go).
 	Page *Page
+	// PolicyReport sends the pages' policies as reports only, and
+	// CheckOrigin, if not "", is the human check's origin, whose script
+	// and frame the game's page may load.
+	PolicyReport bool
+	CheckOrigin  string
 	// Chunks, if not nil, are the world's chunks, served at their
 	// addresses under /w/; Models its islands' models.
 	Chunks *Chunks
@@ -131,6 +137,10 @@ type Config struct {
 	Logs Logs
 	// Races, if not nil, are the world's races ashore.
 	Races Races
+	// NewSailors, if not nil, are the limits on making a new sailor: how
+	// many one address may make in a day, and the human check. Without
+	// them, as in most tests, neither applies.
+	NewSailors *NewSailors
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -156,14 +166,16 @@ var longLived = map[string]bool{"GET /ws": true}
 //
 //  1. the request ID and the access log, which learns the route and the
 //     account from the steps below
-//  2. the client's address (not yet: players reach the server directly)
+//  2. the client's address: Cloudflare's CF-Connecting-IP when it holds
+//     an address, else the connection's own (Address); never logged
 //  3. read and write deadlines, except on long-lived routes
 //  4. a limit on the body's size
 //  5. cross-origin protection: a browser's unsafe request from another
 //     origin is refused, but at the routes AI apps call (their token,
 //     revocation and registration), which read no cookie
 //  6. the session: the account the cookie names, if any
-//  7. limits on how often a client may ask (not yet)
+//  7. limits on how often a client may ask, each in its route's handler:
+//     new sailors from one address, notices, links, the page's reports
 //
 // A path with dot segments or repeated slashes is answered 404 before any of
 // it.
@@ -189,14 +201,21 @@ func Handler(cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/version", versionHandler(cfg.Version))
 	required := func(h http.HandlerFunc) http.Handler { return auth.Required(writeError, h) }
-	signed := func(h http.HandlerFunc) http.Handler { return auth.Signed(writeError, h) }
+	// signed passes a request without a session to its own answer, if
+	// given, else answers it 401.
+	signed := func(h http.HandlerFunc, none ...http.HandlerFunc) http.Handler {
+		if len(none) > 0 {
+			return auth.SignedOr(none[0], h)
+		}
+		return auth.Signed(writeError, h)
+	}
 	mux.HandleFunc("POST /account/begin", a.beginAccount)
 	mux.HandleFunc("POST /account/finish", a.finishAccount)
 	mux.HandleFunc("POST /signin/begin", a.beginSignIn)
 	mux.HandleFunc("POST /signin/finish", a.finishSignIn)
 	mux.HandleFunc("POST /recovery", a.recover)
 	mux.Handle("POST /logout", signed(a.logout))
-	mux.Handle("GET /api/me", signed(a.me))
+	mux.Handle("GET /api/me", signed(a.me, a.noMe))
 	mux.Handle("GET /api/account", required(a.account))
 	mux.Handle("POST /api/account/passkeys/begin", signed(a.beginPasskey))
 	mux.Handle("POST /api/account/passkeys/finish", signed(a.finishPasskey))
@@ -257,7 +276,7 @@ func Handler(cfg Config) http.Handler {
 		mux.Handle("GET /ws", cfg.Game)
 	}
 	if cfg.Page != nil {
-		cfg.Page.register(mux)
+		cfg.Page.register(mux, PolicyOptions{Origin: cfg.Origin, Check: cfg.CheckOrigin, Report: cfg.PolicyReport})
 	}
 	if cfg.Chunks != nil {
 		mux.Handle(chunkRoute, cfg.Chunks.serve(cfg.Metrics))
@@ -304,6 +323,7 @@ func Handler(cfg Config) http.Handler {
 	h = cop.Handler(h)
 	h = bodyLimit(BodyLimit, h)
 	h = deadlines(mux, cfg.ReadTimeout, cfg.WriteTimeout, h)
+	h = clientAddress(h)
 	h = cleanPaths(h)
 	h = route(mux, h)
 	return obs.AccessLog(cfg.Log, h)

@@ -5,11 +5,14 @@ import type { SailSettings } from './api';
 import {
   changeQuestion,
   chatSwitches,
+  humanCheckSwitch,
   lifetimeAllowed,
   lifetimeOf,
   linkLifetimeWords,
   MAX_LINK_LIFETIME,
   MIN_LINK_LIFETIME,
+  newSailorsOf,
+  newSailorsWords,
   onOff,
   touchesLinks,
 } from './settings';
@@ -57,6 +60,11 @@ describe('links to come aboard', () => {
     expect(changeQuestion({ shipmateMessages: false })).toBe('');
     expect(changeQuestion({ spectatorChat: false })).toBe('');
     expect(changeQuestion({ links: false })).toBe('');
+    expect(changeQuestion({ humanCheck: false })).toBe(
+      'The human check off? New sailors come in unchecked until it is on again.',
+    );
+    expect(changeQuestion({ humanCheck: true })).toBe('');
+    expect(changeQuestion({ newSailorsPerAddress: 2 })).toBe('');
   });
 });
 
@@ -69,6 +77,8 @@ describe('chat’s switches', () => {
     shipmateMessages: false,
     spectatorChat: true,
     chatCountries: [],
+    newSailorsPerAddress: 20,
+    humanCheck: true,
   };
 
   test('chat, shipmates’ messages, spectators’ reading, in that order: each its state and its key', () => {
@@ -90,5 +100,41 @@ describe('chat’s switches', () => {
     expect(chatSwitches({ ...settings, spectatorChat: false })[2]?.key).toBe(
       "Switch spectators' reading on",
     );
+  });
+});
+
+describe('new sailors', () => {
+  test('the number typed, a whole one from 1 to 1000', () => {
+    expect(newSailorsOf('20')).toBe(20);
+    expect(newSailorsOf('1')).toBe(1);
+    expect(newSailorsOf('1000')).toBe(1000);
+    for (const bad of ['', ' ', '0', '1001', '2.5', '-3', 'many']) {
+      expect(newSailorsOf(bad)).toBe(0);
+    }
+    expect(newSailorsWords(20)).toBe('20 a day from one address');
+  });
+
+  test('the human check’s switch: its state, its key and the change it asks', () => {
+    const on = {
+      linkLifetime: 86_400,
+      links: true,
+      boarding: true,
+      chat: true,
+      shipmateMessages: true,
+      spectatorChat: true,
+      chatCountries: [],
+      newSailorsPerAddress: 20,
+      humanCheck: true,
+    } satisfies SailSettings;
+    const s = humanCheckSwitch(on);
+    expect([s.field, s.name, s.on, s.key]).toEqual([
+      'human-check',
+      'Human check on new sailors',
+      true,
+      'Switch the check off',
+    ]);
+    expect(s.body).toEqual({ humanCheck: false });
+    expect(s.what).toBe('the human check on new sailors switched off');
+    expect(humanCheckSwitch({ ...on, humanCheck: false }).key).toBe('Switch the check on');
   });
 });

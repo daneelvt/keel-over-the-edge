@@ -104,6 +104,9 @@ Configured from the environment:
   KEEL_CLIENT_DIR      the game's built page, served by the game's listener,
                        and its world page, owner/ in it, by the internal one
                        (default none: another server serves them)
+  KEEL_PAGE_POLICY     enforce: the pages' Content Security Policy refuses what
+                       it does not allow; report: it only tells the pages what
+                       it would refuse (default enforce)
   KEEL_BOAT_LIMIT      the most boats at sea at once, from 1 to 4096; beyond it
                        players wait in a queue (default 1000)
   KEEL_BELL            how long the world sails on once players are told the
@@ -130,6 +133,21 @@ Configured from the environment:
                        and without both it is not served (default none)
   KEEL_STATUS_BOATS    the most boats the website's status shows, from 0 to
                        100 (default 12)
+  KEEL_ADDRESS_KEY     the key a new sailor's address is kept under, as an
+                       HMAC, for the day it counts: base64 of 32 bytes or
+                       more (default: one made at start, so counts start
+                       again with every start)
+  KEEL_TURNSTILE_SITEKEY
+  KEEL_TURNSTILE_SECRET
+                       the Cloudflare Turnstile widget's site key and secret
+                       key, both or neither: with them every new sailor
+                       passes the human check (default none: no check)
+  KEEL_TURNSTILE_VERIFY_URL
+                       Turnstile's siteverify (default Cloudflare's), https,
+                       or http on a loopback address for a test's stand-in
+  KEEL_TURNSTILE_SCRIPT
+                       the widget's script the page loads (default
+                       Cloudflare's), https or a path on the page's origin
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (a steady wind),
                        POST /debug/chart?all|subject=island:…|place:…|feature:…
@@ -225,6 +243,9 @@ type database interface {
 	race.Store
 	RaceRecordsOf(ctx context.Context, id store.AccountID, most int) ([]store.RaceRecord, error)
 	owner.RacingSettings
+	// New sailors: how many from each address, and the owner's settings
+	// for them and the human check.
+	newSailorStore
 	// Certificates: what a sailor holds and has sailed toward the next,
 	// and the owner's every boat.
 	Exam() *store.Exam
@@ -504,6 +525,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		}
 		return stopEarly(side, flight, fmt.Errorf("the settings for chat, mutes and blocks: %w", err))
 	}
+	if err := loadNewSailors(ctx, db, p.switches); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the settings for new sailors: %w", err))
+	}
+	if p.newSailors, err = newSailors(cfg, db, log); err != nil {
+		return stopEarly(side, flight, err)
+	}
 	p.registerWorldMetrics()
 	// The accounts stopped, before anyone is let in.
 	stopped, err := accounts.Load(ctx, db)
@@ -583,7 +613,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	health.Beat()
 	play := newServer(p.playRoutes, log)
 	agents := newServer(p.agents.handler, log)
-	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob(), p.harbourJob()), p.newsJobs()...), Log: log, Metrics: metrics})
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob(), p.harbourJob(), p.newSailorsJob()), p.newsJobs()...), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
 	flightCtx, stopFlight := context.WithCancel(context.Background())
@@ -760,7 +790,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		prepared = c.timeline.Prepared()
 	}
 	cfg := owner.Config{
-		Switches: c.switches, Sail: c.db, ChatSettings: c.chat, Reports: c.reports,
+		Switches: c.switches, Sail: c.db, ChatSettings: c.chat, Reports: c.reports, NewSailors: c.db,
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
 		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat), SeaLife: c.life,
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
