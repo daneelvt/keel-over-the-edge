@@ -67,15 +67,22 @@ export const GUST_LOOK = {
   most: 1.5,
 };
 
+/** Each spell's octaves. */
+const CELLS = SPELLS * OCTAVES;
+/** Where each part of the field starts in GustUniforms.cells. */
+const AT = { low: 0, high: CELLS, frac: 2 * CELLS, frame: 3 * CELLS };
+
 export interface GustUniforms {
-  /** For each spell and octave: the low halves of the origin's cells along, across and in time, and of the seed. */
-  readonly low: ReturnType<typeof uniformArray>;
-  /** And the high halves. */
-  readonly high: ReturnType<typeof uniformArray>;
-  /** For each spell and octave: how far the origin is across its cell along, across and in time. */
-  readonly frac: ReturnType<typeof uniformArray>;
-  /** For each spell: the sine and cosine of its frame's direction, and its share of the mix. */
-  readonly frame: ReturnType<typeof uniformArray>;
+  /**
+   * In one array, so that the tiles' vertex stage, which reads the field
+   * where the sea is drawn per vertex, keeps within a GPU's twelve uniform
+   * buffers: for each spell and octave, the low halves of the origin's
+   * cells along, across and in time, and of the seed (from AT.low); the
+   * high halves (AT.high); how far the origin is across its cell along,
+   * across and in time (AT.frac); then for each spell the sine and cosine
+   * of its frame's direction and its share of the mix (AT.frame).
+   */
+  readonly cells: ReturnType<typeof uniformArray>;
   /** How many spells have a field: 0, 1 or 2. */
   readonly spells: UniformNode<'float', number>;
   /** How strongly the gusts show: 0 with none, 1 for a spell whose gusts show in full. */
@@ -97,10 +104,12 @@ export class GustField {
   /** The water's signs of the wind where it is stronger or lighter than the sea's (water.ts). */
   readonly water: WaterSigns;
 
-  readonly #low: Vector4[] = [];
-  readonly #high: Vector4[] = [];
-  readonly #frac: Vector4[] = [];
-  readonly #frame: Vector4[] = [];
+  /** The cells' values; the four below are views of parts of it. */
+  readonly #cells: Vector4[] = Array.from({ length: AT.frame + SPELLS }, () => new Vector4());
+  readonly #low = this.#cells.slice(AT.low, AT.low + CELLS);
+  readonly #high = this.#cells.slice(AT.high, AT.high + CELLS);
+  readonly #frac = this.#cells.slice(AT.frac, AT.frac + CELLS);
+  readonly #frame = this.#cells.slice(AT.frame, AT.frame + SPELLS);
   readonly #invAlong: number[] = [];
   readonly #invAcross: number[] = [];
   readonly #invLife: number[] = [];
@@ -119,19 +128,8 @@ export class GustField {
       across *= 0.5;
       life *= 0.5;
     }
-    for (let i = 0; i < SPELLS * OCTAVES; i++) {
-      this.#low.push(new Vector4());
-      this.#high.push(new Vector4());
-      this.#frac.push(new Vector4());
-    }
-    for (let s = 0; s < SPELLS; s++) {
-      this.#frame.push(new Vector4());
-    }
     this.uniforms = {
-      low: eachRender(uniformArray(this.#low, 'vec4')),
-      high: eachRender(uniformArray(this.#high, 'vec4')),
-      frac: eachRender(uniformArray(this.#frac, 'vec4')),
-      frame: eachRender(uniformArray(this.#frame, 'vec4')),
+      cells: eachRender(uniformArray(this.#cells, 'vec4')),
       spells: eachRender(uniform(0)),
       strength: eachRender(uniform(0)),
       front: eachRender(uniform(new Vector4())),
@@ -334,7 +332,8 @@ const octave = Fn(
 export function gustAt(field: GustField): (p: Node<'vec2'>) => Node<'float'> {
   const u = field.uniforms;
   const spell = (p: Node<'vec2'>, s: number): Node<'float'> => {
-    const frame = u.frame.element(s) as unknown as Node<'vec4'>;
+    const cell = (at: number): Node<'vec4'> => u.cells.element(at) as unknown as Node<'vec4'>;
+    const frame = cell(AT.frame + s);
     // East is the scene's x, north its −z.
     const along = p.x.mul(frame.x).sub(p.y.mul(frame.y)).negate().toVar();
     const across = p.x.mul(frame.y).add(p.y.mul(frame.x)).toVar();
@@ -343,9 +342,9 @@ export function gustAt(field: GustField): (p: Node<'vec2'>) => Node<'float'> {
       const i = s * OCTAVES + k;
       const { invAlong, invAcross } = field.cell(k);
       const n = octave(
-        u.low.element(i) as unknown as Node<'vec4'>,
-        u.high.element(i) as unknown as Node<'vec4'>,
-        u.frac.element(i) as unknown as Node<'vec4'>,
+        cell(AT.low + i),
+        cell(AT.high + i),
+        cell(AT.frac + i),
         along,
         across,
         vec2(invAlong, invAcross),
@@ -366,7 +365,7 @@ export function gustAt(field: GustField): (p: Node<'vec2'>) => Node<'float'> {
     const t = f.w.sub(ahead).div(f.w.mul(2).max(1e-3)).clamp(0, 1);
     const behind = t.mul(t).mul(float(3).sub(t.mul(2)));
     const share = (s: number): Node<'float'> => {
-      const z = (u.frame.element(s) as unknown as Node<'vec4'>).z;
+      const z = (u.cells.element(AT.frame + s) as unknown as Node<'vec4'>).z;
       return across.select(mix(float(1).sub(behind), behind, z), z) as unknown as Node<'float'>;
     };
     const spread = float(0).toVar();
