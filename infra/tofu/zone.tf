@@ -31,9 +31,11 @@ locals {
     webmcp_enabled           = "off"
   }
 
-  # HSTS for a day while the way in settles, so a mistake lasts no longer;
-  # then six months. No preload: leaving a preload list takes months.
-  hsts_max_age = 86400
+  # HSTS for six months (180 days), the zone's hosts included: the way in
+  # has settled (it began at a day, so a mistake lasted no longer). No
+  # preload: leaving a preload list takes months, and it would bind the
+  # website's host too.
+  hsts_max_age = 15552000
 }
 
 resource "cloudflare_zone_setting" "zone" {

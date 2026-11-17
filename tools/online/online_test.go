@@ -41,6 +41,9 @@ type edge struct {
 	refuseForged bool
 	// beacon is added to the page for a client that accepts HTML.
 	beacon string
+	// policy is the page's Content-Security-Policy header, and its value;
+	// none, the game's.
+	policy, policyValue string
 
 	mu     sync.Mutex
 	cached bool
@@ -103,6 +106,15 @@ func (e *edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/":
 		e.mu.Unlock()
 		w.Header().Set("Cf-Cache-Status", "DYNAMIC")
+		switch e.policy {
+		case "":
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types keel default")
+			w.Header().Set("X-Frame-Options", "DENY")
+		case "none":
+		default:
+			w.Header().Set(e.policy, e.policyValue)
+			w.Header().Set("X-Frame-Options", "DENY")
+		}
 		page := e.page
 		if e.beacon != "" && strings.Contains(r.Header.Get("Accept"), "text/html") {
 			page = strings.Replace(page, "</body>", e.beacon+"</body>", 1)
@@ -134,17 +146,27 @@ func testChecker(t *testing.T, e *edge) (*checker, *bytes.Buffer) {
 // TestForgedHeaderRefused: Cloudflare refusing a forged CF-Connecting-IP
 // outright is as good as overwriting it.
 func TestForgedHeaderRefused(t *testing.T) {
-	c, out := testChecker(t, &edge{page: thePage, hsts: "max-age=86400; includeSubDomains", refuseForged: true})
+	c, out := testChecker(t, &edge{page: thePage, hsts: "max-age=15552000; includeSubDomains", refuseForged: true})
 	if failed := c.run(context.Background()); failed != 0 {
 		t.Fatalf("%d failed:\n%s", failed, out)
 	}
 }
 
 func TestEveryCheckPasses(t *testing.T) {
-	c, out := testChecker(t, &edge{page: thePage, hsts: "max-age=86400; includeSubDomains"})
+	c, out := testChecker(t, &edge{page: thePage, hsts: "max-age=15552000; includeSubDomains"})
 	page := filepath.Join(t.TempDir(), "index.html")
 	os.WriteFile(page, []byte(thePage), 0o644)
 	c.page = page
+	if failed := c.run(context.Background()); failed != 0 {
+		t.Fatalf("%d failed:\n%s", failed, out)
+	}
+}
+
+// TestPolicyReported: the page's policy as a report only passes, as it
+// goes online first.
+func TestPolicyReported(t *testing.T) {
+	c, out := testChecker(t, &edge{page: thePage, hsts: "max-age=15552000; includeSubDomains", policy: "Content-Security-Policy-Report-Only",
+		policyValue: "default-src 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'"})
 	if failed := c.run(context.Background()); failed != 0 {
 		t.Fatalf("%d failed:\n%s", failed, out)
 	}
@@ -157,13 +179,16 @@ func TestChecksFail(t *testing.T) {
 		want string
 	}{
 		"no HSTS":                {&edge{page: thePage}, "", "no HSTS"},
-		"HSTS preloaded":         {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains; preload"}, "", "no preload"},
-		"HSTS for an hour":       {&edge{page: thePage, hsts: "max-age=3600; includeSubDomains"}, "", "a max-age of a day or more"},
-		"a script injected":      {&edge{page: strings.Replace(thePage, "</body>", `<script src="/cdn-cgi/scripts/email-decode.min.js"></script></body>`, 1), hsts: "max-age=86400; includeSubDomains"}, "", `holds "/cdn-cgi/"`},
-		"another origin":         {&edge{page: strings.Replace(thePage, "/assets/index-def456.css", "https://example.org/x.css", 1), hsts: "max-age=86400; includeSubDomains"}, "", "from another origin"},
-		"not the build's page":   {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains"}, "<!doctype html><html></html>", "is not"},
-		"a beacon for browsers":  {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains", beacon: `<script defer src="https://static.cloudflareinsights.com/beacon.min.js"></script>`}, "", `holds "cloudflare"`},
-		"a forged header passed": {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains", passForged: true}, "", "met neither Cloudflare's refusal nor a 429"},
+		"HSTS preloaded":         {&edge{page: thePage, hsts: "max-age=15552000; includeSubDomains; preload"}, "", "no preload"},
+		"HSTS for an hour":       {&edge{page: thePage, hsts: "max-age=3600; includeSubDomains"}, "", "a max-age of six months or more"},
+		"HSTS for a day":         {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains"}, "", "a max-age of six months or more"},
+		"no page policy":         {&edge{page: thePage, hsts: "max-age=15552000; includeSubDomains", policy: "none"}, "", "the page's policy"},
+		"a policy without types": {&edge{page: thePage, hsts: "max-age=15552000; includeSubDomains", policy: "Content-Security-Policy", policyValue: "default-src 'self'; frame-ancestors 'none'"}, "", "the page's policy"},
+		"a script injected":      {&edge{page: strings.Replace(thePage, "</body>", `<script src="/cdn-cgi/scripts/email-decode.min.js"></script></body>`, 1), hsts: "max-age=15552000; includeSubDomains"}, "", `holds "/cdn-cgi/"`},
+		"another origin":         {&edge{page: strings.Replace(thePage, "/assets/index-def456.css", "https://example.org/x.css", 1), hsts: "max-age=15552000; includeSubDomains"}, "", "from another origin"},
+		"not the build's page":   {&edge{page: thePage, hsts: "max-age=15552000; includeSubDomains"}, "<!doctype html><html></html>", "is not"},
+		"a beacon for browsers":  {&edge{page: thePage, hsts: "max-age=15552000; includeSubDomains", beacon: `<script defer src="https://static.cloudflareinsights.com/beacon.min.js"></script>`}, "", `holds "cloudflare"`},
+		"a forged header passed": {&edge{page: thePage, hsts: "max-age=15552000; includeSubDomains", passForged: true}, "", "met neither Cloudflare's refusal nor a 429"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, out := testChecker(t, tc.e)
