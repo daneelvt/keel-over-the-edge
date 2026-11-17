@@ -17,6 +17,7 @@ import {
   INKS,
   mix,
   openingAt,
+  ownPictures,
   PALETTES,
   paletteAt,
   READABLE,
@@ -148,5 +149,20 @@ describe('the steps and their style sheet', () => {
     }
     // Small: a few kilobytes, before compression.
     expect(css.length).toBeLessThan(12_000);
+  });
+});
+
+describe('the opening pictures the page takes from its own data', () => {
+  test('only the page’s own pictures, by paths from the root', () => {
+    expect(
+      ownPictures('/assets/opening-day-AbC_12-x.avif 640w, /assets/opening-day-Zz9.avif 1280w'),
+    ).toBe(true);
+    expect(ownPictures('/assets/opening-night-Q1w2E3r4.jpg')).toBe(true);
+    expect(ownPictures('javascript:alert(1)')).toBe(false);
+    expect(ownPictures('//elsewhere.example/a.jpg')).toBe(false);
+    expect(ownPictures('https://elsewhere.example/a.jpg 640w')).toBe(false);
+    expect(ownPictures('/assets/../x.jpg')).toBe(false);
+    expect(ownPictures('/a.jpg 640w, data:image/png;base64,AAAA 1280w')).toBe(false);
+    expect(ownPictures('')).toBe(false);
   });
 });

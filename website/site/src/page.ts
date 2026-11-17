@@ -14,7 +14,7 @@
 // request for /live.
 
 import './page.css';
-import { hourAt, hourFromQuery, openingAt, skyStep } from './sky';
+import { hourAt, hourFromQuery, openingAt, ownPictures, skyStep } from './sky';
 import { asOf, googleLink, left, plural, type Turn, turnWords, yourTime } from './words';
 
 const $ = (id: string) => document.getElementById(id);
@@ -58,11 +58,13 @@ function sky(): void {
     '.opening-picture [data-o]',
   )) {
     const set = o[el.dataset.o ?? ''];
-    if (set !== undefined) {
+    if (set !== undefined && ownPictures(set)) {
       el.srcset = set;
     }
     if (el instanceof HTMLImageElement) {
-      el.src = o.src ?? el.src;
+      if (o.src !== undefined && ownPictures(o.src)) {
+        el.src = o.src;
+      }
       el.alt = o.alt ?? el.alt;
     }
   }

@@ -170,6 +170,15 @@ export function openingAt(hour: number): HourName {
   return b.t < 0.5 ? b.from : b.to;
 }
 
+/**
+ * Whether a src or srcset names only the page's own pictures: paths from
+ * the site's root, never another site's address or a script.
+ */
+export function ownPictures(set: string): boolean {
+  const urls = set.split(',').map((e) => e.trim().split(/\s+/)[0] ?? '');
+  return urls.length > 0 && urls.every((u) => /^\/[\w-]+(?:[./][\w-]+)*$/.test(u));
+}
+
 /** The hours, ms of real time, apart that the page's colours step by: a fifth of the sky's hour. */
 export const STEP_HOURS = 0.2;
 export const STEPS = Math.round(24 / STEP_HOURS);

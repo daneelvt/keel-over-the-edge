@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { ownPictures } from '../src/sky';
 import { claudeLink, cursorLink, MCP, vscodeLink } from '../src/words';
 import { builtName, manifest, openings, writeOut } from './site';
 
@@ -73,6 +74,10 @@ describe('the page written out', () => {
     for (const hour of Object.values(o)) {
       for (const k of ['upright avif', 'upright jpeg', 'wide avif', 'wide jpeg', 'src', 'alt']) {
         expect(hour[k], k).toBeTruthy();
+      }
+      // The script takes only the page's own pictures.
+      for (const k of ['upright avif', 'upright jpeg', 'wide avif', 'wide jpeg', 'src']) {
+        expect(ownPictures(hour[k] ?? ''), k).toBe(true);
       }
     }
   });
