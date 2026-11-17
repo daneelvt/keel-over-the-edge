@@ -36,7 +36,9 @@
 // --headed, --settle and --measure (ms, each step's), --rungs (the gpu
 // section's, as 0,5,6,10; all by default), --boats, --json (writes every
 // number), --md (writes the tables), --compare (an earlier --json, printed
-// before → after; with --after, two files compared and nothing run).
+// before → after; with --after, two files compared and nothing run),
+// --from (earlier --json files, a section each or more, put together and
+// printed, with nothing run: sections can be measured one at a time).
 //
 // Timings vary run to run and with whatever else the machine is doing:
 // measure before and after in one sitting, with nothing else running.
@@ -64,6 +66,7 @@ import {
   type LadderResult,
   measured,
   median,
+  merge,
   type PartStep,
   type PartsResult,
   type Results,
@@ -151,6 +154,7 @@ interface Options {
   md: string | null;
   compare: string | null;
   after: string | null;
+  from: string[];
 }
 
 function options(): Options {
@@ -169,6 +173,7 @@ function options(): Options {
       md: { type: 'string' },
       compare: { type: 'string' },
       after: { type: 'string' },
+      from: { type: 'string' },
     },
   });
   const only = (values.only ?? SECTIONS.join(',')).split(',').filter((s) => s !== '');
@@ -195,6 +200,7 @@ function options(): Options {
     md: values.md ?? null,
     compare: values.compare ?? null,
     after: values.after ?? null,
+    from: values.from === undefined ? [] : values.from.split(','),
   };
 }
 
@@ -546,6 +552,7 @@ async function countsSection(o: Options, base: string, seen: Seen): Promise<Coun
       counts,
       largest: last.largest,
       passList: last.passList,
+      gpuPassList: last.gpuPassList,
     };
   });
   return { width, height, rows };
@@ -572,6 +579,11 @@ async function main(): Promise<void> {
     const before = JSON.parse(readFileSync(o.compare, 'utf8')) as Results;
     const after = JSON.parse(readFileSync(o.after, 'utf8')) as Results;
     process.stdout.write(compare(before, after));
+    return;
+  }
+  if (o.from.length > 0) {
+    const results = merge(o.from.map((f) => JSON.parse(readFileSync(f, 'utf8')) as Results));
+    finish(o, results);
     return;
   }
   const browsing = o.only.some((s) => s !== 'ladder');
@@ -611,6 +623,11 @@ async function main(): Promise<void> {
   }
   results.meta.chrome = seen.chrome;
   results.meta.dpr = seen.dpr;
+  finish(o, results);
+}
+
+/** Prints the results' tables, writes them where asked, and compares them with earlier ones. */
+function finish(o: Options, results: Results): void {
   const md = report(results);
   process.stdout.write(md);
   if (o.json !== null) {
