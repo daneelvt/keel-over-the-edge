@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  alone,
   bySize,
   COUNT_NAMES,
   type CountsRow,
@@ -97,6 +98,17 @@ describe('the numbers', () => {
     expect(s[0]).toBeNaN();
     expect(s[1]).toBeCloseTo(1.1);
     expect(s[2]).toBeCloseTo(-0.1);
+  });
+
+  it("gives each step's share alone as what leaving its part out saved from the whole", () => {
+    const s = alone([
+      { name: 'Everything', ...measured([9.5]) },
+      { name: 'Sea: foam left out', ...measured([8.5]) },
+      { name: 'Sea: glints left out', ...measured([9.3]) },
+    ]);
+    expect(s[0]).toBeNaN();
+    expect(s[1]).toBeCloseTo(1);
+    expect(s[2]).toBeCloseTo(0.2);
   });
 
   it('sums the writes by their size, with the owner that wrote it most', () => {

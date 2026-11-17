@@ -46,6 +46,7 @@ import {
   varying,
   vec2,
   vec3,
+  vec4,
 } from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
 import { brokenOff } from '../edge/broken';
@@ -56,9 +57,9 @@ import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { FIELD_RADIUS, TILE_RADIUS } from './hex';
 import { HULL_MARGIN, hulls } from './hulls';
-import { depthCap, groundAtHex, leeAt, tileGround, waveLeeAt } from './shore';
+import { depthCap, groundAtHex, leeAt, surf, tileGround, waveLeeAt } from './shore';
 import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from './tilepass';
-import { waterSignAt } from './water';
+import { waterRainAt, waterSignAt } from './water';
 import { type BandUniforms, boatBandAt, cappedBand, periodAt, seaAreaAt, seaPlaneOf } from './wave';
 
 /** Depth of each tile's skirt, in metres: deeper than the steps a gale gives. */
@@ -126,6 +127,14 @@ export interface TileVaryings {
   period: Node<'float'>;
   /** The band's mist from the camera to the vertex. */
   mist: Node<'float'>;
+  /**
+   * The surf on the tile, 0 to 1, worked out once a tile from its ground,
+   * its sea and its lee (shore.ts), all the tile's own; and the rain's
+   * share at the vertex. For a look that does not work them out at each
+   * fragment.
+   */
+  surf: Node<'float'>;
+  rain: Node<'float'>;
 }
 
 export class Tiles {
@@ -136,6 +145,15 @@ export class Tiles {
   readonly centreHex = uniform(new Vector2());
   /** The vertex node: a tile vertex's scene position. */
   readonly position: Node<'vec3'>;
+  /**
+   * The same, for the tiles no hull may reach, and for those a hull may:
+   * each set of tiles alone, the others not drawn. The sea can be drawn in
+   * two parts so, the hulls' cut only in the second (Ocean's apart).
+   */
+  readonly away: Node<'vec3'>;
+  readonly byHulls: Node<'vec3'>;
+  /** A second mesh of the same tiles, a child of mesh, for the tiles a hull may reach when the sea is drawn apart. */
+  readonly hullMesh: Mesh;
   readonly varyings: TileVaryings;
   readonly geometry: InstancedBufferGeometry;
 
@@ -203,32 +221,61 @@ export class Tiles {
     plane = lipPlane(c, plane);
     const e = select(land, positionGeometry.xz.mul(0), positionGeometry.xz);
     const s = positionGeometry.y;
-    const y = select(land, plane.x.sub(50), plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH)));
-    this.position = vec3(c.x.add(e.x), y, c.y.add(e.y));
-    // The sea's period and the optical depth of the band's mist and the
-    // weather (depthToSea's) share a varying: with one more, WebGPU drew
-    // the tiles' glints wrong.
+    const placed = (gone: Node<'bool'>): Node<'vec3'> => {
+      const e = select(gone, positionGeometry.xz.mul(0), positionGeometry.xz);
+      const y = select(
+        gone,
+        plane.x.sub(50),
+        plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH)),
+      );
+      return vec3(c.x.add(e.x), y, c.y.add(e.y)) as unknown as Node<'vec3'>;
+    };
+    const near = hulls.near(c, TILE_RADIUS + HULL_MARGIN);
+    this.position = placed(land);
+    this.away = placed(land.or(near.greaterThan(0)));
+    this.byHulls = placed(land.or(near.lessThanEqual(0)));
+    // The sea's period, the optical depth of the band's mist and the
+    // weather (depthToSea's), the tile's surf and the rain's share share a
+    // varying: with one more, WebGPU drew the tiles' glints wrong.
+    const area = seaAreaAt(band)(c);
+    const period = periodAt(band)(c);
     const periodMist = varying(
-      vec2(periodAt(band)(c), depthBetween(cameraPosition, seaPoint(c.add(e)))),
-    ) as unknown as Node<'vec2'>;
+      vec4(
+        period,
+        depthBetween(cameraPosition, seaPoint(c.add(e))),
+        surf(ground.x, ground.y, ground.w, area.w, period, clamp(lee, 0, 1.3)),
+        waterRainAt(gusts.water)(c.add(e)),
+      ),
+    ) as unknown as Node<'vec4'>;
     this.varyings = {
       offset: varying(e),
       side: varying(s),
       plane: varying(plane),
       hex: varying(hex),
-      area: varying(seaAreaAt(band)(c)),
-      nearHull: varying(hulls.near(c, TILE_RADIUS + HULL_MARGIN)),
+      area: varying(area),
+      nearHull: varying(near),
       centre: c,
       gust: varying(gust),
       ground: varying(ground),
       lee: varying(lee),
       period: periodMist.x,
       mist: periodMist.y,
+      surf: periodMist.z,
+      rain: periodMist.w,
     };
 
     this.mesh = new Mesh(geometry);
     this.mesh.name = 'tiles';
     // The tiles are placed by their vertex node, not by the mesh's bounds.
     this.mesh.frustumCulled = false;
+    // A geometry of its own: two meshes of one instanced geometry whose
+    // shaders are first built in the same frame (a page that starts on a
+    // tier that draws the sea apart, or after a lost device) left all but
+    // one of the sea's meshes undrawn.
+    this.hullMesh = new Mesh(geometry.clone());
+    this.hullMesh.name = 'tiles by hulls';
+    this.hullMesh.frustumCulled = false;
+    this.hullMesh.visible = false;
+    this.mesh.add(this.hullMesh);
   }
 }

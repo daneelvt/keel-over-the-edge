@@ -59,6 +59,12 @@ export interface Tier {
   sprayCrests: boolean;
   /** The detail's anisotropic filtering. */
   anisotropy: number;
+  /**
+   * The sea's look: whole, or plain, which leaves out what costs most and
+   * shows least (seamaterial.ts's PLAIN_SEA) and draws the tiles a hull
+   * may reach apart, so that the rest of the sea's shader holds no cut.
+   */
+  sea: 'whole' | 'plain';
   /** The clouds' puffs drawn at most, and the streaks of rain at the boat. */
   puffs: number;
   streaks: number;
@@ -81,6 +87,7 @@ export const TIERS: Record<TierName, Tier> = {
     sprayBoats: 3,
     sprayCrests: true,
     anisotropy: 4,
+    sea: 'whole',
     puffs: 1024,
     streaks: 2048,
   },
@@ -98,6 +105,7 @@ export const TIERS: Record<TierName, Tier> = {
     sprayBoats: 0,
     sprayCrests: true,
     anisotropy: 4,
+    sea: 'whole',
     puffs: 768,
     streaks: 1024,
   },
@@ -115,6 +123,7 @@ export const TIERS: Record<TierName, Tier> = {
     sprayBoats: 0,
     sprayCrests: false,
     anisotropy: 1,
+    sea: 'plain',
     puffs: 512,
     streaks: 512,
   },

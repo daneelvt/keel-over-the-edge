@@ -95,6 +95,8 @@ import {
   detailOn,
   farLook,
   type Probe,
+  SEA_LAYERS,
+  type SeaLayer,
   tileHashNode,
   tileIdentity,
   tileLook,
@@ -130,7 +132,7 @@ import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { pendantsLoaded } from '../render/sailors/pendant';
 import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
-import { look } from '../render/sky';
+import { look, SKY_LAYERS, type SkyLayer } from '../render/sky';
 import { courseNear, raceNear } from '../sandbox/coursescene';
 import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
@@ -3710,6 +3712,22 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     async setRung(index: number): Promise<void> {
       await world.setRung(index, 'test');
       world.ocean.detail.finishBake();
+    },
+    /**
+     * Builds the sea without some of its layers (seamaterial.ts's
+     * SEA_LAYERS), and with apart the tiles a hull may reach drawn apart or
+     * not; each null as its tier draws it. Resolves once drawn.
+     */
+    async seaLayers(off: string[] | null, apart: boolean | null = null): Promise<void> {
+      await world.setSeaLayers(off === null ? null : new Set(off as SeaLayer[]), apart);
+    },
+    /** The names of the sea's layers and the sky's, as seaLayers and skyLayers take them. */
+    layerNames(): { sea: string[]; sky: string[] } {
+      return { sea: [...SEA_LAYERS], sky: [...SKY_LAYERS] };
+    },
+    /** Builds the sky without some of its layers (sky.ts's SKY_LAYERS); none for the whole sky. */
+    skyLayers(off: string[]): void {
+      world.sky.setLayers(new Set(off as SkyLayer[]));
     },
     /** Adaptive quality on or off, and what it has done. */
     adapt(on: boolean): void {

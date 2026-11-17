@@ -31,7 +31,16 @@ import { type Field, hexCentre, makeField, type Point } from './hex';
 import { FOAM } from './look';
 import { patternTexture } from './pattern';
 import { SeaBand } from './phases';
-import { detailSteep, farLook, type SeaParts, seaTime, setSeaGlow, tileLook } from './seamaterial';
+import {
+  detailSteep,
+  farLook,
+  NO_LAYERS,
+  type SeaLayer,
+  type SeaParts,
+  seaTime,
+  setSeaGlow,
+  tileLook,
+} from './seamaterial';
 import { leeTexture, shore } from './shore';
 import { TilePass } from './tilepass';
 import { Tiles } from './tiles';
@@ -76,6 +85,32 @@ export interface SeaQuality {
   foamMap: number;
   /** The wake's waves. */
   wakeWaves: WakeWavesKind;
+  /** The layers of the look left out. */
+  omit: ReadonlySet<SeaLayer>;
+  /**
+   * Whether the tiles a hull may reach are drawn apart from the rest, so
+   * that only their shader holds the hulls' cut: the walk over the hulls
+   * and the fragments it throws away cost the whole sea where every tile
+   * draws with it.
+   */
+  apart: boolean;
+}
+
+/** The sea's materials: each set of tiles' own and its tiles by the hulls' (the same where not drawn apart), and the far sea's. */
+interface SeaMaterials {
+  pass: [MeshBasicNodeMaterial, MeshBasicNodeMaterial];
+  vertex: [MeshBasicNodeMaterial, MeshBasicNodeMaterial];
+  far: MeshBasicNodeMaterial;
+}
+
+/** Every material of a set, each once. */
+function eachMaterial(m: SeaMaterials): MeshBasicNodeMaterial[] {
+  return [...new Set([...m.pass, ...m.vertex, m.far])];
+}
+
+/** Whether two sets of layers hold the same. */
+function sameLayers(a: ReadonlySet<SeaLayer>, b: ReadonlySet<SeaLayer>): boolean {
+  return a.size === b.size && [...a].every((l) => b.has(l));
 }
 
 export class Ocean {
@@ -132,6 +167,10 @@ export class Ocean {
   /** How much the current raises each area's waves, as laid. */
   readonly #raised = new Float64Array(SEA.window * SEA.window);
   #version = -1;
+  /** The layers of the look left out, as the materials were last made. */
+  #omit: ReadonlySet<SeaLayer> = NO_LAYERS;
+  /** Whether the tiles a hull may reach are drawn apart, as the materials were last made. */
+  #apart = false;
   /** The streaks of foam as they are turned to the wind. */
   readonly #streaks = new Turned(STREAK_ALONG, STREAK_ACROSS);
   /** A change of the look under way: the materials being compiled, to be swapped in together. */
@@ -159,10 +198,10 @@ export class Ocean {
     const ww = this.wakeWaves;
     this.wakes = new FoamMap(foamMap, (east, north) => ww.foldAt(east, north));
     this.far = new FarSea(this.uniforms, this.passTiles.centre, this.passTiles.centreHex);
-    const [pass, vertex, far] = this.#materials();
-    this.passTiles.mesh.material = pass;
-    this.vertexTiles.mesh.material = vertex;
-    this.far.mesh.material = far;
+    const made = this.#materials();
+    Ocean.#dress(this.passTiles, made.pass);
+    Ocean.#dress(this.vertexTiles, made.vertex);
+    this.far.mesh.material = made.far;
     this.#active = this.passTiles;
     scene.add(this.passTiles.mesh);
     scene.add(this.far.mesh);
@@ -183,6 +222,8 @@ export class Ocean {
     const kind = this.detail.kind;
     const ww = this.wakeWaves;
     return {
+      omit: this.#omit,
+      byVertex: this.#apart,
       detail: this.detail.nodes,
       // The second patch of the transform holds the finest ripples itself.
       shimmer: !(kind.kind === 'fft' && kind.patches === 2),
@@ -197,19 +238,44 @@ export class Ocean {
     };
   }
 
-  /** The sea's three materials for the look as it is now: the tiles by the pass, the tiles per vertex, the far sea. */
-  #materials(): [MeshBasicNodeMaterial, MeshBasicNodeMaterial, MeshBasicNodeMaterial] {
+  /**
+   * The sea's materials for the look as it is now: the tiles by the pass,
+   * the tiles per vertex, each with its tiles by the hulls, and the far sea.
+   */
+  #materials(): SeaMaterials {
     const parts = this.parts;
-    const tile = (tiles: Tiles): MeshBasicNodeMaterial => {
+    const tile = (tiles: Tiles): [MeshBasicNodeMaterial, MeshBasicNodeMaterial] => {
       const m = seaMaterial('sea-tile');
-      m.positionNode = tiles.position;
-      m.fragmentNode = tileLook(tiles.varyings, parts);
-      return m;
+      if (!this.#apart) {
+        m.positionNode = tiles.position;
+        m.fragmentNode = tileLook(tiles.varyings, parts);
+        return [m, m];
+      }
+      // The tiles no hull reaches, without the cut; and those it may, with it.
+      m.positionNode = tiles.away;
+      m.fragmentNode = tileLook(tiles.varyings, {
+        ...parts,
+        omit: new Set([...parts.omit, 'cut']),
+      });
+      const h = seaMaterial('sea-tile');
+      h.positionNode = tiles.byHulls;
+      h.fragmentNode = tileLook(tiles.varyings, parts);
+      return [m, h];
     };
     const far = seaMaterial('sea-far');
     far.positionNode = this.far.position;
     far.fragmentNode = farLook(this.far, parts);
-    return [tile(this.passTiles), tile(this.vertexTiles), far];
+    return { pass: tile(this.passTiles), vertex: tile(this.vertexTiles), far };
+  }
+
+  /** Puts a set of tiles' materials on its meshes; the mesh of the tiles by the hulls is drawn only where it has its own. */
+  static #dress(
+    tiles: { mesh: Mesh; hullMesh: Mesh },
+    [main, hull]: [MeshBasicNodeMaterial, MeshBasicNodeMaterial],
+  ): void {
+    tiles.mesh.material = main;
+    tiles.hullMesh.material = hull;
+    tiles.hullMesh.visible = hull !== main;
   }
 
   /** The tiles in use. */
@@ -242,7 +308,12 @@ export class Ocean {
   ): Promise<void> {
     this.wakes.setSize(q.foamMap);
     const waves = this.wakeWaves.setKind(q.wakeWaves, this.compute);
-    const retire = this.detail.set(q.detail, q.anisotropy) ?? (waves ? () => undefined : null);
+    const omit = q.omit;
+    const layers = !sameLayers(omit, this.#omit) || q.apart !== this.#apart;
+    this.#omit = omit;
+    this.#apart = q.apart;
+    const retire =
+      this.detail.set(q.detail, q.anisotropy) ?? (waves || layers ? () => undefined : null);
     if (retire === null) {
       return;
     }
@@ -251,13 +322,15 @@ export class Ocean {
     const made = this.#materials();
     if (compile !== null) {
       // The meshes as they will be, off the scene, for the compiler to see.
-      const meshes = [this.#active, this.far].map((m, i) => {
-        const copy = m.mesh.clone() as Mesh;
-        copy.material = (
-          i === 0 ? made[this.#active === this.passTiles ? 0 : 1] : made[2]
-        ) as MeshBasicNodeMaterial;
-        return copy;
-      });
+      const tiles = this.#active.mesh.clone() as Mesh;
+      const hull = tiles.children[0] as Mesh;
+      Ocean.#dress(
+        { mesh: tiles, hullMesh: hull },
+        this.#active === this.passTiles ? made.pass : made.vertex,
+      );
+      const far = this.far.mesh.clone() as Mesh;
+      far.material = made.far;
+      const meshes = [tiles, far];
       await Promise.all([
         ...meshes.map((m) => compile(m)),
         renderer === null ? Promise.resolve() : this.detail.compile(renderer),
@@ -267,7 +340,7 @@ export class Ocean {
       ]);
       if (change !== this.#pending) {
         // Another change overtook this one, and lets go of what this one would have.
-        for (const m of made) {
+        for (const m of eachMaterial(made)) {
           m.dispose();
         }
         this.#retired.push(retire);
@@ -276,14 +349,16 @@ export class Ocean {
     }
     this.detail.commit();
     const retireWaves = this.wakeWaves.commit();
-    const old = [
+    const old = new Set([
       this.passTiles.mesh.material,
+      this.passTiles.hullMesh.material,
       this.vertexTiles.mesh.material,
+      this.vertexTiles.hullMesh.material,
       this.far.mesh.material,
-    ];
-    this.passTiles.mesh.material = made[0];
-    this.vertexTiles.mesh.material = made[1];
-    this.far.mesh.material = made[2];
+    ]);
+    Ocean.#dress(this.passTiles, made.pass);
+    Ocean.#dress(this.vertexTiles, made.vertex);
+    this.far.mesh.material = made.far;
     for (const m of old) {
       (m as MeshBasicNodeMaterial).dispose();
     }
