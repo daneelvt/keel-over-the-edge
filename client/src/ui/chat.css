@@ -200,7 +200,7 @@
 }
 
 .chat-sheet .deck-faint {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* The report's form: the reasons a column of rows, a child at risk first. */
@@ -222,7 +222,7 @@
   margin-bottom: 4px;
   padding: 0;
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .chat-reason {
@@ -249,13 +249,13 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .hud .chat-report-note textarea {
   min-height: 60px;
   padding: 8px 10px;
-  font-size: 16px;
+  font-size: 1rem;
   resize: none;
 }
 
@@ -267,7 +267,7 @@
   min-height: 0;
   height: var(--key);
   font:
-    500 14px / 1 "Alegreya Sans",
+    500 calc(14 * var(--text, 1px)) / 1 "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -295,7 +295,7 @@
 
 .statement-facts dt {
   color: var(--faint);
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
 }
 
 .statement-facts dd {
@@ -313,13 +313,13 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
 }
 
 .hud .statement-answer textarea {
   min-height: 72px;
   padding: 8px 10px;
-  font-size: 16px;
+  font-size: calc(16 * var(--text, 1px));
   resize: none;
 }
 

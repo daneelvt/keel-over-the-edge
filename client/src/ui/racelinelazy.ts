@@ -4,6 +4,7 @@
 // boat is in a race: the game's first download holds none of them.
 
 import { useEffect, useState } from 'preact/hooks';
+import { lazyFailed } from '../boot/updated';
 import type { RaceSource } from './raceline';
 
 export type { RaceSource };
@@ -17,6 +18,8 @@ export function loadRaceLine(): Promise<RaceLineModule> {
   if (loading === null) {
     loading = import('./raceline').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }

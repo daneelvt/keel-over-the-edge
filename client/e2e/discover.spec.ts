@@ -132,17 +132,23 @@ test('two players discover a world: the chart fills in for both, with the credit
     .toBeGreaterThanOrEqual(3);
   // The news, and the world page.
   // The day's edition: each island a story, its headword its name, Ann's
-  // naming her to herself.
-  const news = (await (await ann.context.request.get('/api/news')).json()) as {
-    stories: { head: string; names: { kind: string; name?: string }[] }[];
-  };
-  expect(news.stories).toContainEqual(
+  // naming her to herself. keel keeps an edition 5 s, so one read by
+  // another test just before may not have them yet.
+  const stories = async () =>
+    (
+      (await (await ann.context.request.get('/api/news')).json()) as {
+        stories: { head: string; names: { kind: string; name?: string }[] }[];
+      }
+    ).stories;
+  await expect.poll(stories, { timeout: 15_000 }).toContainEqual(
     expect.objectContaining({
       head: isleA.name.toUpperCase(),
       names: [expect.objectContaining({ kind: 'human', name: ann.name })],
     }),
   );
-  expect(news.stories).toContainEqual(expect.objectContaining({ head: isleB.name.toUpperCase() }));
+  expect(await stories()).toContainEqual(
+    expect.objectContaining({ head: isleB.name.toUpperCase() }),
+  );
   const owner = (await (
     await ann.page.request.get(`${internal}/owner/api/charted.json`)
   ).json()) as {

@@ -7,6 +7,7 @@
 // same sheet on its own where it is not yet (the start screen).
 
 import { useEffect, useState } from 'preact/hooks';
+import { lazyFailed } from '../boot/updated';
 import type { LogWho } from '../chart/chart';
 
 /** The key that opens another sailor's log from their name. */
@@ -23,6 +24,8 @@ export function loadLog(): Promise<LogModule> {
   if (loading === null) {
     loading = import('./log').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }

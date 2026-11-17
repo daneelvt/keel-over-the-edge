@@ -18,11 +18,15 @@ import {
   countdownOf,
   distanceOf,
   gapWords,
+  type LineView,
   legLabel,
   lineSide,
   lineView,
   medalName,
+  OVER_THE_LINE,
   ordinal,
+  RACE_STARTED,
+  RaceLive,
   resultWords,
 } from './racelinewords';
 import { course, racer } from './racesamples';
@@ -209,6 +213,72 @@ describe('calls', () => {
       'Mark 1 rounded · 3rd',
     );
     expect(callLine(call({ kind: 'overEarly', number: 2 }), 1, name)).toBeNull();
+  });
+});
+
+describe('what a screen reader is told of the line', () => {
+  const waiting = (clock: string, over = false): LineView => ({
+    kind: 'before',
+    flag: 'class',
+    clock,
+    line: over ? 'Over · 12 m' : '40 m to the line',
+    over,
+  });
+  const racing = (distance: string): LineView => ({
+    kind: 'racing',
+    place: '2/5',
+    gap: '+0:12',
+    next: { label: 'Mk 1', bearing: '045°', distance, turn: 10 },
+  });
+
+  test('its events alone, each once: over the line, the start, a mark rounded, home', () => {
+    const live = new RaceLive();
+    const said: string[] = [];
+    const read = (v: LineView, call: { text: string; until: number } | null = null) => {
+      const w = live.read(v, call);
+      if (said.at(-1) !== w) {
+        said.push(w);
+      }
+    };
+    // The countdown, read four times a second, says nothing.
+    for (const c of ['1:00', '0:59', '0:59', '0:58']) {
+      read(waiting(c));
+    }
+    expect(said).toEqual(['']);
+    // Over the line: said once, however long it stays over.
+    read(waiting('0:30', true));
+    read(waiting('0:29', true));
+    read(waiting('0:28'));
+    read(waiting('0:27'));
+    // The start, then the bearing and distance moving, unsaid.
+    read(racing('0.4 NM'));
+    read(racing('0.3 NM'));
+    // A call: said once while it shows; then another.
+    const rounded = { text: 'Mark 1 rounded · 2nd', until: 9000 };
+    read(racing('0.3 NM'), rounded);
+    read(racing('0.2 NM'), rounded);
+    read(racing('0.2 NM'));
+    read(racing('0.1 NM'), { text: 'Mark 2 rounded · 1st', until: 20000 });
+    read(racing('0.1 NM'));
+    // Home.
+    read({ kind: 'done', text: 'Home 1st of 5 · 10:04' });
+    read({ kind: 'done', text: 'Home 1st of 5 · 10:04' });
+    expect(said).toEqual([
+      '',
+      OVER_THE_LINE,
+      RACE_STARTED,
+      'Mark 1 rounded · 2nd',
+      'Mark 2 rounded · 1st',
+      'Home 1st of 5 · 10:04',
+    ]);
+  });
+
+  test('a line first read mid-race says nothing of what came before', () => {
+    const live = new RaceLive();
+    expect(live.read(racing('0.4 NM'), null)).toBe('');
+    const done = new RaceLive();
+    expect(done.read({ kind: 'done', text: 'Home 1st of 3 · 9:58' }, null)).toBe('');
+    expect(new RaceLive().read(null, null)).toBe('');
   });
 });
 

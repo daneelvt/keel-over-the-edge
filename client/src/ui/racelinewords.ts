@@ -9,6 +9,11 @@
 // its stead for a few seconds, in the log's teaching words for a bump,
 // with the seconds it cost. Everything here is words and numbers; the
 // line itself draws them (raceline.tsx).
+//
+// What a screen reader is told of the line is its events alone, each once:
+// the start, over the line, every call (a mark rounded among them), and
+// home or out of it. The countdown, the bearing and the distance change
+// every moment and stay on the screen, unsaid.
 
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { RaceCallIn, RaceFinishIn, RacePoint, RacerAtIn, RaceToldIn } from '../net/messages';
@@ -75,6 +80,55 @@ export type LineView =
     }
   /** Home, retired, or out of it: a line of words. */
   | { kind: 'done'; text: string };
+
+/** Said as the race starts. */
+export const RACE_STARTED = 'The race has started';
+/** Said as the boat goes over the line before the start. */
+export const OVER_THE_LINE = 'Over the line: go back behind it';
+
+/**
+ * The race line's events in words, each said once: fed the line as it
+ * stands and the call shown at every reading, it keeps what it last said,
+ * and says something new only as an event happens.
+ */
+export class RaceLive {
+  /** What was said last; empty before anything. */
+  said = '';
+  #kind: LineView['kind'] | '' = '';
+  #over = false;
+  #call = '';
+  #done = '';
+
+  /** The line now, and the call shown (its words and until when) or null: what to say. */
+  read(v: LineView | null, call: { text: string; until: number } | null): string {
+    if (v === null) {
+      return this.said;
+    }
+    const was = this.#kind;
+    this.#kind = v.kind;
+    const over = (v.kind === 'before' || v.kind === 'trial') && v.over;
+    if (over && !this.#over) {
+      this.said = OVER_THE_LINE;
+    }
+    this.#over = over;
+    if (v.kind === 'racing' && (was === 'before' || was === 'trial')) {
+      this.said = RACE_STARTED;
+    }
+    const key = call === null ? '' : `${call.until} ${call.text}`;
+    if (key !== '' && key !== this.#call && call !== null) {
+      this.said = call.text;
+    }
+    this.#call = key;
+    if (v.kind === 'done' && v.text !== this.#done) {
+      this.#done = v.text;
+      // Home, or out of it, as it happens; not again on a page opened after.
+      if (was !== '') {
+        this.said = v.text;
+      }
+    }
+    return this.said;
+  }
+}
 
 /** What the race line is made from. */
 export interface LineInput {

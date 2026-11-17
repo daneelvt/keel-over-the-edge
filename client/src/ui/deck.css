@@ -85,7 +85,7 @@
 }
 
 .deck-knock .deck-faint {
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
 }
 
 /* The own knock: as a notice is, its × to put it away. */
@@ -116,7 +116,7 @@
 }
 
 .deck-line-words {
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
 }
 
 /* At the foot of the screen, centred, in the controls' place; one row,
@@ -227,11 +227,14 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   pointer-events: auto;
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
+  font-size: 0.9375rem;
 }
 
 .hud .deck-window h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 .hud .deck-question {
@@ -279,7 +282,7 @@
 }
 
 .deck-row .deck-faint {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .deck-row-keys {
@@ -334,7 +337,7 @@
 /* The skipper's link: its address in a slot, the time it has left. */
 .hud .deck-link .deck-url {
   width: 100%;
-  font-size: 14px;
+  font-size: 0.875rem;
   -webkit-user-select: text;
   user-select: text;
 }
@@ -353,7 +356,7 @@
 
 .deck-switch-detail {
   display: block;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .deck-switch input {
@@ -386,7 +389,7 @@
   height: var(--key);
   padding: 0 14px;
   font:
-    500 14px / 1 "Alegreya Sans",
+    500 calc(14 * var(--text, 1px)) / 1 "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -405,5 +408,5 @@
 }
 
 .hud .deck-window h2 {
-  font-size: 18px;
+  font-size: 1.125rem;
 }

@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { drawLook, type Looks } from '../catalog/looks';
 import { loadRaces, type RacesView } from '../ui/raceslazy';
 import { MAKE_TO_RACE } from '../ui/racewords';
+import { UpdateLine } from '../ui/updateline';
 import { useWatch } from '../ui/watchlazy';
 import { type ListLink, MAKE_TO_WATCH } from '../ui/watchwords';
 import { BoatChooser } from './boatchooser';
@@ -761,7 +762,13 @@ function mount(parent: HTMLElement, draw: (done: (me: Me) => void) => JSX.Elemen
       root.remove();
       resolve(me);
     };
-    render(draw(done), root);
+    render(
+      <>
+        <UpdateLine start={true} />
+        {draw(done)}
+      </>,
+      root,
+    );
   });
 }
 

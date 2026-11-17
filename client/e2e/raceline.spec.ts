@@ -7,7 +7,9 @@
 // the flags of the moment and fires her gun with smoke; racing, the line
 // gives the place, the gap ahead and the next mark's bearing and
 // distance, the pocket chart frames the course and the chart opens on it
-// with the boats' tracks; a call shows on the line and goes; Retire, from
+// with the boats' tracks; a call shows on the line and goes; read out,
+// the line says its events alone (the start, the call), never the
+// countdown or the bearing; Retire, from
 // the line's ⋯, asks first and retires; a boat home opens the finish's
 // card, and the results the results' window with its rosettes, its awards
 // read warmly and the wooden spoon's question.
@@ -31,6 +33,11 @@ test('a race on the racer’s screen, from the warning to the results', async ({
   await expect(line.locator('[data-readout=race-countdown]')).toHaveText('−1:40');
   await expect(line.locator('[data-readout=race-side]')).toHaveText(/^\d+ m to the line$/);
   await expect(line.locator('.rl-flag')).toHaveAttribute('aria-label', 'The class’s flag');
+  // Read out, its events alone: nothing yet, the countdown not said.
+  const said = line.locator('[data-readout=race-said]');
+  await expect(said).toHaveAttribute('role', 'status');
+  await expect(said).toHaveText('');
+  await expect(line).not.toHaveAttribute('role', 'status');
   const flown = await page.evaluate(() => globalThis.keel.raceMarks().laid[0]?.flags.length ?? 0);
   expect(flown).toBe(1);
 
@@ -63,6 +70,7 @@ test('a race on the racer’s screen, from the warning to the results', async ({
   await expect(line.locator('[data-readout=race-gap]')).toHaveText('+0:18');
   await expect(line.locator('.rl-label')).toHaveText('Mk 1');
   await expect(line.locator('.rl-bearing')).toHaveText(/^\d{3}°$/);
+  await expect(said).toHaveText('The race has started');
 
   // The chart opens on the course, every boat's track and its tags.
   await page.locator('.pocket-chart').click();
@@ -86,7 +94,10 @@ test('a race on the racer’s screen, from the warning to the results', async ({
   await expect(line.locator('[data-readout=race-call]')).toHaveText(
     'Port tack keeps clear of starboard · 10 seconds added',
   );
+  await expect(said).toHaveText('Port tack keeps clear of starboard · 10 seconds added');
   await expect(line).toHaveAttribute('data-state', 'racing', { timeout: 10_000 });
+  // The call gone, what was said stays: nothing new to say.
+  await expect(said).toHaveText('Port tack keeps clear of starboard · 10 seconds added');
 
   // Retire asks first.
   await line.locator('.rl-more').click();

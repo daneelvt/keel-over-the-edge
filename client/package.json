@@ -24,6 +24,7 @@
     "fsevents": false
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@biomejs/biome": "2.6.4",
     "@bufbuild/buf": "1.75.0",
     "@bufbuild/protobuf": "2.16.0",

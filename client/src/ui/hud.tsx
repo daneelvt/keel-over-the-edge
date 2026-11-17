@@ -28,6 +28,8 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { AccountPanel, MachinesPanel } from '../account/account';
 import type { FullScreen } from '../boot/fullscreen';
+import { updated } from '../boot/updated';
+import { keysGo } from '../input/focused';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
@@ -52,6 +54,7 @@ import { cheeringText } from './racewatchwords';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
 import { type StatementsView, statementsShown, useStatements } from './statementlazy';
+import { UpdateLine } from './updateline';
 import { sailsOwn, useWatch, type WatchView } from './watchlazy';
 import { watchersText } from './watchwords';
 
@@ -291,14 +294,10 @@ export interface ScreenProps {
   home?: HomeView | null;
 }
 
-/** Whether a key press is the player's, not typing in a field. */
+/** Whether a key press is not the game's: typing in a field, or on a key, list or window of its own. */
 function typing(e: KeyboardEvent): boolean {
-  const t = e.target;
-  return (
-    t instanceof HTMLInputElement ||
-    t instanceof HTMLSelectElement ||
-    t instanceof HTMLTextAreaElement
-  );
+  const go = keysGo(e.target);
+  return go === 'typing' || go === 'aside';
 }
 
 /** The free camera as the screen sees it. */
@@ -412,6 +411,7 @@ function Screen(props: ScreenProps) {
         <SailorLine model={model} />
         {watch !== null && steer ? <WatchersLine watch={watch} racing={racing} /> : null}
         <BumpLine model={model} />
+        {cleared ? null : <UpdateLine />}
         {notices !== null && !cleared ? <NoticeLine notices={notices} /> : null}
         {deck !== null ? <LazyDeck deck={deck} part="top" sailor={props.sailor} /> : null}
         {deck !== null ? <LazyDeck deck={deck} part="chat" sailor={props.sailor} /> : null}
@@ -421,9 +421,10 @@ function Screen(props: ScreenProps) {
         ) : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
       </div>
-      {notices !== null && cleared ? (
+      {cleared && (notices !== null || updated.value) ? (
         <div class="clear-notices">
-          <NoticeLine notices={notices} />
+          <UpdateLine />
+          {notices !== null ? <NoticeLine notices={notices} /> : null}
         </div>
       ) : null}
       <div class="hud-right">

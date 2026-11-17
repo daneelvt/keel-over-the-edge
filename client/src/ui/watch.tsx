@@ -27,6 +27,7 @@ import { call, reasonOf } from '../account/passkeys';
 import { reasonText } from '../account/reasons';
 import { SHARE } from './deckwords';
 import { COME_ABOARD, comeAboardText } from './machinewords';
+import { useModal } from './modal';
 import { PlayerText } from './player';
 import { queueLines } from './queue';
 import { loadSettings, saveWatchChoice, type WatchSort, type WatchWho } from './settings';
@@ -238,28 +239,28 @@ export function pickOne(rows: readonly WatchRow[], random = Math.random): string
   return top[Math.min(top.length - 1, Math.floor(random() * top.length))]?.name ?? null;
 }
 
-/** The question before the own boat leaves the water to watch; Escape is Stay. */
+/**
+ * The question before the own boat leaves the water to watch: Stay takes
+ * the focus, and Escape is Stay; the rest of the page is inert while it is
+ * asked.
+ */
 export function LeaveQuestion({ leave, stay }: { leave: () => void; stay: () => void }) {
-  // Heard as soon as it is drawn.
-  useLayoutEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        stay();
-      }
-    };
-    document.addEventListener('keydown', key);
-    return () => document.removeEventListener('keydown', key);
-  }, [stay]);
+  const ref = useModal(stay, { inert: true, focus: '[data-stay]' });
   return (
-    <section class="watch-question" role="alertdialog" aria-labelledby="watch-leave-title">
+    <section
+      class="watch-question"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="watch-leave-title"
+      ref={ref}
+    >
       <h2 id="watch-leave-title">{LEAVE_QUESTION}</h2>
       <p>{LEAVE_DETAIL}</p>
       <div class="watch-buttons">
         <button type="button" class="watch-go" onClick={leave}>
           {LEAVE}
         </button>
-        <button type="button" onClick={stay}>
+        <button type="button" data-stay onClick={stay}>
           {STAY}
         </button>
       </div>

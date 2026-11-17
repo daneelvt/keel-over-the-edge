@@ -30,6 +30,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 import { chromiumArgs, chromiumEnv, softwareGPUOf } from './e2e/gpu';
+import { builtFiles } from './playwright.built.config';
 
 const port = 5181;
 // A second Vite, whose game traffic goes through tools/e2e's lag proxy.
@@ -53,12 +54,14 @@ const linux = process.platform === 'linux';
 // keel's world is a minute old: it is the page project's first file.
 export const pageFiles = [
   'connect',
+  'a11y',
   'aboard',
   'audio',
   'boats',
   'discover',
   'lag',
   'life',
+  'lifecycle',
   'looks',
   'machines',
   'oauth-approve',
@@ -110,11 +113,16 @@ export const shardFiles: Record<string, string[][]> = {
   ],
 };
 
-/** The files a scene project's shard runs, as the project's testMatch or testIgnore. */
+/**
+ * The files a scene project's shard runs, as the project's testMatch or
+ * testIgnore: neither the page's nor the built page's
+ * (playwright.built.config.ts).
+ */
 function shardOf(project: string): { testMatch?: string[]; testIgnore: string[] } {
   const shards = Number(process.env.SHARDS ?? '1');
+  const others = [...pageFiles, ...builtFiles];
   if (shards <= 1 || process.env.PROJECT !== project) {
-    return { testIgnore: pageFiles };
+    return { testIgnore: others };
   }
   const groups = (shardFiles[project] ?? []).map((g) => g.map((n) => `${n}.spec.ts`));
   const shard = Number(process.env.SHARD);
@@ -124,8 +132,8 @@ function shardOf(project: string): { testMatch?: string[]; testIgnore: string[] 
     );
   }
   return shard < shards
-    ? { testMatch: groups[shard - 1] ?? [], testIgnore: pageFiles }
-    : { testIgnore: [...groups.flat(), ...pageFiles] };
+    ? { testMatch: groups[shard - 1] ?? [], testIgnore: others }
+    : { testIgnore: [...groups.flat(), ...others] };
 }
 /** Chromium's launch, on the software GPU e2e/gpu.ts gives the project on Linux. */
 function launch(project: string): { args: string[]; env: Record<string, string> } {

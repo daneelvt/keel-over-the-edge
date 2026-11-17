@@ -10,6 +10,7 @@
 // the player's own panel.
 
 import { type Signal, signal } from '@preact/signals';
+import { modalRef } from '../ui/modal';
 import {
   KEEP_IT,
   NOT_TAKEN_OUT,
@@ -38,6 +39,11 @@ export class TakeOut {
    * here never lands after a boat chosen there.
    */
   out: () => void | Promise<void> = () => {};
+  /**
+   * The question's ref: Keep it takes the focus as it is asked, and the
+   * rest of the page is inert until it is answered.
+   */
+  readonly modal = modalRef(() => this.keep(), { inert: true, focus: '[data-stay]' });
   readonly #fetch: Fetch;
 
   constructor(atSea: boolean, f: Fetch = (input, init) => fetch(input, init)) {
@@ -123,8 +129,10 @@ export function TakeOutQuestion({ out }: { out: TakeOut }) {
     <section
       class="start-panel take-out"
       role="alertdialog"
+      aria-modal="true"
       aria-labelledby="take-out-title"
       aria-describedby="take-out-detail"
+      ref={out.modal}
     >
       <h1 id="take-out-title">{TAKE_OUT_QUESTION}</h1>
       <p id="take-out-detail" class="start-text">
@@ -134,7 +142,13 @@ export function TakeOutQuestion({ out }: { out: TakeOut }) {
         {out.problem.value}
       </p>
       <div class="choose-look-actions">
-        <button type="button" class="start-sign-in" disabled={busy} onClick={() => out.keep()}>
+        <button
+          type="button"
+          class="start-sign-in"
+          data-stay
+          disabled={busy}
+          onClick={() => out.keep()}
+        >
           {KEEP_IT}
         </button>
         <button type="button" class="start-go" disabled={busy} onClick={() => void out.take()}>

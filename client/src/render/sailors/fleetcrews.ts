@@ -53,6 +53,7 @@ import { company } from './ship';
 import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
 import { type ShipMember, ShipRules, shipPlan } from './shiprules';
 import { hullSolid } from './solid';
+import { stillNow } from './still';
 import { trapezeOf, wireDepth } from './trapeze';
 import { namesYachtClips, yachtBoat } from './yacht';
 
@@ -198,7 +199,10 @@ export class FleetCrews {
   readonly #figures = new Map<string, Float32Array>();
   #dirty = true;
   #frames = 0;
-  readonly #still: boolean;
+  /** Under reduced motion, read every frame: a change while playing is followed. */
+  get #still(): boolean {
+    return stillNow();
+  }
   /** The wind's direction, radians from north: each boat's wind off its bow. */
   windFrom = 0;
   /** The most people drawn: CREW_MOST, or as a test asks. */
@@ -214,8 +218,6 @@ export class FleetCrews {
     readonly sailorLookOf: (code: number) => SailorLook,
   ) {
     this.group.name = 'crews';
-    this.#still =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /** The fleet's looks, which the crews are drawn in; until given, nothing is drawn. */
@@ -572,6 +574,7 @@ export class FleetCrews {
     if (c.rules instanceof ShipRules) {
       const s = this.#shipInput;
       s.rules = c.rules;
+      c.rules.still = this.#still;
       s.clips = clips;
       s.machine = p.look.machine;
       s.time = this.#still ? p.hold : p.time;

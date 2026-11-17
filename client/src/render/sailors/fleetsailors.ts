@@ -96,6 +96,7 @@ import {
   wheelTurn,
 } from './runtime';
 import type { HullSolid } from './solid';
+import { stillNow } from './still';
 import type { Trapeze } from './trapeze';
 import type { YachtPlaces } from './yacht';
 
@@ -239,7 +240,10 @@ export class SailorRows {
 
 export class NearSailors extends SailorRows {
   readonly #slots: (Sailor | null)[] = new Array<Sailor | null>(SLOTS).fill(null);
-  readonly #still: boolean;
+  /** Under reduced motion, read every frame: a change while playing is followed. */
+  get #still(): boolean {
+    return stillNow();
+  }
   /** The world's time, seconds, at the last frame. */
   #time = 0;
   /** How many times a sailor has run, counted until read. */
@@ -251,8 +255,6 @@ export class NearSailors extends SailorRows {
     readonly boat: NearBoat,
   ) {
     super(ROW_HEAD + 3 * bones, rows, 'fleet near sailors skinned');
-    this.#still =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /** The wind's direction (radians from north) and speed (m/s): each boat's apparent wind from it and the boat's own way. */
@@ -320,6 +322,7 @@ export class NearSailors extends SailorRows {
     this.runs++;
     const mo = s.moment;
     mo.dt = dt;
+    mo.still = stillNow();
     mo.time = this.#time;
     mo.offset = b.sailor;
     mo.aft = b.aft;

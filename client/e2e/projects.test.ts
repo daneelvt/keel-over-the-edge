@@ -7,6 +7,7 @@
 
 import { readdirSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { builtFiles } from '../playwright.built.config';
 import { pageFiles, shardFiles } from '../playwright.config';
 
 const specs = readdirSync(new URL('.', import.meta.url)).filter((f) => f.endsWith('.spec.ts'));
@@ -16,11 +17,17 @@ describe('the spec files', () => {
     expect(pageFiles.filter((f) => !specs.includes(f))).toEqual([]);
   });
 
+  test('the built page’s are all there, and in no other project', () => {
+    expect(builtFiles.filter((f) => !specs.includes(f))).toEqual([]);
+    expect(builtFiles.filter((f) => pageFiles.includes(f))).toEqual([]);
+  });
+
   for (const [project, groups] of Object.entries(shardFiles)) {
     test(`${project}’s shards name scene files that are there, each once`, () => {
       const named = groups.flat().map((n) => `${n}.spec.ts`);
       expect(named.filter((f) => !specs.includes(f))).toEqual([]);
       expect(named.filter((f) => pageFiles.includes(f))).toEqual([]);
+      expect(named.filter((f) => builtFiles.includes(f))).toEqual([]);
       expect(named.filter((f, i) => named.indexOf(f) !== i)).toEqual([]);
     });
   }

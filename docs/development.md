@@ -133,9 +133,9 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the sizes of its parts loaded apart (the approval page, the log, the news), the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. The built page's, when either's ran: the page built and served by keel, and a new sailor's first download to the reveal held under 4 MB on the wire (`critical.spec.ts`). Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2`; `npx vite build`, then `npx playwright test -c playwright.built.config.ts` |
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
@@ -2098,7 +2098,7 @@ that skips a frame misses none. Each connection is sent a `Bump` for each
 bump after the last it was sent (from its Welcome): to the two boats'
 sailors with their part (`yours`, `theirs`, `none`) and the Article; to a
 connection that sees either boat in its near band, without them. The page
-knocks (`art/sound/bump.json`), shakes the camera (a third as much under
+knocks (`art/sound/bump.json`), shakes the camera (not at all under
 reduced motion) and, for its own, says the verdict under the readout for
 four seconds. The persist queue writes each bump to the `event` table, kind
 `bump`, the sailor and boat at fault first (with no fault, the first boat),
@@ -5468,7 +5468,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_AI_SILENCE` | `3m` | How long a machine sailor's boat stays at sea with no call from its agent before its minute's grace begins, from 1s to 1h |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
-| `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world); `tools/e2e` sets it too) |
+| `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world); `tools/e2e` sets it too, but with `-land`) |
 | `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1, as `tools/e2e` does |
 | `KEEL_WORLD_SCHEDULE` | `Sun 18:00 America/New_York notice=72h ahead=24h` | When worlds end, how long before a world is closing and its successor made; or a period from an anchor in UTC (see [The weekly world](#the-weekly-world)) |
 | `KEEL_WORLD_KEEP` | `672h` | How long an ended world's data is kept before its partitions are dropped |
@@ -5582,12 +5582,72 @@ resolved at start, so updating it allocates nothing:
 | `keel_edge_resyncs_total{result}` | Clients' requests for a full snapshot, `honoured` or `ignored` (more than one a second): should stay at 0 |
 | `keel_edge_input_margin_ticks` | How many ticks before their tick inputs arrived; negative when late |
 | `keel_client_rtt_seconds`, `keel_client_frame_seconds` | The phones' round trips and 95th percentile frame times, from their pings |
+| `keel_edge_minute_bytes{role,direction}` | Each game connection's bytes in a whole minute at sea, `sailing` or `watching`: `in`, `out`, `fetched` (what its page fetched over HTTP, from its pings) and `all` (the three together); see [The page's reports and data use](#the-pages-reports-and-data-use) |
+| `keel_client_errors_total{build}` | Errors the pages reported, by the build they ran (the first eight builds by name, `other` after) |
+| `keel_client_startup_seconds{stage,visit}`, `keel_client_startup_bytes{visit}` | The pages' start-up, from the navigation's start to each stage (`shell`, `cover`, `start`, `tap`, `reveal`), and the bytes they fetched before the reveal, by visit: `first`, `return` (from the browser's cache) or `worker` (served by the service worker) |
 | `keel_http_cross_origin_refused_total` | Requests refused as cross-origin |
 | `go_*`, `process_*` | The runtime and the process |
 
 ```sh
 curl -s 127.0.0.1:9090/metrics | grep keel_sim_tick_duration
 go tool pprof http://127.0.0.1:9090/debug/pprof/profile    # 30 s of CPU
+```
+
+### The page's reports and data use
+
+**Reports.** The page reports what it meets to `POST /api/client-report`
+(`internal/api/clientreport.go`, `client/src/boot/report.ts`), a JSON body
+of 8 KB at most, `{build, kind, …}`, with its build as `BUILD` has it
+(`dev` from Vite):
+
+- `error`: from the page's `error` and `unhandledrejection`, five a page at
+  most and the same one once. Its `message` (300 characters at most) is cut
+  before the first quote of any kind, and an address in it becomes its
+  file's name; its `stack` (2 KB at most) is asset names and line numbers
+  only, `index-Bx1.js:12:345`, one a line.
+- `startup`, once, at the reveal: each stage's ms from the navigation's
+  start, `shell` (the HTML arrived), `cover` (the first paint), `start`
+  (the start screen, or the player's own sailor, shown), `tap` (Set sail)
+  and `reveal`, a stage not passed through left out; `bytes`, what the
+  page fetched over HTTP to the reveal (below); `visit`, from the
+  navigation's own timing (`workerStart` set: `worker`; the entry script
+  from the browser's cache, nothing of it over the wire: `return`;
+  otherwise `first`), which works with or without a service worker; and
+  the tier it draws at.
+
+The route needs a session, as every game route does: the page holds its
+reports in memory (eight at most) until its sailor is known, a returning
+player's at their own panel, a new one's once made, so an error before
+then, or from a visitor who leaves, is never sent. A session sends 10 a
+minute at most, then 429 `often`; a body over 8 KB is 413, and anything
+malformed, unknown or out of bounds 400. keel counts each report
+(`keel_client_errors_total`, `keel_client_startup_seconds`,
+`keel_client_startup_bytes`) and logs an error at warn, `a page's error`,
+with `page_build`, its message (cut before a quote again) and its stack.
+Nothing about a report names the account: the access log's line for the
+route has none either. No player's words are in any field: names, chat,
+the log and notices never reach a report.
+
+**Data use.** The page counts what it fetches over HTTP
+(`client/src/net/fetched.ts`): every resource's `transferSize` from a
+`PerformanceObserver`, which is 0 for a file the browser's cache or the
+service worker served, and the land's chunks, which the mesh worker
+counts. After the reveal each `Ping` carries `fetched_bytes`, what was
+fetched since the last; what came before the reveal is the start-up
+report's. The edge counts each connection's frames each way, and once a
+whole minute has passed since the connection's first ping it observes the
+minute into `keel_edge_minute_bytes{role, direction}`: `in`, `out`,
+`fetched` and `all`, under `sailing` (its own boat, or aboard another's)
+or `watching`; a minute queued or idle, and a connection's last part of a
+minute, are not observed. Nothing is kept per player.
+
+The Game dashboard shows **Data an hour at sea, by role** (the median and
+90th percentile of `all`, as an hour), **Start-up, first and return
+visits** and **Errors in the pages, by build**. `ClientErrors` warns when
+the pages report more than one error a minute for 15 minutes.
+
+```sh
+curl -s 127.0.0.1:9090/metrics | grep -E 'keel_client_(errors|startup)|keel_edge_minute_bytes_count'
 ```
 
 ### The flight recorder
@@ -5695,7 +5755,7 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | `POST /api/account/recovery` | Confirmed: 200 `{"recoveryCode", "recoveryMade"}`, the old code void |
 | `POST /api/account/logout-others` | 200 `{"ended": n}` |
 | `POST /api/account/delete` | `{"name"}`, confirmed: 200 `{"unknown": [...]}`, every passkey for the browser to forget; 422 `name` |
-| `GET /`, `GET /{file}`, `GET /assets/{file}` | With `KEEL_CLIENT_DIR`, the built page, read into memory at start: `index.html` at `/`, the other files of the directory's top level (`dev.html`, the licences notice) by name, and the hashed files in `assets/`. Assets are cached for a year as `immutable`, the rest `no-cache`. No listings, no other folders, no hidden files; types from a table of the build's extensions (`.wasm` as `application/wasm`, `.glb` as `model/gltf-binary`); `HEAD` too. These routes need no session, so the page loads while the database cannot be asked |
+| `GET /`, `GET /{file}`, `GET /assets/{file}` | With `KEEL_CLIENT_DIR`, the built page, read into memory at start: `index.html` at `/`, the other files of the directory's top level (`dev.html`, the licences notice) by name, and the hashed files in `assets/`. Assets are cached for a year as `immutable`, the rest `no-cache` (the service worker, `/sw.js`, among them, so a browser checks it at every visit). No listings, no other folders, no hidden files (so never the build's manifest, `.vite/manifest.json`); types from a table of the build's extensions (`.wasm` as `application/wasm`, `.glb` as `model/gltf-binary`); `HEAD` too. These routes need no session, so the page loads while the database cannot be asked |
 
 **Nothing is served without a session unless there is a reason it must
 be.** The routes that answer without one are listed in `openRoutes`
@@ -8193,7 +8253,7 @@ secrets are made from:
 | `tunnel.tf` | The tunnel `keel-prod`, remotely managed: `play.keelovertheedge.com` → `http://traefik.kube-system.svc.cluster.local:80`, anything else 404. Its token, written into Infisical |
 | `dns.tf` | `play` and `agents` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
 | `zone.tf` | TLS strict, HTTPS always, TLS 1.2 at least, no 0-RTT, WebSockets; HSTS; nothing that rewrites the page or answers in its place; no bot or AI-crawler blocking |
-| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited; the free plan's rule names the path alone, on every host); no script of Cloudflare's added to the game's page or the website's (its Web Analytics beacon, Zaraz); no challenge where servers call (AI apps, GitHub's webhook, the website's Worker at `/api/status`) |
+| `rules.tf` | `/assets/` cached as the game says; the models and other binary assets under `/assets/` (`model/gltf-binary`, `application/octet-stream`) compressed by a Compression Rule, since Cloudflare's own list of types it compresses has neither; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited; the free plan's rule names the path alone, on every host); no script of Cloudflare's added to the game's page or the website's (its Web Analytics beacon, Zaraz); no challenge where servers call (AI apps, GitHub's webhook, the website's Worker at `/api/status`) |
 | `access.tf` | The Access application on `play.keelovertheedge.com/api/status`, its Service Auth policy and the website's service token (a year; renewed by raising `website_token_term`, its secret rotated by `website_token_generation`); the team's domain and the application's audience tag written to Infisical's `/keel-access/` for keel; the token's ID and secret as sensitive outputs, for the website's deploy |
 | `website.tf` | The website's KV namespace (its ID an output); `www`'s placeholder record (proxied, `100::`); the redirects: `www.` to the apex, the apex's `/play` to `https://play.keelovertheedge.com/`, each keeping the query. No apex record: the Worker's custom domain makes it |
 | `secrets.tf` | The database's password: ephemeral, written into Infisical write-only, in no plan or state |
@@ -9078,7 +9138,7 @@ In the folder **Keel**, written for this game (`infra/cluster/monitoring/dashboa
 | Dashboard | What it answers |
 |---|---|
 | Overview | Is anything wrong? What fires, how severe, and when each alert fired in the last day; boats, connections and the tick; the database, and the last WAL, base backup, dump and restore test; the machine's CPU, steal, memory and disk, a pending reboot or update; Flux; scrape targets down |
-| Game | How the simulation does: the tick and its phases, ticks late and skipped, boats, connections, joins and closes, the queue's wait, bytes a player a second, phones' round trip and frame time, persistence's oldest unwritten change and inbox, checkpoints, the lease, keel's CPU, throttling and memory, restarts and restores, its warnings and errors |
+| Game | How the simulation does: the tick and its phases, ticks late and skipped, boats, connections, joins and closes, the queue's wait, bytes a player a second, data an hour at sea by role, phones' round trip and frame time, the pages' start-up times and errors by build, persistence's oldest unwritten change and inbox, checkpoints, the lease, keel's CPU, throttling and memory, restarts and restores, its warnings and errors |
 | Machine | The VM: CPU by mode, pressure, memory, the clock; the root filesystem, what grows on it and when it would be full; disk latency; the network and the month's transfer at today's rate; its upkeep (a reboot required, updates waiting, a newer kernel waiting, AIDE, the units, auditd's log); the journal's warnings; each pod against what it asked for |
 | Database | PostgreSQL: connections, transactions, locks, the oldest transaction; tables, dead rows and vacuums; WAL, checkpoints and I/O; keel's pool and its queries' times; the statements that cost the most, and the slow ones with their plans |
 | Backups | How far back a restore can go: the last WAL archived, segments archived and failed, WAL waiting on the machine, WAL written a day, the base backups, the dump's and the restore test's runs and results, the archiver's log |
@@ -9147,6 +9207,7 @@ itself is down. The rules are beside what they watch
 | MachineSailorsShutOut | the machine sailors' queue's head has waited 10 minutes while they sail fewer boats than their reserve and the sea has room, for 5 minutes: admission is broken | The world page's queues; keel's logs |
 | MemoryNearLimit | a container of keel or the database is over 90% of its limit | Its memory over days; raise the limit in a commit |
 | CPUThrottled | keel is throttled in over a tenth of its CPU periods | Game: does the tick suffer |
+| ClientErrors | the players' pages report more than one error a minute for 15 minutes | Game: which build; keel's log, `a page's error`, for the messages and stacks |
 | BackupStale | no base backup completed in 26 hours | `kubectl -n keel get backups.postgresql.cnpg.io`; the sidecar's log |
 | DatabaseConnections | over 80% of `max_connections` are held | Database: who holds them |
 | LongTransaction | a transaction is open for over 5 minutes | `pg_stat_activity`; cancel it if it is nobody's |
@@ -9303,8 +9364,8 @@ things and their pictures stay in one wind. The developer page is
 
 | Control | Touch | Keyboard and mouse |
 |---------|-------|--------------------|
-| Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it |
-| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly). Its name and its ends' words are the boat's (the catalog's `controls.sheet`: "Sheet", Trim and Ease on the Jolly boat and the keelboat) | W trims and S eases, the whole range in 2 s while held |
+| Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it. Tabbed to, its own ← and → |
+| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly). Its name and its ends' words are the boat's (the catalog's `controls.sheet`: "Sheet", Trim and Ease on the Jolly boat and the keelboat) | W trims and S eases, the whole range in 2 s while held. Tabbed to, → and ↑ trim, ← and ↓ ease, Page Up and Page Down a tenth at a time |
 | Reef | The brass Reef key at the sheet's top (held sideways beside it, toward the boat): a tap reefs one more, its face the reef asked for in the boat's words (`controls.reef`: Full sail, One reef, Two reefs); once reefed a second key, Shake, beside it (upright over it) shakes one out. The crew takes the catalog's `reefTime` a reef; the case's last line names the reef the main has. On a boat whose main does not reef, no key | R reefs one more, F shakes one out |
 | Autopilot | The button between them: on at the boat's angle to the wind, and its dial; touching the helm takes the helm back | P on or off; Q and E turn its target a degree to port or starboard, ten with Shift; T tacks, G gybes; the helm's keys take the helm back |
 | Reef | The Reef key (`Game.reef.set(level)`) | R takes one more reef, F shakes one out (Shift and R too, since F flies the free camera where it may); the crew takes the boat's reef time a level, and the reef goes out in each `Input` |
@@ -9335,6 +9396,82 @@ stand over it below the keys under the pocket chart; a drag moves the
 sheet as far whatever its track's length. `e2e/layout.spec.ts` holds the
 keys at 44 px, on the sheet's top or beside it, covering nothing, on its
 five phone screens and the tests' (and the keelboat framed on every one).
+
+### Reading the screen
+
+What a keyboard, a screen reader, a reader's larger text and less motion
+get of the game; `e2e/a11y.spec.ts` checks it in the browser.
+
+**Keys go to what has the focus** (`client/src/input/focused.ts`). Typing
+in a field, the game's keys are not heard. The helm and the sheet are
+sliders (`role="slider"`, a tab stop each): focused, they answer their own
+arrows (table above), and the other keys do as anywhere. On a key, a list
+or a window the keyboard reached, the game's keys stand aside, so the
+arrows, Space and Enter do what they do there, and Escape still closes
+what is open. On the scene or the page, and on a key a pointer pressed
+(which keeps the focus but not its ring, `:focus-visible`), the game's keys
+work as everywhere. The helm's `aria-valuetext` is the rudder asked for
+("Helm 12° to port", "Helm amidships", from the boat's `rudderAngle`),
+written as the whole degree changes; the sheet's, its percentage and what
+the sail wants ("Sheet 50%, luffing: trim in").
+
+**Questions and windows** (`client/src/ui/modal.ts`, one rule for all):
+each is `aria-modal`, takes the focus as it opens (a window on its first
+key or field; a question, `role="alertdialog"`, on the key that changes
+nothing: Stay, Stay aboard, Keep it, Cancel), closes on Escape (the one
+opened last, so a window over a window closes alone) and gives the focus
+back to what opened it, or to the menu's button or the pocket chart where
+that is gone. While a question is asked, the rest of the page is `inert`:
+the scene, the case, the controls. The menu, the full chart (Escape puts
+away a box open on it first), the race's windows and races ashore's are
+windows; the way home, leaving the water to watch, going ashore, a block
+and taking the boat out are questions. A component tested by calling it
+as a function stays free of hooks: `Modal` (drawn beside it) or
+`modalRef` (made by its owner) apply the same rule.
+
+**Live words.** The race line's live words are its events alone, each
+once, in a hidden status line: the start, over the line, every call (a
+mark rounded, over early, a bump) and home (`RaceLive` in
+`racelinewords.ts`). The countdown, bearing and distance change every
+moment and are not read out. Every other status line (the sailor's, a
+bump's verdict, the connection's, the notices, the clock's hour) changes
+only on an event.
+
+**Less motion** (`prefers-reduced-motion`): the camera does not sway or
+shake at a bump, the lightning does not pulse, the cover, the case and the
+chart's streaks keep still, the pushers, keys and controls change at once
+with no turn or fade, and the crews keep their clips still
+(`render/sailors/still.ts`, read every frame, so a change made while
+playing is followed).
+
+**Text size.** The screens for reading follow the browser's text size:
+the start screen, the menu (and the account page in its place), the
+windows (the log, the news, races ashore's and the race's windows, the
+list of sailors to watch and its card, sailing together's windows), the
+questions and the notices. Their words are in `rem` from the page's root,
+which is left at the browser's 100%; at its default 16 px every size is
+what it was in px. The case, the control head, the helm, the sheet, the
+pocket chart, the race line and bar, the plates and the chart's own parts
+keep their px. A rule shared by both writes its size in `--text`: `1px`
+in `.hud`, `0.0625rem` on each screen for reading (the plate's keys, the
+menu's and a window's, sailing together's). Keys stay the head keys'
+40 px tall whatever their words. `e2e/layout.spec.ts` runs its checks of
+the screens for reading again at 20 px (Chromium's `Page.setFontSizes`
+over the DevTools protocol), on a small phone held either way and the
+tests' screen. To look at one: Chrome's settings, Appearance, Font size,
+or `chrome://settings/fonts`.
+
+**The automated check** (`e2e/a11y.spec.ts`, a page project's file):
+`@axe-core/playwright` on the start screen, the screen at sea (the
+barometer out, the control head open), the menu, the question before going
+home, the log and the news, under reduced motion, failing on any serious
+or critical finding; and the instruments read by name and state with
+`getByRole` (the case's pushers, the helm and the sheet with their words,
+the control head, the night light's slider). No rule is turned off;
+`label-content-name-mismatch` is checked apart without the dials (their
+drawn figures are a picture) and the control head's levers (their halves'
+legends mark positions; the state is `aria-pressed`). A rule turned off or
+a part left out is named in the spec with why.
 
 ### The frame
 
@@ -9450,6 +9587,47 @@ copy its scenario into `scenarios.json` and rewrite the golden file.
 compare (`UPDATE_RECORDING=1 npx vitest run src/sandbox` rewrites it after a
 deliberate change to the physics).
 
+### The screen kept on, and the home screen
+
+**The wake lock** (`client/src/boot/wakelock.ts`). From the reveal, while
+the connection is at sea (sailing, aboard or watching) and the page is in
+sight, the page holds a screen wake lock, so a boat on the autopilot or a
+sailor watched keeps the screen on. The browser lets it go when the page
+is hidden; it is taken again when the page is back in sight, and looked
+at every 5 s. It is let go while the connection is not at sea (the
+world's end, a connection lost) and when the full chart or the menu (or a
+panel it opened) has stood open and untouched for two minutes; a touch or a key takes it
+again. The start screen never holds it. A refusal, or a browser without
+the API, is silent. There is no setting.
+
+**The home screen** (`client/src/boot/homescreen.ts`,
+`account/homeoffer.tsx`). A day of play is a Set sail on a local date not
+counted before, kept in `localStorage` as `keel.homeScreen`
+(`{"days":2,"last":"2026-11-16","done":false,"shown":""}`). From the
+third day, when
+the game is not installed and the browser can install it (Chrome has
+fired `beforeinstallprompt`, which the page keeps and whose own banner it
+holds back; or Safari on an iPhone), the player's own panel shows "Play
+from your home screen, without the browser's bars." under Set sail, with
+**Add Keel** (Chrome's own question; on an iPhone, the menu's three
+steps in its place) and **Not now**. Either, or the game installed
+(`appinstalled`), puts it away for good (`done`). It is offered once:
+the date it is first shown is kept (`shown`), it stays for a reload that
+day, and, left unanswered, it is not shown on a later day. In the menu, once
+Chrome has offered, an **Install** key asks its question; it goes once
+answered, until Chrome offers again. To see the offer, set
+`keel.homeScreen` to two days before today from the browser's console
+(on a phone, through remote DevTools) and reload; in desktop Chrome a
+test can dispatch its own `beforeinstallprompt` (`e2e/lifecycle.spec.ts`
+does).
+
+**The back/forward cache.** Nothing keeps the page out of it: there is no
+`unload` handler, the page is `no-cache`, not `no-store`, and `pagehide`
+closes the game connection, which `pageshow` opens again when the page
+comes back from the cache. `e2e/lifecycle.spec.ts` goes to the rules and
+back at sea and finds the same page sailing the same boat (Playwright
+turns Chromium's cache off; that file turns it on).
+
 ### How it is drawn
 
 | File | What |
@@ -9468,6 +9646,107 @@ deliberate change to the physics).
 | `client/src/ocean/hulls.ts` | No water inside a hull: the sea's fragments within a hull's volume are left out |
 | `client/src/game/float.ts` | The other boats' heave and pitch, from the sea drawn under them |
 | `client/src/render/boat.ts` | Loads a boat's model and its sailor from the catalog's art, replaces their materials with the factory's |
+
+### The build's id
+
+The image's `BUILD` (the commit's first 12 characters, `release.yaml`)
+reaches the page: the `Dockerfile`'s client stage sets `KEEL_BUILD` from
+it, and Vite defines it in the page (`client/src/boot/build.ts`, `"dev"`
+from the development server or a build without it). The page's hello sends
+it, so keel's logs name the page's build, and the service worker names its
+caches by it. `GET /api/version` answers the server's.
+
+### The service worker
+
+A built page keeps the game on the phone with a small service worker of
+its own, `client/src/sw/` (no library), built by Vite to `dist/sw.js` by
+`client/build/sw.ts`. The build writes in its build's id and the files
+the page can reach from `index.html`, lazy ones too, read from Vite's
+manifest (`build.manifest`, written to `dist/.vite/`, which keel never
+serves): the **code** (scripts, workers, WebAssembly, style sheets and
+fonts, about 320 files and 1.7 MB gzipped) and the **art** (models,
+portraits, images, sounds).
+
+It answers only what it knows:
+
+| Request | Answer |
+|---------|--------|
+| A navigation to `/`, with any query but `s` | The network first; after 3 s, a failure or a server error (5xx), the page this build kept, which says "Back soon" itself until the server answers |
+| A navigation to `/?s=…` (a skipper's link) | Never from the worker: the server's own answer, with its `no-referrer` header |
+| `GET /assets/*` | The caches first (this build's code, the previous build's, the art), else the network, and kept: a file of the build's code with its build, anything else in the art cache. A request for a range goes to the network |
+| The icons and `manifest.webmanifest` | The kept copy at once, a fresh one fetched and kept for next time |
+| Everything else | Untouched, as if there were no worker: `/api/`, `/ws`, `/w/` (the mesh worker keeps the land's chunks itself, `chunks-<world>`), `/oauth/`, `/passkey/`, `/account/`, `/signin/`, `/mcp`, `/report`, `/sw.js`, the other pages, other sites, anything but `GET` |
+
+Its caches:
+
+| Cache | Holds |
+|-------|-------|
+| `keel-code-<build>` | The page at `/`, its icons and manifest, and every file of the build's code, fetched when the worker installs, at low priority (most from the browser's own cache, since the page has just loaded them). A file the previous build kept under the same name is copied, not fetched. The page at `/` must name the build's entry script, or a deploy is under way and the install fails, leaving no cache, to be tried at the next visit |
+| `keel-art` | The art, as it is used, for every build |
+
+**When.** The page registers `/sw.js` once the world is revealed, or after
+20 s on the start screen, whichever comes first, so it never competes with
+the first download; only in a built page, never under Vite, `?test` or
+`?sandbox` (`client/src/boot/sw.ts`, one function, `register()`, for a
+policy on script addresses to cover). Where the game runs installed (from
+its icon), the page asks once for persistent storage
+(`navigator.storage.persist()`), granted there without a question.
+
+**Updates.** A new build's worker installs at the next visit, takes over
+at once (`skipWaiting`, `clients.claim`) and, as it activates, keeps the
+previous build's code cache (the one made last before its own) and
+deletes older ones; the art cache drops what the new build does not name.
+So a page open across a deploy keeps opening its lazy screens from the
+previous build's cache, and its next load is the new build. A page closed
+with 4002 (an older protocol, catalog or physics) tells a waiting worker
+to take over before it reloads. A page with no worker, or two deploys old,
+whose lazy screen (the log, the news, a race's window, a sailor's look, a
+watch) fails to load asks `/api/version`: if the server's build is not its
+own, it shows **"The game was updated. Reload to carry on."** with
+**Reload**, where the notices are at sea and at the top of the start
+screen (`client/src/ui/updateline.tsx`, its words in `updatewords.ts`). It
+never reloads by itself while the player sails. With the network down it
+says nothing, and the screen asks again when next opened.
+
+**The off switch.** A broken worker stands between players and the fix,
+so it can be switched off by a build: `KEEL_SW=off` (the image's build
+argument `SW=off`: change its default in the `Dockerfile` to release one)
+builds a `sw.js` that takes over at once, every open page with it (so the
+worker before answers nothing more), deletes every `keel-` cache (again
+3 s later, after what the worker before was answering), and unregisters
+itself; and a page that registers nothing, asks the browser to
+check a worker it is still under at once, and takes away any worker and
+caches left once under none. Browsers check `/sw.js` at every visit,
+past their HTTP cache (`updateViaCache: 'none'`), so it reaches every phone
+that comes back. Building with the worker again later turns it back on.
+
+**Seeing it.** In Chrome, DevTools' Application panel: Service workers (the
+worker and its state; "Update on reload" for trying changes) and Cache
+storage (the `keel-` caches). On a built page served by keel (below), a
+second visit's Network panel shows the page's files "(ServiceWorker)".
+Safari deletes a site's workers and caches after seven days without a
+visit (apps on the Home Screen keep theirs), so a weekly player may
+download the game again.
+
+**Testing it.** Vitest holds the worker's routing table (a skipper's link
+never from the cache, `/api/` and the rest never touched), its install,
+its answers and the clean-up keeping the previous build, against a fake
+CacheStorage and `fetch` (`client/src/sw/worker.test.ts`); the lists the
+build writes in (`client/build/sw.test.ts`); and the update line. In the
+browser, only a built page has the worker: `kept.spec.ts` in the `built`
+project (see [The built page and its first download](#the-built-page-and-its-first-download))
+sails one sailor through a return visit (served through the worker, under
+100 KB on the wire before the reveal, the land's chunks and the game's
+connection apart; both visits' tables in the job's summary), a deploy
+(keel restarted on the next build, `e2e/nextbuild.ts`: a copy of `dist/`
+with every asset renamed and the build's id changed, since a second build
+of the same tree names most files as the first did; the open page opens
+the log and the news from the worker, and its reload runs the next build
+with the first's code kept) and the off switch (keel restarted on a build
+made with `KEEL_SW=off`: after a navigation no worker and no `keel-`
+caches). By hand: `npx vite build`, then `go run ./tools/e2e -client
+client/dist` and `http://localhost:18088/` in Chrome, DevTools open as
+above.
 
 ## Art
 
@@ -9669,7 +9948,7 @@ page loads the physics module, so build it first (`go run ./tools/physics`).
 Playwright starts four servers: `keel`, which `go run ./tools/e2e` builds from
 the tree and serves on a database of its own on the test database's server
 (so start it first: `go run ./tools/dev -db`), on ports 18080, 18081 and
-19090, dropping the database when it stops, with developer commands on and land off (the terrain made from seed 1), the
+19090, dropping the database when it stops, with developer commands on and land off (the terrain made from seed 1; `-land` turns it on), the
 lag proxy on 18090 (200 ms, 2%) and, on 19099, `POST /restart`, which
 restarts `keel`; Vite on `http://localhost:5181` in front of it; a second
 Vite on `http://localhost:5182` whose traffic goes through the lag proxy;
@@ -9866,6 +10145,61 @@ when a file they read changed: a change to the server alone runs the
 page's, to the shaders alone the scene's (`tools/e2e/filters_test.go` holds
 the two filters to what each reads). A new folder under `client/src` is
 both kinds', unless it only draws or only keel's pages use it.
+
+### The built page and its first download
+
+Every project above runs against Vite in development. The `built` project
+(`playwright.built.config.ts`, its files named in `builtFiles` there, which
+the other projects leave out) runs against the page as players load it:
+built by Vite, served by keel (`go run ./tools/e2e -client client/dist
+-land`, `KEEL_CLIENT_DIR`), with the world's land on, and opened at `/`
+with no `?test`, so that the page draws and its cover lifts only once the
+world under it is ready. In front of keel, tools/e2e runs a stand-in for
+Cloudflare's edge on `http://localhost:18088`, the page's origin, which
+gzips what Cloudflare would: the types on Cloudflare's list, and the
+models and binary assets under `/assets/` that the zone's Compression
+Rule adds (`tools/e2e/edge.go`). So the bytes the browser receives are
+those of the wire players have, at gzip's size (Cloudflare sends zstd, a
+little smaller), though over HTTP/1.1, where Cloudflare speaks HTTP/2 and
+3. Chromium draws on the GPU the `webgl2` project does (lavapipe on
+Linux), at a phone's 360 × 640 at 3×, with no WebGPU.
+
+```sh
+cd client
+npx vite build
+PW_CHANNEL=chrome npx playwright test -c playwright.built.config.ts
+```
+
+A test that needs a second build served (a deploy) builds it into another
+directory (`npx vite build --outDir dist2`) and restarts keel on it:
+`POST http://127.0.0.1:19099/restart?client=client/dist2`, the directory
+from the repository's root; keel serves it from then on.
+
+`critical.spec.ts` is the critical download's check. A new player opens
+the start screen, makes a sailor with Playwright's authenticator, keeps the
+start screen's look, and sets sail from Port Royal, on a network throttled
+to DevTools' Fast 4G (`CRITICAL_NETWORK=slow4g` for Slow 4G). Every
+response from the first request to the reveal is counted as it came over
+the wire (its headers and its encoded body): the page, its code, fonts,
+models, portraits, the sky and the land's chunks. Not counted: the game's
+connection (`/ws`, which is data use), and the passkey's own requests
+(`/account/`, `/signin/`). The reveal is the html element losing its class
+`covered`, which the cover drops only as it lifts at sea
+(`client/src/boot/cover.ts`); the start screen is its name field
+appearing. **It fails over 4 MB** (4 × 1024 × 1024 bytes). Its table goes to
+the job's summary and the log: the total, what it would be without the
+Compression Rule and as keel sends it, the bytes by kind, the times from
+the navigation's start to the start screen, each Set sail, the sailor made
+and the reveal, and every response with when it was asked for and ended.
+The look shown on the start screen is drawn at random, so the total moves
+by a look's size from run to run. CI's runners are not phones: the bytes
+are the check there, and the times are only told. `pr.render`'s `built`
+job builds the page and runs the project whenever the page's tests or the
+scene's would run, beside them, on one runner.
+
+`client/build/size.ts`, in the `client` job, keeps the budgets of the
+parts loaded apart: the approval page (30 KB), the log's chunk (60 KB) and
+the news sheet's (20 KB), gzipped.
 
 ## The contributor agreement
 

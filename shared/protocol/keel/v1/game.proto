@@ -87,6 +87,9 @@ message Ping {
   uint32 tier = 5;
   // The pixel ratio the client draws at, in hundredths; 0 unknown.
   uint32 render_scale = 6;
+  // The bytes the page fetched over HTTP since its last Ping (models, land,
+  // code), as they came over the wire: none for a file a cache served.
+  uint32 fetched_bytes = 7;
 }
 
 // Command is something the player asks of the game.

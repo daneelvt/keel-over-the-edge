@@ -50,6 +50,7 @@ import { setWire, wireColour, wireMesh } from './onboat';
 import { ShipBraces } from './shipbraces';
 import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
 import { type ShipMember, ShipRules } from './shiprules';
+import { stillNow } from './still';
 
 /** Someone aboard, as the crew drawn needs them: their seat and look code, whether they wear the winner's cockade, and the pendant they wear (0 none). */
 export interface CrewPerson {
@@ -230,7 +231,10 @@ export class CrewDeck {
   #floor: ((x: number, z: number) => number | null) | null = null;
   /** Aboard a beach cat: each side's crew's wire drawn to whoever hangs on it, and the model's own (starboard, port). */
   #wires: { mesh: Mesh; node: Object3D | null }[] = [];
-  readonly #still: boolean;
+  /** Under reduced motion, read every frame: a change while playing is followed. */
+  get #still(): boolean {
+    return stillNow();
+  }
   /** Each person's distance from the camera, squared, and the people by it, nearest first. */
   #d2 = new Float64Array(0);
   #order: number[] = [];
@@ -239,8 +243,6 @@ export class CrewDeck {
 
   constructor(readonly sailorLookOf: (code: number) => SailorLook) {
     this.group.name = 'crew';
-    this.#still =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /** The fleet's looks, which the crew is drawn in; until given, nothing is drawn. */
@@ -694,6 +696,7 @@ export class CrewDeck {
     if (rules instanceof ShipRules) {
       const s = this.#shipInput;
       s.rules = rules;
+      rules.still = this.#still;
       s.clips = clips;
       s.machine = p.look.machine;
       s.time = this.#still ? p.hold : p.time;

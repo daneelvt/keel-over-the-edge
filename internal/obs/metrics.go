@@ -43,6 +43,18 @@ var WaitBuckets = []float64{1, 5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600}
 // ClientBuckets are the phones' round trips and frame times, in seconds.
 var ClientBuckets = []float64{0.005, 0.01, 0.017, 0.025, 0.033, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2}
 
+// MinuteBuckets are the bytes a game connection carries in a minute, each
+// way and fetched: a typical hour at sea is about 300 kB a minute, a busy
+// harbour four times that, and a minute of the page's own files more.
+var MinuteBuckets = []float64{10e3, 25e3, 50e3, 100e3, 150e3, 200e3, 300e3, 400e3, 600e3, 800e3, 1.2e6, 2e6, 4e6, 8e6}
+
+// StartupBuckets are the page's start-up stages, in seconds from the
+// navigation's start.
+var StartupBuckets = []float64{0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 60}
+
+// StartupByteBuckets are the bytes a page fetched before the reveal.
+var StartupByteBuckets = []float64{25e3, 100e3, 250e3, 500e3, 1e6, 1.5e6, 2e6, 2.5e6, 3e6, 3.5e6, 4e6, 5e6, 6e6, 8e6}
+
 // DBBuckets are the database queries' histogram buckets, in seconds.
 var DBBuckets = []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}
 
@@ -187,6 +199,14 @@ type Metrics struct {
 	ClientFrame         prometheus.Histogram
 	ClientTier          *prometheus.GaugeVec // by tier
 	ClientRenderScale   prometheus.Histogram
+	// EdgeMinuteBytes are each game connection's bytes a minute, by role
+	// and direction.
+	EdgeMinuteBytes *prometheus.HistogramVec
+	// The page's own reports: errors by build, start-up stages and bytes
+	// by visit.
+	ClientErrors       *prometheus.CounterVec
+	ClientStartup      *prometheus.HistogramVec
+	ClientStartupBytes *prometheus.HistogramVec
 }
 
 // NewMetrics makes the metrics, with the Go runtime's and the process's.
@@ -460,6 +480,22 @@ func NewMetrics(build, catalog string) *Metrics {
 		Name: "keel_client_render_scale", Help: "The pixel ratios the clients draw at.",
 		Buckets: []float64{0.5, 0.7, 0.8, 0.9, 1, 1.25, 1.5, 1.75, 2},
 	})
+	m.EdgeMinuteBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "keel_edge_minute_bytes",
+		Help:    "Each game connection's bytes in a minute at sea, by role (sailing, watching) and direction: in and out over the connection, fetched by the page over HTTP, and all three together.",
+		Buckets: MinuteBuckets,
+	}, []string{"role", "direction"})
+	m.ClientErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_client_errors_total", Help: "Errors the pages reported, by the build they ran.",
+	}, []string{"build"})
+	m.ClientStartup = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "keel_client_startup_seconds",
+		Help:    "The pages' start-up, from the navigation's start to each stage (shell, cover, start, tap, reveal), by visit: first, return, or worker (a return the service worker served).",
+		Buckets: StartupBuckets,
+	}, []string{"stage", "visit"})
+	m.ClientStartupBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_client_startup_bytes", Help: "The bytes the pages fetched over HTTP before the reveal, by visit.", Buckets: StartupByteBuckets,
+	}, []string{"visit"})
 	m.LeaseEpoch = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "keel_sim_lease_epoch", Help: "The simulation lease's epoch this process took it at: one more for each process that has run the world.",
 	})
@@ -526,6 +562,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistCheckpoint, m.PersistWrites)
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
+		m.EdgeMinuteBytes, m.ClientErrors, m.ClientStartup, m.ClientStartupBytes,
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeWatches, m.EdgeSpectators, m.EdgeSpectatorLimit, m.EdgeWatchers, m.EdgeKnocks, m.EdgeDeck, m.EdgeAboard,
 		m.ChatLines, m.ChatDeliveries, m.ChatRingLines, m.ChatRingBytes, m.ChatDropped, m.ChatSay, m.Reports, m.ReportsOpen, m.ReportsOldest, m.Shipmates, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
