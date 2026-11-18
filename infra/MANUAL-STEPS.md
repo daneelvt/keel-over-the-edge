@@ -384,57 +384,62 @@ Check:
 ## 11. Cloudflare: Zero Trust and the API token
 
 1. **Zero Trust** (from the account's home): if the account has no team
-   yet, choose a team name and the **Free** plan. Record in the pull
-   request whether Cloudflare asked for a payment method. If it asks and
-   you will not give one, stop: tunnels belong to Zero Trust.
+   yet, choose the **Free** plan. Record in the pull request whether
+   Cloudflare asked for a payment method. If it asks and you will not give
+   one, stop: tunnels belong to Zero Trust. Cloudflare gives the team a
+   random name (`tight-smoke-7182`); rename it at once under **Settings →
+   Team name and domain** (`keelovertheedge`), before anything is applied:
+   the team's domain is in every token Access signs, and a later rename
+   takes an apply and a restart of keel. A tunnel works without the team,
+   but Access does not: without it, `plan` stops at
+   `cloudflare_zero_trust_organization` with "Access is not enabled".
 2. **Manage Account → Account API Tokens → Create Token → Custom token**
    (a token the account owns, not your profile):
    - **Name**: `accounts`
-   - **Permissions**:
+   - **Permissions**, by the names the token's editor shows (its summary
+     says Write for Edit):
 
-     | Scope | Permission | Access |
-     |---|---|---|
-     | Account | Cloudflare One Connector: cloudflared | Edit |
-     | Account | Notifications | Edit |
-     | Zone | DNS | Edit |
-     | Zone | Zone | Read |
-     | Zone | Zone Settings | Edit |
-     | Zone | Zone WAF Rules | Edit |
-     | Zone | Bot Management | Edit |
-     | Zone | Cache Settings | Edit |
-     | Account | Access: Apps and Policies | Edit |
-     | Account | Access: Service Tokens | Edit |
-     | Account | Access: Organizations, Identity Providers, and Groups | Read |
-     | Account | Workers Scripts | Edit |
-     | Account | Workers KV Storage | Edit |
-     | Zone | Workers Routes | Edit |
-     | Zone | Single Redirect | Edit |
-     | Account | Turnstile | Edit |
+     | Scope | Permission | Access | For |
+     |---|---|---|---|
+     | Account | Cloudflare One Connector: cloudflared | Edit | the tunnel |
+     | Account | Notifications | Edit | the e-mails |
+     | Zone | Zone | Read | finding the zone |
+     | Zone | DNS | Edit | the records |
+     | Zone | Zone Settings | Edit | the zone's settings |
+     | Zone | Zone WAF | Edit | the firewall and rate rules |
+     | Zone | Bot Management | Edit | the bot settings |
+     | Zone | Cache Settings | Edit | the cache rules |
+     | Zone | Config Settings | Edit | the configuration rules |
+     | Zone | Response Compression | Edit | the compression rule |
+     | Account | Access: Apps | Edit | the website (section 16) |
+     | Account | Access: Policies | Edit | the website |
+     | Account | Access: Service Tokens | Edit | the website |
+     | Account | Access: Organizations, Identity Providers, and Groups | Read | the website |
+     | Account | Workers Scripts | Edit | the website |
+     | Account | Workers KV Storage | Edit | the website |
+     | Zone | Workers Routes | Edit | the website |
+     | Zone | Dynamic URL Redirects | Edit | the website |
+     | Account | Turnstile Sites | Edit | new sailors' human check |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
-     zone, `keelovertheedge.com`.
+     zone, `keelovertheedge.com`. The token's editor puts each permission
+     in the policy of its scope: one for the account, one for the zone.
    - **Client IP Address Filtering**: none. **TTL**: none (replaced by
      hand, below).
 
    "Cloudflare One Connector: cloudflared" is what Cloudflare now calls
    Cloudflare Tunnel's permission, the narrowest the provider accepts for a
    tunnel and its token; not "Argo Tunnel (Legacy)", nor "Cloudflare One
-   Connectors", which covers WARP's connectors too.
+   Connectors", which covers WARP's connectors too. "Dynamic URL
+   Redirects" covers the Single Redirects (`http_request_dynamic_redirect`).
+   The organisation is only read (`access.tf`): not its Write.
 
-   This is where the list starts: the first `plan` and `apply` show what is
-   missing (an error naming the endpoint refused) or unused, and this table
-   is corrected to the final list.
-
-   The last seven are the website's (section 16): the Access application,
-   its policy and service token in front of the game's status, and reading
-   the Zero Trust organisation's team domain; the Worker, its KV namespace
-   and its custom domain at the apex; and the redirects (www. to the apex,
-   the apex's `/play` to the game). A token made before them is **edited** to add them (Account API
-   Tokens → `accounts` → Edit): its value stays the same.
-
-   The last, Turnstile, makes the human check's widget for new sailors
-   (`infra/tofu/newsailors.tf`); a token made before it is edited the same
-   way.
+   A token made before a permission was added is **edited** to add it
+   (Account API Tokens → `accounts` → Edit): its value stays the same. A
+   missing one shows as a 403 in `plan` (an error naming the endpoint
+   refused) or, for a resource made the first time, only in `apply`
+   ("request is not authorized"); add it, then run `plan` and `apply`
+   again, since an apply runs its own run's plan.
 3. Cloudflare shows the token once. In `keel-accounts`, Production,
    `accounts`, **Add Secret** `CLOUDFLARE_API_TOKEN`.
 4. On the zone's **Overview**, copy the **Account ID** and **Zone ID** as
@@ -884,9 +889,13 @@ audience tag from Cloudflare and writes both to `keel-cluster`'s
 what follows.
 
 1. The `accounts` token has the website's permissions (section 11).
-2. **Zero Trust → Settings → Team name and domain**: note the team domain
-   (`<team>.cloudflareaccess.com`) in the pull request that first applies
-   `access.tf`. OpenTofu reads it itself; the note is for checking.
+2. The account has a Zero Trust team with its own name (section 11,
+   step 1): an account that only had the tunnel may have none, and Access
+   is off until it does. **Zero Trust → Settings → Team name and domain**:
+   note the team domain (`<team>.cloudflareaccess.com`) in the pull
+   request that first applies `access.tf`. OpenTofu reads it itself; the
+   note is for checking. Production's is
+   `keelovertheedge.cloudflareaccess.com`.
 3. The account is on **Workers Paid** (Workers & Pages → Plans): the
    share picture takes about half a second of CPU to draw, past the free
    plan's 10 ms.
