@@ -1099,6 +1099,15 @@ test.describe('budgets', () => {
 });
 
 test.describe('adaptive quality', () => {
+  // The page is the worker's, shared with the pictures: its size goes back
+  // after a test that made it small, pass or fail.
+  test.afterEach(async ({ page }) => {
+    const size = page.viewportSize();
+    if (size?.width !== 960 || size.height !== 600) {
+      await page.setViewportSize({ width: 960, height: 600 });
+    }
+  });
+
   test('a slow page settles within ten seconds of drawing, then holds an even rate', async ({
     page,
   }) => {
