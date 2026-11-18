@@ -266,3 +266,37 @@ func TestSceneWatched(t *testing.T) {
 	default:
 	}
 }
+
+// An order written from a frame the sim has already moved past is taken a
+// tick late; an order sent in that tick keeps it. Here the reef, stamped
+// from frame T after tick T+1 read the controls, and then a steer from
+// frame T+1 that says nothing of the reef: the boat is reefed.
+func TestAnOrderTakenLateIsKept(t *testing.T) {
+	sc := newScene(t, 8, 0)
+	st := sc.start()
+	st.X, st.Y, st.Heading = 1500, -1500, wrap(rad(90))
+	me := sc.boat(st, true)
+	sc.steer(me, 90, 40)
+	h := sc.helmAt(me)
+	sc.look(h, 1)
+
+	before := sc.w.Bus().Frames.Acquire()
+	sc.w.Tick() // tick T+1 reads the controls before the reef is written
+	reef := 1
+	if _, refused := h.trim(sc.sea, before, me, nil, &reef); refused != "" {
+		t.Fatal(refused)
+	}
+	before.Release()
+	a := 150
+	sc.order(h, &steerOrder{WindAngle: &a, Side: sidePort})
+	sc.sail(time.Second)
+
+	f := sc.w.Bus().Frames.Acquire()
+	defer f.Release()
+	if got := f.Rig[me].Reef(); got != 1 {
+		t.Fatalf("the reef ordered was lost: the boat holds reef %d", got)
+	}
+	if p := f.Pilot[me]; p.Target() != turnTarget(-150) && p.Target() != turnTarget(150) {
+		t.Fatalf("the steer was lost: pilot %v", p)
+	}
+}
