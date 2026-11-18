@@ -20,7 +20,11 @@ import { decodePng, openScene, picture, pictureDifference } from './helpers';
 
 const catalog = JSON.parse(
   readFileSync(new URL('../src/catalog/catalog.gen.json', import.meta.url), 'utf8'),
-) as { boats: { physics: BoatPhysics }[]; weather: Weather; world: World };
+) as {
+  boats: { physics: BoatPhysics; fleet: string; art: { sailorClips?: string[] } }[];
+  weather: Weather;
+  world: World;
+};
 const wasm = readFileSync(new URL('../src/predict/physics.wasm', import.meta.url));
 
 test('the boat gains speed on a beam reach, with the module’s own bits', async ({ page }) => {
@@ -290,30 +294,41 @@ test('a machine sailor’s boat carries its machine, which sails as a sailor doe
 test('the boat in view changing kind takes the look told: a machine watched, then the own sailor again', async ({
   page,
 }) => {
+  // Every sailor's own boat, and the account's drawn with a cruising
+  // yacht's clips.
+  const jolly = catalog.boats.findIndex((b) => b.fleet === 'sailor');
+  const yacht = catalog.boats.findIndex(
+    (b) => b.fleet === 'account' && b.art.sailorClips?.includes('cruiser') === true,
+  );
+  expect(jolly).toBeGreaterThanOrEqual(0);
+  expect(yacht).toBeGreaterThanOrEqual(0);
   await openScene(page);
-  const r = await page.evaluate(async () => {
-    const k = globalThis.keel;
-    // Sailing a yacht, a machine sailor's jolly boat watched: the look
-    // told while the yacht is in view, then the jolly boat brought into
-    // view, as the server tells its kind.
-    await k.useBoat('yacht');
-    const own = k.lookDrawn();
-    await k.machineAboard(true);
-    await k.useBoat('jolly-boat');
-    const watched = k.lookDrawn();
-    // Sail again: the own look told with the jolly boat in view, then the
-    // yacht brought back.
-    await k.machineAboard(false);
-    await k.useBoat('yacht');
-    const back = k.lookDrawn();
-    // The look told while the kind is still being brought into view.
-    const changing = k.useBoat('jolly-boat');
-    await k.machineAboard(true);
-    await changing;
-    const told = k.lookDrawn();
-    await k.machineAboard(false);
-    return { own, watched, back, told };
-  });
+  const r = await page.evaluate(
+    async ({ jolly, yacht }) => {
+      const k = globalThis.keel;
+      // Sailing a yacht, a machine sailor's jolly boat watched: the look
+      // told while the yacht is in view, then the jolly boat brought into
+      // view, as the server tells its kind.
+      await k.useBoat(yacht);
+      const own = k.lookDrawn();
+      await k.machineAboard(true);
+      await k.useBoat(jolly);
+      const watched = k.lookDrawn();
+      // Sail again: the own look told with the jolly boat in view, then the
+      // yacht brought back.
+      await k.machineAboard(false);
+      await k.useBoat(yacht);
+      const back = k.lookDrawn();
+      // The look told while the kind is still being brought into view.
+      const changing = k.useBoat(jolly);
+      await k.machineAboard(true);
+      await changing;
+      const told = k.lookDrawn();
+      await k.machineAboard(false);
+      return { own, watched, back, told };
+    },
+    { jolly, yacht },
+  );
   expect(r.own).toMatchObject({ machine: false, mark: false });
   expect(r.watched).toMatchObject({ machine: true, mark: true });
   expect(r.back).toMatchObject({ machine: false, mark: false });
