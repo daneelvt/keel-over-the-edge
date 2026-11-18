@@ -3,7 +3,8 @@
 // Watching a boat, against keel and its database: a machine sailor made
 // and sailed through the MCP address with a connection token, watched from
 // its owner's start screen; the plate at the foot of the screen says whose
-// boat it is, with the cog, and nothing on the screen steers it; Back to
+// boat it is, with the cog, the running light is a jewel in the case's
+// edge, and nothing on the screen steers it; Back to
 // the boat brings the camera behind it at its resting distance; the Inputs
 // the page sends while it watches carry no controls (the worker's count);
 // and Sail gives the player a boat of their own at the start, through the
@@ -137,6 +138,11 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   await expect(bar.getByRole('img', { name: 'machine sailor' })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'Watch another' })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'Sail' })).toBeVisible();
+  // The own machine sailor's running light, set in the case's top edge:
+  // a jewel of 9 pixels, lit or hollow.
+  const lamp = await page.locator('.case .lamp').boundingBox();
+  expect(lamp?.width).toBe(9);
+  expect(lamp?.height).toBe(9);
   // The plate at the foot of the screen, where the controls are while sailing.
   const plate = await bar.boundingBox();
   const size = page.viewportSize();
