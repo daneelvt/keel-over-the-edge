@@ -1104,12 +1104,17 @@ test.describe('adaptive quality', () => {
   }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    // On a software GPU, the low tier's ladder: no shaders to change on the way down.
+    // On a software GPU, a small page (no picture is judged here: a frame
+    // there takes over a second at full size on a slow runner) on the low
+    // tier's ladder: no shaders to change on the way down.
+    if (softwareGPU) {
+      await page.setViewportSize({ width: 320, height: 200 });
+    }
     await openLook(page, 'sea=fresh', !softwareGPU);
     // Slowed on the main thread, nothing a rung changes helps: the last rung
     // at half the rate. Slowed by the pixels drawn, as a GPU that shades only
     // so many a second: a rung that holds 60. On a software GPU the main
-    // thread's slowing, with windows made to hold a dozen of its frames, and
+    // thread's slowing, with windows made to hold six of its frames, and
     // the display taken as 60 Hz: its animation frames come so late that
     // even a probe reads the display slow. Its timing is not judged.
     const cases = softwareGPU
@@ -1124,18 +1129,29 @@ test.describe('adaptive quality', () => {
           const k = globalThis.keel;
           const w = k.world;
           k.slowFrames(ms, byPixels);
+          // On a software GPU, the loop's own interval between drawn frames,
+          // with nothing judged: a lone render and its fence come back far
+          // sooner than the loop draws (1.3 s a frame on a slow runner), and
+          // a window must hold four of the loop's frames to say anything:
+          // six, so that four windows (two to step, two to halve) fit.
+          let window = 0;
+          if (software) {
+            k.adapt(false);
+            const seen: number[] = [];
+            w.onDrawn = () => seen.push(performance.now());
+            k.thaw();
+            while (seen.length < 7) {
+              await k.frames(1);
+            }
+            w.onDrawn = null;
+            const gaps = seen.slice(1).map((t, i) => t - (seen[i] as number));
+            gaps.sort((a, b) => a - b);
+            window = Math.max(250, 6 * (gaps[Math.floor(gaps.length / 2)] ?? 0));
+          }
           // A first visit, on a display of 1,080 lines: the floor at half its pixels.
           await k.qualityAfresh(1080);
           if (software) {
-            const times: number[] = [];
-            for (let i = 0; i < 5; i++) {
-              const t0 = performance.now();
-              k.render();
-              await k.show();
-              times.push(performance.now() - t0);
-            }
-            times.sort((a, b) => a - b);
-            k.qualityTiming(Math.max(250, 12 * (times[2] ?? 0)), null);
+            k.qualityTiming(window, null);
             k.capFrames(null, 60);
           }
           const drawn: number[] = [];
