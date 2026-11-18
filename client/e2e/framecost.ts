@@ -578,13 +578,7 @@ async function cpuSection(o: Options, base: string, seen: Seen): Promise<CpuResu
     for (let run = 0; run < o.runs; run++) {
       for (const boat of o.boats) {
         for (const tier of tiers) {
-          const page = await openSandbox(
-            browser,
-            o,
-            base,
-            LAPTOP,
-            boat === 'jolly-boat' ? '' : `&boat=${boat}`,
-          );
+          const page = await openSandbox(browser, o, base, LAPTOP, `&boat=${boat}`);
           seen.dpr.cpu = await page.evaluate(() => window.devicePixelRatio);
           // The cap as a player's: the display's own rate, at most 60.
           await page.evaluate(() => globalThis.keel.capFrames(null));

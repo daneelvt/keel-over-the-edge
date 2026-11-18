@@ -8,21 +8,10 @@
 // passes as three.js's renders, so it has limits of its own.
 
 import { expect, test } from '@playwright/test';
-import { openScene } from './helpers';
+import { openScene, softwareGPU } from './helpers';
 
 // Counts don't depend on the picture's size: a small page draws them soonest.
 test.use({ viewport: { width: 320, height: 200 } });
-
-interface Counted {
-  tier: string;
-  rung: string;
-  backend: string;
-  writes: number;
-  most: number;
-  bytes: number;
-  passes: number;
-  draws: number;
-}
 
 /**
  * The most a frame may ask, by back end and tier: buffers written and KB a
@@ -45,50 +34,50 @@ const LIMITS: Record<
   },
 };
 
-test('a frame sends the GPU few buffers and few bytes, in few passes, on every tier', async ({
-  page,
-}) => {
-  await openScene(page, '', false, true);
-  const counted = await page.evaluate(async () => {
-    const k = globalThis.keel;
-    k.thaw();
-    const out: Counted[] = [];
-    // The medium tier is the high's sea with one patch: its counts lie between.
-    for (const tier of ['high', 'low']) {
-      const info = k.info();
-      const i = info.rungs.findIndex((r) => r.startsWith(`${tier} `));
-      if (i < 0) {
-        continue;
-      }
-      await k.setRung(i);
-      await k.show();
-      // A few frames for what a new rung makes once, then sixty counted.
-      await k.countFrames(5);
-      const c = await k.countFrames(60);
-      out.push({
-        tier,
-        rung: info.rungs[i] as string,
-        backend: c.backend,
-        writes: c.writes.median,
-        most: c.writes.max,
-        bytes: c.bytes.median,
-        passes: c.passes.median,
-        draws: c.draws.median,
-      });
-    }
-    return out;
-  });
-  test.info().annotations.push({ type: 'counted', description: JSON.stringify(counted) });
-  expect(counted.length).toBeGreaterThan(0);
-  for (const c of counted) {
-    const limit = LIMITS[c.backend]?.[c.tier];
+// A software GPU (CI's) takes about a quarter of a second a frame: fewer
+// frames there, as a median of twenty counts the same as one of sixty.
+const WARM = softwareGPU ? 3 : 5;
+const FRAMES = softwareGPU ? 20 : 60;
+
+for (const tier of ['high', 'low']) {
+  test(`a frame sends the GPU few buffers and few bytes, in few passes, on the ${tier} tier`, async ({
+    page,
+  }) => {
+    // The tier held from the start: one set of shaders to build, not two.
+    await openScene(page, `tier=${tier}`, false, true);
+    // WebGL 2's ladder starts at the low tier: a page asked for the high
+    // tier is held to that.
+    const top = await page.evaluate(() => globalThis.keel.info().rungs[0] as string);
+    test.skip(!top.startsWith(`${tier} `), `this back end has no ${tier} tier`);
+    const c = await page.evaluate(
+      async ({ warm, frames }) => {
+        const k = globalThis.keel;
+        k.thaw();
+        await k.show();
+        // A few frames for what the rung makes once, then those counted.
+        await k.countFrames(warm);
+        const n = await k.countFrames(frames);
+        return {
+          rung: k.info().rungs[0] as string,
+          backend: n.backend,
+          writes: n.writes.median,
+          most: n.writes.max,
+          bytes: n.bytes.median,
+          passes: n.passes.median,
+          draws: n.draws.median,
+        };
+      },
+      { warm: WARM, frames: FRAMES },
+    );
+    test.info().annotations.push({ type: 'counted', description: JSON.stringify(c) });
+    const limit = LIMITS[c.backend]?.[tier];
     expect(limit, `${c.backend} ${c.rung}`).toBeDefined();
     if (limit === undefined) {
-      continue;
+      return;
     }
     expect(c.writes, `${c.backend} ${c.rung}: buffers written a frame`).toBeLessThan(limit.writes);
     expect(c.bytes / 1024, `${c.backend} ${c.rung}: KB written a frame`).toBeLessThan(limit.kb);
     expect(c.passes, `${c.backend} ${c.rung}: render passes`).toBeLessThanOrEqual(limit.passes);
     expect(c.draws, `${c.backend} ${c.rung}: draws`).toBeLessThan(limit.draws);
-  }
-});
+  });
+}
