@@ -435,7 +435,8 @@
 
 /* The running light, set into the case's top edge like a jewel in a
    bezel: lit while the own machine sailor's AI is at the helm, hollow
-   while it is quiet. It does not blink. */
+   while it is quiet. It does not blink. Its state is an attribute, not
+   a class: the class helm is the helm's, and would size it. */
 .lamp {
   position: absolute;
   top: -5px;
@@ -451,14 +452,14 @@
   right: 92px;
 }
 
-.lamp.helm {
+.lamp[data-lamp="helm"] {
   background: #3ecf8e;
   box-shadow:
     0 0 0 1.5px var(--brass-dark),
     0 0 6px 2px rgb(62 207 142 / 55%);
 }
 
-.lamp.quiet {
+.lamp[data-lamp="quiet"] {
   border: 2px solid #3ecf8e;
   background: rgb(12 22 30 / 90%);
   box-shadow: 0 0 0 1.5px var(--brass-dark);

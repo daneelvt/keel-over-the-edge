@@ -598,9 +598,7 @@ export function Case({
         aria-label="Instruments"
         data-case=""
       >
-        {light === '' ? null : (
-          <span class={`lamp ${light}`} data-lamp={light} aria-hidden="true" />
-        )}
+        {light === '' ? null : <span class="lamp" data-lamp={light} aria-hidden="true" />}
         <p class="visually-hidden" role="status">
           {LAMP_WORDS[light]}
         </p>

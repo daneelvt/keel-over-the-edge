@@ -664,6 +664,15 @@ export class SeaScene {
 
   #drawHelm(): Promise<void> {
     this.#wearHelm();
+    return this.boat === null ? Promise.resolve() : this.#lookOn(this.boat);
+  }
+
+  /**
+   * Draws a boat's sailor at the helm in the look it is to be, and its
+   * sail's mark: the boat in view's, or one of the own boat's kinds about
+   * to come into view, which keeps the look it was last drawn in till told.
+   */
+  #lookOn(boat: Boat): Promise<void> {
     if (this.#crewShown === null && this.#lookShown === null && this.#ownLook === null) {
       return Promise.resolve();
     }
@@ -672,7 +681,7 @@ export class SeaScene {
     const skipper = crew?.people.find((p) => p.seat === 0);
     const helm = sailorLookOf(catalog, this.#helmCode());
     const mark = skipper === undefined ? helm.machine : sailorLookOf(catalog, skipper.look).machine;
-    return this.boat?.setLook(helm, mark) ?? Promise.resolve();
+    return boat.setLook(helm, mark);
   }
 
   /** The look the boat in view's sailor was last asked to be drawn in; null for the player's own. */
@@ -852,14 +861,22 @@ export class SeaScene {
     }
     this.#loadingKind = -1;
     const renderer = this.stage.renderer;
-    if (boat.sailor === null && renderer !== null) {
-      await this.#lookAsked;
-      await boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1);
+    if (renderer !== null) {
+      if (boat.sailor === null) {
+        await this.#lookAsked;
+        await boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1);
+      }
+      // A kind sailed before keeps the sailor it was drawn with: the look
+      // told since (a boat watched, or the own again) went to the boat in
+      // view then, not to it.
+      await this.#lookOn(boat);
     }
     if (this.kindIndex !== kind) {
       return;
     }
     this.#show(boat);
+    // And a look told while it came into view went to the boat before it.
+    await this.#drawHelm();
     this.sailorReady = true;
   }
 

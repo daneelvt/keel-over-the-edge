@@ -333,6 +333,11 @@ export class Boat {
     return this.#shownMachine;
   }
 
+  /** Whether the sail carries the machine mark. */
+  get marked(): boolean {
+    return this.#look.machine.value === 1;
+  }
+
   /** The sailor drawn's look: its deck level's path and whether it is a machine; null before one is. */
   drawnLook(): { model: string; machine: boolean } | null {
     for (const [art, s] of this.#sailors) {

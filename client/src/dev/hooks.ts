@@ -1028,10 +1028,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     async lookAboard(code: number): Promise<void> {
       await world.showLook(code);
     },
-    /** The boat in view's sailor's look as drawn: its art's deck level and whether it is a machine; null for none. */
-    lookDrawn(): { model: string; machine: boolean } | null {
+    /**
+     * The boat in view's sailor's look as drawn: its art's deck level,
+     * whether it is a machine, and whether the sail carries the machine
+     * mark; null for none.
+     */
+    lookDrawn(): { model: string; machine: boolean; mark: boolean } | null {
       const b = world.boat;
-      return b === null ? null : b.drawnLook();
+      const d = b?.drawnLook() ?? null;
+      return b === null || d === null ? null : { ...d, mark: b.marked };
     },
     /** Puts the camera at a preset, by name, or at a view of its own. */
     camera(name: string | CameraView): void {
