@@ -39,6 +39,7 @@ import { LifeStore } from '../life/store';
 import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
 import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
+import { NO_LAYERS, PLAIN_SEA, type SeaLayer } from '../ocean/seamaterial';
 import { rainShare } from '../ocean/water';
 import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
@@ -68,17 +69,20 @@ import { Overlays } from './overlays';
 import { cockadeOf, PrizesAfloat, pendantOf } from './prizes';
 import {
   Adaptive,
+  type Display,
   type FrameWindow,
+  forget,
   pixelRatioOf,
   type Rung,
   remember,
-  rungName,
   SLOW,
   type Store,
+  sameShaders,
   startQuality,
   TIERS,
   type Tier,
   type TierName,
+  WAIT,
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
@@ -120,8 +124,12 @@ const TICK_US = 1e6 / STEPS_PER_SECOND;
 /** How high over the sea a mark's tag stands, m: over its spar's flag. */
 const MARK_TAG_HEIGHT = 8;
 
-/** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
-const BENCHMARK = 6000;
+/**
+ * For this long after the scene first draws, the windows adaptive quality
+ * judges are short: the first seconds are the benchmark, and a slow device
+ * finds its rung within them.
+ */
+const BENCHMARK = 10_000;
 const BENCHMARK_WINDOW = 500;
 /**
  * A slow window probes the display again if the last probe is older than
@@ -300,6 +308,8 @@ export class SeaScene {
   lastWindow: FrameWindow | null = null;
   /** A window's length for adaptive quality that overrides the scene's own, ms (the tests). */
   windowMs: number | null = null;
+  /** The display's shorter side, CSS pixels, standing in for the screen's (the tests); null for the screen's own. */
+  screenShort: number | null = null;
   /** Called when the tier or the render scale in use changes: what the server is told. */
   onQuality: ((tier: number, scale: number) => void) | null = null;
   /** Called at the start of each drawn frame, with the real time since the last one (s) and now (ms). */
@@ -357,10 +367,14 @@ export class SeaScene {
   /** The ground's height at a point, as the land holds it: what has no sea to break at the end. */
   readonly #groundAt = (east: number, north: number): number | null =>
     this.land?.heightAt(east, north) ?? null;
+  /** When the scene first drew, ms; −1 before. */
   #started = -1;
   #probed = Number.NEGATIVE_INFINITY;
   /** Counts the changes of quality asked for: one that takes long may be overtaken. */
   #applying = 0;
+  /** The rung last applied to this renderer, and the latest change of shaders while it compiles. */
+  #applied: Rung | null = null;
+  #shaders: Promise<void> = Promise.resolve();
 
   constructor(
     container: HTMLElement,
@@ -1140,6 +1154,7 @@ export class SeaScene {
       this.stats.restart(now);
     }
     this.#started = -1;
+    this.#applied = null;
     void this.#apply(false);
   }
 
@@ -1149,15 +1164,52 @@ export class SeaScene {
     this.top = start.top;
     this.quality = new Adaptive(start.ladder, start.index);
     this.quality.enabled = start.adaptive;
-    this.stage.ratio = (dpr) => pixelRatioOf(this.rung, dpr);
+    this.quality.ratioOf = (r) => pixelRatioOf(this.top, r, this.display());
+    this.stage.ratio = (dpr) =>
+      pixelRatioOf(this.top, this.rung, { dpr, short: this.display().short });
+  }
+
+  /** The display drawn on: its pixel ratio, and its screen's shorter side. */
+  display(): Display {
+    const s = globalThis.screen;
+    return {
+      dpr: window.devicePixelRatio || 1,
+      short: this.screenShort ?? (s === undefined ? 0 : Math.min(s.width, s.height)),
+    };
   }
 
   /** The rung in use. */
   get rung(): Rung {
     const q = this.quality;
     return q === null
-      ? { tier: 'low', scale: 1, shadows: false, detail: { kind: 'none' } }
+      ? { tier: 'low', level: 0, shadows: false, detail: { kind: 'none' } }
       : q.rung;
+  }
+
+  /**
+   * Whether adaptive quality has judged the device where it is: the cover
+   * stays down until it has, so the sea first shows on a rung it can hold.
+   */
+  get qualitySettled(): boolean {
+    return this.quality?.settled ?? true;
+  }
+
+  /**
+   * Starts adaptive quality over as on a first visit (the tests): nothing
+   * remembered, the top of the ladder at the full rate, and the short
+   * windows of the first seconds again.
+   */
+  qualityAfresh(): Promise<void> {
+    const q = this.quality;
+    if (q === null) {
+      return Promise.resolve();
+    }
+    forget(this.#store);
+    q.enabled = true;
+    q.base = WAIT;
+    q.wait = WAIT;
+    this.#started = -1;
+    return this.setRung(0, 'afresh');
   }
 
   /** The tier in use. */
@@ -1180,6 +1232,26 @@ export class SeaScene {
     }
   }
 
+  /**
+   * The sea's layers left out by hand (the tests, the measures of what each
+   * costs), or null for the tier's own look.
+   */
+  seaLayersOff: ReadonlySet<SeaLayer> | null = null;
+  /** Whether the tiles a hull may reach are drawn apart, set by hand; null for the tier's way. */
+  seaApart: boolean | null = null;
+
+  /**
+   * Leaves the sea's layers out by hand, and draws the tiles a hull may
+   * reach apart or not; null for the tier's own look. Resolves once drawn.
+   */
+  setSeaLayers(off: ReadonlySet<SeaLayer> | null, apart: boolean | null = null): Promise<void> {
+    this.seaLayersOff = off;
+    this.seaApart = apart;
+    // The rung may be the same, but the sea's shaders are not.
+    this.#applied = null;
+    return this.#apply(true);
+  }
+
   /** Moves to a rung of the ladder by hand (the developer panel, the tests). */
   setRung(index: number, why = 'set'): Promise<void> {
     this.quality?.set(performance.now(), index, why);
@@ -1187,10 +1259,12 @@ export class SeaScene {
   }
 
   /**
-   * Brings the scene to the rung in use: the render scale, the sea's look,
-   * the foam map. A change of the sea's shaders is compiled before it is
-   * drawn when ahead is set, and adaptive quality judges nothing until it
-   * is in and a second has passed.
+   * Brings the scene to the rung in use: the render scale, the frame cap's
+   * rate, the sea's look, the foam map. A change of the sea's shaders is
+   * compiled before it is drawn when ahead is set, and adaptive quality
+   * judges nothing until it is in and a second has passed. A change of the
+   * render scale or the rate alone compiles nothing, and the next window
+   * is judged.
    */
   async #apply(ahead: boolean): Promise<void> {
     const q = this.quality;
@@ -1201,6 +1275,23 @@ export class SeaScene {
     const rung = q.rung;
     const tier = TIERS[rung.tier];
     q.quiet(performance.now(), Number.POSITIVE_INFINITY);
+    this.stage.cap.halved = q.halved;
+    const before = this.#applied;
+    this.#applied = rung;
+    if (before !== null && sameShaders(before, rung)) {
+      // The render target's size alone, or the rate: nothing is compiled,
+      // so nothing is waited for but a change of shaders still under way.
+      this.stage.resize();
+      this.onQuality?.(tier.number, this.stage.pixelRatio());
+      await this.#shaders;
+      if (change === this.#applying) {
+        this.shadows.light.castShadow = this.shadows.lit;
+        const now = performance.now();
+        q.unquiet(now, 0);
+        this.stats.restart(now);
+      }
+      return;
+    }
     this.stage.resize();
     const sh = this.shadows;
     sh.set(
@@ -1233,7 +1324,7 @@ export class SeaScene {
     this.swimmers.setTint(tier.name !== 'low');
     this.weather.setCapacity(tier.puffs, tier.streaks);
     this.onQuality?.(tier.number, this.stage.pixelRatio());
-    await Promise.all([
+    const shaders = Promise.all([
       lit,
       this.ocean.setQuality(
         {
@@ -1241,11 +1332,15 @@ export class SeaScene {
           anisotropy: tier.anisotropy,
           foamMap: tier.foamMap,
           wakeWaves: tier.wakeWaves,
+          omit: this.seaLayersOff ?? (tier.sea === 'plain' ? PLAIN_SEA : NO_LAYERS),
+          apart: this.seaApart ?? tier.sea === 'plain',
         },
         ahead ? (o) => this.stage.compile(o) : null,
         this.stage.gfx?.renderer ?? null,
       ),
-    ]);
+    ]).then(() => undefined);
+    this.#shaders = shaders.catch(() => undefined);
+    await shaders;
     if (change === this.#applying) {
       sh.light.castShadow = sh.lit;
     }
@@ -1263,11 +1358,12 @@ export class SeaScene {
     if (q === null || !q.enabled) {
       return;
     }
+    // The menu's 30, or a display of 30 Hz, leaves no lower rate to go to.
+    q.halvable = cap.halvable;
     const w: FrameWindow = {
       frames: st.frames,
       p90: st.p90,
       interval: cap.interval,
-      gpu: st.gpu,
       work: st.workMedian,
     };
     this.lastWindow = w;
@@ -1276,7 +1372,7 @@ export class SeaScene {
     if (
       w.interval > 0 &&
       w.p90 > SLOW * w.interval &&
-      q.index < q.ladder.length - 1 &&
+      q.index < q.bottom &&
       now - cap.probed > PROBE_AFTER + 2 * this.stats.window
     ) {
       cap.probe();
@@ -1286,6 +1382,7 @@ export class SeaScene {
       remember(this.#store, this.top, q.index);
       void this.#apply(true);
     }
+    cap.halved = q.halved;
   }
 
   /** The steps adaptive quality took, in words, the latest last. */
@@ -1294,9 +1391,7 @@ export class SeaScene {
     if (q === null) {
       return [];
     }
-    return q.log.map(
-      (s) => `${(s.at / 1000).toFixed(1)} s  ${s.why}: ${rungName(q.ladder[s.to] as Rung)}`,
-    );
+    return q.log.map((s) => `${(s.at / 1000).toFixed(1)} s  ${s.why}: ${q.nameOf(s.to)}`);
   }
 
   /**
@@ -1958,11 +2053,12 @@ export class SeaScene {
       this.#probed = cap.probed;
       this.stats.gap();
     }
-    if (this.#started < 0) {
+    if (this.#started < 0 && gfx !== null) {
       this.#started = now;
     }
     this.stats.window =
-      this.windowMs ?? (now - this.#started < BENCHMARK ? BENCHMARK_WINDOW : WINDOW);
+      this.windowMs ??
+      (this.#started >= 0 && now - this.#started < BENCHMARK ? BENCHMARK_WINDOW : WINDOW);
     if (gfx === null) {
       // Not drawn: the frames either side of it say nothing of the GPU.
       this.stats.gap();

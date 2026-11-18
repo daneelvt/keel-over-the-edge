@@ -15,13 +15,14 @@ import {
   DynamicDrawUsage,
   Float32BufferAttribute,
   InstancedInterleavedBuffer,
-  InstancedMesh,
   InterleavedBufferAttribute,
+  type Mesh,
 } from 'three';
 import { attribute, positionLocal, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { STAFF } from './flags';
 import { litMaterial } from './materials';
+import { instances } from './uploads';
 
 /** The cones drawn at most. */
 export const CONE_CAPACITY = 16;
@@ -68,7 +69,7 @@ export interface Staff {
 }
 
 export class StormCones {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   count = 0;
   readonly #buffer: InstancedInterleavedBuffer;
 
@@ -85,7 +86,7 @@ export class StormCones {
       local as unknown as Node<'vec3'>,
     );
     m.name = 'storm cone';
-    this.mesh = new InstancedMesh(g, m, CONE_CAPACITY);
+    this.mesh = instances(g, m);
     this.mesh.name = 'storm cones';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;

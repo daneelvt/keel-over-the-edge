@@ -66,6 +66,7 @@ const COCKADE_RADIUS = catalog.world.committee.prizes.cockade.across / 2;
 /** A place far off any cockade's disc, in its radii. */
 const OFF_DISC = 99;
 
+import { eachRender } from '../uploads';
 import { boneNames } from './onboat';
 import { PENDANT_BONE } from './pendant';
 import { RAIL_CLIPS, railClips } from './rail';
@@ -171,14 +172,18 @@ export class FleetLooks {
   wheel = false;
   /** Where each look wears the winner's cockade on its figure as bound, by its layer: its middle and the way it faces. */
   readonly cockades = {
-    at: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4())),
-    facing: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+    at: eachRender(uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4()))),
+    facing: eachRender(
+      uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+    ),
   };
 
   /** Where each look's certificate's pendant hangs on its figure as bound, by its layer: its bail and the way its face looks. */
   readonly pendants = {
-    at: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4())),
-    facing: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+    at: eachRender(uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4()))),
+    facing: eachRender(
+      uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+    ),
   };
   /** The pendant's bone's place in the skeleton's order (the first loaded look's): the rows' bones are in that order. */
   readonly pendantBone = uniform(0);

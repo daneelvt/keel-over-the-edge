@@ -95,6 +95,8 @@ import {
   detailOn,
   farLook,
   type Probe,
+  SEA_LAYERS,
+  type SeaLayer,
   tileHashNode,
   tileIdentity,
   tileLook,
@@ -124,13 +126,13 @@ import {
   seaMaterial,
 } from '../render/materials';
 import { prizeCode } from '../render/prizes';
-import { rungName, TIERS } from '../render/quality';
+import { pixelRatioOf, rungName, TIERS } from '../render/quality';
 import { type CrewMove, moveAt } from '../render/sailors/crewrules';
 import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { pendantsLoaded } from '../render/sailors/pendant';
 import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
-import { look } from '../render/sky';
+import { look, SKY_LAYERS, type SkyLayer } from '../render/sky';
 import { courseNear, raceNear } from '../sandbox/coursescene';
 import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
@@ -158,6 +160,7 @@ import {
   drawnHeight,
   hexCentre as landHexCentre,
 } from '../workers/mesh/build';
+import { type CountOptions, FrameCounter, type FrameReport } from './counts';
 import { type DeckSceneName, deckScene } from './deckscenes';
 import { setSky } from './skypanel';
 
@@ -174,6 +177,8 @@ export interface Info {
   adaptive: boolean;
   /** How the detail band is made. */
   detail: string;
+  /** The sea's look the tier draws: whole, or plain (seamaterial.ts's PLAIN_SEA, the tiles by the hulls apart). */
+  sea: 'whole' | 'plain';
   dispatches: number;
   /** Drops of spray in the air. */
   spray: number;
@@ -653,6 +658,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         rungs: (world.quality?.ladder ?? []).map(rungName),
         adaptive: world.quality?.enabled ?? false,
         detail: world.ocean.detail.state.kind,
+        sea: TIERS[world.rung.tier].sea,
         dispatches: world.stats.last.dispatches,
         spray: world.spray.count,
         floatTargets: g?.floatTargets ?? false,
@@ -1458,6 +1464,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       game.helm.target = 0;
       game.sheet.target = 0.5;
       world.windowMs = null;
+      world.screenShort = null;
       if (world.quality !== null) {
         world.quality.enabled = false;
       }
@@ -1757,9 +1764,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
 
-    /** Draws only every n-th animation frame; null for the measured cap. */
-    capFrames(n: number | null): void {
+    /** Draws only every n-th animation frame, null for the measured cap; and takes the display's rate as hz, null for the measured one. */
+    capFrames(n: number | null, hz: number | null = null): void {
       stage.cap.forced = n;
+      stage.cap.forcedRate = hz;
     },
     settings(change: Partial<Settings>): void {
       game.settings.set(change);
@@ -3710,6 +3718,38 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       await world.setRung(index, 'test');
       world.ocean.detail.finishBake();
     },
+    /**
+     * Builds the sea without some of its layers (seamaterial.ts's
+     * SEA_LAYERS), and with apart the tiles a hull may reach drawn apart or
+     * not; each null as its tier draws it. Resolves once drawn.
+     */
+    async seaLayers(off: string[] | null, apart: boolean | null = null): Promise<void> {
+      await world.setSeaLayers(off === null ? null : new Set(off as SeaLayer[]), apart);
+    },
+    /**
+     * The fragment shaders the sea's tiles are drawn with now, as the back
+     * end runs them: the tiles', and the tiles by the hulls' where those are
+     * drawn apart (null where they are not).
+     */
+    async seaShaders(): Promise<{ tiles: string; byHulls: string | null }> {
+      const g = gfx();
+      const tiles = world.ocean.tiles;
+      const shader = async (mesh: Mesh): Promise<string> =>
+        (await g.renderer.debug.getShaderAsync(stage.scene, stage.camera, mesh)).fragmentShader ??
+        '';
+      return {
+        tiles: await shader(tiles.mesh),
+        byHulls: tiles.hullMesh.visible ? await shader(tiles.hullMesh) : null,
+      };
+    },
+    /** The names of the sea's layers and the sky's, as seaLayers and skyLayers take them. */
+    layerNames(): { sea: string[]; sky: string[] } {
+      return { sea: [...SEA_LAYERS], sky: [...SKY_LAYERS] };
+    },
+    /** Builds the sky without some of its layers (sky.ts's SKY_LAYERS); none for the whole sky. */
+    skyLayers(off: string[]): void {
+      world.sky.setLayers(new Set(off as SkyLayer[]));
+    },
     /** Adaptive quality on or off, and what it has done. */
     adapt(on: boolean): void {
       if (world.quality !== null) {
@@ -3732,8 +3772,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         q.wait = wait;
       }
     },
-    /** Makes every drawn frame take at least ms of the main thread's time; 0 stops. */
-    slowFrames(ms: number): void {
+    /**
+     * Makes every drawn frame take at least ms of the main thread's time; 0
+     * stops. With byPixels, ms on the top rung of the ladder, and on a lower
+     * one less by its share of the top's pixels: a device whose GPU can shade
+     * only so many pixels a second, as a laptop's built-in graphics.
+     */
+    slowFrames(ms: number, byPixels = false): void {
       const prev = world.onFrame as ((() => void) & { base?: (() => void) | null }) | null;
       // The frame's own callback, under any slowing put on it before.
       const base = prev !== null && 'base' in prev ? (prev.base ?? null) : prev;
@@ -3741,16 +3786,110 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         world.onFrame = base;
         return;
       }
+      const top = world.quality?.ladder[0];
       world.onFrame = Object.assign(
         () => {
           base?.();
-          const until = performance.now() + ms;
+          const share =
+            byPixels && top !== undefined
+              ? (stage.pixelRatio() / pixelRatioOf(world.top, top, world.display())) ** 2
+              : 1;
+          const until = performance.now() + ms * share;
           while (performance.now() < until) {
             // Busy, as a slow phone is.
           }
         },
         { base },
       );
+    },
+    /**
+     * Adaptive quality as on a first visit: nothing remembered, the ladder's
+     * top at the full rate, the first seconds' short windows; on a display
+     * whose shorter side is short CSS pixels, or the screen's (null).
+     */
+    async qualityAfresh(short: number | null = null): Promise<void> {
+      world.screenShort = short;
+      world.windowMs = null;
+      await world.qualityAfresh();
+    },
+    /** The frame cap: the display's rate, the divisor drawn at, and whether adaptive quality halved the rate. */
+    frameCap(): { display: number; divisor: number; interval: number; halved: boolean } {
+      const c = stage.cap;
+      return { display: c.display, divisor: c.divisor, interval: c.interval, halved: c.halved };
+    },
+    /**
+     * Counts each drawn frame from now on (src/dev/counts.ts): the buffer
+     * writes and their bytes, the texture writes, the render passes, the
+     * compute dispatches, the draws and triangles, the main thread's work
+     * and the interval between frames. With gpu false only the work and the
+     * intervals, with nothing of the GPU's wrapped; with detail, which
+     * buffers are written and what each pass draws into. Starting again
+     * starts afresh.
+     */
+    countStart(options: CountOptions = {}): void {
+      if (stage.counter instanceof FrameCounter) {
+        stage.counter.detach();
+      }
+      stage.counter = new FrameCounter(options);
+    },
+    /** What the frames since countStart showed; counting stops, unless keep is set. */
+    countStop(keep = false): FrameReport | null {
+      const c = stage.counter;
+      if (!(c instanceof FrameCounter)) {
+        return null;
+      }
+      const report = c.report();
+      if (!keep) {
+        c.detach();
+        stage.counter = null;
+      }
+      return report;
+    },
+    /**
+     * Counts the next n drawn frames (countStart's options), and stops: drawn
+     * by the frame loop when it draws, or here, one an animation frame, when
+     * it does not (a frozen page, or one under test not yet thawed).
+     */
+    async countFrames(n: number, options: CountOptions = {}): Promise<FrameReport> {
+      hooks.countStart(options);
+      const c = stage.counter as FrameCounter;
+      const byHand = !stage.loopDraws || stage.frozen;
+      const started = performance.now();
+      // The first frame counted only starts the count.
+      while (c.frames < n) {
+        await new Promise((r) => requestAnimationFrame(r));
+        if (byHand) {
+          stage.renderOnce(performance.now());
+        }
+        if (performance.now() - started > 120_000) {
+          break;
+        }
+      }
+      return hooks.countStop() as FrameReport;
+    },
+    /**
+     * Keeps an object hidden whatever the scene sets its visible to, or lets
+     * it go back to what it was: for measuring what each part of the frame
+     * costs.
+     */
+    keepHidden(o: { visible: boolean } | null | undefined, on: boolean): void {
+      if (o === null || o === undefined) {
+        return;
+      }
+      const held = o as { visible: boolean; heldVisible?: boolean };
+      if (on && held.heldVisible === undefined) {
+        held.heldVisible = o.visible;
+        Object.defineProperty(o, 'visible', {
+          configurable: true,
+          get: () => false,
+          set: () => undefined,
+        });
+      } else if (!on && held.heldVisible !== undefined) {
+        const was = held.heldVisible;
+        delete (o as { visible?: boolean }).visible;
+        delete held.heldVisible;
+        o.visible = was;
+      }
     },
     /**
      * The bytes the GPU holds for the look's textures on the rung in use, as
@@ -3886,7 +4025,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       target.dispose();
       m.dispose();
       const maker = new FieldMaker(c.patch);
-      maker.set(world.catalogSea, c.inputs);
+      maker.set(world.catalogSea, c.follower.inputs);
       const f = maker.at(world.ocean.frame.time, newFields(n));
       const cpu = new Array<number>(n * n * 4);
       for (let i = 0; i < n * n; i++) {
@@ -3895,7 +4034,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         cpu[i * 4 + 2] = f.convergence[i] ?? 0;
         cpu[i * 4 + 3] = f.height[i] ?? 0;
       }
-      return { size: n, gpu: Array.from(got), cpu, variance: c.inputs.variance };
+      return { size: n, gpu: Array.from(got), cpu, variance: c.follower.inputs.variance };
     },
     /**
      * The tiles seen from straight above the boat, each pixel's numbers of

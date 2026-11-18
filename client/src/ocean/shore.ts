@@ -46,6 +46,7 @@ import { GroundWindow, WINDOW_COLUMNS, WINDOW_ROWS } from '../land/ground';
 import { SHELTER_SCALE, SHELTER_SIDE, ShelterTexture } from '../land/shelter';
 import { GROUND } from '../predict/layout.gen';
 import { look } from '../render/sky';
+import { eachRender } from '../render/uploads';
 import { LEE_SIDE, LeeTexture } from './lee';
 import { seaTime } from './seamaterial';
 
@@ -72,12 +73,14 @@ export const shore = {
   /** K: how fast light fades in the water, per m (the catalog's). */
   attenuation: uniform(0.15),
   /** Each surface's bed seen through the water, display values. */
-  beds: uniformArray(
-    Array.from({ length: GROUND.surfaces }, () => new Vector3(0.8, 0.75, 0.6)),
-    'vec3',
+  beds: eachRender(
+    uniformArray(
+      Array.from({ length: GROUND.surfaces }, () => new Vector3(0.8, 0.75, 0.6)),
+      'vec3',
+    ),
   ),
   /** Each surface's foam where the waves break over it, as a reef's crest foams. */
-  crests: uniformArray(new Array<number>(GROUND.surfaces).fill(0), 'float'),
+  crests: eachRender(uniformArray(new Array<number>(GROUND.surfaces).fill(0), 'float')),
   /** 1 to draw the shallows, surf and the lee, once a world with land is in play; 0 for the open sea. */
   on: uniform(0),
 };

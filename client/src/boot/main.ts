@@ -637,7 +637,13 @@ async function start(): Promise<void> {
     const start = performance.now();
     const ready = untilReady(
       new Gate(
-        { epoch: () => true, boat: () => true, view: () => true, land: () => true },
+        {
+          epoch: () => true,
+          boat: () => true,
+          view: () => true,
+          land: () => true,
+          judged: () => world.qualitySettled,
+        },
         { start, draws: world.drawsWhenReady },
       ),
       world,
@@ -1305,6 +1311,7 @@ async function start(): Promise<void> {
       boat: () => boatIn,
       view: () => placed,
       land: () => landNear() && world.sailorReady,
+      judged: () => world.qualitySettled,
     },
     { start: tapped, draws: world.drawsWhenReady },
   );

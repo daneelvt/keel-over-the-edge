@@ -47,7 +47,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import type { Node } from 'three/webgpu';
+import type { MeshBasicNodeMaterial, Node } from 'three/webgpu';
 import { edgeLook, mistTo } from '../edge/mist';
 import { BODY, SKY } from '../predict/physics';
 import { sheets, sheetsOver } from '../sky/sheets';
@@ -126,56 +126,78 @@ export const skyColour = /* @__PURE__ */ Fn(([d]: [Node<'vec3'>]) => {
   return mix(look.skyHorizon, look.skyTop, pow(max(d.y, 0), 0.55));
 });
 
+/**
+ * The layers of the sky that a sky can be built without: the glow toward
+ * the sun, the sun's glow and disc, the moon, the sheets of cloud, the
+ * weather's fog and rain along each ray, the halo of a light in fog, and
+ * the band's mist.
+ */
+export const SKY_LAYERS = ['glow', 'sun', 'moon', 'sheets', 'air', 'halo', 'mist'] as const;
+export type SkyLayer = (typeof SKY_LAYERS)[number];
+
 /** The sky's full colour in a direction: gradient, glow, sun, moon, sheet cloud (display values). */
-const skyFull = Fn(([dir]: [Node<'vec3'>]) => {
-  const d = normalize(dir);
-  const y = d.y;
-  const c = skyColour(d).toVar();
-  // The glow low in the sky toward the sun, at sunset, dusk and dawn.
-  const level = vec3(d.x, 0, d.z);
-  const sunLevel = vec3(look.sun.x, 0, look.sun.z);
-  const toward = max(dot(level, sunLevel), 0).div(
-    max(length(level), 1e-4).mul(max(length(sunLevel), 1e-4)),
-  );
-  c.addAssign(look.glow.mul(pow(toward, 3).mul(float(1).sub(smoothstep(0, 0.4, abs(y))))));
-  // The sun's glow, while it is up; its disc after the sheets, which hide it.
-  const sd = max(dot(d, look.sun), 0);
-  const overcast = float(1).sub(look.overcast.mul(0.8));
-  c.addAssign(
-    look.sunColour.mul(
-      pow(sd, 10).mul(0.28).add(pow(sd, 3).mul(0.08)).mul(look.sunUp).mul(overcast),
-    ),
-  );
-  // The moon's disc, each point of it lit as the sun lights a sphere there:
-  // the lit side faces the sun, and its share is the phase.
-  const md = dot(d, look.moon);
-  const q = d.sub(look.moon.mul(md)).div(Math.sin(MOON_RADIUS));
-  const r2 = dot(q, q);
-  const inside = float(1)
-    .sub(smoothstep(0.88, 1, r2))
-    .mul(step(0, md));
-  const n = q.sub(look.moon.mul(sqrt(max(float(1).sub(r2), 0))));
-  const lit = smoothstep(-0.06, 0.06, dot(n, look.sun));
-  const face = mix(c.mul(0.9), vec3(...MOON_COLOUR).mul(1.15), lit.mul(look.moonDisc));
-  c.assign(mix(c, face, inside));
-  c.addAssign(vec3(...MOON_COLOUR).mul(pow(max(md, 0), 4000).mul(look.moonHalo)));
-  const s = sheetsOver(
-    sheets,
-    {
-      top: look.cloudTop as unknown as Node<'vec3'>,
-      base: look.cloudBase as unknown as Node<'vec3'>,
-      horizon: look.skyHorizon as unknown as Node<'vec3'>,
-    },
-    d,
-    c,
-    look.sun,
-    look.sunColour as unknown as Node<'vec3'>,
-    look.sunUp,
-  );
-  c.assign(s.colour);
-  c.addAssign(look.sunColour.mul(pow(sd, 900).mul(5).mul(look.sunUp).mul(s.disc)));
-  return c;
-});
+const skyFull = (dir: Node<'vec3'>, omit: ReadonlySet<SkyLayer>): Node<'vec3'> =>
+  Fn(() => {
+    const d = normalize(dir);
+    const y = d.y;
+    const c = skyColour(d).toVar();
+    if (!omit.has('glow')) {
+      // The glow low in the sky toward the sun, at sunset, dusk and dawn.
+      const level = vec3(d.x, 0, d.z);
+      const sunLevel = vec3(look.sun.x, 0, look.sun.z);
+      const toward = max(dot(level, sunLevel), 0).div(
+        max(length(level), 1e-4).mul(max(length(sunLevel), 1e-4)),
+      );
+      c.addAssign(look.glow.mul(pow(toward, 3).mul(float(1).sub(smoothstep(0, 0.4, abs(y))))));
+    }
+    // The sun's glow, while it is up; its disc after the sheets, which hide it.
+    const sd = max(dot(d, look.sun), 0);
+    if (!omit.has('sun')) {
+      const overcast = float(1).sub(look.overcast.mul(0.8));
+      c.addAssign(
+        look.sunColour.mul(
+          pow(sd, 10).mul(0.28).add(pow(sd, 3).mul(0.08)).mul(look.sunUp).mul(overcast),
+        ),
+      );
+    }
+    if (!omit.has('moon')) {
+      // The moon's disc, each point of it lit as the sun lights a sphere there:
+      // the lit side faces the sun, and its share is the phase.
+      const md = dot(d, look.moon);
+      const q = d.sub(look.moon.mul(md)).div(Math.sin(MOON_RADIUS));
+      const r2 = dot(q, q);
+      const inside = float(1)
+        .sub(smoothstep(0.88, 1, r2))
+        .mul(step(0, md));
+      const n = q.sub(look.moon.mul(sqrt(max(float(1).sub(r2), 0))));
+      const lit = smoothstep(-0.06, 0.06, dot(n, look.sun));
+      const face = mix(c.mul(0.9), vec3(...MOON_COLOUR).mul(1.15), lit.mul(look.moonDisc));
+      c.assign(mix(c, face, inside));
+      c.addAssign(vec3(...MOON_COLOUR).mul(pow(max(md, 0), 4000).mul(look.moonHalo)));
+    }
+    let disc: Node<'float'> = float(1);
+    if (!omit.has('sheets')) {
+      const s = sheetsOver(
+        sheets,
+        {
+          top: look.cloudTop as unknown as Node<'vec3'>,
+          base: look.cloudBase as unknown as Node<'vec3'>,
+          horizon: look.skyHorizon as unknown as Node<'vec3'>,
+        },
+        d,
+        c,
+        look.sun,
+        look.sunColour as unknown as Node<'vec3'>,
+        look.sunUp,
+      );
+      c.assign(s.colour);
+      disc = s.disc;
+    }
+    if (!omit.has('sun')) {
+      c.addAssign(look.sunColour.mul(pow(sd, 900).mul(5).mul(look.sunUp).mul(disc)));
+    }
+    return c;
+  })() as unknown as Node<'vec3'>;
 
 /** Radius of the sky sphere, in metres: inside the camera's far plane. */
 export const SKY_RADIUS = 3000;
@@ -269,20 +291,7 @@ export class Sky {
   constructor(scene: Scene) {
     const material = skyMaterial();
     material.side = BackSide;
-    // The band's mist over the sky, along each direction out to where the
-    // dome has lifted the ray clear of the mist's layer: at the vertices;
-    // and the weather's fog and rain, whose banks' edges are finer than the
-    // sphere's vertices are apart, at each fragment, the sun's disc and the
-    // sky hidden by the depth in their direction, white overhead in a
-    // bank. A lit light in a bank lights the fog about it.
-    const toward = normalize(positionLocal);
-    const reach = cameraPosition.add(toward.mul(SKY_MIST_REACH));
-    // The weather's along the whole ray: a bank far off is seen edge-on
-    // low over the horizon, a wall whitening it.
-    const far = cameraPosition.add(toward.mul(AIR_REACH));
-    const depth = mistTo(reach).add(airBetween(cameraPosition, far));
-    const seen = mix(edgeLook.colour, skyFull(positionLocal) as Node<'vec3'>, exp(depth.negate()));
-    material.fragmentNode = vec4(toLinear(seen).add(haloBetween(cameraPosition, reach)), 1);
+    material.fragmentNode = Sky.look(new Set());
     this.mesh = new Mesh(skyGeometry(), material);
     this.mesh.name = 'sky';
     this.mesh.renderOrder = -1;
@@ -299,6 +308,44 @@ export class Sky {
     );
     scene.add(this.hemisphere);
     this.#apply();
+  }
+
+  /**
+   * The sky's colour, without the layers left out. The band's mist over
+   * the sky, along each direction out to where the dome has lifted the ray
+   * clear of the mist's layer: at the vertices; and the weather's fog and
+   * rain, whose banks' edges are finer than the sphere's vertices are apart,
+   * at each fragment, the sun's disc and the sky hidden by the depth in
+   * their direction, white overhead in a bank. A lit light in a bank lights
+   * the fog about it.
+   */
+  static look(omit: ReadonlySet<SkyLayer>): Node<'vec4'> {
+    const toward = normalize(positionLocal);
+    const reach = cameraPosition.add(toward.mul(SKY_MIST_REACH));
+    // The weather's along the whole ray: a bank far off is seen edge-on
+    // low over the horizon, a wall whitening it.
+    const far = cameraPosition.add(toward.mul(AIR_REACH));
+    let depth: Node<'float'> = float(0);
+    if (!omit.has('mist')) {
+      depth = mistTo(reach);
+    }
+    if (!omit.has('air')) {
+      depth = depth.add(airBetween(cameraPosition, far)) as Node<'float'>;
+    }
+    const full = skyFull(positionLocal, omit);
+    const seen =
+      omit.has('mist') && omit.has('air') ? full : mix(edgeLook.colour, full, exp(depth.negate()));
+    const lit = omit.has('halo')
+      ? toLinear(seen)
+      : toLinear(seen).add(haloBetween(cameraPosition, reach));
+    return vec4(lit, 1) as unknown as Node<'vec4'>;
+  }
+
+  /** Builds the sky's shader again without the layers left out (the tests, the measures). */
+  setLayers(omit: ReadonlySet<SkyLayer>): void {
+    const m = this.mesh.material as MeshBasicNodeMaterial;
+    m.fragmentNode = Sky.look(omit);
+    m.needsUpdate = true;
   }
 
   /**

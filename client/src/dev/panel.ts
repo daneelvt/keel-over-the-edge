@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The developer panel, with ?dev. Online, the connection's numbers: the
-// clock's offset, the round trip, how far ahead the boat is stepped, the
-// arrival margins, corrections and bytes each way. Offline, the sandbox's
+// The developer panel, with ?dev. Online, the frame's numbers (as offline)
+// and the connection's: the clock's offset, the round trip, how far ahead
+// the boat is stepped, the arrival margins, corrections and bytes each way.
+// Offline, the sandbox's
 // wind and the sea it raises: one of four sea states at once, another fetch
 // than open water's, a second wind to the east to see two seas meet, or flat
 // water; the boat, reset to the start or placed at a position and heading,
@@ -23,6 +24,7 @@ import { catalog } from '../catalog';
 import type { Forecasting } from '../chart/forecasting';
 import type { ChartWeather } from '../chart/weatherlayer';
 import { type MistParams, visualRangeAt } from '../edge/mist';
+import type { FrameCap } from '../game/cap';
 import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
 import type { LandStats } from '../land/land';
@@ -35,10 +37,19 @@ import { type Physics, SEA_PARTS } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import type { BoatWind } from '../predict/weather';
 import { DISK_RADIUS } from '../render/coords';
-import { rungName } from '../render/quality';
+import {
+  type Adaptive,
+  type Display,
+  floorRatio,
+  type Rung,
+  rungName,
+  type TierName,
+} from '../render/quality';
+import type { Gfx } from '../render/renderer';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import type { Antialias } from '../render/stage';
+import type { FrameStats } from '../render/stats';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
 import { FRONT, type Sandbox, SEA_STATES, STEADY } from '../sandbox/sandbox';
 import type { Barometer } from '../ui/barometer';
@@ -896,11 +907,8 @@ export function openPanel(
     }
     shown = now;
     sky.update();
-    const st = world.stats.last;
     const p = world.pose;
     const o = world.origin;
-    const cap = world.stage.cap;
-    const gpu = st.gpu === null ? 'no timestamps' : `${st.gpu.toFixed(2)} ms`;
     // The sea of the area the boat is in, in the window drawn.
     const band = world.ocean.band;
     const slot = world.ocean.slot;
@@ -927,13 +935,7 @@ export function openPanel(
       );
     }
     stats.textContent = [
-      `frame   ${st.median.toFixed(1)} ms median, ${st.p90.toFixed(1)} ms 90th (${st.frames} in 2 s)`,
-      `work    ${st.workMedian.toFixed(2)} ms median, ${st.workP90.toFixed(2)} ms 90th`,
-      `display ${cap.rate.toFixed(0)} Hz, drawing every ${cap.divisor} (cap ${cap.limit})`,
-      `gpu     ${gpu}`,
-      `draws   ${st.drawCalls}, ${st.dispatches} dispatches, ${st.triangles.toLocaleString('en')} triangles`,
-      `scale   ${world.stage.pixelRatio().toFixed(2)}${world.stage.gfx?.floatTargets === false ? ', no float targets' : ''}`,
-      `tier    ${rungName(world.rung)}${world.quality?.enabled ? ', adaptive' : ', held'} (wait ${((world.quality?.wait ?? 0) / 1000).toFixed(0)} s)`,
+      ...frameLines(world),
       `detail  ${detailLine(world)}`,
       `wake    ${wakeLine(world)}`,
       `boat    ${p.east.toFixed(0)} E, ${p.north.toFixed(0)} N`,
@@ -973,6 +975,45 @@ export function openPanel(
     ].join('\n');
   };
   render();
+}
+
+/** What the frame's lines read: the scene's statistics, stage and quality. */
+export interface FrameSource {
+  readonly stats: { readonly last: FrameStats; readonly window: number };
+  readonly stage: { readonly cap: FrameCap; readonly gfx: Gfx | null; pixelRatio(): number };
+  readonly quality: Adaptive | null;
+  readonly rung: Rung;
+  readonly top: TierName;
+  display(): Display;
+}
+
+/**
+ * The frame's lines, offline and online: the back end, the intervals
+ * between drawn frames, the main thread's work, the display's rate and the
+ * cap's divisor, the GPU's time, the draws, the render scale with its floor,
+ * and the rung of the ladder with the rate drawn at.
+ */
+export function frameLines(world: FrameSource): string[] {
+  const st = world.stats.last;
+  const cap = world.stage.cap;
+  const g = world.stage.gfx;
+  const q = world.quality;
+  const d = world.display();
+  const gpu = st.gpu === null ? 'no timestamps' : `${st.gpu.toFixed(2)} ms`;
+  const rate = cap.interval > 0 ? 1000 / cap.interval : 0;
+  const rung = q === null ? rungName(world.rung) : q.nameOf(q.index);
+  const adaptive =
+    q === null ? '' : q.enabled ? `, adaptive (wait ${(q.wait / 1000).toFixed(0)} s)` : ', held';
+  return [
+    `backend ${g === null ? '…' : `${g.backend}${g.compat ? ' (compatibility)' : ''}`}`,
+    `frame   ${st.median.toFixed(1)} ms median, ${st.p90.toFixed(1)} ms 90th (${st.frames} in ${(world.stats.window / 1000).toFixed(1)} s)`,
+    `work    ${st.workMedian.toFixed(2)} ms median, ${st.workP90.toFixed(2)} ms 90th`,
+    `display ${cap.display.toFixed(0)} Hz, frames called at ${cap.rate.toFixed(0)} Hz, drawing every ${cap.divisor} (cap ${cap.limit})`,
+    `gpu     ${gpu}`,
+    `draws   ${st.drawCalls}, ${st.dispatches} dispatches, ${st.triangles.toLocaleString('en')} triangles`,
+    `scale   ${world.stage.pixelRatio().toFixed(2)} (floor ${floorRatio(world.top, d).toFixed(2)} on ${d.short} px at ${d.dpr})${g?.floatTargets === false ? ', no float targets' : ''}`,
+    `tier    ${rung}, ${rate.toFixed(0)} a second${cap.halved ? ' (halved)' : ''}${adaptive}`,
+  ];
 }
 
 /** What the panel reads of the forecast: the chart's weather, its gale words and the barometer. */
@@ -1145,8 +1186,8 @@ function encounterLines(n: NetNumbers): string[] {
 }
 
 /**
- * The developer panel online: the connection's numbers, twice a second, and
- * the sky, which it can move for this page alone.
+ * The developer panel online: the frame's numbers and the connection's,
+ * twice a second, and the sky, which it can move for this page alone.
  */
 export function openNetPanel(
   world: SeaScene,
@@ -1161,7 +1202,7 @@ export function openNetPanel(
   const sky = skyPanel(world);
   body.append(numbers, ...sky.elements);
   panel.append(
-    button('Connection', () => body.toggleAttribute('hidden')),
+    button('Frames and connection', () => body.toggleAttribute('hidden')),
     body,
   );
   parent.append(panel);
@@ -1173,7 +1214,7 @@ export function openNetPanel(
   };
   const update = (): void => {
     sky.update();
-    numbers.textContent = netLines({
+    numbers.textContent = `${frameLines(world).join('\n')}\n\n${netLines({
       status: online.status.value,
       offsetMs: online.clock.offset / 1000,
       rttMs: online.clock.rtt / 1000,
@@ -1193,7 +1234,7 @@ export function openNetPanel(
           : { told: lastBump.told, ago: (performance.now() - lastBump.at) / 1000 },
       land: world.land?.stats ?? null,
       slots: world.land?.slots?.chunks ?? null,
-    });
+    })}`;
     const p = world.pose;
     numbers.textContent += `\n${edgeLines(
       p.east,

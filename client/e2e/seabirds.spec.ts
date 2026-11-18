@@ -16,14 +16,27 @@ const TRIANGLES = 40_000;
 /** The most draw calls a frame may make on any tier. */
 const FRAME_DRAWS = 150;
 
-/** The frame's draw calls and triangles, as the GPU was given them. */
+/**
+ * The frame's draw calls and triangles, as the GPU was given them, once two
+ * frames running agree: a shader still compiling leaves its object out of
+ * a frame (WebGPU makes its pipelines in the background), and a count taken
+ * then would put that object's triangles into the birds' when it arrives.
+ */
 async function drawn(page: Page): Promise<{ draws: number; triangles: number }> {
   return page.evaluate(async () => {
     const k = globalThis.keel;
-    k.render();
-    await k.show();
-    const i = k.info();
-    return { draws: i.drawCalls, triangles: i.triangles };
+    let last = { draws: -1, triangles: -1 };
+    for (let n = 0; n < 20; n++) {
+      k.render();
+      await k.show();
+      const i = k.info();
+      const now = { draws: i.drawCalls, triangles: i.triangles };
+      if (now.draws === last.draws && now.triangles === last.triangles) {
+        return now;
+      }
+      last = now;
+    }
+    return last;
   });
 }
 

@@ -339,6 +339,85 @@ export function newSpectrumInputs(): SpectrumInputs {
 }
 
 /**
+ * How far the wind may move from the one a patch's fit was worked out for
+ * before it is worked out again: a fiftieth of its speed (and no less than a
+ * centimetre a second) or of its fetch, or ten degrees. The fit is the dear
+ * part (the lattice's rings and three integrals), and within those steps it
+ * moves by about 1% at most, the waves' heights by half of that: no picture
+ * shows it. The level, the peak and the direction are cheap, and follow the
+ * wind every frame.
+ */
+export const REFIT = { speed: 0.02, least: 0.01, fetch: 0.02, turn: (10 * Math.PI) / 180 } as const;
+
+const REFIT_COS = Math.cos(REFIT.turn);
+
+/**
+ * A patch's spectrum under a wind that moves from frame to frame, as
+ * spectrumInputs gives it, with the fit and the band's variance and slope
+ * over its level worked out afresh only when the wind has moved a step
+ * (REFIT) from the one they were worked out for. Between those, the variance
+ * and the slope follow the level.
+ */
+export class SpectrumFollower {
+  /** The inputs for the wind last followed. */
+  readonly inputs: SpectrumInputs = newSpectrumInputs();
+  /** How many times the fit has been worked out. */
+  fits = 0;
+  readonly #sea: WeatherSea;
+  readonly #patch: Patch;
+  /** The wind the fit was worked out for: its speed, fetch and direction. */
+  #speed = Number.NaN;
+  #fetch = 0;
+  #east = 1;
+  #north = 0;
+  /** The variance and the slope over the level, at the fit. */
+  #variance = 0;
+  #slope = 0;
+
+  constructor(sea: WeatherSea, patch: Patch) {
+    this.#sea = sea;
+    this.#patch = patch;
+  }
+
+  /** Whether the wind has moved a step from the one the fit was worked out for. */
+  moved(wind: WaveWind): boolean {
+    const d = Math.hypot(wind.east, wind.north) || 1;
+    return (
+      !(Math.abs(wind.speed - this.#speed) <= Math.max(REFIT.speed * this.#speed, REFIT.least)) ||
+      !(Math.abs(wind.fetch - this.#fetch) <= REFIT.fetch * this.#fetch) ||
+      (wind.east * this.#east + wind.north * this.#north) / d < REFIT_COS
+    );
+  }
+
+  follow(wind: WaveWind): SpectrumInputs {
+    const s = this.inputs;
+    if (this.moved(wind)) {
+      spectrumInputs(this.#sea, this.#patch, wind, s);
+      this.#speed = wind.speed;
+      this.#fetch = wind.fetch;
+      this.#east = s.east;
+      this.#north = s.north;
+      this.#variance = s.level > 0 ? s.variance / s.level : 0;
+      this.#slope = s.level > 0 ? s.slope / s.level : 0;
+      this.fits++;
+      return s;
+    }
+    jonswap(this.#sea, wind.speed, wind.fetch, s);
+    const d = Math.hypot(wind.east, wind.north) || 1;
+    s.east = wind.east / d;
+    s.north = wind.north / d;
+    s.variance = s.level * this.#variance;
+    s.slope = s.level * this.#slope;
+    return s;
+  }
+
+  /** Forgets the wind followed: the next wind works the fit out afresh. */
+  forget(): void {
+    this.#speed = Number.NaN;
+  }
+}
+
+/**
  * Each wave's amplitude under a wind, in metres, into out: √(2 E Δk² · fit).
  * The surface is the sum of a cos(k·x − ω t + phase) over the waves.
  */

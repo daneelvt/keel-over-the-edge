@@ -17,6 +17,7 @@
 
 import { HalfFloatType, type TextureDataType, UnsignedByteType } from 'three';
 import { WebGPURenderer } from 'three/webgpu';
+import { sendLess } from './uploads';
 
 export type Backend = 'webgpu' | 'webgl2';
 
@@ -138,6 +139,7 @@ export async function createGfx(
   };
   renderer.onDeviceLost = (info: { message?: string }) => lose(info.message ?? 'device lost');
   await renderer.init();
+  sendLess(renderer);
 
   const backend = renderer.backend as unknown as WebGPUBackendLike;
   const isWebGPU = backend.isWebGPUBackend === true;

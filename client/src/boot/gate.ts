@@ -5,9 +5,10 @@
 // world's hour, the boat's first snapshot taken and its driver set, the
 // first view placed, the land within reach of the boat built (or three
 // seconds past), and a few frames drawn under the cover so that the first
-// one seen is not the one that makes every shader. Ten seconds after the
-// tap it lifts on whatever has come, once there is a boat to show. A page
-// that draws nothing has no frames to wait for.
+// one seen is not the one that makes every shader, and judged by adaptive
+// quality so that the sea first shows on a rung the device can hold. Ten
+// seconds after the tap it lifts on whatever has come, once there is a boat
+// to show. A page that draws nothing has no frames to wait for.
 
 /** What the cover waits for now: the boat, the land, the first frames; or nothing. */
 export type Waiting = 'boat' | 'land' | 'sail' | 'ready';
@@ -31,6 +32,8 @@ export interface GateParts {
   land(): boolean;
   /** Nothing more will come (a watch refused, a queue): show what there is now. */
   abandoned?(): boolean;
+  /** Adaptive quality has judged the frames drawn: the device holds the rung it is on. */
+  judged?(): boolean;
 }
 
 export interface GateRules {
@@ -115,7 +118,9 @@ export class Gate {
       return 'ready';
     }
     this.#sailing = true;
-    return this.#drawn >= this.#frames && this.#last < this.#slow ? 'ready' : 'sail';
+    return this.#drawn >= this.#frames && this.#last < this.#slow && (p.judged?.() ?? true)
+      ? 'ready'
+      : 'sail';
   }
 }
 

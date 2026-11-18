@@ -52,6 +52,7 @@ import {
   gltfLoader,
   loadClips,
   loadSailor,
+  oneMesh,
   placesOf,
   type SailorClips,
   type SailorModel,
@@ -244,10 +245,12 @@ export class BoatSailor {
   ): Promise<BoatSailor> {
     const c = urls.colours;
     const colours = sailorColours(c.main, c.skin, c.hair);
-    const [deck, clipFile] = await Promise.all([
+    const [loaded, clipFile] = await Promise.all([
       loadSailor(urls.model, renderer, colours, machine, urls.cockade ?? null),
       loadClips(urls.clips, renderer),
     ]);
+    // One draw a pass for the figure, not one a part.
+    const deck = oneMesh(loaded);
     const rig = Rig.from(deck.root, boneNames(deck.root));
     const clips = new Map<string, Clip>();
     const identity = new Matrix4();
@@ -467,12 +470,14 @@ export class BoatSailor {
   async #loadClose(): Promise<void> {
     const deckMesh = this.#deck.meshes[0];
     const shared = (deckMesh?.userData ?? {}) as { main: Color; skin: Color; hair: Color };
-    const close = await loadSailor(
-      await this.#urls.close(),
-      this.#renderer,
-      shared,
-      this.#machine,
-      this.#urls.cockade ?? null,
+    const close = oneMesh(
+      await loadSailor(
+        await this.#urls.close(),
+        this.#renderer,
+        shared,
+        this.#machine,
+        this.#urls.cockade ?? null,
+      ),
     );
     wearCockade(close, this.#cockade);
     if (this.#urls.pendant !== undefined) {

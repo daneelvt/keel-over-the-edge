@@ -3,12 +3,17 @@
 // The frame cap. The browser calls for an animation frame at the display's
 // rate: 60 Hz, 120 Hz on many phones, 90 or 144 Hz on some, 30 Hz on an
 // iPhone in Low Power Mode. The game draws at most 60 frames a second (30 to
-// save battery), and draws on every n-th animation frame, n the smallest
-// whole number that brings the display's rate within the cap. Every drawn
-// frame then stays on screen for the same number of refreshes, which keeps
-// motion even: skipping frames by elapsed time instead alternates one and two
-// refreshes on a display whose rate is not a multiple of the cap, and
-// judders. A 90 Hz display draws at 45, a 144 Hz one at 48.
+// save battery, or when adaptive quality halves the rate of a device too
+// slow for 60 on its last rung), and draws once every n refreshes, n the
+// smallest whole number that brings the display's rate within the cap. Every
+// drawn frame then stays on screen for the same number of refreshes, which
+// keeps motion even: skipping frames by elapsed time against the cap's own
+// interval instead alternates one and two refreshes on a display whose rate
+// is not a multiple of the cap, and judders. A 90 Hz display draws at 45, a
+// 144 Hz one at 48. The refreshes are counted by the time since the last
+// drawn frame, not by the animation frames called for: a frame that took
+// longer than its refreshes is followed at once by the next, not made to
+// wait n more animation frames.
 //
 // The display's rate is the median of the last 30 intervals between
 // animation frames, measured all the time, so a phone that changes its rate
@@ -27,6 +32,8 @@ const WINDOW = 30;
 const SLACK = 0.05;
 /** Animation frames a probe leaves undrawn; the first interval still holds the last drawn frame's work. */
 const PROBE = 6;
+/** The rate adaptive quality halves to, at most, in Hz. */
+export const HALF = 30;
 
 /** The smallest n for which a display of rate hz drawn every n-th frame is within the cap. */
 export function divisorFor(hz: number, cap: number): number {
@@ -41,6 +48,14 @@ export class FrameCap {
   limit = 60;
   /** A divisor that overrides the measured one (the browser tests). */
   forced: number | null = null;
+  /** Whether adaptive quality halved the rate: at most 30 frames a second, whatever the limit. */
+  halved = false;
+  /**
+   * A display's rate that overrides the measured one, Hz (the browser tests
+   * on a software GPU, whose animation frames come so late that even a
+   * probe reads the display slow).
+   */
+  forcedRate: number | null = null;
 
   readonly #intervals = new Float64Array(WINDOW);
   readonly #sorted = new Float64Array(WINDOW);
@@ -48,6 +63,8 @@ export class FrameCap {
   #next = 0;
   #prev = -1;
   #since = 0;
+  /** When the last frame was drawn, ms; −1 for none since a start. */
+  #drawnAt = -1;
   #divisor = 1;
   #hz = 0;
   readonly #probe = new Float64Array(PROBE - 1);
@@ -65,13 +82,24 @@ export class FrameCap {
    * frames come at when that is faster or nothing was probed yet.
    */
   get display(): number {
-    return Math.max(this.#display, this.#hz);
+    return this.forcedRate ?? Math.max(this.#display, this.#hz);
+  }
+
+  /** The most frames a second drawn now: the limit, or the half rate. */
+  get target(): number {
+    return this.halved ? Math.min(this.limit, HALF) : this.limit;
   }
 
   /** The interval between drawn frames the cap asks of this display, in milliseconds; 0 until measured. */
   get interval(): number {
     const hz = this.display;
-    return hz > 0 ? (1000 * (this.forced ?? divisorFor(hz, this.limit))) / hz : 0;
+    return hz > 0 ? (1000 * (this.forced ?? divisorFor(hz, this.target))) / hz : 0;
+  }
+
+  /** Whether halving the rate would draw less often than the cap does now on this display. */
+  get halvable(): boolean {
+    const hz = this.display;
+    return this.limit > HALF && (hz <= 0 || divisorFor(hz, HALF) > divisorFor(hz, this.limit));
   }
 
   /** When the display was last probed, in milliseconds on the animation frames' clock. */
@@ -123,13 +151,24 @@ export class FrameCap {
         this.#display = median > 0 ? 1000 / median : 0;
         this.#probed = now;
         this.#since = this.divisor;
+        this.#drawnAt = -1;
       }
       return false;
     }
     this.#prev = now;
     this.#since++;
-    if (this.#since >= this.divisor) {
+    const n = this.divisor;
+    const hz = this.display;
+    // Refreshes since the last drawn frame, by the display's rate; until
+    // there is one, animation frames.
+    const due =
+      n <= 1 ||
+      (this.#drawnAt >= 0 && hz > 0
+        ? Math.round(((now - this.#drawnAt) * hz) / 1000) >= n
+        : this.#since >= n);
+    if (due) {
       this.#since = 0;
+      this.#drawnAt = now;
       return true;
     }
     return false;
@@ -139,6 +178,7 @@ export class FrameCap {
   restart(): void {
     this.#prev = -1;
     this.#since = this.divisor;
+    this.#drawnAt = -1;
     this.#probing = 0;
   }
 
@@ -153,6 +193,6 @@ export class FrameCap {
     const median =
       n % 2 === 1 ? (s[(n - 1) / 2] ?? 0) : ((s[n / 2 - 1] ?? 0) + (s[n / 2] ?? 0)) / 2;
     this.#hz = median > 0 ? 1000 / median : 0;
-    this.#divisor = divisorFor(this.#hz, this.limit);
+    this.#divisor = divisorFor(this.#hz, this.target);
   }
 }

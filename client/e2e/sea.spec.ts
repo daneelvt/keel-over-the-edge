@@ -81,12 +81,22 @@ test.describe('the tiles', () => {
     test(`are rigid flat slabs under the gale, ${pass ? 'with the tile pass' : 'planes per vertex'}`, async ({
       page,
     }) => {
+      // The sea's own shaders must build too: the tiles' vertex stage keeps
+      // within a GPU's twelve uniform buffers, or the sea is not drawn.
+      const errors: string[] = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error' && m.text().includes('uniform buffers')) {
+          errors.push(m.text());
+        }
+      });
       await openScene(page, 'sea=gale');
       const [r, tol] = await page.evaluate(async (on) => {
         globalThis.keel.setPass(on);
         globalThis.keel.render();
+        await globalThis.keel.show();
         return [await globalThis.keel.rigidity(), globalThis.keel.tolerance()] as const;
       }, pass);
+      expect(errors).toEqual([]);
       expect(r.tiles).toBeGreaterThan(100);
       // From straight above every pixel is a tile's top: no gap, no skirt.
       expect(r.empty).toBe(0);

@@ -54,6 +54,7 @@ import { PLANT_STRIDE } from '../workers/mesh/plants';
 import { artUrl } from './boat';
 import { headingToRotationY } from './coords';
 import { horizonDistance, litMaterial } from './materials';
+import { instancesByAttribute, sendFirst, sendInstances } from './uploads';
 
 /** The forms drawn near only, as clumps. */
 const NEAR_ONLY = ['shrub', 'tuft', 'krummholz'];
@@ -142,7 +143,7 @@ class Draw {
     this.info = new InstancedBufferAttribute(new Float32Array(capacity * INFO), INFO);
     this.info.setUsage(DynamicDrawUsage);
     g.setAttribute('plantInfo', this.info);
-    this.mesh = new InstancedMesh(g, material, capacity);
+    this.mesh = instancesByAttribute(new InstancedMesh(g, material, capacity));
     this.mesh.name = name;
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
@@ -459,8 +460,8 @@ export class Flora {
       });
       d.mesh.count = list.length;
       d.mesh.visible = list.length > 0;
-      d.mesh.instanceMatrix.needsUpdate = true;
-      d.info.needsUpdate = true;
+      sendInstances(d.mesh, list.length);
+      sendFirst(d.info, list.length);
       draws++;
       triangles += ((g.index?.count ?? 0) / 3) * list.length;
     }

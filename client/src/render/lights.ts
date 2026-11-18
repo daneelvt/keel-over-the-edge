@@ -68,6 +68,7 @@ import type { LightSeen, PlaceSeen } from '../net/messages';
 import { HALO_REACH, setHalo } from './fog';
 import { bendScene, fallToEdge, glowMaterial, horizonDistance, litMaterial } from './materials';
 import { toLinear } from './sky';
+import { instancesByAttribute, sendFirst, sendInstances } from './uploads';
 
 const DEG = Math.PI / 180;
 
@@ -310,7 +311,7 @@ export class Lighthouses {
       vec3(1, 0.86, 0.6).mul(vBand.w.mul(2.2)),
       vec3(0, 0, 0),
     ) as unknown as Node<'vec3'>;
-    const mesh = new InstancedMesh(towerGeometry(), m, TOWER_CAPACITY);
+    const mesh = instancesByAttribute(new InstancedMesh(towerGeometry(), m, TOWER_CAPACITY));
     mesh.name = 'lighthouse towers';
     mesh.count = 0;
     mesh.frustumCulled = false;
@@ -467,8 +468,8 @@ export class Lighthouses {
     }
     this.towers.count = t;
     this.towers.visible = t > 0;
-    this.towers.instanceMatrix.needsUpdate = true;
-    this.band.needsUpdate = true;
+    sendInstances(this.towers, t);
+    sendFirst(this.band, t);
 
     // The lights.
     this.count = 0;

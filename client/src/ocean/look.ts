@@ -10,7 +10,7 @@
 export const KNOT = 1852 / 3600;
 
 /** Changed by hand whenever the tiers' values change: what a phone remembered of an older build's is let go. */
-export const QUALITY_VERSION = 3;
+export const QUALITY_VERSION = 4;
 
 /** The detail band: the waves shorter than the boat band's shortest, drawn and never felt. */
 export const DETAIL = {
