@@ -2,9 +2,17 @@
 # Deploying is tagging: this moves prod, the tag production's Flux follows,
 # to a release, once the owner has approved the run (the production
 # environment, which only main may use). Before it moves anything it checks
-# the release's signature as Flux will, that its commit is on main, and
-# that it is not older than what production follows now. Rolling back is
-# promoting an older build, with the box ticked to say it is meant.
+# the release's signature as Flux will, that its commit is on main, that it
+# is not older than what production follows now, and that it passed every
+# check. Rolling back is promoting an older build, with the rollback box
+# ticked to say it is meant; promoting a hotfix's build, which passed only
+# the short checks, before the full suite after them has passed, is the
+# same with the hotfix box.
+#
+# While the run waits for approval, check says on its summary what the
+# promote will do: whether the world starts empty, what production follows
+# now, and for a hotfix the full suite's state. The promote job checks it
+# all again when approved, and says it again on its own summary.
 #
 # go run ./tools/release -promote does the work; see its tests for each
 # refusal.
@@ -21,6 +29,10 @@ on:
         description: A rollback (allow a build older than the one production follows)
         type: boolean
         default: false
+      hotfix:
+        description: A hotfix (allow a build that passed only the hotfix checks, before the full suite after them passes)
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -31,6 +43,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Beside the promote, not before it: the approval is asked for at once,
+  # and this summary is there within a minute to read before giving it.
+  check:
+    name: check
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: read # read the releases
+      actions: read # the full suite after a hotfix, in its release run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - name: Sign in to the registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: What the promote will do, moving nothing
+        env:
+          BUILD: ${{ inputs.build }}
+          ROLLBACK: ${{ inputs.rollback }}
+          HOTFIX: ${{ inputs.hotfix }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set --
+          if [ "$ROLLBACK" = "true" ]; then set -- "$@" -rollback; fi
+          if [ "$HOTFIX" = "true" ]; then set -- "$@" -hotfix; fi
+          go run ./tools/release -promote "$BUILD" -check "$@"
+
   promote:
     name: promote
     runs-on: ubuntu-26.04
@@ -38,6 +83,7 @@ jobs:
     permissions:
       contents: read
       packages: write # move the tag
+      actions: read # the full suite after a hotfix, in its release run
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,7 +100,10 @@ jobs:
         env:
           BUILD: ${{ inputs.build }}
           ROLLBACK: ${{ inputs.rollback }}
+          HOTFIX: ${{ inputs.hotfix }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [ "$ROLLBACK" = "true" ]; then set -- -rollback; fi
+          set --
+          if [ "$ROLLBACK" = "true" ]; then set -- "$@" -rollback; fi
+          if [ "$HOTFIX" = "true" ]; then set -- "$@" -hotfix; fi
           go run ./tools/release -promote "$BUILD" "$@"

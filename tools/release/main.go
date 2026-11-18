@@ -7,13 +7,17 @@
 //	go run ./tools/release -verify-keyed                 check the signatures Flux cannot: cert-manager's chart and images against its key, Kured's image against its release workflow
 //	go run ./tools/release -render <dir> -image <image>  render every cluster's manifests with the game's image by digest, check them, write them under dir
 //	go run ./tools/release -released <build>             say whether the build is released: its manifests published and signed
-//	go run ./tools/release -promote <build> [-rollback]  make the build the release production follows
+//	go run ./tools/release -annotations <gate>           print the annotations of a release that passed gate (full or hotfix), one key=value a line
+//	go run ./tools/release -promote <build> [-rollback] [-hotfix] [-check]
+//	                                                     make the build the release production follows; with -check, say what that would do
 //
 // A build is the first 12 characters of its commit. A release is the
 // cluster's manifests, rendered with the image built from that commit, as
 // an OCI artifact in the registry, signed by the release workflow.
 // Production follows the tag prod, which -promote moves, and only to a
-// release whose signature it has checked.
+// release whose signature it has checked. A release's manifests say which
+// checks the build passed, and the versions that decide whether the world
+// starts empty when production moves to it: -promote reads both.
 //
 // It runs from the repository root. -released and -promote read the
 // registry as GITHUB_ACTOR with GITHUB_TOKEN, if set, and GitHub's API
@@ -50,6 +54,9 @@ func main() {
 	releasedBuild := flag.String("released", "", "say whether `build` is released, as released=true or released=false")
 	promoteBuild := flag.String("promote", "", "make `build` the release production follows")
 	rollback := flag.Bool("rollback", false, "with -promote: allow a build older than the one production follows")
+	hotfix := flag.Bool("hotfix", false, "with -promote: allow a build that passed only the hotfix checks, before the full suite after them has passed")
+	check := flag.Bool("check", false, "with -promote: say what promoting would do, and move nothing")
+	gate := flag.String("annotations", "", "print the annotations of a release whose build passed `gate`, full or hotfix")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -74,6 +81,13 @@ func main() {
 		if err == nil {
 			err = render(ctx, os.Stdout, *renderDir, *image)
 		}
+	case *gate != "":
+		var lines []string
+		if lines, err = annotations(*gate); err == nil {
+			for _, l := range lines {
+				fmt.Println(l)
+			}
+		}
 	case *releasedBuild != "":
 		var p *promoter
 		if p, err = newPromoter(os.Stderr); err == nil {
@@ -86,7 +100,7 @@ func main() {
 	case *promoteBuild != "":
 		var p *promoter
 		if p, err = newPromoter(os.Stdout); err == nil {
-			err = p.promote(ctx, *promoteBuild, *rollback)
+			err = p.promote(ctx, *promoteBuild, promotion{rollback: *rollback, hotfix: *hotfix, check: *check})
 		}
 	default:
 		flag.Usage()

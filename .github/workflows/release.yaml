@@ -15,6 +15,14 @@
 #
 # The jobs that publish restore no cache: what they build comes from the
 # commit alone.
+#
+# A commit merged from a pull request labelled hotfix is built once the
+# short form of the tests passes, run here again (ci.yaml, called with
+# mode hotfix), and the full suite runs beside the build as after, needed
+# by nothing: its result is on this run's page, and the promote asks for
+# the hotfix box until it has passed. The manifests say which gate the
+# build passed, and the versions the game's checkpoint is compared with,
+# so that a promote can say when it starts the world empty.
 name: release
 
 on:
@@ -40,9 +48,63 @@ env:
   SIGNER_IDENTITY: ^https://github\.com/daneelvt/keel-over-the-edge/\.github/workflows/release\.yaml@refs/heads/main$
 
 jobs:
+  # The pull request the commit was merged from, and its labels as they
+  # are now: hotfix only for one of this repository's, labelled hotfix.
+  # A commit with no pull request (the ruleset allows none) is held to
+  # every check.
+  gate:
+    name: gate
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read # the commit's pull requests
+      pull-requests: read # and their labels
+    outputs:
+      mode: ${{ steps.gate.outputs.mode }}
+    steps:
+      - id: gate
+        name: Every check, or the short form of a hotfix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # GitHub links a squash-merged commit to its pull request within
+          # moments of the push; give it a few.
+          pr=""
+          for _ in 1 2 3 4 5 6; do
+            pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+              --jq '[.[] | select(.merged_at != null and .merge_commit_sha == env.GITHUB_SHA)][0] // empty')
+            if [ -n "$pr" ]; then break; fi
+            sleep 5
+          done
+          mode=full
+          if [ -n "$pr" ] && jq -e '.head.repo.full_name == env.GITHUB_REPOSITORY and any(.labels[]; .name == "hotfix")' <<<"$pr" >/dev/null; then
+            mode=hotfix
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          number=none
+          if [ -n "$pr" ]; then number="#$(jq -r .number <<<"$pr")"; fi
+          echo "Pull request: $number; gate: $mode" | tee -a "$GITHUB_STEP_SUMMARY"
+
   ci:
     name: ci
+    needs: [gate]
     uses: ./.github/workflows/ci.yaml
+    with:
+      mode: ${{ needs.gate.outputs.mode }}
+    permissions:
+      contents: read
+      pull-requests: read # ci.yaml's changes job asks for it on a pull request
+
+  # After a hotfix's short form, the full suite on the same commit, beside
+  # the build: what the promote looks for (tools/release) before it
+  # promotes a hotfix's build without the hotfix box.
+  after:
+    name: after
+    needs: [gate]
+    if: needs.gate.outputs.mode == 'hotfix'
+    uses: ./.github/workflows/ci.yaml
+    with:
+      mode: full
     permissions:
       contents: read
       pull-requests: read # ci.yaml's changes job asks for it on a pull request
@@ -205,7 +267,7 @@ jobs:
   # rendered and checked here.
   manifests:
     name: manifests
-    needs: [build, image, check]
+    needs: [gate, build, image, check]
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -237,15 +299,21 @@ jobs:
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
       # Reproducible: the same commit and image give the same artifact, so
       # this job run again after a failure pushes what it pushed before.
+      # Annotated with the gate the build passed and the versions the
+      # checkpoint is compared with, read from the code; signed with them.
       - id: push
         name: Push the manifests, tagged with the build
         env:
           BUILD: ${{ needs.build.outputs.id }}
+          GATE: ${{ needs.gate.outputs.mode }}
         run: |
           set -euo pipefail
+          go run ./tools/release -annotations "$GATE" > "$RUNNER_TEMP/annotations"
+          annotations=()
+          while read -r a; do annotations+=(--annotations "$a"); done < "$RUNNER_TEMP/annotations"
           flux push artifact "oci://$MANIFESTS:$BUILD" --path "$RUNNER_TEMP/manifests" \
             --source "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --revision "main@sha1:$GITHUB_SHA" \
-            --reproducible --output json | tee "$RUNNER_TEMP/artifact.json"
+            "${annotations[@]}" --reproducible --output json | tee "$RUNNER_TEMP/artifact.json"
           digest=$(jq -r .digest "$RUNNER_TEMP/artifact.json")
           case "$digest" in sha256:*) ;; *) echo "the push reported no digest: $digest"; exit 1 ;; esac
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
@@ -262,8 +330,10 @@ jobs:
           BUILD: ${{ needs.build.outputs.id }}
           IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
           DIGEST: ${{ steps.push.outputs.digest }}
+          GATE: ${{ needs.gate.outputs.mode }}
         run: |
           size=$(docker buildx imagetools inspect --raw "$MANIFESTS@$DIGEST" | jq '[.config.size, .layers[].size] | add')
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           {
             echo "### Release \`$BUILD\`"
             echo "| | |"
@@ -271,6 +341,15 @@ jobs:
             echo "| Commit | $GITHUB_SHA |"
             echo "| Image | \`$IMAGE@$IMAGE_DIGEST\` |"
             echo "| Manifests | \`$MANIFESTS@$DIGEST\`, $size bytes |"
+            if [ "$GATE" = hotfix ]; then
+              echo "| Gate | **hotfix**: the short checks; the full suite runs as [after]($run) |"
+            else
+              echo "| Gate | full: every check |"
+            fi
+            sed 's/^com\.keelovertheedge\.\([a-z]*\)=\(.*\)$/| \1 | `\2` |/' "$RUNNER_TEMP/annotations" | grep -v '^| gate '
             echo
             echo "On the local cluster: \`go run ./tools/cluster -release $BUILD\`. To production: the promote workflow, with build \`$BUILD\`."
+            if [ "$GATE" = hotfix ]; then
+              echo "Until after has passed, the promote asks for hotfix to be ticked."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

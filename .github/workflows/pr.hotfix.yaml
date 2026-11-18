@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A pull request labelled hotfix gets the runners first, and its checks
+# in their short form. When the label is added (or the labelled pull
+# request is marked ready for review):
+#
+# - every other pull request's runs, queued or running, are cancelled:
+#   with twenty jobs at once and about sixty to a pull request, a hotfix
+#   would otherwise wait up to an hour. Runs on main (releases, nights, the
+#   scans on push) are never touched. A cancelled pull request's checks
+#   run again on its next push, or by hand (gh run rerun);
+# - this pull request's newest ci and pr.render runs are run again, if
+#   they read its labels before it had this one: ci.yaml and pr.render.yaml
+#   read the label when they start, and labels are not their trigger, so
+#   that another label's run never replaces the real one.
+#
+# Only a pull request from this repository: a fork's never takes the short
+# form, and only those with triage rights can label one.
+name: pr.hotfix
+
+on:
+  pull_request:
+    types: [labeled, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  hotfix:
+    name: hotfix
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      ((github.event.action == 'labeled' && github.event.label.name == 'hotfix') ||
+       (github.event.action == 'ready_for_review' && contains(github.event.pull_request.labels.*.name, 'hotfix')))
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      actions: write # cancel the other pull requests' runs, and run this one's again
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Cancel every other pull request's runs, queued or running
+        run: |
+          set -euo pipefail
+          for status in queued in_progress waiting pending requested; do
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?event=pull_request&status=$status&per_page=100" \
+              --jq '.workflow_runs[] | select(.head_sha != env.SHA) | "\(.id) \(.name) \(.head_branch)"'
+          done | sort -u > "$RUNNER_TEMP/runs"
+          if [ ! -s "$RUNNER_TEMP/runs" ]; then
+            echo "No other pull request's runs are queued or running." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "### Cancelled for the hotfix" >> "$GITHUB_STEP_SUMMARY"
+          while read -r id name branch; do
+            # A run that ended meanwhile cannot be cancelled: nothing lost.
+            if gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null 2>&1; then
+              echo "- $name on $branch ($id)" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          done < "$RUNNER_TEMP/runs"
+          echo "They run again on their next push, or with gh run rerun." >> "$GITHUB_STEP_SUMMARY"
+      # A run whose changes job had not started when this run was made
+      # reads the label itself. One whose changes job started before may
+      # have read the labels without it: it is cancelled if still going,
+      # and run again in whole, its changes job reading the label anew.
+      - name: Run this pull request's checks again, in their short form
+        run: |
+          set -euo pipefail
+          labelled=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          for workflow in ci.yaml pr.render.yaml; do
+            run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=pull_request&head_sha=$SHA&per_page=1" \
+              --jq '.workflow_runs[0] // empty | "\(.id) \(.status)"')
+            if [ -z "$run" ]; then
+              echo "$workflow: no run yet; it reads the label when it starts." | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            read -r id status <<<"$run"
+            started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?filter=latest&per_page=100" \
+              --jq '[.jobs[] | select(.name == "changes" and .status != "queued" and .status != "waiting" and .status != "pending")][0].started_at // empty')
+            # Both are UTC, as 2026-11-19T10:29:00Z: they compare as text.
+            if [ -z "$started" ] || [[ "$started" > "$labelled" ]]; then
+              echo "$workflow: run $id read the label itself." | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            if [ "$status" != completed ]; then
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null || true
+              for _ in $(seq 60); do
+                status=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq .status)
+                if [ "$status" = completed ]; then break; fi
+                sleep 2
+              done
+            fi
+            gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/rerun" >/dev/null
+            echo "$workflow: run $id runs again, in the short form." | tee -a "$GITHUB_STEP_SUMMARY"
+          done
