@@ -24,7 +24,7 @@ A multiplayer sailing game on a small disk-shaped world you can sail off the edg
 
 ## Status
 
-Early development. There is no playable game yet.
+Live at [keelovertheedge.com](https://keelovertheedge.com). Come and sail.
 
 To run it locally, see [docs/development.md](docs/development.md). To report a
 security problem, see [SECURITY.md](SECURITY.md).
