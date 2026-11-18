@@ -121,11 +121,16 @@ func turnTarget(deg float64) uint16 {
 }
 
 // held is the words in force for the boat in slot sl: the last the helm
-// wrote that the boat has not yet taken, or else the frame's.
+// wrote, taken or not, or else the frame's. The slot's words are the
+// newest, as the sim writes back every change it makes to them; a word
+// is not known taken by its tick, as a word stamped from a frame the sim
+// had already moved past is taken a tick or two late, and an order
+// written in between would undo it. Only words of the slot's generation,
+// all three of one tick, are the helm's.
 func held(s *Sea, f *bus.Frame, sl int32) (bus.Word, bus.PilotWord, bus.RigWord) {
 	w, p, r := s.Bus.Controls.Load(sl)
 	g := f.Gen[sl]
-	if w.Gen() == g && p.Gen() == g && r.Gen() == g && w.Seq() == p.Seq() && w.Seq() == r.Seq() && int32(w.Seq()-uint32(f.Tick)) > 0 {
+	if w.Gen() == g && p.Gen() == g && r.Gen() == g && w.Seq() == p.Seq() && w.Seq() == r.Seq() {
 		return w, p, r
 	}
 	return f.Control[sl], f.Pilot[sl], f.Rig[sl]
