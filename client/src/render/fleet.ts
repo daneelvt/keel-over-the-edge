@@ -178,6 +178,7 @@ import { kiteRig, kiteRipple, kiteShown } from './sailshape';
 import { Shadows } from './shadows';
 import { packYards, squareVertex } from './squarerig';
 import { FLOW_LUFFING } from './telltales';
+import { instances } from './uploads';
 
 /** The winner's cockade's colours, linear. */
 const COCKADE_COLOURS = cockadeColours(catalog.world.committee.prizes.cockade);
@@ -202,7 +203,7 @@ const RIPPLES = 4;
 /** One level of detail: its meshes and their instances' values. */
 class Level {
   readonly group = new Group();
-  readonly meshes: InstancedMesh[] = [];
+  readonly meshes: (InstancedMesh | Mesh)[] = [];
   readonly pose = attr();
   readonly rig = attr();
   readonly sail = attr();
@@ -213,7 +214,7 @@ class Level {
   /** Each instance's downwind sail: its clew's angle, signed twist, ripple and hoist. */
   readonly kite = attr();
   /** The downwind sail's meshes, none for a kind without one; and how many boats drawn have it up. */
-  readonly kiteMeshes: InstancedMesh[] = [];
+  readonly kiteMeshes: (InstancedMesh | Mesh)[] = [];
   kites = 0;
   /** Each instance's sailor's row (fleetsailors.ts's first eight texels), which the rigid figures read. */
   readonly rows: SailorRows;
@@ -333,7 +334,7 @@ class Level {
       const c = vec4(clothColour(palette, look, uv(), cloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
-      this.add(parts.sail.geometry, m, 'sail');
+      this.add(parts.sail.geometry, m, 'sail', undefined, true);
     }
     // Each headsail its own draw: each is shaped in its own frame.
     parts.jibs.forEach((jib, n) => {
@@ -348,7 +349,7 @@ class Level {
       const c = vec4(clothColour(palette, look, cloth, jibCloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
-      this.add(jib.geometry, m, n === 0 ? 'jib' : `jib ${n + 1}`);
+      this.add(jib.geometry, m, n === 0 ? 'jib' : `jib ${n + 1}`, undefined, true);
     });
     // The downwind sail: a draw for each of its meshes (the models have one).
     const kite = kiteRig(kind.physics);
@@ -364,7 +365,9 @@ class Level {
       const c = vec4(clothColour(palette, look, cloth, kiteCloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
-      this.kiteMeshes.push(this.add(sail.geometry, m, n === 0 ? 'kite' : `kite ${n + 1}`));
+      this.kiteMeshes.push(
+        this.add(sail.geometry, m, n === 0 ? 'kite' : `kite ${n + 1}`, undefined, true),
+      );
     });
     if (parts.square !== null && squareCloth !== null) {
       const m = litMaterial(
@@ -378,7 +381,7 @@ class Level {
       const c = vec4(clothColour(palette, numbered, at, squareCloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
-      this.add(parts.square.geometry, m, 'square sails');
+      this.add(parts.square.geometry, m, 'square sails', undefined, true);
     }
   }
 
@@ -402,13 +405,27 @@ class Level {
     this.figures = this.add(geometry, m, 'sailor', n.opacity);
   }
 
-  add(geometry: BufferGeometry, m: Material, name: string, opacity?: Node<'float'>): InstancedMesh {
+  /**
+   * A mesh of the level, its instances the level's boats. A sail is a
+   * plain mesh drawn its count times: an InstancedMesh's matrices, which
+   * would say nothing of where the boats are, take a vertex buffer of their
+   * own, and a sail's attributes and the instances' already fill WebGPU's
+   * eight.
+   */
+  add<Sail extends boolean = false>(
+    geometry: BufferGeometry,
+    m: Material,
+    name: string,
+    opacity?: Node<'float'>,
+    sail?: Sail,
+  ): Sail extends true ? Mesh : InstancedMesh {
     // Faded boats are dithered: each fragment kept or dropped by a hash
     // against its instance's opacity, in the opaque pass.
     m.alphaHash = true;
     (m as unknown as { opacityNode: Node<'float'> }).opacityNode = opacity ?? this.nodes.rig.z;
     m.name = `fleet ${this.name} ${name}`;
-    const mesh = new InstancedMesh(geometry, m, this.capacity);
+    const mesh =
+      sail === true ? instances(geometry, m) : new InstancedMesh(geometry, m, this.capacity);
     mesh.name = m.name;
     mesh.count = 0;
     // The parts place themselves from the instances' values: the
@@ -417,7 +434,7 @@ class Level {
     mesh.frustumCulled = false;
     this.meshes.push(mesh);
     this.group.add(mesh);
-    return mesh;
+    return mesh as Sail extends true ? Mesh : InstancedMesh;
   }
 
   commit(): void {

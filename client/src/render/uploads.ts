@@ -115,6 +115,7 @@ interface BuilderMaker {
 
 /** Has the renderer's builders take those paths for the objects that want them (bufferless). */
 export function sendLess(renderer: WebGPURenderer): void {
+  sharedByStage(renderer);
   const backend = renderer.backend as unknown as BuilderMaker;
   const make = backend.createNodeBuilder.bind(backend);
   backend.createNodeBuilder = (object, r) => {
@@ -164,4 +165,85 @@ export function sendFirst(data: InstanceData, n: number): void {
     data.addUpdateRange(0, n * (data.stride ?? data.itemSize ?? 1));
     data.needsUpdate = true;
   }
+}
+
+/** A binding of a bind group, as three.js's Bindings sees it. */
+interface StagedBinding {
+  visibility: number;
+}
+
+/** What three.js's Bindings keeps its shared bind groups in: by render context, a map by cache key. */
+interface SharedStore {
+  get(context: object): Map<string, unknown> | undefined;
+  set(context: object, groups: Map<string, unknown>): void;
+}
+
+/** The parts of three.js's Bindings that sharedByStage changes. */
+export interface SharedBindings {
+  _sharedBindGroups: SharedStore;
+  getSharedBindGroup(group: { bindings: StagedBinding[] }, context?: object | null): unknown;
+}
+
+/**
+ * Has the renderer share a bind group only between builds that read each of
+ * its bindings in the same shader stages.
+ *
+ * three.js shares a group (the scene's and the kept: sharedUniformGroup)
+ * between every build whose group holds the same uniforms, by a key of
+ * their ids alone. But a uniform array's or a texture's binding is visible
+ * only to the stages that read it, and the GPU's layout of a group is
+ * made once, from the first build's: a material that reads an array in its
+ * vertex shader, given the group of one that read it only in its fragment
+ * shader, makes no pipeline at all ("not in the binding visibility"). Each
+ * set of stages here has a store of its own, so every build gets a group
+ * laid out for its own stages, as three.js 0.186 gave it.
+ *
+ * A group let go is taken out of every set's store by its key: one of
+ * another set with the same key is then made again when next asked for.
+ */
+export function sharedByStage(renderer: WebGPURenderer): void {
+  const bindings = (renderer as unknown as { _bindings?: SharedBindings })._bindings;
+  if (bindings === undefined) {
+    return;
+  }
+  const stores = new Map<string, WeakMap<object, Map<string, unknown>>>();
+  const storeOf = (stages: string): WeakMap<object, Map<string, unknown>> => {
+    let s = stores.get(stages);
+    if (s === undefined) {
+      s = new WeakMap();
+      stores.set(stages, s);
+    }
+    return s;
+  };
+  /** The stages of the group being asked for, or null outside getSharedBindGroup (a group let go). */
+  let asking: string | null = null;
+  bindings._sharedBindGroups = {
+    get(context) {
+      if (asking !== null) {
+        return storeOf(asking).get(context);
+      }
+      // A group let go: its key out of every store.
+      const all = [...stores.values()].map((s) => s.get(context)).filter((m) => m !== undefined);
+      const forget = new Map<string, unknown>();
+      forget.delete = (key: string) => {
+        for (const m of all) {
+          m.delete(key);
+        }
+        return true;
+      };
+      return forget;
+    },
+    set(context, groups) {
+      storeOf(asking ?? '').set(context, groups);
+    },
+  };
+  const get = bindings.getSharedBindGroup.bind(bindings);
+  bindings.getSharedBindGroup = (group, context) => {
+    asking = group.bindings.map((b) => b.visibility).join(',');
+    try {
+      return get(group, context);
+    } finally {
+      asking = null;
+    }
+  };
 }

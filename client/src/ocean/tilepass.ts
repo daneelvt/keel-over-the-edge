@@ -89,6 +89,7 @@ export class TilePass {
 
   constructor(field: Field, band: BandUniforms, gusts: GustField) {
     this.#rows = Math.ceil(field.count / PASS_WIDTH);
+    this.target.scissorTest = true;
     const offsets = fieldTexture(field);
     const summed = boatBandAt(band);
     const area = seaAreaAt(band);
@@ -132,12 +133,10 @@ export class TilePass {
 
   /** Draws every tile's plane into the target, and, where there are gusts, every tile's gust below them. */
   render(renderer: WebGPURenderer): void {
-    // The renderer's own switch turns on a target's scissor. Only the rows
-    // that hold tiles are drawn.
+    // Only the rows that hold tiles are drawn: the target's own switch turns
+    // on its scissor, set in the constructor, not the renderer's.
     const before = renderer.getRenderTarget();
-    const scissored = renderer.getScissorTest();
     renderer.setRenderTarget(this.target);
-    renderer.setScissorTest(true);
     this.target.scissor.set(0, 0, PASS_WIDTH, this.#rows);
     this.#quad.render(renderer);
     const cleared = renderer.autoClear;
@@ -157,7 +156,6 @@ export class TilePass {
       renderer.autoClear = cleared;
       this.#gusty = gusty;
     }
-    renderer.setScissorTest(scissored);
     renderer.setRenderTarget(before);
   }
 }

@@ -1324,16 +1324,22 @@ export class SeaScene {
     this.fleet.castShadows(sh.fleet, sh.lit);
     // The light's casting changes every lit material's shader: compiled off
     // the frame first, and swapped in once ready. The compiler reads the
-    // light as it is when called, so the light is changed for that call and
-    // put back until the shaders are in.
+    // light as it is when it starts, so the light is changed for that start
+    // and put back until the shaders are in.
     let lit: Promise<void> = Promise.resolve();
-    const was = sh.light.castShadow;
-    if (sh.lit !== was) {
-      sh.light.castShadow = sh.lit;
+    if (sh.lit !== sh.light.castShadow) {
       if (ahead) {
+        const casting = (): (() => void) => {
+          const was = sh.light.castShadow;
+          sh.light.castShadow = sh.lit;
+          return () => {
+            sh.light.castShadow = was;
+          };
+        };
         const casters = [this.boat?.root, this.fleet.root].filter((o) => o !== undefined);
-        lit = Promise.all(casters.map((o) => this.stage.compile(o))).then(() => undefined);
-        sh.light.castShadow = was;
+        lit = Promise.all(casters.map((o) => this.stage.compile(o, casting))).then(() => undefined);
+      } else {
+        sh.light.castShadow = sh.lit;
       }
     }
     this.spray.capacity = tier.spray;

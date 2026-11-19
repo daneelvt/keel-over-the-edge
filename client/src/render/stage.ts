@@ -12,11 +12,11 @@
 // every animation frame, and nothing is drawn. A page under test that draws
 // updates every frame but draws only when a test asks, until it is thawed.
 
-import { NoToneMapping, type Object3D, PerspectiveCamera, Scene } from 'three';
+import { NoToneMapping, type Object3D, PerspectiveCamera, type RenderTarget, Scene } from 'three';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { pass, renderOutput } from 'three/tsl';
-import { type PassNode, RenderPipeline, type WebGPURenderer } from 'three/webgpu';
+import { RenderPipeline, type WebGPURenderer } from 'three/webgpu';
 import { FrameCap } from '../game/cap';
 import { type Backend, createGfx, type Gfx, type Wanted } from './renderer';
 
@@ -87,9 +87,12 @@ export class Stage {
   readonly #wanted: Wanted;
   readonly #hooks: StageHooks;
   #pipeline: RenderPipeline | null = null;
-  #scenePass: PassNode | null = null;
+  /** A target of the scene pass's own formats, at 1 × 1, that compiles draw to. */
+  #compileTarget: RenderTarget | null = null;
   #last = 0;
   #frozen = false;
+  /** The compile running, or the last to: compiles run one at a time. */
+  #compiling: Promise<void> = Promise.resolve();
   /** Those waiting for a copy of the next frame drawn. */
   #captures: ((c: HTMLCanvasElement | null) => void)[] = [];
 
@@ -230,23 +233,48 @@ export class Stage {
   /**
    * Compiles what an object needs to be drawn in the scene, before its first
    * frame there: its shaders and pipelines are made off the frame, and the
-   * frame that first draws it does not wait for them.
+   * frame that first draws it does not wait for them. Compiles run one at a
+   * time, so one may start after others end; the compiler reads the scene
+   * when it starts, and set, given, puts the scene as the compile should see
+   * it then and returns what puts it back.
    */
-  compile(object: Object3D): Promise<void> {
-    const g = this.gfx;
-    const p = this.#scenePass;
-    if (g === null || p === null) {
-      return Promise.resolve();
-    }
-    // The scene is drawn into the pass's own target, and a pipeline is made
-    // for the target it draws to. compileAsync reads the target at once, so
-    // it is set for the call alone.
-    const r = g.renderer;
-    const before = r.getRenderTarget();
-    r.setRenderTarget(p.renderTarget);
-    const done = r.compileAsync(object, this.camera, this.scene);
-    r.setRenderTarget(before);
-    return done.then(() => undefined);
+  compile(object: Object3D, set?: () => () => void): Promise<void> {
+    // One at a time: compileAsync keeps its state on the renderer while it
+    // yields, and two at once overwrite each other's.
+    const run = (): Promise<void> => {
+      const g = this.gfx;
+      const t = this.#compileTarget;
+      if (g === null || t === null) {
+        return Promise.resolve();
+      }
+      // A pipeline is made for the formats of the target it draws to: the
+      // scene pass's. Not the pass's target itself: once a compile has
+      // drawn to it, the frame after the pass resizes it samples its old
+      // textures. compileAsync reads the target as it starts, so it is set
+      // for the call; but its work, done in steps between frames, binds
+      // that target again after each step, and leaves it bound at the end.
+      // Each frame draws to the canvas whatever is bound (#draw), and the
+      // canvas is bound again once the compile is done.
+      const r = g.renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(t);
+      const unset = set?.();
+      const done = r.compileAsync(object, this.camera, this.scene);
+      unset?.();
+      r.setRenderTarget(before);
+      const after = (): void => {
+        if (r.getRenderTarget() === t) {
+          r.setRenderTarget(null);
+        }
+      };
+      return done.then(after, (e: unknown) => {
+        after();
+        throw e;
+      });
+    };
+    const done = this.#compiling.then(run, run);
+    this.#compiling = done.catch(() => undefined);
+    return done;
   }
 
   /** The stage's size on the page, in CSS pixels. */
@@ -285,7 +313,9 @@ export class Stage {
     this.#pipeline?.dispose();
     const p = new RenderPipeline(g.renderer);
     const scenePass = pass(this.scene, this.camera);
-    this.#scenePass = scenePass;
+    this.#compileTarget?.dispose();
+    this.#compileTarget = scenePass.renderTarget.clone();
+    this.#compileTarget.setSize(1, 1);
     if (this.antialias === 'none') {
       p.outputNode = scenePass;
     } else {
@@ -322,6 +352,9 @@ export class Stage {
       return;
     }
     const start = performance.now();
+    // The frame draws to the canvas: a compile running between frames may
+    // have left its own target bound (compile).
+    g.renderer.setRenderTarget(null);
     g.renderer.info.reset();
     if (this.#hooks.frame(g, { dt, now }) === false) {
       return;
