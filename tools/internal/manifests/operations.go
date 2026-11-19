@@ -343,8 +343,8 @@ type Forward struct {
 	// Tailnet: the machine also routes the address to the tailnet, for
 	// the tailnet's admins alone, on its one port (infra/tailnet/
 	// policy.hujson), so the owner's phone opens it with no tunnel. The
-	// monitoring pages only: never the database or keel's internal
-	// listener.
+	// monitoring pages and keel's internal listener, for the owner's world
+	// page: never the database.
 	Tailnet bool
 }
 
@@ -355,7 +355,7 @@ var Forwards = []Forward{
 	{"monitoring", "vmsingle-forward", "10.43.0.52", 8428, 8428, "VictoriaMetrics' UI (vmui), with vmalert's rules and alerts", true},
 	{"monitoring", "victoria-logs", "10.43.0.50", 9428, 9428, "VictoriaLogs' UI", true},
 	{"keel", "keel-db-forward", "10.43.0.53", 5432, 15432, "the database, for psql as reader", false},
-	{"keel", "keel-internal-forward", "10.43.0.54", 9090, 9090, "keel's internal listener: profiles, the flight recorder", false},
+	{"keel", "keel-internal-forward", "10.43.0.54", 9090, 9090, "keel's internal listener: the owner's world page, profiles, the flight recorder", true},
 }
 
 // TailnetRange is the tailnet's IPv4 range, which every device on it has

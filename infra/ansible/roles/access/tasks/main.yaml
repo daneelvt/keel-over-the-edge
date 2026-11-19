@@ -51,9 +51,10 @@
     - not ((access_prefs.stdout | from_json).RunSSH and not (access_prefs.stdout | from_json).CorpDNS)
   changed_when: true
 
-# The monitoring pages' fixed addresses, routed to the tailnet. k3s keeps
-# forwarding on; Tailscale masquerades what it forwards.
-- name: Route the monitoring pages to the tailnet
+# The monitoring pages' and the owner's world page's fixed addresses,
+# routed to the tailnet. k3s keeps forwarding on; Tailscale masquerades
+# what it forwards.
+- name: Route the owner's pages to the tailnet
   ansible.builtin.command:
     cmd: tailscale set --advertise-routes={{ access_tailscale_routes | join(',') }}
   when:

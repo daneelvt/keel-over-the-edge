@@ -935,10 +935,17 @@ func TestEachRuleFails(t *testing.T) {
 			return objs
 		}},
 		// The tailnet's range: into a routed forward's namespace alone, on
-		// a port.
+		// one port: not beside Traefik on the game's and the agents'
+		// listeners, nor out.
 		{"no address range but the internet", inDeploy, func(objs []Object) []Object {
 			r := Get(Find(objs, "NetworkPolicy", "keel"), "spec", "ingress", 0).(map[string]any)
 			r["from"] = append(r["from"].([]any), map[string]any{"ipBlock": map[string]any{"cidr": TailnetRange}})
+			return objs
+		}},
+		{"no address range but the internet", inDeploy, func(objs []Object) []Object {
+			r := Get(Find(objs, "NetworkPolicy", "keel"), "spec", "egress", 0).(map[string]any)
+			r["to"] = append(r["to"].([]any), map[string]any{"ipBlock": map[string]any{"cidr": TailnetRange}})
+			r["ports"] = r["ports"].([]any)[:1]
 			return objs
 		}},
 		{"no address range but the internet", inRelease(prod, "monitoring"), func(objs []Object) []Object {
