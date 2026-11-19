@@ -23,7 +23,7 @@ import {
   appWords,
   cardBoatWords,
   checked,
-  countsWords,
+  countsTiles,
   dayWords,
   doneWords,
   type Flow,
@@ -210,6 +210,20 @@ function Opens({
  * page; the answer's note above the accounts found. Asked again when again
  * changes, after the owner's hand changed an account.
  */
+/** What a sailor is doing now, as marks: at sea or waiting, and stopped. */
+function Now({ atSea, queued, stopped }: { atSea: boolean; queued: boolean; stopped: boolean }) {
+  return (
+    <span class="who">
+      {atSea ? <span class="chip sea">at sea</span> : null}
+      {!atSea && queued ? <span class="chip">waiting</span> : null}
+      <span class={stopped ? 'chip danger' : ''} data-field="row-stopped">
+        {stopped ? 'stopped' : ''}
+      </span>
+      {!atSea && !queued && !stopped ? <span class="faint">ashore</span> : null}
+    </span>
+  );
+}
+
 function Search({
   open,
   chosen,
@@ -241,8 +255,7 @@ function Search({
   }, [asked, again]);
 
   return (
-    <section class="card" aria-label="Search">
-      <h2>Search</h2>
+    <section class="card finder" aria-label="Search">
       <form
         class="search"
         onSubmit={(e) => {
@@ -251,116 +264,128 @@ function Search({
         }}
       >
         <input
-          type="text"
+          type="search"
           name="search"
           autocomplete="off"
           spellcheck={false}
-          placeholder="a name or part of one, an id, a token"
+          placeholder="Find a sailor: a name or part of one, an id, a token"
           aria-label="A name or part of one, an account's id, or a token"
           value={text}
           onInput={(e) => setText(e.currentTarget.value)}
         />
-        <button type="submit" name="find">
+        <button type="submit" name="find" class="primary">
           Find
         </button>
-        <select
-          name="sort"
-          aria-label="The order"
-          value={asked.sort}
-          onChange={(e) => setAsked({ ...asked, sort: e.currentTarget.value as Sort, page: 0 })}
-        >
-          {(Object.keys(SORTS) as Sort[]).map((s) => (
-            <option key={s} value={s}>
-              {SORTS[s]}
-            </option>
-          ))}
-        </select>
       </form>
       {why !== '' ? <p class="small error">{why}</p> : null}
       {answer !== null && answer.note !== '' ? <p data-field="search-note">{answer.note}</p> : null}
       {answer !== null ? (
         <>
-          <p class="small" data-field="search-total">
-            {plural(answer.total, 'human')} found
-            {answer.pages > 1 ? `, page ${answer.page + 1} of ${answer.pages}` : ''}.
-          </p>
-          <table class="accounts">
-            <thead>
-              <tr>
-                <th>Sailor</th>
-                <th>Human or machine</th>
-                <th>Made</th>
-                <th>Last active</th>
-                <th>Its machine sailors last active</th>
-                <th>At sea</th>
-                <th>Log</th>
-                <th>Flags</th>
-                <th>Stopped</th>
-              </tr>
-            </thead>
-            <tbody>
-              {answer.accounts.flatMap((r) => [
-                <tr
-                  key={r.id}
-                  data-account={r.id}
-                  class={`${r.matched ? 'matched' : ''} ${chosen === r.id ? 'chosen' : ''}`}
-                  onClick={() => open(r.id)}
-                >
-                  <td>
-                    <bdi>{r.name}</bdi>
-                  </td>
-                  <td>human</td>
-                  <td>{dayWords(r.made)}</td>
-                  <td title={momentWords(r.lastActiveAt)}>{r.lastActive}</td>
-                  <td class="small">
-                    {r.machines.map((m) => (
-                      <span key={m.id} class="side">
-                        <Opens id={m.id} open={open}>
-                          {m.name}
-                        </Opens>
-                        : {m.lastActive}
+          <div class="found-head">
+            <p class="small" data-field="search-total">
+              {plural(answer.total, 'human')} found
+              {answer.pages > 1 ? `, page ${answer.page + 1} of ${answer.pages}` : ''}.
+            </p>
+            <label class="small sort">
+              Sorted by{' '}
+              <select
+                name="sort"
+                aria-label="The order"
+                value={asked.sort}
+                onChange={(e) =>
+                  setAsked({ ...asked, sort: e.currentTarget.value as Sort, page: 0 })
+                }
+              >
+                {(Object.keys(SORTS) as Sort[]).map((s) => (
+                  <option key={s} value={s}>
+                    {SORTS[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {answer.accounts.length === 0 ? (
+            <p class="empty">
+              {asked.text === '' ? 'No sailors yet.' : 'No sailor by that. Try less of the name.'}
+            </p>
+          ) : (
+            <table class="accounts">
+              <thead>
+                <tr>
+                  <th>Sailor</th>
+                  <th>Now</th>
+                  <th>Last active</th>
+                  <th class="more">Made</th>
+                  <th class="more">Log</th>
+                </tr>
+              </thead>
+              <tbody>
+                {answer.accounts.flatMap((r) => [
+                  <tr
+                    key={r.id}
+                    data-account={r.id}
+                    class={`${r.matched ? 'matched' : ''} ${chosen === r.id ? 'chosen' : ''}`}
+                    onClick={() => open(r.id)}
+                  >
+                    <td>
+                      <span class="who">
+                        <bdi>{r.name}</bdi>
+                        {r.tools ? <span class="chip gold">owner’s</span> : null}
+                        {r.priority ? <span class="chip">priority</span> : null}
                       </span>
-                    ))}
-                  </td>
-                  <td>{r.atSea ? 'at sea' : r.queued ? 'waiting' : ''}</td>
-                  <td class="small" data-field="row-log">
-                    {figuresWords(answer.logs?.[r.id])}
-                  </td>
-                  <td>
-                    {[r.tools ? 'owner’s' : '', r.priority ? 'priority' : '']
-                      .filter((w) => w !== '')
-                      .join(', ')}
-                  </td>
-                  <td data-field="row-stopped">{r.stopped ? 'stopped' : ''}</td>
-                </tr>,
-                // A machine sailor the search hit shows under its human.
-                ...r.machines
-                  .filter((m) => m.matched)
-                  .map((m) => (
-                    <tr
-                      key={m.id}
-                      data-account={m.id}
-                      class={`machine matched ${chosen === m.id ? 'chosen' : ''}`}
-                      onClick={() => open(m.id)}
-                    >
-                      <td>
-                        <bdi>{m.name}</bdi>
-                      </td>
-                      <td>machine sailor</td>
-                      <td>{dayWords(m.made)}</td>
-                      <td title={momentWords(m.lastActiveAt)}>{m.lastActive}</td>
-                      <td />
-                      <td>{m.atSea ? 'at sea' : m.queued ? 'waiting' : ''}</td>
-                      <td class="small">{figuresWords(answer.logs?.[m.id])}</td>
-                      <td>{m.priority ? 'priority' : ''}</td>
-                      <td>{m.stopped ? 'stopped' : ''}</td>
-                    </tr>
-                  )),
-              ])}
-            </tbody>
-          </table>
+                      {r.machines.length > 0 ? (
+                        <span class="small theirs">
+                          {r.machines.map((m) => (
+                            <span key={m.id} class="side">
+                              <Opens id={m.id} open={open}>
+                                {m.name}
+                              </Opens>
+                              : {m.lastActive}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <Now atSea={r.atSea} queued={r.queued} stopped={r.stopped} />
+                    </td>
+                    <td title={momentWords(r.lastActiveAt)}>{r.lastActive}</td>
+                    <td class="more">{dayWords(r.made)}</td>
+                    <td class="small more" data-field="row-log">
+                      {figuresWords(answer.logs?.[r.id])}
+                    </td>
+                  </tr>,
+                  // A machine sailor the search hit shows under its human.
+                  ...r.machines
+                    .filter((m) => m.matched)
+                    .map((m) => (
+                      <tr
+                        key={m.id}
+                        data-account={m.id}
+                        class={`machine matched ${chosen === m.id ? 'chosen' : ''}`}
+                        onClick={() => open(m.id)}
+                      >
+                        <td>
+                          <span class="who">
+                            <bdi>{m.name}</bdi>
+                            <span class="chip">machine sailor</span>
+                            {m.priority ? <span class="chip">priority</span> : null}
+                          </span>
+                        </td>
+                        <td>
+                          <Now atSea={m.atSea} queued={m.queued} stopped={m.stopped} />
+                        </td>
+                        <td title={momentWords(m.lastActiveAt)}>{m.lastActive}</td>
+                        <td class="more">{dayWords(m.made)}</td>
+                        <td class="small more">{figuresWords(answer.logs?.[m.id])}</td>
+                      </tr>
+                    )),
+                ])}
+              </tbody>
+            </table>
+          )}
           {answer.pages > 1 ? (
-            <p>
+            <p class="pages">
               <button
                 type="button"
                 name="previous"
@@ -934,9 +959,18 @@ export function AccountsTab({
   return (
     <main class="accounts-tab" hidden={!shown}>
       <div class="accounts-list">
-        <section class="card" aria-label="Accounts">
-          <h2>Accounts</h2>
-          <p data-field="account-counts">{accounts === null ? '—' : countsWords(accounts)}</p>
+        <section class="tiles" aria-label="Accounts" data-field="account-counts">
+          {accounts === null ? (
+            <p class="small">Counting the accounts.</p>
+          ) : (
+            countsTiles(accounts).map((t) => (
+              <div class="tile" key={t.label}>
+                <span class="tile-label">{t.label}</span>
+                <strong class="tile-value">{t.value}</strong>
+                <span class="tile-note">{t.note}</span>
+              </div>
+            ))
+          )}
         </section>
         <Search open={open} chosen={chosen} again={again} />
       </div>
@@ -953,8 +987,9 @@ export function AccountsTab({
             changed={() => searchAgain(undefined)}
           />
         ) : (
-          <section class="card account-card" aria-label="The account">
-            <p class="small">Open an account found, or one from the world's boats and queue.</p>
+          <section class="card account-card empty-card" aria-label="The account">
+            <h2>No account open</h2>
+            <p class="small">Pick a sailor from the list, or from the world's boats and queue.</p>
           </section>
         )}
       </aside>

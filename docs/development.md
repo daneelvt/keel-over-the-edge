@@ -4394,7 +4394,14 @@ the map: **the world** (its number, ID, seed and generator, when it was
 made, its epoch, the tick, world time, the sky's hour at the centre),
 **the weather** (the spell's regime, wind at mid-disk, drift, gust factor,
 the next change), **the boats at sea and in the queue**, and **the
-islands**, by number and name, each taking the map to itself.
+islands**, by number and name, each taking the map to itself. Each card
+folds to its head at a click (`fold.tsx`; what was folded is kept in the
+browser).
+
+**On a phone** (under 700 px) the page scrolls, the map above the cards,
+which start folded but the world's, the boats' and the queue's; the layers
+fold behind a key, what was picked is under the map, and two fingers zoom
+it.
 
 The page (`client/src/owner/`, Preact and Canvas 2D, no map library) is
 built apart from the game into `dist/owner/` (`vite.owner.config.ts`;

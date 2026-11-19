@@ -126,6 +126,7 @@ import {
   visibilityRanges,
   visibilityWords,
 } from './fog';
+import { Cards } from './fold';
 import { busyRows, FORECAST_COLOURS, spellAt, trackAt, warningSpan } from './forecast';
 import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
@@ -2226,7 +2227,7 @@ function App() {
             {!onNext && placeWeather !== null ? <PlaceBox p={placeWeather} /> : null}
           </div>
           {onNext ? (
-            <aside>
+            <Cards>
               {life !== null ? <LifecycleCard life={life} /> : null}
               {life !== null ? (
                 <WorldByHand life={life} charted={charted} act={act} hands={['make']} />
@@ -2241,9 +2242,9 @@ function App() {
                 />
               ) : null}
               {next.stored ? nextLists : null}
-            </aside>
+            </Cards>
           ) : (
-            <aside>
+            <Cards>
               {now !== null ? <Clock now={now} accounts={accounts} /> : null}
               {now !== null ? <WeatherCard now={now} /> : null}
               <WeekCard
@@ -2332,7 +2333,7 @@ function App() {
                 />
               </section>
               {lists}
-            </aside>
+            </Cards>
           )}
         </main>
       )}

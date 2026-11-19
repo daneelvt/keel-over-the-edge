@@ -24,18 +24,46 @@ export const PAGE = 50;
 /** A reason's bounds, in characters. */
 export const MAX_REASON = 500;
 
-/** The Accounts tab's head: the humans, the machine sailors and the grants live, and those stopped. */
-export function countsWords(a: AccountsData): string {
-  const words = [`${plural(a.total, 'human')}: ${a.week} made this week, ${a.today} seen today`];
+/** A count at the Accounts tab's head: what it counts, the figure, and its parts. */
+export interface Tile {
+  label: string;
+  value: string;
+  note: string;
+}
+
+/** The Accounts tab's head as figures: humans, machine sailors, grants live, stopped. */
+export function countsTiles(a: AccountsData): Tile[] {
+  const tiles: Tile[] = [
+    {
+      label: 'Humans',
+      value: String(a.total),
+      note: `${a.week} made this week · ${a.today} seen today`,
+    },
+  ];
   if (a.machines !== undefined) {
-    words.push(machinesWords(a.machines));
-  }
-  if (a.stopped !== undefined) {
-    words.push(
-      `stopped: ${plural(a.stopped.human, 'human')}, ${plural(a.stopped.ai, 'machine sailor')}`,
+    const apps = a.machines.grants.app ?? 0;
+    const tokens = a.machines.grants.connection ?? 0;
+    tiles.push(
+      {
+        label: 'Machine sailors',
+        value: String(a.machines.total),
+        note: `${a.machines.week} made this week`,
+      },
+      {
+        label: 'Grants live',
+        value: String(apps + tokens),
+        note: `${plural(apps, 'app')} · ${plural(tokens, 'connection token')}`,
+      },
     );
   }
-  return words.join('; ');
+  if (a.stopped !== undefined) {
+    tiles.push({
+      label: 'Stopped',
+      value: String(a.stopped.human + a.stopped.ai),
+      note: `${plural(a.stopped.human, 'human')} · ${plural(a.stopped.ai, 'machine sailor')}`,
+    });
+  }
+  return tiles;
 }
 
 const days = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
