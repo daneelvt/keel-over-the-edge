@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -92,5 +95,67 @@ func TestTailKeepsTheLastLines(t *testing.T) {
 	tl.reset()
 	if len(tl.lines()) != 0 {
 		t.Error("reset kept lines")
+	}
+}
+
+func TestPageEnvServesTheBuiltPageAtKeelsOrigin(t *testing.T) {
+	root := t.TempDir()
+	if _, err := pageEnv(root, "client/dist"); err == nil {
+		t.Fatal("a directory with no built page was taken")
+	}
+	dist := filepath.Join(root, "client", "dist")
+	if err := os.MkdirAll(dist, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "index.html"), []byte("<!doctype html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env, err := pageEnv(root, "client/dist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"KEEL_PLAY_ORIGIN=http://localhost:18088", "KEEL_CLIENT_DIR=" + dist}
+	if !slices.Equal(env, want) {
+		t.Errorf("the built page's env is %q, want %q", env, want)
+	}
+	env, err = pageEnv(root, "")
+	if err != nil || !slices.Contains(env, "KEEL_PLAY_ORIGIN=http://localhost:5181") || slices.ContainsFunc(env, func(e string) bool { return strings.HasPrefix(e, "KEEL_CLIENT_DIR=") }) {
+		t.Errorf("Vite's page's env is %q (%v)", env, err)
+	}
+}
+
+func TestWithEnvReplacesAName(t *testing.T) {
+	env := []string{"A=1", "KEEL_CLIENT_DIR=/one", "B=2"}
+	got := withEnv(env, "KEEL_CLIENT_DIR", "/two")
+	if want := []string{"A=1", "B=2", "KEEL_CLIENT_DIR=/two"}; !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if env[1] != "KEEL_CLIENT_DIR=/one" {
+		t.Error("the env given was changed")
+	}
+}
+
+func TestBuiltDirStaysInTheRepository(t *testing.T) {
+	root := t.TempDir()
+	built := filepath.Join(root, "client", "dist")
+	if err := os.MkdirAll(built, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(built, "index.html"), []byte("<p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, client := range []string{"client/dist", built, "client/../client/dist"} {
+		if dir, err := builtDir(root, client); err != nil || dir != built {
+			t.Errorf("builtDir(%q) = %q, %v; want %q", client, dir, err, built)
+		}
+	}
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "index.html"), []byte("<p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, client := range []string{outside, "../" + filepath.Base(outside), "client/../../x"} {
+		if dir, err := builtDir(root, client); err == nil {
+			t.Errorf("builtDir(%q) = %q, want an error", client, dir)
+		}
 	}
 }

@@ -46,8 +46,12 @@ spec:
       - name: keel-db-monitoring
         key: queries.yaml
   # Two read-only roles, over TLS like the game: reader for the owner,
-  # grafana for Grafana's SQL. Neither may write; there is no role that
-  # may, but the owner's, keel. Their passwords are their Secrets'.
+  # grafana for Grafana's SQL. Neither may write. And agreement, the
+  # contributor agreement keeper's, a member of no role: it may read and
+  # write its own two tables, agreement_signatures and agreement_pulls,
+  # and nothing else, by the grants keel migrate gives it on each run once
+  # the role is there. No role may write the game's tables but the
+  # owner's, keel. Their passwords are their Secrets'.
   managed:
     roles:
       - name: reader
@@ -63,6 +67,15 @@ spec:
         inRoles: [pg_read_all_data, pg_monitor]
         passwordSecret:
           name: keel-db-grafana
+      # Its pool holds two connections (the owner's tool, run in its pod,
+      # goes through the keeper's own); one more is to spare, for one a
+      # keeper that vanished left open until the keepalives end it.
+      - name: agreement
+        ensure: present
+        login: true
+        connectionLimit: 3
+        passwordSecret:
+          name: keel-db-agreement
   storage:
     storageClass: local-path
     size: 40Gi

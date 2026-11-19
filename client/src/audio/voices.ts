@@ -76,6 +76,20 @@ export interface SoundInput {
   waterline?: number;
   /** The main's area, m²: how thick its sheet is, and so its tone. */
   sailArea?: number;
+  /**
+   * The page's alone, which the server's twin does not hear: the boat's
+   * pitch rate (rad/s, bow up) and heave rate (m/s, up), the bow meeting the
+   * waves; the boom's angle off the centreline (rad, positive to starboard)
+   * and its rate (rad/s), and the apparent wind's angle off the bow (rad),
+   * the sail crossing; and the water's depth under the boat, m, a shore's
+   * surf.
+   */
+  pitchRate?: number;
+  heaveRate?: number;
+  boom?: number;
+  boomRate?: number;
+  apparentAngle?: number;
+  depth?: number;
 }
 
 /** A rope's diameter on a boat whose main has this area, m², by the rigging's recipe. */
@@ -210,6 +224,17 @@ export function soundInput(
     (out[RECORDS.out.footFlow] === FLOW_LUFFING ? 1 : 0) +
     (out[RECORDS.out.headFlow] === FLOW_LUFFING ? 1 : 0);
   into.time = time;
+  into.apparentAngle = out[RECORDS.out.apparentWindAngle] ?? 0;
+  into.depth = out[RECORDS.out.depth] ?? Number.NaN;
+  return into;
+}
+
+/** Sets the boat's motion's part of the sound's inputs from its state: its pitch and heave rates, and its boom. */
+export function motionInput(state: Float64Array, into: SoundInput): SoundInput {
+  into.pitchRate = state[RECORDS.state.pitchRate] ?? 0;
+  into.heaveRate = state[RECORDS.state.heaveRate] ?? 0;
+  into.boom = state[RECORDS.state.boom] ?? 0;
+  into.boomRate = state[RECORDS.state.boomRate] ?? 0;
   return into;
 }
 

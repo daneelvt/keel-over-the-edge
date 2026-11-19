@@ -128,6 +128,9 @@ func TestRenderFilters(t *testing.T) {
 		{"client/build/licences.ts", true, true},
 		{"client/e2e/helpers.ts", true, true},
 		{"client/e2e/sea.spec.ts", true, true},
+		// The built page's tests run when either kind's do.
+		{"client/playwright.built.config.ts", true, true},
+		{"client/e2e/critical.spec.ts", true, true},
 		{"client/e2e/pictures/webgl2-linux/calm-sea.png", true, true},
 		{"client/src/render/stage.ts", true, true},
 		{"client/src/game/game.ts", true, true},

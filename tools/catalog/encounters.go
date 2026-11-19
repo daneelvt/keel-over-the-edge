@@ -86,8 +86,13 @@ func checkEncounters(doc map[string]any) error {
 			p.Outline[i] = num(v)
 			widest = max(widest, p.Outline[i])
 		}
-		if !physics.OutlineConvex(&p) {
-			bad("boats[%s].physics.hull.outline: not convex with the stem a point: each half-beam must be at least the mean of its neighbours', and the last 0", id)
+		hulls, _ := phys["hulls"].(map[string]any)
+		if twin := num(hulls["hullSpacing"]) > 0; !physics.OutlineConvex(&p, twin) {
+			if twin {
+				bad("boats[%s].physics.hull.outline: not convex with a flat bow: each half-beam must be at least the mean of its neighbours', and the last, the bows' half-spread, above 0 and no wider than the one before", id)
+			} else {
+				bad("boats[%s].physics.hull.outline: not convex with the stem a point: each half-beam must be at least the mean of its neighbours', and the last 0", id)
+			}
 		}
 		if beam := num(m["beam"]); widest > beam/2+1e-9 {
 			bad("boats[%s].physics.hull.outline: %v m wide, wider than half the beam, %v m", id, widest, beam/2)

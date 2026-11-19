@@ -73,6 +73,32 @@ describe('the gate before the world is shown', () => {
     expect(g.step(110)).toBe('ready');
   });
 
+  test('waits for adaptive quality to judge the frames, up to the ceiling', () => {
+    const p = parts();
+    p.b = p.e = p.v = p.l = true;
+    let judged = false;
+    const g = new Gate({ ...p, judged: () => judged }, { start: 0, draws: true });
+    expect(g.step(0)).toBe('sail');
+    for (let i = 0; i < FRAMES + 30; i++) {
+      g.drawn(8);
+    }
+    // A slow device steps down under the cover; the sea is shown once it holds.
+    expect(g.step(1500)).toBe('sail');
+    judged = true;
+    expect(g.step(1600)).toBe('ready');
+    expect(g.timedOut).toBe(false);
+    // One that never settles is shown at the ceiling all the same.
+    judged = false;
+    const late = new Gate({ ...p, judged: () => judged }, { start: 0, draws: true });
+    late.step(0);
+    late.drawn(8);
+    late.drawn(8);
+    late.drawn(8);
+    expect(late.step(CEILING - 1)).toBe('sail');
+    expect(late.step(CEILING)).toBe('ready');
+    expect(late.timedOut).toBe(true);
+  });
+
   test('the land is waited for three seconds after the boat is in, no longer', () => {
     const p = parts();
     p.e = p.v = true;

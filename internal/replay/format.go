@@ -62,13 +62,24 @@ import (
 //	            connection, boat and why as a byte; a SetHolder its boat and account; a boat
 //	            that left the water as its sailor came aboard another is a Leave with the
 //	            result Gone, and someone put ashore as their boat left the water or their
-//	            grace ended an Ashore of why 3 or 4, which the tick makes itself too
+//	            grace ended an Ashore of why 3 or 4, which the tick makes itself too;
+//	            a RacePlace its race's ID (16 bytes) and run, a byte of flags (1: a
+//	            trial, 2: an island course, 4: a triangle, 8: long), its course,
+//	            its boat's kind and its start's tick, then its entrants (count, then
+//	            each one's account, number, a byte of flags, 1 for a machine sailor's
+//	            and 2 with its crew, and its boat's look code and name); a RaceRetire
+//	            its account; a RaceWritten its race's ID and run; a RaceCheer
+//	            its account and its cheers; a Certify its account, the
+//	            certificate's and the task's places as varints, then the
+//	            tasks done, needed and the way, the venture's runs and
+//	            those it asks, a byte each, and a byte of flags (1: earned,
+//	            2: by hand); a Lift its boat
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 17
+	formatVersion = 23
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -222,7 +233,7 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
 		dst = appendString(dst, e.BoatName)
-	case bus.Leave:
+	case bus.Leave, bus.Lift:
 		dst = binary.AppendUvarint(dst, e.Boat)
 	case bus.Disconnect:
 		dst = binary.AppendUvarint(dst, e.Boat)
@@ -282,6 +293,27 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	case bus.SetHolder:
 		dst = binary.AppendUvarint(dst, e.Boat)
 		dst = append(dst, e.Account[:]...)
+	case bus.RacePlace:
+		dst = appendRaceCall(dst, e.Race)
+	case bus.RaceRetire:
+		dst = append(dst, e.Account[:]...)
+	case bus.RaceWritten:
+		var id [16]byte
+		var run int32
+		if e.Race != nil {
+			id, run = e.Race.ID, e.Race.Run
+		}
+		dst = append(dst, id[:]...)
+		dst = binary.AppendVarint(dst, int64(run))
+	case bus.RaceCheer:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(e.Cheers))
+	case bus.Certify:
+		c := &e.Certified
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendVarint(dst, int64(c.Certificate))
+		dst = binary.AppendVarint(dst, int64(c.Task))
+		dst = append(dst, c.Done, c.Of, c.Way, c.Runs, c.RunsOf, certFlags(c))
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -289,6 +321,74 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	dst = binary.AppendUvarint(dst, uint64(e.Reply.Gen))
 	dst = binary.AppendUvarint(dst, uint64(e.Reply.Position))
 	return binary.AppendVarint(dst, e.Reply.Since)
+}
+
+// The flags of a Certify.
+const (
+	certEarned = 1
+	certByHand = 2
+)
+
+// certFlags are a Certify's flags.
+func certFlags(c *bus.Certified) byte {
+	var f byte
+	if c.Earned {
+		f |= certEarned
+	}
+	if c.ByHand {
+		f |= certByHand
+	}
+	return f
+}
+
+// The flags of a race handed to the committee.
+const (
+	raceTrial    = 1
+	raceIsland   = 2
+	raceTriangle = 4
+	raceLong     = 8
+	raceFlags    = raceTrial | raceIsland | raceTriangle | raceLong
+
+	entrantMachine = 1
+	entrantCrew    = 2
+)
+
+// appendRaceCall appends a race handed to the committee.
+func appendRaceCall(dst []byte, c *bus.RaceCall) []byte {
+	if c == nil {
+		c = &bus.RaceCall{}
+	}
+	dst = append(dst, c.ID[:]...)
+	dst = binary.AppendVarint(dst, int64(c.Run))
+	var flags byte
+	for _, f := range [...]struct {
+		on  bool
+		bit byte
+	}{{c.Trial, raceTrial}, {c.Island, raceIsland}, {c.Triangle, raceTriangle}, {c.Long, raceLong}} {
+		if f.on {
+			flags |= f.bit
+		}
+	}
+	dst = append(dst, flags)
+	dst = binary.AppendVarint(dst, int64(c.Course))
+	dst = binary.AppendUvarint(dst, uint64(c.Kind))
+	dst = binary.AppendVarint(dst, c.Start)
+	dst = binary.AppendUvarint(dst, uint64(len(c.Entrants)))
+	for _, e := range c.Entrants {
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendVarint(dst, int64(e.Number))
+		var k byte
+		if e.Machine {
+			k |= entrantMachine
+		}
+		if e.Crew {
+			k |= entrantCrew
+		}
+		dst = append(dst, k)
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
+	}
+	return dst
 }
 
 // flag is a yes or no as a byte: 1 or 0.
@@ -619,7 +719,7 @@ func (p *payload) event(e *bus.Event) {
 	case bus.SetBoatLook:
 		p.bytes(e.Account[:])
 		e.BoatLook, e.BoatName = p.boatLook()
-	case bus.Leave:
+	case bus.Leave, bus.Lift:
 		e.Boat = p.uvarint()
 	case bus.Disconnect:
 		e.Boat = p.uvarint()
@@ -690,6 +790,29 @@ func (p *payload) event(e *bus.Event) {
 	case bus.SetHolder:
 		e.Boat = p.uvarint()
 		p.bytes(e.Account[:])
+	case bus.RacePlace:
+		e.Race = p.raceCall()
+	case bus.RaceRetire:
+		p.bytes(e.Account[:])
+	case bus.RaceWritten:
+		c := &bus.RaceCall{}
+		p.bytes(c.ID[:])
+		c.Run = int32(p.varint())
+		e.Race = c
+	case bus.RaceCheer:
+		p.bytes(e.Account[:])
+		e.Cheers = uint32(p.count(math.MaxUint32))
+	case bus.Certify:
+		p.bytes(e.Account[:])
+		c := &e.Certified
+		c.Certificate, c.Task = int16(p.varint()), int16(p.varint())
+		c.Done, c.Of, c.Way = p.byte(), p.byte(), p.byte()
+		c.Runs, c.RunsOf = p.byte(), p.byte()
+		if f := p.byte(); f&^(certEarned|certByHand) != 0 {
+			p.err = fmt.Errorf("a certify of flags %d", f)
+		} else {
+			c.Earned, c.ByHand = f&certEarned != 0, f&certByHand != 0
+		}
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)
@@ -706,6 +829,34 @@ func (p *payload) event(e *bus.Event) {
 	e.Reply.Gen = uint16(p.count(bus.GenMask))
 	e.Reply.Position = int32(p.count(bus.QueueLimit))
 	e.Reply.Since = p.varint()
+}
+
+// raceCall reads a race handed to the committee.
+func (p *payload) raceCall() *bus.RaceCall {
+	c := &bus.RaceCall{}
+	p.bytes(c.ID[:])
+	run := p.varint()
+	flags := p.byte()
+	course, kind, start := p.varint(), p.count(math.MaxUint16), p.varint()
+	if p.err == nil && (run < 0 || run > math.MaxInt32 || flags&^raceFlags != 0 || course < 0 || course > math.MaxInt32) {
+		p.err = fmt.Errorf("a race of run %d, course %d and flags %d", run, course, flags)
+	}
+	c.Run, c.Course, c.Kind, c.Start = int32(run), int32(course), uint16(kind), start
+	c.Trial, c.Island, c.Triangle, c.Long = flags&raceTrial != 0, flags&raceIsland != 0, flags&raceTriangle != 0, flags&raceLong != 0
+	n := p.count(bus.MaxEntrants)
+	for range n {
+		var e bus.RaceEntrant
+		p.bytes(e.Account[:])
+		number := p.varint()
+		k := p.byte()
+		if p.err == nil && (number < 1 || number > math.MaxInt16 || k&^(entrantMachine|entrantCrew) != 0) {
+			p.err = fmt.Errorf("an entrant of number %d", number)
+		}
+		e.Number, e.Machine, e.Crew = int16(number), k&entrantMachine != 0, k&entrantCrew != 0
+		e.BoatLook, e.BoatName = p.boatLook()
+		c.Entrants = append(c.Entrants, e)
+	}
+	return c
 }
 
 // look reads a look code.

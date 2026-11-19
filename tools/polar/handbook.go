@@ -123,6 +123,10 @@ const (
 // shipReefHeel is the heel close-hauled past which a ship reefs, degrees.
 const shipReefHeel = 10
 
+// reefShare is the share of the apparent wind that lifts her windward hull
+// a cruising catamaran reefs at: ISO 12217-2's 70%.
+const reefShare = 0.7
+
 // reefWind is the least wind, knots 10 m up, in which the kind heels past
 // its trim at full sail: close-hauled, its fastest sheet is no longer
 // hauled in hard, or a ship's braces no longer braced up sharp, because
@@ -135,11 +139,29 @@ const shipReefHeel = 10
 // lets her carry sail in: hers is the least wind in which, close-hauled at
 // full sail, she heels past shipReefHeel, where her crew takes the
 // topgallants in (Beaufort's man-of-war scale, force 6).
+//
+// A boat of two hulls whose sailor never falls in barely heels, and eases
+// her sheet for speed long before she is pressed: hers is the least wind in
+// which, close-hauled at full sail at her fastest sheet, the apparent wind
+// reaches the wind her builder has her reef at (her plate's, ISO 12217-2
+// clause 7.6), or without one, reefShare of the apparent wind that lifts
+// her windward hull hauled in (liftWind), as ISO 12217-2 has a builder set
+// it from trials (clause 7.5).
 func reefWind(k *kind) float64 {
+	lift := k.plate
+	if k.cruising() && lift == 0 {
+		if lift, _ = liftWind(k); lift == 0 {
+			return 0
+		}
+		lift *= reefShare
+	}
 	eased := func(w float64) bool {
 		pt := best(k, k.atHeight(w), k.p.CloseHauled, 0)
-		if k.square {
+		switch {
+		case k.square:
 			return pt.OK && pt.Heel > shipReefHeel
+		case k.cruising():
+			return !pt.OK || apparent(k.atHeight(w), pt.Speed, k.p.CloseHauled) >= lift
 		}
 		return !pt.OK || pt.Boom > k.in+easedOver
 	}
@@ -206,6 +228,31 @@ func kiteAdvice(k *kind, wind float64) string {
 	return b.String()
 }
 
+// hullsAdvice is the page's paragraph on a boat of two hulls, or one whose
+// rig pitches her: her windward hull flying, and her bows burying. A boat
+// of two hulls whose sailor never falls in is told to reef by the wind:
+// she barely heels, and her hull lifts only when she is far over-pressed.
+func hullsAdvice(k *kind) string {
+	var b strings.Builder
+	switch {
+	case k.cruising():
+		fmt.Fprintf(&b, "The %s barely heels, so heel will not warn you: reef by the wind, before any hull lifts. A lifted hull (\"hull flying\") means she is far over-pressed: let fly.", k.name)
+	case k.p.HullSpacing > 0:
+		fmt.Fprintf(&b, "The %s lifts her windward hull when pressed (\"hull flying\" on the Boat line), fastest just clear; ease before it rises further.", k.name)
+	}
+	if k.p.RigPitch != 0 {
+		if b.Len() > 0 {
+			b.WriteString(" ")
+		}
+		b.WriteString("In a gust on a broad reach her bows bury (\"bows burying\") and she can pitchpole, throwing her sailor off over them; her sailor steps aft by herself. Ease, reef, or bear off to a run.")
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
 // reefAdvice is the page's paragraph on reefing, every kind's wind in it.
 func reefAdvice(kinds []*kind, winds []float64) string {
 	var b strings.Builder
@@ -242,6 +289,10 @@ func handbookBlock(kinds []*kind) (string, error) {
 		b.WriteString("\n")
 		if k.p.DownwindArea > 0 {
 			b.WriteString(kiteAdvice(k, kiteWind(k)))
+			b.WriteString("\n")
+		}
+		if a := hullsAdvice(k); a != "" {
+			b.WriteString(a)
 			b.WriteString("\n")
 		}
 		if winds[i] = reefWind(k); winds[i] == 0 {
@@ -294,6 +345,9 @@ func checkHandbook(k *kind, polars []polar) error {
 			return fmt.Errorf("%s's advice on the %s's gennaker is not the polar's: rewrite it with go run ./tools/polar -handbook, which gives\n%s", handbookPath, k.name, a)
 		}
 	}
+	if a := hullsAdvice(k); !strings.Contains(page, a) {
+		return fmt.Errorf("%s's advice on the %s's hulls and bows is not the polar's: rewrite it with go run ./tools/polar -handbook, which gives\n%s", handbookPath, k.name, a)
+	}
 	w := reefWind(k)
 	if want := fmt.Sprintf("the %s from %g knots", k.name, w); w == 0 || !strings.Contains(page, want) {
 		return fmt.Errorf("%s's reefing advice is not the polar's: rewrite it with go run ./tools/polar -handbook, which gives %q", handbookPath, want)
@@ -303,11 +357,16 @@ func checkHandbook(k *kind, polars []polar) error {
 }
 
 // checkWords fails unless the sail says drawing at the fastest sheet at
-// every angle and strength the boat sails without capsizing.
-func checkWords(polars []polar) error {
+// every angle and strength the boat sails without capsizing, from 10°
+// inside her close-hauled angle: pinched closer, a big boat's main lifts,
+// the genoa backing it, and the word is not held there.
+func checkWords(polars []polar, closeHauled float64) error {
 	var bad []string
 	for _, p := range polars {
 		for _, pt := range p.Points {
+			if pt.TWA < closeHauled-10 {
+				continue
+			}
 			if pt.OK && pt.Word != physics.SailDrawing {
 				bad = append(bad, fmt.Sprintf("%g knots at %g°, boom %.0f°, apparent %.0f°: %s", p.Wind, pt.TWA, pt.Boom, pt.Apparent, sailWords[pt.Word]))
 			}

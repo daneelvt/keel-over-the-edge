@@ -61,6 +61,7 @@ import {
 import type { Node } from 'three/webgpu';
 import { type BoatLooks, boatLookOf, clothOf, paintOf } from '../catalog/boatlooks';
 import { luminance, type MarkPlace, paintMark } from './machinemark';
+import { kept } from './uploads';
 
 /** The material a model's painted topsides are in: their vertices carry each plank's tone, the boat its paint. */
 export const TOPSIDES = 'topsides';
@@ -173,7 +174,8 @@ export class LookPalette {
       set(AT.ink, i, c.ink, 0);
       set(AT.insignia, i, insigniaOn(c.colour, c.ink), 0);
     });
-    this.node = uniformArray(this.values, 'vec4');
+    // The catalog's: sent once.
+    this.node = kept(uniformArray(this.values, 'vec4'));
   }
 
   /** A list's entry at a place (a float node). */

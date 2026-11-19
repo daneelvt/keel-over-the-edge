@@ -3,7 +3,11 @@
 import { signal } from '@preact/signals';
 import type { VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
-import { ClearView, type Needed, needed } from './clearview';
+import { newPose } from '../predict/blend';
+import { RECORDS, SIZES } from '../predict/layout.gen';
+import { newBoatWind } from '../predict/weather';
+import { ClearView, type Needed, needed, overboard } from './clearview';
+import { HudModel } from './model';
 import { BACK_TO_THE_BOAT, CLEAR_VIEW, SeaKeys, SHOW_INSTRUMENTS } from './seakeys';
 import { DEFAULTS, loadSettings } from './settings';
 
@@ -53,6 +57,38 @@ describe('the clear view', () => {
     for (const c of cases) {
       expect(needed(CALM, { ...CALM, ...c }), JSON.stringify(c)).toBe(true);
     }
+  });
+
+  test('a boat flying a hull or burying her bows, her sailor aboard, leaves it cleared; in the water brings everything back', () => {
+    const clear = new ClearView();
+    clear.set(true);
+    const model = new HudModel();
+    const out = new Float64Array(SIZES.out);
+    const pose = newPose();
+    const wind = newBoatWind();
+    let was = CALM;
+    let now = 0;
+    for (const [flying, burying, mode, on] of [
+      [1, 0, 0, true],
+      [1, 1, 0, true],
+      [0, 1, 0, true],
+      [0, 0, 0, true],
+      [1, 0, 1, false],
+    ] as const) {
+      out[RECORDS.out.hullFlying] = flying;
+      out[RECORDS.out.bowsBurying] = burying;
+      pose.sailorMode = mode;
+      now += 1000;
+      model.frame(now, now / 1000, pose, out, wind, 0, 0, 0, 0);
+      const is = { ...CALM, overboard: overboard(model.sailor.value) };
+      if (needed(was, is)) {
+        clear.show();
+      }
+      was = is;
+      expect(clear.on.value, `${flying} ${burying} ${mode}`).toBe(on);
+    }
+    // Aground needs nothing either.
+    expect(overboard('Aground')).toBe(false);
   });
 
   test('not while that state merely holds, nor for anything else', () => {

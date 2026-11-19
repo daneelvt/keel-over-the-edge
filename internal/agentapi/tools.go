@@ -8,10 +8,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The tools. Twelve, fixed, the same for every machine sailor and every
-// app, in this order, named for what a sailor does: apps cache a server's
-// tool list or freeze it, so the list never changes as the game grows; a
-// tool whose feature is still to come answers "not yet". Their
+// The tools. Thirteen, the same for every machine sailor and every app, in
+// this order, named for what a sailor does: apps cache a server's tool
+// list or freeze it, so the list changes seldom as the game grows, and a
+// tool whose feature is still to come answers "not yet"; course came
+// after the first twelve, and an app sees it once it lists the tools
+// again. Their
 // definitions, descriptions included, are here alone, and
 // testdata/tools.golden.json holds the exact tools/list answer, so that
 // any change to what agents are told shows in review and in the release
@@ -27,6 +29,7 @@ const (
 	toolSteer    = "steer"
 	toolTrim     = "trim"
 	toolChart    = "chart"
+	toolCourse   = "course"
 	toolPencil   = "pencil"
 	toolForecast = "forecast"
 	toolNews     = "news"
@@ -66,7 +69,7 @@ func hints(_ string, readOnly, idempotent, destructive bool) *mcp.ToolAnnotation
 // alwaysLoad is the _meta of a core tool.
 func alwaysLoad() mcp.Meta { return mcp.Meta{metaAlwaysLoad: true} }
 
-// tools are the twelve, in their order.
+// tools are the thirteen, in their order.
 func tools() []toolDef {
 	return []toolDef{
 		{budget: looks, joins: true, tool: &mcp.Tool{
@@ -77,7 +80,7 @@ func tools() []toolDef {
 			Annotations: hints("Observe", true, false, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"wait":{"type":"integer","minimum":0,"maximum":50,"description":"Seconds to rest until something happens; 0 answers now. 25 is safe in every app."},` +
-				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","chat","race","pilot","sky","weather","life"]},"description":"What ends the wait. Default all but life and heel, wind_shift, bearing, near (need values)."},` +
+				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","course","chat","race","pilot","sky","weather","life"]},"description":"What ends the wait. Default all but life and heel, wind_shift, bearing, near (need values)."},` +
 				`"heel_over":{"type":"integer","minimum":5,"maximum":60,"description":"Degrees, for heel."},` +
 				`"shift_over":{"type":"integer","minimum":3,"maximum":90,"description":"Degrees, for wind_shift."},` +
 				`"place":{"type":"string","description":"A charted place, for bearing and near."},` +
@@ -121,12 +124,23 @@ func tools() []toolDef {
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolChart, Title: "Chart",
 			Description: "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. " +
-				"Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
+				"Uncharted places have no names until someone sights them. Steer by the bearings, not by name. " +
+				"Also racing areas and open courses.",
 			Annotations: hints("Chart", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"group":{"type":"string","enum":["all","islands","places","features"],"description":"Default all."},` +
+				`"group":{"type":"string","enum":["all","islands","places","features","courses"],"description":"Default all."},` +
 				`"limit":{"type":"integer","minimum":1,"maximum":30,"description":"Default 10."},` +
 				`"place":{"type":"string","description":"One place by name."}` +
+				`}}`),
+		}},
+		{budget: looks, tool: &mcp.Tool{
+			Name: toolCourse, Title: "Course",
+			Description: "Set a course: observe then tells its bearing and distance and wakes you on arrival. It never steers.",
+			Annotations: hints("Course", false, true, false),
+			InputSchema: schema(`{"type":"object","properties":{` +
+				`"place":{"type":"string","description":"Charted, or a course's name for its start."},` +
+				`"position":{"type":"string","description":"A pin: 67°24′N 045°12′."},` +
+				`"clear":{"type":"boolean"}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{
@@ -150,12 +164,12 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolNews, Title: "News",
-			Description: "The world's news sheet, newest first: what was charted and by whom, and the world's notices. " +
+			Description: "The day's news edition: its figures, chosen stories and where, your shipmates', notices. " +
 				"Names in «» are written by players.",
 			Annotations: hints("News", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"before":{"type":"string","description":"An id from the last page."},` +
-				`"limit":{"type":"integer","minimum":1,"maximum":20,"description":"Default 10."}` +
+				`"day":{"type":"string","description":"An earlier edition, 2006-01-02."},` +
+				`"log":{"type":"boolean","description":"Your own log instead."}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{
@@ -169,11 +183,17 @@ func tools() []toolDef {
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolRace, Title: "Race",
-			Description: "Races: list, enter, start, retire. Not yet.",
+			Description: "Races: list yours and the next harbour races; enter one; make one, for its link; retire. handbook races.",
 			Annotations: hints("Race", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"action":{"type":"string","enum":["list","enter","start","retire"],"description":"Default list."},` +
-				`"race":{"type":"string","description":"By its name."}` +
+				`"action":{"type":"string","enum":["list","enter","make","retire"],"description":"Default list."},` +
+				`"race":{"type":"string","description":"Code, link or name."},` +
+				`"course":{"type":"string","description":"For make, as list gives."},` +
+				`"boat":{"type":"string"},` +
+				`"in":{"type":"integer","minimum":5,"description":"Minutes to the gun."},` +
+				`"who":{"type":"string","enum":["everyone","machines"]},` +
+				`"trial":{"type":"boolean"},` +
+				`"name":{"type":"string","maxLength":40}` +
 				`}}`),
 		}},
 		{budget: orders, tool: &mcp.Tool{
@@ -209,7 +229,7 @@ func tools() []toolDef {
 				"With no topic, the list, and which machine sailor you sail as. Read start first.",
 			Annotations: hints("Handbook", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","tools","limits"],"description":"Default: the list."}` +
+				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","races","certificates","tools","limits"],"description":"Default: the list."}` +
 				`}}`),
 		}},
 	}

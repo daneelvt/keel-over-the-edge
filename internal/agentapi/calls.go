@@ -14,6 +14,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 // A call, from the door to its answer: the helm of the machine sailor the
@@ -27,7 +28,7 @@ const (
 	resultError   = "error"
 )
 
-// addTools adds the twelve tools to s, answered by c.
+// addTools adds the tools to s, answered by c.
 func (c *Core) addTools(s *mcp.Server) {
 	for _, d := range tools() {
 		s.AddTool(d.tool, c.handler(d))
@@ -211,7 +212,7 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 		if s == nil {
 			return "", nil, refuse(refusedNoWorld, wordsNoWorld)
 		}
-		text, r := newsWords(ctx, s, &o)
+		text, r := newsWords(ctx, s, h.account, &o)
 		return text, nil, r
 	case toolBoat:
 		var o struct {
@@ -250,6 +251,19 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 			return "", nil, r
 		}
 		return c.say(ctx, h, &o)
+	case toolRace:
+		var o raceArgs
+		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		return c.race(ctx, h, &o)
+	case toolCourse:
+		var o courseArgs
+		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		text, r := c.setCourseOf(h, &o)
+		return text, nil, r
 	case toolHandbook:
 		var o handbookArgs
 		if r := args(req, &o); r != nil {
@@ -320,7 +334,7 @@ func atSeaRefusal(err error, jr joinResult) *refusal {
 }
 
 // noticesOf are what a call is told of going to sea.
-func (c *Core) noticesOf(s *Sea, jr joinResult) []string {
+func (c *Core) noticesOf(ctx context.Context, s *Sea, account store.AccountID, jr joinResult) []string {
 	var out []string
 	if w := leftWords(jr.told, c.cfg.Silence); w != "" {
 		out = append(out, w)
@@ -331,6 +345,9 @@ func (c *Core) noticesOf(s *Sea, jr joinResult) []string {
 			where = "at " + s.Start
 		}
 		out = append(out, "At sea: you are in the water "+where+".")
+		if w := towardLine(ctx, s, account); w != "" {
+			out = append(out, w)
+		}
 	}
 	return out
 }
@@ -360,7 +377,7 @@ func (c *Core) order(ctx context.Context, h *helm, give func(s *Sea, f *bus.Fram
 	if refused != "" {
 		return "", nil, refuse(refusedOrder, refused)
 	}
-	lines := append(c.noticesOf(s, jr), orderLine(s, f, sl, w))
+	lines := append(c.noticesOf(ctx, s, h.account, jr), orderLine(s, f, sl, w))
 	return strings.Join(lines, "\n"), nil, nil
 }
 
@@ -461,7 +478,7 @@ func (c *Core) observe(ctx context.Context, h *helm, req *mcp.CallToolRequest, o
 	if r := atSeaRefusal(err, jr); r != nil {
 		return "", nil, r
 	}
-	notices := c.noticesOf(s, jr)
+	notices := c.noticesOf(ctx, s, h.account, jr)
 	woke := ""
 	wait := 0
 	if o.Wait != nil {
@@ -496,6 +513,7 @@ func (c *Core) observe(ctx context.Context, h *helm, req *mcp.CallToolRequest, o
 		}
 	}
 	defer f.Release()
+	c.knowRace(ctx, s, h, f)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if s != c.sea.Load() {

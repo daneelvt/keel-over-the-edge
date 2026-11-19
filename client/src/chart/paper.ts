@@ -10,8 +10,7 @@
 // stands on.
 
 import type { IslandModel } from './model';
-import { meridianText, parallelText } from './position';
-import { NM } from './store';
+import { meridianText, NM, parallelText } from './position';
 
 /** What the paper is painted with. */
 export interface PaperLook {
@@ -155,7 +154,9 @@ export function paintPaper(
   // The compass rose, in the south-west.
   rose(ctx, px(-look.lip * 0.62), py(-look.lip * 0.62), look.lip * 0.14 * k, look.ink);
 
-  // The charted islands' coasts: the land inked round, then tinted.
+  // The charted islands' coasts: the land inked round, then tinted. The
+  // website's map inks the coasts keel traces of them the same way
+  // (website/worker/src/map/draw.ts, inkCoasts).
   for (const m of models) {
     const w = Math.max(m.dx * k, 1);
     const h = Math.max(m.dy * k, 1);
@@ -169,6 +170,55 @@ export function paintPaper(
       ctx.fillRect(px(x) - w / 2, py(y) - h / 2, w + 0.5, h + 0.5);
     });
   }
+}
+
+/**
+ * Paints the island courses open on the paper, after its islands: each
+ * way as a faint dotted line in the ink, its start a small ring, as an
+ * old chart pricks a passage sailed.
+ */
+export function paintCourses(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  look: PaperLook,
+  courses: readonly { way: readonly (readonly [number, number])[] }[],
+): void {
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
+  if (ctx === null || courses.length === 0) {
+    return;
+  }
+  const side = canvas.width;
+  const k = side / (2 * look.lip * PAPER_MARGIN);
+  const px = (east: number) => side / 2 + east * k;
+  const py = (north: number) => side / 2 - north * k;
+  const dot = Math.max(2, side / 600);
+  ctx.save();
+  ctx.strokeStyle = look.ink;
+  ctx.globalAlpha = 0.65;
+  ctx.lineWidth = dot;
+  ctx.lineCap = 'round';
+  ctx.setLineDash([0.01, dot * 3]);
+  for (const c of courses) {
+    const first = c.way[0];
+    if (first === undefined) {
+      continue;
+    }
+    ctx.beginPath();
+    ctx.moveTo(px(first[0]), py(first[1]));
+    for (const p of c.way.slice(1)) {
+      ctx.lineTo(px(p[0]), py(p[1]));
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const c of courses) {
+    const first = c.way[0];
+    if (first !== undefined) {
+      ctx.beginPath();
+      ctx.arc(px(first[0]), py(first[1]), dot * 2.5, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 /** Calls f with each land cell of m: its centre, m, and its surface. */

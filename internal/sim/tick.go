@@ -101,12 +101,16 @@ func (w *World) inputs() {
 			next.Bumps = append(next.Bumps, b)
 		}
 	}
+	raceCopy(next, cur)
+	w.racePlaced = w.racePlaced[:0]
 	next.Queue = append(next.Queue[:0], cur.Queue...)
 	next.Changed = next.Changed[:0]
 	clear(next.Events) // drop the old events' references
 	next.Events = next.Events[:0]
 	next.Edges = next.Edges[:0]
 	next.Charted = next.Charted[:0]
+	next.VoyageEnds = next.VoyageEnds[:0]
+	next.AboardEnds = next.AboardEnds[:0]
 	next.Ended = false
 	w.landed = w.landed[:0]
 	w.restarted = w.restarted[:0]
@@ -200,6 +204,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 			// state and its sail as it went over; nor is a boat that
 			// stays while its owner's free camera roams.
 			f.Sail[s] = w.cur.Sail[s]
+			f.Trim[s] = w.cur.Trim[s]
 			f.Instruments[s] = w.cur.Instruments[s]
 			w.settle(f, s)
 			continue
@@ -215,6 +220,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		}
 		physics.Step(st, &c, &e, w.sea.at, w.ground, kind, o)
 		f.Sail[s] = physics.SailByte(o)
+		f.Trim[s] = o.Trim
 		if f.Machine[s] {
 			// What a phone reads from its own prediction, a machine
 			// boat's agent is told: the step worked it out.

@@ -114,6 +114,9 @@ type cmd struct {
 	// env is added to the tool's own environment, and wins over it.
 	env []string
 	dir string
+	// stdin is what it reads on its standard input: a secret it takes
+	// there, never on its command line.
+	stdin []byte
 }
 
 type execCommands struct{}
@@ -122,6 +125,9 @@ func (execCommands) run(ctx context.Context, c cmd) ([]byte, []byte, error) {
 	x := exec.CommandContext(ctx, c.argv[0], c.argv[1:]...)
 	x.Env = append(os.Environ(), c.env...)
 	x.Dir = c.dir
+	if c.stdin != nil {
+		x.Stdin = bytes.NewReader(c.stdin)
+	}
 	var stdout, stderr bytes.Buffer
 	x.Stdout, x.Stderr = &stdout, &stderr
 	err := x.Run()
@@ -308,7 +314,8 @@ func (a *accounts) checkPlan(plan, runID, commit string) error {
 	return nil
 }
 
-// apply applies the plan the owner read in the plan job's summary.
+// apply applies the plan the owner read in the plan job's summary, then
+// deploys the website with what it made.
 func (a *accounts) apply(ctx context.Context, env []string, plan string) error {
 	changes, err := a.show(ctx, "apply", env, plan)
 	if err != nil {
@@ -319,7 +326,7 @@ func (a *accounts) apply(ctx context.Context, env []string, plan string) error {
 		return err
 	}
 	a.report("Applied", changes)
-	return nil
+	return a.deployWebsite(ctx, env)
 }
 
 // show reads a saved plan's changes from tofu show -json, which never
@@ -369,7 +376,10 @@ func (a *accounts) check(ctx context.Context) error {
 		return err
 	}
 	a.logf("infra/tofu is formatted and valid")
-	return a.checkLock(ctx)
+	if err := a.checkLock(ctx); err != nil {
+		return err
+	}
+	return a.checkWrangler()
 }
 
 // checkLock makes the lock file again, for every platform, from the

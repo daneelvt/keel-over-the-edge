@@ -231,7 +231,11 @@ export class FoamMap {
       const steps = floor(min(kept, 1).mul(255).add(noise.mul(0.996)).add(0.002)).mul(1 / 255);
       return vec4(inside.select(steps, vec2(0)), 0, 1);
     })() as unknown as Node<'vec4'>;
+    // Drawn first, in the stamps' pass: one pass a frame, not two.
     this.#quad = new QuadMesh(material);
+    this.#quad.renderOrder = -1;
+    this.#quad.frustumCulled = false;
+    this.#scene.add(this.#quad);
 
     // The stamps: each hull's track along its waterline, and the white
     // water behind its transom, added to the map.
@@ -387,7 +391,7 @@ export class FoamMap {
     this.#placed = false;
   }
 
-  /** Forgets every wake. */
+  /** Forgets every wake: a page shown again after a while hidden, its boat where it is now. */
   clear(): void {
     this.#placed = false;
   }
@@ -461,10 +465,6 @@ export class FoamMap {
     const texel = WAKE.span / this.size;
     const east = Math.round(f.boatEast / texel) * texel;
     const north = Math.round(f.boatNorth / texel) * texel;
-    if (f.dt > 1) {
-      // A page hidden and shown again: what was there is long gone.
-      this.#placed = false;
-    }
     const fresh = !this.#placed;
     const moving = f.dt > 0;
     let de = fresh ? 0 : east - this.centre.east;
@@ -540,12 +540,9 @@ export class FoamMap {
     const before = renderer.getRenderTarget();
     const cleared = renderer.autoClear;
     renderer.setRenderTarget(into);
-    this.#quad.render(renderer);
-    if (n > 0) {
-      renderer.autoClear = false;
-      renderer.render(this.#scene, this.#camera);
-      renderer.autoClear = cleared;
-    }
+    renderer.autoClear = true;
+    renderer.render(this.#scene, this.#camera);
+    renderer.autoClear = cleared;
     renderer.setRenderTarget(before);
     this.current = 1 - this.current;
     for (const s of this.#samplers) {

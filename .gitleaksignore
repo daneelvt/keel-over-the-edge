@@ -1,0 +1,5 @@
+# Findings gitleaks may skip, by fingerprint (commit:file:rule:line).
+# A made-up Access audience tag in a test, since replaced by a plain word.
+6271550c8793ad23ddcb1d4e8773dba1d98ad9c7:internal/config/config_test.go:generic-api-key:103
+# The browser tests' Turnstile stand-in: keel's environment names its made-up secret.
+8c7aad0175402c9b629398ed58c88d811d717cc1:tools/e2e/turnstile.go:generic-api-key:40

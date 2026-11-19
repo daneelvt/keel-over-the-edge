@@ -1,0 +1,116 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when the website, or what it is built from, changed: its own
+# files, and the chart's painters, fonts and catalog it shares with the
+# game, and the art its pictures are. Biome and tsc over it, its Worker's
+# tests in workerd, its pictures' and its page's in Node, the page and the
+# Worker built as wrangler would deploy them, uploading nothing, and the
+# page's checks in Chromium, served as production serves it.
+name: pr.website
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      website: ${{ steps.filter.outputs.website }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            website:
+              - '.github/workflows/pr.website.yaml'
+              - '.github/actions/setup/**'
+              - '.nvmrc'
+              - 'website/**'
+              - 'client/package.json'
+              - 'client/package-lock.json'
+              - 'client/biome.json'
+              - 'client/build/no-html-sinks.grit'
+              - 'client/src/chart/**'
+              - 'client/src/render/machinemark.ts'
+              - 'client/src/catalog/catalog.gen.json'
+              - 'client/src/fonts/**'
+              - 'client/public/icon-192.png'
+              - 'client/public/apple-touch-icon.png'
+              - 'internal/status/testdata/**'
+              - 'art/website/**'
+              - 'art/glyphs/**'
+              - 'art/sailors/*/*.ink.webp'
+
+  website:
+    name: website
+    needs: [changes]
+    if: needs.changes.outputs.website == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The client's packages too: its Biome, and the types of the chart's painters.
+      - uses: ./.github/actions/setup
+        with:
+          go: "false"
+      - name: Install the website's packages
+        working-directory: website
+        run: npm ci --no-audit --no-fund
+      - name: Biome, with the client's configuration
+        working-directory: client
+        run: npx --no-install biome ci ../website
+      - name: tsc
+        working-directory: website
+        run: npm run typecheck
+      # And the pictures' manifest against the files it names, and the
+      # page's colours, words and build, in Node.
+      - name: The Worker's tests, in workerd, the pictures' and the page's
+        working-directory: website
+        run: npm test
+      - name: The page and the Worker built as wrangler deploys them, nothing uploaded
+        working-directory: website
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: npm run build
+      - name: Chromium's headless shell for Playwright
+        uses: ./.github/actions/install
+        with:
+          working-directory: website
+          command: npx --no-install playwright install --with-deps --only-shell chromium
+      # At four screens and four hours: Set sail in the first screen, the
+      # opening's words readable over its picture, each hour's colours, the
+      # page whole without script, its weight within its budgets.
+      - name: The page's checks, through wrangler dev
+        working-directory: website
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: npm run checks
+
+  pr-website:
+    name: pr-website
+    if: always()
+    needs: [changes, website]
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done

@@ -89,11 +89,17 @@ import {
 import { headingToRotationY, type ScenePoint } from './coords';
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
+import { mergeStill } from './merge';
 import { Pennant } from './pennant';
+import { type PrizeRig, prizeRig } from './prizes';
 import type { Gfx } from './renderer';
+import { bridgeClips } from './sailors/bridgedeck';
+import { catClips } from './sailors/cat';
+import { cockadeOf } from './sailors/model';
 import { BoatSailor } from './sailors/onboat';
 import { harnessFile, trapezeClips } from './sailors/trapeze';
-import { wheelClips } from './sailors/wheel';
+import { wheelClips, wheelNodes } from './sailors/wheel';
+import { yachtClips } from './sailors/yacht';
 import {
   headsailFrame,
   jibPoint,
@@ -128,20 +134,24 @@ import { FLOW_LUFFING, Telltales } from './telltales';
  * Every model under art/ the game loads as it starts, by its path there, as
  * Vite serves it: the boats', the towns' and the plants'. No sailor's: the
  * player's own look is loaded once it is known, and every other when it is
- * wanted.
+ * wanted; nor the certificates' pendants, loaded when one is first worn.
  */
-const MODELS = import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/**'], {
-  query: '?url',
-  import: 'default',
-  eager: true,
-});
+const MODELS = import.meta.glob<string>(
+  ['../../../art/**/*.glb', '!../../../art/sailors/**', '!../../../art/pendants/**'],
+  { query: '?url', import: 'default', eager: true },
+);
 /**
  * The sailors' files the game loads only when wanted: the player's own
  * look's once it is known, the other looks' as a boat with one comes into
- * view, and every close level, as the camera comes near.
+ * view, and every close level, as the camera comes near; and the pendants,
+ * when someone first wears one.
  */
 const LATER = import.meta.glob<string>(
-  ['../../../art/sailors/*/*.glb', '!../../../art/sailors/{test,vendor}/**'],
+  [
+    '../../../art/sailors/*/*.glb',
+    '!../../../art/sailors/{test,vendor}/**',
+    '../../../art/pendants/*.glb',
+  ],
   {
     query: '?url',
     import: 'default',
@@ -185,6 +195,32 @@ const DEG = Math.PI / 180;
 
 /** The node whose meshes are the stern gallery's panes, lit by night. */
 export const GALLERY = 'gallery';
+
+/** The nodes whose meshes are shaped or lit by their name: none of theirs is merged. */
+const APART = new Set([GALLERY, 'jib', 'kite', 'pennant', 'sail', 'telltales']);
+
+/** The nodes the boat or its sailor moves, or finds by name: what hangs from each is merged apart, in its frame. */
+const MOVED = new Set([
+  'aboard',
+  'board-root',
+  'boom',
+  'company',
+  'extension',
+  'rail',
+  'rudder',
+  'rudder-port',
+  'rudder-starboard',
+  'sailor',
+  'seats',
+  'sheet',
+  'sheet-boom',
+  'tiller',
+  'trapeze',
+  'ways',
+  'wheel',
+  'wheel-port',
+  'wheel-starboard',
+]);
 /** The gallery's lamplight, display values, at its brightest. */
 export const LAMPLIGHT = [1.6, 0.95, 0.45] as const;
 /**
@@ -271,6 +307,8 @@ export class Boat {
   /** The model, lowered so that the heel's pivot is at its centre of gravity. */
   readonly model = new Group();
   readonly parts = new Map<string, Object3D>();
+  /** The wheels that turn with the rudder: none, one or two. */
+  #wheels: Object3D[] = [];
   readonly sail = sailUniforms();
   /** The headsail's shape, and how far aft of its tack its head is (its node's rake). */
   readonly jib = sailUniforms();
@@ -293,6 +331,11 @@ export class Boat {
   /** Whether the sailor drawn is a machine sailor's machine. */
   get machineAboard(): boolean {
     return this.#shownMachine;
+  }
+
+  /** Whether the sail carries the machine mark. */
+  get marked(): boolean {
+    return this.#look.machine.value === 1;
   }
 
   /** The sailor drawn's look: its deck level's path and whether it is a machine; null before one is. */
@@ -408,6 +451,14 @@ export class Boat {
         this.parts.set(o.name, o);
       }
     });
+    // Where its prizes fly, from its nodes' places in the model's frame.
+    model.updateMatrixWorld(true);
+    const nodes = new Map<string, Vector3>();
+    for (const [name, o] of this.parts) {
+      nodes.set(name, o.getWorldPosition(new Vector3()));
+    }
+    this.prizeRig = prizeRig(nodes, this.parts.get('hull')?.userData);
+    this.#wheels = wheelNodes(this.parts);
     let sail: Mesh | undefined;
     this.parts.get('sail')?.traverse((o) => {
       if (sail === undefined && o instanceof Mesh) {
@@ -516,6 +567,20 @@ export class Boat {
     if (this.#squareSails.length > 0) {
       squareCloth = squarePrint(this.#squareSails);
     }
+    // The still parts that share a material, one draw each material: only
+    // parts the file leaves unnamed (mesh_…), none shaped, none under a node
+    // whose meshes are found by name (a sail's, the gallery's); those that
+    // hang from a node the boat moves are merged in its frame.
+    const dropped = new Set(this.#yards.map((y) => y.node));
+    mergeStill(model, {
+      kept: (m) =>
+        !/^mesh_\d/.test(m.name) ||
+        this.#squareMeshes.has(m) ||
+        this.#headsails.has(m) ||
+        this.#kites.has(m),
+      apart: (o) => APART.has(o.name),
+      moves: (o) => MOVED.has(o.name) || o.name in YARDS_NODES || dropped.has(o),
+    });
     model.traverse((o) => {
       if (o instanceof Mesh) {
         o.material = this.#replace(
@@ -543,9 +608,45 @@ export class Boat {
     writeLook(this.#looks, code, this.#lookValues, 0);
     this.#look.paint.value = this.#lookValues[0] ?? 0;
     this.#look.cloth.value = this.#lookValues[1] ?? 0;
-    this.#look.number.value = this.#lookValues[2] ?? 0;
+    this.#look.number.value = this.#raceNumber > 0 ? this.#raceNumber : (this.#lookValues[2] ?? 0);
     this.#name = name;
     this.#letter();
+  }
+
+  /** Where its prizes fly on its model (render/prizes.ts); null until loaded. */
+  prizeRig: PrizeRig | null = null;
+
+  /** Its race number while it races, on its sail in place of its own number; 0 for none. */
+  #raceNumber = 0;
+
+  /** Whether its sailor wears the winner's cockade, whatever look it is drawn in. */
+  #cockade = false;
+
+  wearCockade(on: boolean): void {
+    this.#cockade = on;
+    for (const s of this.#sailors.values()) {
+      s.wearCockade(on);
+    }
+  }
+
+  /** The pendant its sailor wears at the neck, whatever look it is drawn in: 0 none, else the certificate's place and one. */
+  #pendant = 0;
+
+  wearPendant(n: number): void {
+    this.#pendant = n;
+    for (const s of this.#sailors.values()) {
+      s.wearPendant(n);
+    }
+  }
+
+  /** The pendant its sailor drawn wears, and whether it is drawn (its model loaded). */
+  get pendantWorn(): { worn: number; drawn: boolean } {
+    return this.#shown?.pendant ?? { worn: 0, drawn: false };
+  }
+
+  setRaceNumber(n: number): void {
+    this.#raceNumber = Math.max(Math.floor(n), 0);
+    this.#look.number.value = this.#raceNumber > 0 ? this.#raceNumber : (this.#lookValues[2] ?? 0);
   }
 
   /** The look drawn: the paint's and cloth's places, the sail number, the name lettered and its row (−1 for none). */
@@ -606,6 +707,8 @@ export class Boat {
       return;
     }
     sailor.colour(wanted.colours);
+    sailor.wearCockade(this.#cockade);
+    sailor.wearPendant(this.#pendant);
     this.#shown = sailor;
     this.#shownMachine = wanted.machine;
     for (const s of this.#sailors.values()) {
@@ -623,7 +726,12 @@ export class Boat {
         wheel: () => lazyArtUrl(wheelClips(a.clips)),
         trapeze: () => lazyArtUrl(trapezeClips(a.clips)),
         harness: () => lazyArtUrl(harnessFile(a.clips)),
+        cat: () => lazyArtUrl(catClips(a.clips)),
+        cruiser: () => lazyArtUrl(yachtClips(a.clips)),
+        bridgedeck: () => lazyArtUrl(bridgeClips(a.clips)),
         colours: look.colours,
+        cockade: cockadeOf(a),
+        pendant: a.pendant,
       },
       renderer,
       this.model,
@@ -671,7 +779,23 @@ export class Boat {
     // A positive rudder turns the bow to starboard: its blade swings to
     // starboard behind the stock, and the tiller ahead of it to port.
     const rudder = this.parts.get('rudder');
-    if (rudder !== undefined) {
+    const starboard = this.parts.get('rudder-starboard');
+    const port = this.parts.get('rudder-port');
+    if (starboard !== undefined && port !== undefined) {
+      // A boat of two hulls: each rudder on its own stock, and the
+      // crossbar carried across by their arms, square to the boat.
+      starboard.rotation.y = pose.rudder;
+      port.rotation.y = pose.rudder;
+      const bar = this.parts.get('tiller');
+      if (bar !== undefined) {
+        if (bar.userData.rest === undefined) {
+          bar.userData.rest = bar.position.clone();
+        }
+        const rest = bar.userData.rest as Vector3;
+        const arm = -rest.z;
+        bar.position.set(-arm * Math.sin(pose.rudder), rest.y, -arm * Math.cos(pose.rudder));
+      }
+    } else if (rudder !== undefined) {
       rudder.rotation.y = pose.rudder;
     }
 
@@ -771,9 +895,10 @@ export class Boat {
         node.rotation.y = YARDS_NODES[name] === 'fore' ? pose.foreYardsTurn : pose.yardsTurn;
       }
     }
-    const wheel = this.parts.get('wheel');
-    if (wheel !== undefined) {
-      wheel.rotation.z = wheelTurn(pose.rudder, this.#kind.physics.foils.rudderAngle);
+    // The wheel, or each of two, turned with the rudder.
+    const turn = wheelTurn(pose.rudder, this.#kind.physics.foils.rudderAngle);
+    for (const wheel of this.#wheels) {
+      wheel.rotation.z = turn;
     }
     if (this.#squareSails.length === 0) {
       return;

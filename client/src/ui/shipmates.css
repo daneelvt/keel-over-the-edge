@@ -9,7 +9,7 @@
 .deck-star {
   flex: none;
   color: var(--gold);
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
   line-height: 1;
 }
 
@@ -20,7 +20,7 @@
   margin: 6px 0 0;
   color: var(--faint);
   font:
-    15px / 1.2 "IM Fell English SC",
+    calc(15 * var(--text, 1px)) / 1.2 "IM Fell English SC",
     Georgia,
     serif;
   letter-spacing: 0.04em;
@@ -28,21 +28,21 @@
 
 .shipmates-detail {
   font:
-    13px / 1.2 "Alegreya Sans",
+    calc(13 * var(--text, 1px)) / 1.2 "Alegreya Sans",
     system-ui,
     sans-serif;
   letter-spacing: 0;
 }
 
 .shipmates-panel > .deck-faint {
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
 }
 
 /* What came of an act on a row: under it, the row's width. */
 .deck-row-note {
   flex: 1 1 100%;
   color: var(--brass-light);
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
   overflow-wrap: anywhere;
 }
 
@@ -96,7 +96,7 @@
 .shipmate-presence {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
   white-space: nowrap;
 }
 

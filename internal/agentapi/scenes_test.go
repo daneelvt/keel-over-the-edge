@@ -642,3 +642,51 @@ func TestSceneChartPortRoyal(t *testing.T) {
 	}
 	golden(t, "chart-port-royal", text)
 }
+
+// chart with group courses, from the roads: the racing areas off Port
+// Royal from the start, then an island course once every place it names
+// is charted, with its start, what it rounds and the boats it suits; and
+// the whole chart's list ends with them.
+func TestSceneChartCourses(t *testing.T) {
+	sc := newScene(t, 3, 0)
+	at := sc.roads()
+	before, r := chartList(sc.sea, &chartArgs{Group: groupCourses}, at.X, at.Y, true)
+	if r != nil {
+		t.Fatal(r)
+	}
+	if !strings.Contains(before, "Racing areas off Port Royal") || !strings.Contains(before, " Area 1 · ") {
+		t.Fatalf("before:\n%s", before)
+	}
+	w := sc.cw
+	k := -1
+	for i, c := range w.Courses {
+		if !slices.Contains(sc.sea.Chart.OpenCourses(), int32(i)) && len(c.Boats) > 0 {
+			k = i
+			break
+		}
+	}
+	if k < 0 {
+		t.Fatal("every course is open from the start")
+	}
+	course := &w.Courses[k]
+	if strings.Contains(before, course.Name) {
+		t.Fatalf("%s listed before it opens:\n%s", course.Name, before)
+	}
+	var rows []store.Charting
+	for _, s := range w.CourseSubjects[k] {
+		rows = append(rows, store.Charting{Subject: chart.KindWord(w.Subjects[s].Kind), Number: w.Subjects[s].Number})
+	}
+	sc.sea.Chart.Add(rows)
+	after, r := chartList(sc.sea, &chartArgs{Group: groupCourses}, at.X, at.Y, true)
+	if r != nil {
+		t.Fatal(r)
+	}
+	if !strings.Contains(after, course.Name+" · start ") || !strings.Contains(after, " to starboard") || !strings.Contains(after, " min") {
+		t.Fatalf("after:\n%s", after)
+	}
+	all, _ := chartList(sc.sea, &chartArgs{}, at.X, at.Y, true)
+	if !strings.Contains(all, course.Name) {
+		t.Errorf("the whole chart's list leaves out %s", course.Name)
+	}
+	golden(t, "chart-courses", after)
+}

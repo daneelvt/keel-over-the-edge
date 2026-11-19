@@ -17,7 +17,7 @@
 @font-face {
   font-family: "IM Fell English SC";
   font-display: swap;
-  src: url("../fonts/IMFellEnglishSC-Regular.ttf") format("truetype");
+  src: url("../fonts/IMFellEnglishSC-Regular.woff2") format("woff2");
 }
 
 .hud {
@@ -51,6 +51,12 @@
   --edge-left: max(12px, env(safe-area-inset-left));
   /* The sheet's height: shorter on short screens and small phones upright. */
   --sheet-height: 196px;
+  /* A pixel of words: a pixel among the instruments, which keep their
+     size; a sixteenth of the reader's text size on the screens for
+     reading (the menu, the windows, the questions and the notices), set
+     on each, where their words follow the browser's text size. Rules
+     shared by both write their sizes in it. */
+  --text: 1px;
   position: fixed;
   inset: 0;
   height: 100dvh;
@@ -117,7 +123,7 @@
   min-height: 44px;
   padding: 0 12px;
   font:
-    500 15px / 1.2 "Alegreya Sans",
+    500 calc(15 * var(--text, 1px)) / 1.2 "Alegreya Sans",
     system-ui,
     sans-serif;
 }
@@ -429,7 +435,8 @@
 
 /* The running light, set into the case's top edge like a jewel in a
    bezel: lit while the own machine sailor's AI is at the helm, hollow
-   while it is quiet. It does not blink. */
+   while it is quiet. It does not blink. Its state is an attribute, not
+   a class: the class helm is the helm's, and would size it. */
 .lamp {
   position: absolute;
   top: -5px;
@@ -445,14 +452,14 @@
   right: 92px;
 }
 
-.lamp.helm {
+.lamp[data-lamp="helm"] {
   background: #3ecf8e;
   box-shadow:
     0 0 0 1.5px var(--brass-dark),
     0 0 6px 2px rgb(62 207 142 / 55%);
 }
 
-.lamp.quiet {
+.lamp[data-lamp="quiet"] {
   border: 2px solid #3ecf8e;
   background: rgb(12 22 30 / 90%);
   box-shadow: 0 0 0 1.5px var(--brass-dark);
@@ -542,21 +549,26 @@
   }
 
   .complication {
-    padding: 6px 8px 8px;
+    padding: 6px 8px 6px;
   }
 
-  .case .baro-words {
-    max-width: 96px;
+  /* The barometer's two lines close under its dial, leaving the left
+     column beneath the case its room. */
+  .complication .dial:not(.big) {
+    gap: 2px;
+  }
+
+  .complication .dial:not(.big) .baro-slot .baro-words {
+    line-height: 1.15;
   }
 }
 
 /* Held upright, the boat stands in the middle of the screen: the case's
-   face across the top, small, and its complications in a column, no
-   wider than the compass, beside the boat. */
+   face across the top, small, and its complications in a column, as wide
+   as the barometer's dial and its words, beside the boat. */
 @media (orientation: portrait) {
   .complications {
     flex-direction: column;
-    max-width: 96px;
   }
 
   .complication {
@@ -677,6 +689,33 @@
   fill: #9fd0f0;
   stroke: rgb(12 22 30 / 60%);
   stroke-width: 0.8;
+}
+
+/* The course's mark: a brass chevron on the rim, outside the ticks,
+   pointing in; a stroke, not the wind's filled arrowhead, so the two read
+   apart by shape as well as colour. */
+.compass-course {
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+/* The course's distance, read through the window at the card's foot. */
+.compass-distance {
+  fill: var(--ink);
+  font:
+    500 15px "Alegreya Sans",
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.compass-unit {
+  font-size: 10px;
 }
 
 .compass-boat {
@@ -826,6 +865,14 @@
   right: auto;
 }
 
+/* In a race, held upright, the race line heads the screen's whole width:
+   the pocket chart's column stands under it, as the case does. */
+@media (orientation: portrait) {
+  .hud-screen.racing .hud-right {
+    top: calc(var(--edge-top) + 40px);
+  }
+}
+
 /* The keys: the menu's button heads a column of them, 8 pixels apart:
    Back to the boat, the clear view's, and the full screen's while it is
    wanted. On a short screen they run left from it in a row. */
@@ -954,6 +1001,9 @@
   overscroll-behavior: contain;
   padding: 0;
   outline: none;
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
+  font-size: 0.9375rem;
 }
 
 @media (orientation: portrait) {
@@ -980,7 +1030,7 @@
 }
 
 .hud .menu-x {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .menu-body {
@@ -990,7 +1040,7 @@
 .menu h3 {
   margin: 10px 0 4px;
   font:
-    17px "IM Fell English SC",
+    1.0625rem "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
@@ -1007,7 +1057,21 @@
   align-items: center;
   gap: 8px;
   color: var(--faint);
-  font-size: 13px;
+  font-size: 0.8125rem;
+}
+
+.menu-sound {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.menu-range-value {
+  flex: none;
+  width: 5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .menu-range input {
@@ -1075,7 +1139,7 @@
 .menu h2 {
   margin: 0;
   font:
-    20px "IM Fell English SC",
+    1.25rem "IM Fell English SC",
     Georgia,
     serif;
   color: var(--gold);
@@ -1100,7 +1164,7 @@
 .menu-note {
   margin: -4px 0 8px;
   color: var(--faint);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.35;
 }
 
@@ -1114,7 +1178,7 @@
 }
 
 .menu-steps-mark {
-  font-size: 20px;
+  font-size: 1.25rem;
   transition: rotate 0.15s;
 }
 
@@ -1126,6 +1190,62 @@
 .hud .menu-close {
   margin-top: 6px;
   width: 100%;
+}
+
+/* Make a race, and the player's races ahead under it: the head keys'
+   size, 40 px and 14 px words, a touch 3 px beyond the face. */
+.menu-races {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.hud .menu-race {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--key);
+  min-width: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(#34434e, #1c262d);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: var(--ink);
+  font:
+    500 0.875rem / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.hud .menu-race::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.hud .menu-race-mine {
+  justify-content: space-between;
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--plate-line);
+}
+
+.menu-race-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-race-when {
+  flex: none;
+  color: var(--faint);
 }
 
 /* The free camera's way back to the boat: hidden, and shown a moment after
@@ -1442,6 +1562,29 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+
+/* A race's next mark's number, over its spar while in sight. */
+.mark-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  min-width: 14px;
+  padding: 1px 5px;
+  border: 1px solid var(--gold);
+  border-radius: 9px;
+  background: rgb(26 36 44 / 80%);
+  color: var(--gold);
+  font:
+    500 13px / 1.1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  text-align: center;
+}
+
+.mark-tag[hidden] {
+  display: none;
 }
 
 .overlay-label {
@@ -1876,9 +2019,26 @@
 }
 
 .baro-words {
-  max-width: 110px;
   font-size: 13px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+/* The reading's slot, as big as the longest it can say, laid out unseen:
+   always two lines, the figure above the tendency, since one line of the
+   longest would push the clock beside it under the case's pushers. Its
+   size never changes with its words. */
+.baro-slot {
+  justify-items: center;
+}
+
+.baro-slot .baro-words {
+  white-space: nowrap;
+}
+
+.baro-slot :is(.baro-figure, .baro-tendency) {
+  display: block;
 }
 
 /* The reading in words, and enlarged the set hand's beneath it. */
@@ -1974,6 +2134,7 @@
 .clock-words {
   max-width: 110px;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
@@ -2047,6 +2208,10 @@
   .clock.big .clock-words {
     max-width: 180px;
     text-align: left;
+  }
+
+  .barometer.big .baro-slot {
+    justify-items: start;
   }
 }
 
@@ -2173,5 +2338,98 @@
     transform: none;
     width: min(360px, 56vw);
     max-height: none;
+  }
+}
+
+/* Port Royal's board: the harbour races ahead, a row each, its key the
+   head keys' size at the end; the newcomers' week folded under them. */
+.hud .board .race-row button {
+  position: relative;
+  min-height: 0;
+  height: var(--key);
+  min-width: 44px;
+  padding: 0 14px;
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.hud .board .race-row button::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.hud .board .race-row .race-row-words {
+  flex: 1 1 160px;
+  min-width: 0;
+  height: auto;
+  min-height: var(--key);
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font:
+    15px / 1.3 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  text-align: left;
+}
+
+.board .race-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board .race-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 2px 0;
+}
+
+.race-row-name {
+  display: block;
+  font-weight: 500;
+}
+
+.race-row-when {
+  display: block;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.race-row-ribbon {
+  color: #5fbf72;
+  font-size: 13px;
+}
+
+.board .race-greenhorn {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.board .race-greenhorn summary {
+  min-height: 32px;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+/* Less motion asked for: the pushers, keys and controls change at once,
+   without turning or fading. */
+@media (prefers-reduced-motion: reduce) {
+  .pusher-face,
+  .pusher-stem,
+  .hud .sea-key,
+  .menu-steps-mark,
+  .hud .fly-back,
+  .hud .fly-back.shown,
+  .control,
+  .reef-keys {
+    transition: none;
   }
 }

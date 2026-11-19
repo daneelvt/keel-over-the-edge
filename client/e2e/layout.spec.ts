@@ -10,15 +10,20 @@
 // on the screen. One page, its viewport changed screen by screen, with
 // less motion asked for, so that nothing is measured mid-slide.
 //
-// The case is one size whatever its readouts say. Held sideways it is no
+// The case is one size whatever its readouts say, and its complications
+// one size and in one place whatever the barometer's words say, the
+// clock's dial level with the barometer's. Held sideways it is no
 // taller than its compass card, its pushers standing on three edges; held
 // upright the barometer's and the board's stand out of its bottom edge
 // beneath the readouts and the clock's out of its top edge over the
 // speed's empty end, and the open barometer and clock stay open, their
 // column clear of the boat. No pusher stands over the compass card, the
-// readouts' words or another pusher, nor off the screen. The pocket chart's caption
+// readouts' words or another pusher, nor off the screen. With a course
+// set, the compass card carries its mark on its rim and its distance whole
+// in a window at its foot, the case no bigger. The pocket chart's caption
 // is two lines within its frame, the weather's pusher set in the frame.
-// The menu, open, stands over everything and within the screen. The
+// The menu, open, stands over everything and within the screen, the
+// focus on its first key and, closed, back on its button. The
 // sheet's legend at its longest, the sail luffing or stalled, stands
 // within the sheet's frame, clear of its ends, the end lit with its arrow
 // within it too. The Reef key and, a reef asked for, the key that shakes
@@ -35,6 +40,25 @@
 // screen, the countdown beside or under the strip, and the layers' sheet
 // and the key, open, stand on the case within the screen, covering
 // neither it nor the strip.
+//
+// The chart screen's Log tab, the strip still one row with its four tabs,
+// where the boat is and the way back to sea, holds a sailor's log on its
+// paper within the screen under the strip: a long log's days, its
+// collection (three kinds a row upright, five sideways) and its ribbons, the
+// next certificate's block at their head (its name alone after the last),
+// who may read it, another sailor's (their certificate at its head), a
+// machine sailor's, an empty one and one not there;
+// its keys the head keys' size, its day rows and kinds a 44 px touch, no
+// words under 13 px, nothing wider than the sheet.
+//
+// The chart screen's News tab, its dot over the tab's corner with the
+// strip no wider, holds the day's edition on its paper under the strip: a
+// full day's (the figures, six stories at their longest, the reader's own
+// box and the world's notice), a new world's first (its arrival and the
+// last world in review), a quiet day's and an earlier one's; its masthead
+// on one line, every story a 44 px touch, its keys the head keys' size, no
+// words under 13 px, nothing wider than the sheet; and a full day's front
+// page, to the sixth story, within about one and a half screens upright.
 //
 // The menu's button heads a column of keys under the pocket chart, Back
 // to the boat, the clear view's and the full screen's, 8 pixels apart; on
@@ -57,10 +81,51 @@
 // name, keeps Set sail in view on every screen, and the boat's look and
 // the fleet's boats keep Save, Cancel, every swatch and the first boat in
 // view, the server's answers stood in for.
+//
+// In a race, the race line heads the top, 32 pixels, over the case: held
+// upright the screen's width, the pocket chart's column under it; held
+// sideways between the case and the pocket chart. Before the start (over
+// the line), racing and with a call at its longest, on every screen, it
+// covers no part and no part covers it, it stands clear of the boat, and
+// its words are whole within it, none cut short. Its ⋯'s window, the
+// finish's card and the results, with what the run counted toward a
+// certificate at its longest, fit every screen, their keys the head keys'
+// size. The notices of certificates, a task done and a certificate earned
+// with See, keep the notices' rules on the phones held either way.
+//
+// Watching a race, the race bar takes the watch plate's place: one row at
+// the foot of the screen, within it, clear of every part and the boat,
+// before the start and racing, with the crier's line and a cheer's under
+// the case; the standings and the bar's ⋯ fit every screen, the
+// standings' rows a 40 px touch.
+//
+// A race replayed on the chart: its head (the race's name, the standings
+// at the slider's moment) under the chart's strip and its time (Play, the
+// slider, the speeds, Results, Share) at the foot, in two rows held
+// upright and one sideways, within the screen and clear of each other, on
+// every screen; its keys a 40 px touch; the standings, the results and a
+// gone world's results alone fit, Close within reach.
+//
+// Races ashore's windows over the sea, Make a race (filled, a later start
+// and an island course, refused), the share of a race made, a race's card
+// (its owner's ⋯ open, another's, one refused) and the harbour race's
+// notice with Enter, on every screen, the server's answers stood in for:
+// each within the screen, its foot's keys in view, every key 40 pixels
+// tall with 14-pixel words.
+//
+// The screens for reading follow the browser's text size: the start
+// screen, the menu, the windows, the questions and the notices. Their
+// checks run again with the browser's default text at 20 px (125%), on a
+// small phone held either way and the tests' screen, the words' sizes
+// held to the same share of it; the instruments keep their size.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
+import { emptyLog, LONG_NAME, longLog, masterLog, standInLogs } from './logs';
+import { firstEdition, fullDay, quietDay, standInNews } from './news';
+import { OTHERS, REFUSED, standInRaces } from './races';
+import { GONE, RACED, standInReplays } from './replays';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
 const SCREENS = [
@@ -74,6 +139,42 @@ const SCREENS = [
   { name: 'small Android phone full screen sideways', width: 780, height: 360, upright: false },
   { name: 'the tests’ screen', width: 960, height: 600, upright: false },
 ] as const;
+
+/**
+ * The browser's default text size the screens for reading are checked at:
+ * as browsers set it, and 20 px (125%). Their words follow it; the
+ * instruments keep their size.
+ */
+const TEXT_SIZES = [16, 20] as const;
+
+/** The screens a check runs on at a text size: all of them, or at 20 px a small phone held either way and the tests' own. */
+function screensAt(text: number): readonly (typeof SCREENS)[number][] {
+  return text === 16 ? SCREENS : [SCREENS[1], SCREENS[5], SCREENS[7]];
+}
+
+/** A test's title's end for its text size. */
+function atText(text: number): string {
+  return text === 16 ? '' : `, at ${text} px default text`;
+}
+
+/**
+ * Sets the browser's default text size, as a reader does in its settings:
+ * over Chromium's DevTools protocol, so a check at another size than the
+ * browser's own is Chromium's alone.
+ */
+async function textSize(page: Page, text: number): Promise<void> {
+  if (text === 16) {
+    return;
+  }
+  test.skip(
+    test.info().project.name === 'webkit',
+    'the browser’s text size is set over Chromium’s DevTools protocol',
+  );
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', {
+    fontSizes: { standard: text, fixed: Math.round((text * 13) / 16) },
+  });
+}
 
 /** The room kept about the boat, px. */
 const ABOUT_BOAT = 16;
@@ -90,6 +191,8 @@ interface Box {
 async function parts(page: Page): Promise<{
   parts: Box[];
   boat: Box | null;
+  /** Each of the boat's drawn parts' boxes, with the room kept about the boat. */
+  drawn: Box[];
   out: string[];
   spilt: string[];
   words: string[];
@@ -141,6 +244,8 @@ async function parts(page: Page): Promise<{
       one('the shake out key', '.reef-key.shake'),
       one('the autopilot', '.pilot-head'),
       one('the autopilot button', '.pilot-button'),
+      one('the race bar', '.race-bar'),
+      one('the crier’s lines', '.rb-lines'),
       ...[...hud.querySelectorAll('.hud-top > .panel:not(.case)')].map((e) =>
         box(`the line “${(e as HTMLElement).innerText}”`, [e]),
       ),
@@ -156,6 +261,13 @@ async function parts(page: Page): Promise<{
             right: Math.max(...b.map((r) => r.right)) + about,
             bottom: Math.max(...b.map((r) => r.bottom)) + about,
           };
+    const drawn = b.map((r) => ({
+      name: 'the boat',
+      left: r.left - about,
+      top: r.top - about,
+      right: r.right + about,
+      bottom: r.bottom + about,
+    }));
     // A part's own keys stay within it; a pusher's stem stands out of the
     // edge it is set in, and no other.
     const spilt = [...hud.querySelectorAll('.pilot-head button, .case button, .pocket button')]
@@ -182,7 +294,8 @@ async function parts(page: Page): Promise<{
     );
     // No words show outside their part: each run of text as it is drawn,
     // clipped by whatever clips it, within the part it is in.
-    const PARTS = '.case-top, .complications, .pocket-frame, .pilot-head, .pilot-button, .control';
+    const PARTS =
+      '.case-top, .complications, .pocket-frame, .pilot-head, .pilot-button, .control, .racer-line';
     const words: string[] = [];
     const walker = document.createTreeWalker(hud, NodeFilter.SHOW_TEXT);
     for (let t = walker.nextNode(); t !== null; t = walker.nextNode()) {
@@ -224,7 +337,7 @@ async function parts(page: Page): Promise<{
     }
     const helm = one('the helm', '[data-control=helm]');
     const head = one('the control head', '.pilot-head');
-    return { parts: all, boat, out, spilt, words, helm, head };
+    return { parts: all, boat, drawn, out, spilt, words, helm, head };
   }, ABOUT_BOAT);
 }
 
@@ -260,26 +373,49 @@ async function longestCaption(page: Page): Promise<string[]> {
   });
 }
 
-/** What is wrong with the case: its size as its readouts change, its height, its pushers. */
+/**
+ * What is wrong with the case: its size, and its complications' sizes and
+ * places, as its readouts and the barometer's words change; its height,
+ * its pushers.
+ */
 async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
+  const boxes = {
+    'the case': '.case-top',
+    'the complications': '.complications',
+    'the barometer': '[data-complication=barometer]',
+    'the clock': '[data-complication=clock]',
+    'the barometer’s dial': '[data-complication=barometer] svg',
+    'the clock’s dial': '[data-complication=clock] svg',
+  };
   const size = (at: 'shortest' | 'longest') =>
-    page.evaluate(async (at) => {
-      globalThis.keel.readouts(at);
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const r = document.querySelector('.case-top')?.getBoundingClientRect();
-      return r === undefined ? null : [r.left, r.top, r.width, r.height];
-    }, at);
+    page.evaluate(
+      async ({ at, boxes }) => {
+        globalThis.keel.readouts(at);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return Object.fromEntries(
+          Object.entries(boxes).map(([name, sel]) => {
+            const r = document.querySelector(sel)?.getBoundingClientRect();
+            return [name, r === undefined ? null : [r.left, r.top, r.width, r.height]];
+          }),
+        );
+      },
+      { at, boxes },
+    );
   const found: string[] = [];
   const short = await size('shortest');
   const long = await size('longest');
-  if (
-    short === null ||
-    long === null ||
-    short.some((v, i) => Math.abs(v - (long[i] ?? 0)) > 0.01)
-  ) {
-    found.push(
-      `the case is ${short?.join(' ')} at its shortest, ${long?.join(' ')} at its longest`,
-    );
+  for (const name of Object.keys(boxes)) {
+    const s = short[name];
+    const l = long[name];
+    if (!s || !l || s.some((v, i) => Math.abs(v - (l[i] ?? 0)) > 0.01)) {
+      found.push(`${name} is ${s?.join(' ')} at its shortest, ${l?.join(' ')} at its longest`);
+    }
+  }
+  // Side by side, the two dials stand level.
+  const baro = long['the barometer’s dial'];
+  const clock = long['the clock’s dial'];
+  if (!upright && baro && clock && Math.abs((baro[1] ?? 0) - (clock[1] ?? 0)) > 0.5) {
+    found.push(`the clock’s dial is at ${clock[1]}, the barometer’s at ${baro[1]}`);
   }
   found.push(
     ...(await page.evaluate((upright) => {
@@ -544,10 +680,38 @@ async function menuFaults(page: Page): Promise<string[]> {
     if (!inView(x.getBoundingClientRect())) {
       out.push('the menu’s close is off the screen');
     }
-    if (document.activeElement !== menu) {
+    if (document.activeElement !== x) {
       out.push(
-        `the menu does not have the focus: ${document.activeElement?.tagName}.${document.activeElement?.className}`,
+        `the menu’s first key does not have the focus: ${document.activeElement?.tagName}.${document.activeElement?.className}`,
       );
+    }
+    // The Sound block: each slider a 44 px touch with room to move, its
+    // percentage whole, all within the menu's width.
+    const sound = document.querySelector('.menu-sound');
+    if (sound === null) {
+      out.push('no Sound block');
+    } else {
+      const b = sound.getBoundingClientRect();
+      if (b.left < m.left - 0.5 || b.right > m.right + 0.5) {
+        out.push(
+          `the Sound block is wider than the menu (${Math.round(b.left)} to ${Math.round(b.right)})`,
+        );
+      }
+      const sliders = [...sound.querySelectorAll<HTMLInputElement>('input[type=range]')];
+      if (sliders.length !== 3) {
+        out.push(`the Sound block has ${sliders.length} sliders`);
+      }
+      for (const r of sliders.map((e) => e.getBoundingClientRect())) {
+        if (r.width < 160 || r.height < 44) {
+          out.push(`a sound slider is ${Math.round(r.width)} × ${Math.round(r.height)}`);
+        }
+      }
+      for (const v of sound.querySelectorAll<HTMLElement>('.menu-range-value')) {
+        const r = v.getBoundingClientRect();
+        if (v.scrollWidth > v.clientWidth + 0.5 || r.right > b.right + 0.5) {
+          out.push(`a sound slider’s percentage is cut: ${v.textContent}`);
+        }
+      }
     }
     // Nothing over it: at its corners, its middle and its head's close.
     const xr = x.getBoundingClientRect();
@@ -1231,10 +1395,13 @@ for (const { kind, braces, aback, kite } of data.boats.slice(1).map((kind) => {
         n === 'the barometer pusher' ||
         n === 'the clock pusher' ||
         n === 'the board pusher';
+      // Against each part drawn, not the box about them all: a wide boat's
+      // box takes in empty corners beside a tall mast.
       for (const p of seen.parts) {
-        if (!(s.upright && inCase(p.name)) && overlap(p, boat)) {
+        const under = seen.drawn.find((d) => overlap(p, d));
+        if (!(s.upright && inCase(p.name)) && under !== undefined) {
           found.push(
-            `${id}, ${s.name}: ${p.name} covers the boat (${edges(p)} and ${edges(boat)})`,
+            `${id}, ${s.name}: ${p.name} covers the boat (${edges(p)} and ${edges(under)})`,
           );
         }
       }
@@ -1642,6 +1809,105 @@ const STILL = [
   { name: 'a desktop', width: 1440, height: 900 },
 ] as const;
 
+test('a course on the compass: its mark on the card’s rim and its distance whole in the window at its foot, the case no bigger, on five screens', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the case is the same on either back end');
+  await page.setViewportSize({ width: STILL[0].width, height: STILL[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const found: string[] = [];
+  const caseBox = () =>
+    page.evaluate(async () => {
+      for (let i = 0; i < 3; i++) {
+        globalThis.keel.render();
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      const r = document.querySelector('.case-top')?.getBoundingClientRect();
+      return r === undefined ? '' : [r.left, r.top, r.width, r.height].map(Math.round).join(',');
+    });
+  for (const s of STILL) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.evaluate(() => {
+      globalThis.keel.setCourse(null);
+      globalThis.keel.render();
+    });
+    const bare = await caseBox();
+    // The farthest a course can be, ahead, abeam, astern and on the quarter.
+    for (const [deg, metres] of [
+      [0, 8000],
+      [90, 3000],
+      [180, 2000],
+      [225, 400],
+    ] as const) {
+      const faults = await page.evaluate(
+        async ([deg, metres]) => {
+          const k = globalThis.keel;
+          const b = k.boatAt();
+          const a = (deg * Math.PI) / 180;
+          k.setCourse({
+            kind: 'pin',
+            east: b.east + metres * Math.sin(a),
+            north: b.north + metres * Math.cos(a),
+          });
+          for (let i = 0; i < 3; i++) {
+            k.render();
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+          const out: string[] = [];
+          const card = document.querySelector('.case .compass')?.getBoundingClientRect();
+          const windows = document.querySelectorAll('.case .compass-window');
+          const foot = windows[1]?.getBoundingClientRect();
+          const text = document
+            .querySelector('[data-readout=course-distance]')
+            ?.getBoundingClientRect();
+          const mark = document
+            .querySelector('[data-readout=course-mark]')
+            ?.getBoundingClientRect();
+          if (
+            card === undefined ||
+            foot === undefined ||
+            text === undefined ||
+            mark === undefined
+          ) {
+            return ['no course on the card'];
+          }
+          const inside = (a: DOMRect, b: DOMRect, slack: number) =>
+            a.left >= b.left - slack &&
+            a.right <= b.right + slack &&
+            a.top >= b.top - slack &&
+            a.bottom <= b.bottom + slack;
+          if (!inside(foot, card, 0.5)) {
+            out.push(`the window at its foot is out of the card`);
+          }
+          if (!inside(text, foot, 0.5)) {
+            out.push(
+              `"${document.querySelector('[data-readout=course-distance]')?.textContent}" spills out of its window (${text.width.toFixed(1)} in ${foot.width.toFixed(1)} px)`,
+            );
+          }
+          // The chevron's stroke may stand a little over the card's rim.
+          if (!inside(mark, card, 2)) {
+            out.push('the mark is off the card');
+          }
+          return out;
+        },
+        [deg, metres] as const,
+      );
+      for (const f of faults) {
+        found.push(`${s.name}, ${deg}°: ${f}`);
+      }
+    }
+    if ((await caseBox()) !== bare) {
+      found.push(`${s.name}: the case is ${await caseBox()} with a course, ${bare} without`);
+    }
+  }
+  expect(found).toEqual([]);
+});
+
 /** The complications' boxes, and the animations running on either. */
 async function stillness(page: Page): Promise<{ boxes: string; running: string[] }> {
   return page.evaluate(async () => {
@@ -1916,9 +2182,46 @@ test('on the chart the arrow shrinks as it zooms out, the notices stand clear of
         await button.click();
       }
     }
+    // The place's box on the screen, every key of it within it.
+    const box = await page.evaluate(() => {
+      const e = document.querySelector('.chart-box');
+      const r = e?.getBoundingClientRect();
+      if (e === null || r === undefined) {
+        return ['no box'];
+      }
+      const out: string[] = [];
+      if (
+        r.left < -0.5 ||
+        r.top < -0.5 ||
+        r.right > innerWidth + 0.5 ||
+        r.bottom > innerHeight + 0.5
+      ) {
+        out.push(
+          `the box is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+        );
+      }
+      for (const k of e.querySelectorAll('button')) {
+        const b = k.getBoundingClientRect();
+        if (b.left < r.left - 0.5 || b.right > r.right + 0.5) {
+          out.push(`“${k.textContent}” sticks out of the box`);
+        }
+        // Its words on one line.
+        const words = document.createRange();
+        words.selectNodeContents(k);
+        const lines = new Set([...words.getClientRects()].map((l) => Math.round(l.top)));
+        if (lines.size > 1 || k.scrollWidth > k.clientWidth + 0.5) {
+          out.push(`“${k.textContent}” does not fit its key on one line`);
+        }
+      }
+      return out;
+    });
+    for (const c of box) {
+      found.push(`${s.name}: ${c}`);
+    }
     await page.locator('.notice-dismiss').click();
-    // The strip's clock: in the strip, and swept on by the slider.
-    const clock = page.locator('.chart-strip .chart-clock');
+    // The chart's clock: in the strip, or under it held upright, and swept
+    // on by the slider.
+    const clock = page.locator('.chart-top .chart-clock');
     await expect(clock).toBeVisible();
     const hands = () =>
       page.evaluate(() => ({
@@ -1982,6 +2285,70 @@ async function lookFaults(page: Page, sel: string): Promise<string[]> {
     }
     return out;
   }, sel);
+}
+
+// A long notice under the case wraps beside the pocket chart, on every
+// screen: on the screen, clear of the pocket chart, its × not under it.
+for (const text of TEXT_SIZES) {
+  test(`a long notice stands beside the pocket chart, not under it, its × in reach, on every screen${atText(text)}`, async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+    await textSize(page, text);
+    await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openScene(page, '', true);
+    const found: string[] = [];
+    for (const s of screensAt(text)) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width: s.width, height: s.height },
+      );
+      for (const [on, fill] of [
+        ['new-world', {}],
+        ['course-reached', { name: 'the start of Round Long Cay' }],
+      ] as const) {
+        await page.evaluate(([on, fill]) => globalThis.keel.raiseNotice(on, fill), [
+          on,
+          fill,
+        ] as const);
+        await expect(page.locator('.notice-line .notice')).toBeVisible();
+        const faults = await page.evaluate(() => {
+          const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+          const over = (a: DOMRect, b: DOMRect) =>
+            Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+            Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+          const n = box('.notice-line .notice');
+          const x = box('.notice-line .notice-dismiss');
+          const pocket = box('.hud-right .pocket');
+          if (n === null || x === null) {
+            return ['no notice'];
+          }
+          const out: string[] = [];
+          if (n.left < -0.5 || n.right > innerWidth + 0.5 || n.top < -0.5) {
+            out.push(`it is off the screen (${[n.left, n.right].map(Math.round)})`);
+          }
+          if (pocket !== null && over(n, pocket)) {
+            out.push(
+              `it runs under the pocket chart (${Math.round(n.right)} past ${Math.round(pocket.left)})`,
+            );
+          }
+          const on = document.elementFromPoint((x.left + x.right) / 2, (x.top + x.bottom) / 2);
+          if (on === null || on.closest('.notice-dismiss') === null) {
+            out.push('its × is covered');
+          }
+          return out;
+        });
+        for (const f of faults) {
+          found.push(`${s.name}, ${on}: ${f}`);
+        }
+        await page.locator('.notice-line .notice-dismiss').click();
+        await expect(page.locator('.notice-line .notice')).toHaveCount(0);
+      }
+    }
+    expect(found).toEqual([]);
+  });
 }
 
 test('every panel and window on the screen at sea is in the plate’s brass and lacquer, its keys the head’s, the watch plate centred', async ({
@@ -2067,70 +2434,145 @@ test('every panel and window on the screen at sea is in the plate’s brass and 
   expect(found).toEqual([]);
 });
 
-test('the list of sailors to watch and the card fit every screen, Watch in view', async ({
-  context,
+test('the notices of certificates, a task done and a certificate earned with See, keep the notices’ rules on the phones held either way', async ({
   page,
 }) => {
-  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
-  test.setTimeout(150_000);
-  await sailor(context, 'Layout');
-  await standIn(page);
-  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  test.skip(test.info().project.name === 'webgpu', 'the notices are the same on either back end');
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto(GAME);
-  await page
-    .locator('.your-sailor')
-    .getByRole('button', { name: 'Watch another sailor' })
-    .click({ timeout: 90_000 });
-  await expect(page.locator('.watch-row').first()).toBeVisible({ timeout: 30_000 });
+  await openScene(page, 'world=1', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    // The autopilot's head open, the barometer and the clock shut, as a
+    // harbour race's notice with Enter is held: held sideways, the column
+    // under the case has no room for a notice with a key under both.
+    k.settings({ barometer: false, clock: false, pilotHead: true, rightOfWay: true });
+    k.render();
+  });
+  await expect(page.locator('[data-pusher=board]')).toBeVisible({ timeout: 15_000 });
   const found: string[] = [];
-  const LIST = [
-    '.watch-head h2',
-    '.watch-search',
-    '.watch-sorts',
-    '.watch-who-pick',
-    '.watch-again button',
-    '.watch-scroll',
-    '.watch-close',
-  ];
-  const CARD = [
-    '.watch-back',
-    '.watch-follow',
-    '.watch-card-name',
-    '.watch-card-body',
-    '.watch-card-foot button',
-  ];
-  for (const s of SCREENS) {
+  /** The notice shown, by the rules every notice keeps: within the screen, no wider than it shows, its key the head keys' size and in reach, in the plate's brass. */
+  const check = async (where: string, sel: string) => {
+    for (const f of await raceFaults(page, sel)) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  for (const s of [SCREENS[1], SCREENS[5]]) {
     await page.setViewportSize({ width: s.width, height: s.height });
     await page.waitForFunction(
       ({ width, height }) => innerWidth === width && innerHeight === height,
       { width: s.width, height: s.height },
     );
-    await page.waitForTimeout(100);
-    // The list: its top, rows and Close apart; the first row's Watch in view.
-    await expect(page.locator('.watch-row').first()).toBeVisible();
-    for (const f of await panelParts(page, LIST)) {
-      found.push(`${s.name}, the list: ${f}`);
+    await page.waitForTimeout(200);
+    // A task of the log done, its words at their longest.
+    await page.evaluate(() =>
+      globalThis.keel.certified({ certificate: 4, task: 6, done: 5, of: 5, way: 'log' }),
+    );
+    await expect(page.locator('.notice-passive')).toContainText('Toward Master: Every weather');
+    await check(`${s.name}, a task done`, '.notice');
+    for (const f of await lookFaults(page, '.notice')) {
+      found.push(`${s.name}, a task done: ${f}`);
     }
-    if (!(await inView(page, '.watch-row .watch-go'))) {
-      found.push(`${s.name}, the list: the first row’s Watch is out of view`);
+    await page.locator('.notice-dismiss').click();
+    // A certificate earned, the longest boats' words: active, with See.
+    await page.evaluate(() =>
+      globalThis.keel.certified({ certificate: 0, task: -1, done: 3, of: 3, earned: true }),
+    );
+    await expect(page.locator('.notice-active.with-act')).toContainText("You're a Deckhand!");
+    await check(`${s.name}, a certificate earned`, '.notice.with-act');
+    for (const f of await lookFaults(page, '.notice.with-act')) {
+      // Its key is the head keys' size, 40 px, its touch reaching beyond.
+      if (!f.includes('“See”')) {
+        found.push(`${s.name}, a certificate earned: ${f}`);
+      }
     }
-    if (!(await inView(page, '.watch-close'))) {
-      found.push(`${s.name}, the list: Close is out of view`);
-    }
-    // The card about the first: its top, sections and foot apart; Watch in view.
-    await page.getByRole('button', { name: `About ${LONG}` }).click();
-    await expect(page.locator('.watch-card section[aria-label="Where"]')).toBeVisible();
-    for (const f of await panelParts(page, CARD)) {
-      found.push(`${s.name}, the card: ${f}`);
-    }
-    if (!(await inView(page, '.watch-card-foot .watch-go'))) {
-      found.push(`${s.name}, the card: Watch is out of view`);
-    }
-    await page.getByRole('button', { name: 'Back' }).click();
+    await page.locator('.notice-dismiss').click();
   }
   expect(found).toEqual([]);
 });
+
+for (const text of TEXT_SIZES) {
+  test(`the list of sailors to watch and the card fit every screen, Watch in view${atText(text)}`, async ({
+    context,
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+    await textSize(page, text);
+    test.setTimeout(150_000);
+    await sailor(context, 'Layout');
+    await standIn(page);
+    // The sailor's last story, on the card.
+    await standInNews(page);
+    await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(GAME);
+    await page
+      .locator('.your-sailor')
+      .getByRole('button', { name: 'Watch another sailor' })
+      .click({ timeout: 90_000 });
+    await expect(page.locator('.watch-row').first()).toBeVisible({ timeout: 30_000 });
+    const found: string[] = [];
+    const LIST = [
+      '.watch-head h2',
+      '.watch-search',
+      '.watch-sorts',
+      '.watch-who-pick',
+      '.watch-again button',
+      '.watch-scroll',
+      '.watch-close',
+    ];
+    const CARD = [
+      '.watch-back',
+      '.watch-follow',
+      '.watch-card-name',
+      '.watch-card-body',
+      '.watch-card-foot button',
+    ];
+    for (const s of screensAt(text)) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width: s.width, height: s.height },
+      );
+      await page.waitForTimeout(100);
+      // The list: its top, rows and Close apart; the first row's Watch in view.
+      await expect(page.locator('.watch-row').first()).toBeVisible();
+      for (const f of await panelParts(page, LIST)) {
+        found.push(`${s.name}, the list: ${f}`);
+      }
+      if (!(await inView(page, '.watch-row .watch-go'))) {
+        found.push(`${s.name}, the list: the first row’s Watch is out of view`);
+      }
+      if (!(await inView(page, '.watch-close'))) {
+        found.push(`${s.name}, the list: Close is out of view`);
+      }
+      // The card about the first: its top, sections and foot apart; Watch in view.
+      await page.getByRole('button', { name: `About ${LONG}` }).click();
+      await expect(page.locator('.watch-card section[aria-label="Where"]')).toBeVisible();
+      for (const f of await panelParts(page, CARD)) {
+        found.push(`${s.name}, the card: ${f}`);
+      }
+      if (!(await inView(page, '.watch-card-foot .watch-go'))) {
+        found.push(`${s.name}, the card: Watch is out of view`);
+      }
+      // Its last story in the news, one line within the card.
+      const line = await page.locator('.watch-card .watch-last-news').evaluate((e) => ({
+        tall: e.getBoundingClientRect().height,
+        over: e.scrollHeight - e.clientHeight,
+      }));
+      if (line.tall < 39.5 || line.over > 1) {
+        found.push(
+          `${s.name}, the card: its last story is ${Math.round(line.tall)} px tall, ${line.over} px over`,
+        );
+      }
+      await page.getByRole('button', { name: 'Back' }).click();
+    }
+    expect(found).toEqual([]);
+  });
+}
 
 /** A fleet at its longest: a twenty-letter name on the largest kind, its sail number four figures. */
 function longFleet() {
@@ -2166,114 +2608,310 @@ function longFleet() {
   };
 }
 
-test('the player’s own panel keeps Set sail in view with their boat, and the boat’s look and the fleet’s boats fit every screen', async ({
-  page,
-}) => {
-  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
-  test.setTimeout(150_000);
-  const o = data.sailorOptions;
-  await page.route(
-    (url) => url.pathname === '/api/me',
-    (r) =>
-      r.fulfill({
-        json: {
-          name: LONG,
-          look: data.sailors[0]?.id,
-          version: data.sailors[0]?.versions[0]?.id,
-          skin: o.skins[0]?.id,
-          hair: o.hairs[0]?.id,
-          colour: o.colours[0]?.id,
-          lookChosen: true,
-          kind: data.boats[0]?.id,
-          spectators: 'no',
-          atSea: false,
-        },
-      }),
-  );
-  await page.route(
-    (url) => url.pathname === '/api/fleet',
-    (r) => r.fulfill({ json: longFleet() }),
-  );
-  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto(GAME);
-  await expect(page.locator('.your-sailor [data-readout=boat]')).toBeVisible({ timeout: 90_000 });
-  const found: string[] = [];
-  /** Each of the named keys within the screen, and within the panel shown. */
-  const inSight = async (where: string, panel: string, keys: string[]) => {
-    const out = await page.evaluate(
-      ({ panel, keys }) => {
-        const p = document.querySelector(panel)?.getBoundingClientRect();
-        if (p === undefined) {
-          return [`no ${panel}`];
-        }
-        const out: string[] = [];
-        for (const k of keys) {
-          const els = [...document.querySelectorAll<HTMLElement>(k)];
-          if (els.length === 0) {
-            out.push(`no ${k}`);
+for (const text of TEXT_SIZES) {
+  test(`the player’s own panel keeps Set sail in view with their boat, and the boat’s look and the fleet’s boats fit every screen${atText(text)}`, async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+    await textSize(page, text);
+    test.setTimeout(150_000);
+    const o = data.sailorOptions;
+    await page.route(
+      (url) => url.pathname === '/api/me',
+      (r) =>
+        r.fulfill({
+          json: {
+            name: LONG,
+            look: data.sailors[0]?.id,
+            version: data.sailors[0]?.versions[0]?.id,
+            skin: o.skins[0]?.id,
+            hair: o.hairs[0]?.id,
+            colour: o.colours[0]?.id,
+            lookChosen: true,
+            kind: data.boats[0]?.id,
+            spectators: 'no',
+            atSea: false,
+          },
+        }),
+    );
+    await page.route(
+      (url) => url.pathname === '/api/fleet',
+      (r) => r.fulfill({ json: longFleet() }),
+    );
+    await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(GAME);
+    await expect(page.locator('.your-sailor [data-readout=boat]')).toBeVisible({ timeout: 90_000 });
+    const found: string[] = [];
+    /** Each of the named keys within the screen, and within the panel shown. */
+    const inSight = async (where: string, panel: string, keys: string[]) => {
+      const out = await page.evaluate(
+        ({ panel, keys }) => {
+          const p = document.querySelector(panel)?.getBoundingClientRect();
+          if (p === undefined) {
+            return [`no ${panel}`];
           }
-          for (const e of els) {
-            const r = e.getBoundingClientRect();
-            if (
-              r.top < Math.max(p.top, 0) - 0.5 ||
-              r.bottom > Math.min(p.bottom, innerHeight) + 0.5 ||
-              r.left < -0.5 ||
-              r.right > innerWidth + 0.5
-            ) {
-              out.push(`${k} “${e.getAttribute('aria-label') ?? e.textContent}” is out of view`);
+          const out: string[] = [];
+          for (const k of keys) {
+            const els = [...document.querySelectorAll<HTMLElement>(k)];
+            if (els.length === 0) {
+              out.push(`no ${k}`);
+            }
+            for (const e of els) {
+              const r = e.getBoundingClientRect();
+              if (
+                r.top < Math.max(p.top, 0) - 0.5 ||
+                r.bottom > Math.min(p.bottom, innerHeight) + 0.5 ||
+                r.left < -0.5 ||
+                r.right > innerWidth + 0.5
+              ) {
+                out.push(`${k} “${e.getAttribute('aria-label') ?? e.textContent}” is out of view`);
+              }
             }
           }
+          return out;
+        },
+        { panel, keys },
+      );
+      for (const f of out) {
+        found.push(`${where}: ${f}`);
+      }
+    };
+    for (const s of screensAt(text)) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width: s.width, height: s.height },
+      );
+      await page.waitForTimeout(100);
+      await inSight(`${s.name}, the panel`, '.your-sailor', [
+        '.your-sailor-go',
+        '[data-readout=boat]',
+      ]);
+      await page.getByRole('button', { name: 'Your boat', exact: true }).click();
+      await expect(page.locator('.boat-look')).toBeVisible();
+      await inSight(`${s.name}, the boat’s look`, '.boat-look', [
+        '.boat-look-actions .start-go',
+        '.boat-look-actions .start-sign-in',
+      ]);
+      // Every swatch on the screen's width, and in view as the panel scrolls to it.
+      for (const radio of await page.locator('.boat-look [role=radio]').all()) {
+        await radio.scrollIntoViewIfNeeded();
+        const b = await radio.boundingBox();
+        if (
+          b === null ||
+          b.x + b.width > s.width + 0.5 ||
+          b.y < -0.5 ||
+          b.y + b.height > s.height + 0.5
+        ) {
+          found.push(
+            `${s.name}, the boat’s look: a swatch is off the screen (${JSON.stringify(b)})`,
+          );
         }
-        return out;
-      },
-      { panel, keys },
-    );
-    for (const f of out) {
-      found.push(`${where}: ${f}`);
+      }
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('button', { name: 'Change boat', exact: true }).click();
+      await expect(page.locator('.change-boat')).toBeVisible();
+      await inSight(`${s.name}, the fleet’s boats`, '.change-boat', [
+        '.change-boat-list li:first-child .change-boat-choice',
+        '.change-boat .boat-look-actions .start-sign-in',
+      ]);
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     }
-  };
-  for (const s of SCREENS) {
+    expect(found).toEqual([]);
+  });
+}
+
+/** A window's faults: off the screen, its keys out of it or of the screen, or a key under 40 px tall or a 44 px touch wide. */
+async function windowFaults(page: Page, where: string, sel: string): Promise<string[]> {
+  const out = await page.evaluate((sel) => {
+    const w = document.querySelector(sel);
+    if (w === null) {
+      return [`no ${sel}`];
+    }
+    const found: string[] = [];
+    const r = w.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      found.push(
+        `${sel} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+      );
+    }
+    for (const b of w.querySelectorAll('button')) {
+      const k = b.getBoundingClientRect();
+      const name = `“${(b as HTMLElement).innerText}”`;
+      if (
+        k.left < r.left - 0.5 ||
+        k.right > r.right + 0.5 ||
+        k.top < r.top - 0.5 ||
+        k.bottom > r.bottom + 0.5
+      ) {
+        found.push(`${name} is outside ${sel}`);
+      }
+      if (k.bottom > innerHeight + 0.5 || k.right > innerWidth + 0.5) {
+        found.push(`${name} is off the screen`);
+      }
+      if (k.height < 39.5 || k.width < 43.5) {
+        found.push(`${name} is ${Math.round(k.width)} × ${Math.round(k.height)}`);
+      }
+    }
+    return found;
+  }, sel);
+  return out.map((f) => `${where}: ${f}`);
+}
+
+for (const text of TEXT_SIZES) {
+  test(`with the boat still in the water, the player’s own panel keeps Set sail in view and Start again at Port Royal within reach, and the question before the boat is taken out fits every screen${atText(text)}`, async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+    await textSize(page, text);
+    test.setTimeout(120_000);
+    const o = data.sailorOptions;
+    await page.route(
+      (url) => url.pathname === '/api/me',
+      (r) =>
+        r.fulfill({
+          json: {
+            name: LONG,
+            look: data.sailors[0]?.id,
+            version: data.sailors[0]?.versions[0]?.id,
+            skin: o.skins[0]?.id,
+            hair: o.hairs[0]?.id,
+            colour: o.colours[0]?.id,
+            lookChosen: true,
+            kind: data.boats[0]?.id,
+            spectators: 'no',
+            atSea: true,
+          },
+        }),
+    );
+    await page.route(
+      (url) => url.pathname === '/api/fleet',
+      (r) => r.fulfill({ json: longFleet() }),
+    );
+    await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(GAME);
+    await expect(page.locator('.your-sailor [data-readout=boat]')).toBeVisible({ timeout: 90_000 });
+    await expect(page.locator('.your-sailor')).toContainText('still in the water');
+    const found: string[] = [];
+    for (const s of screensAt(text)) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width: s.width, height: s.height },
+      );
+      await page.waitForTimeout(100);
+      if (!(await inView(page, '.your-sailor-go'))) {
+        found.push(`${s.name}: Set sail is out of view`);
+      }
+      // Start again under it, in view as the panel scrolls to it.
+      await page.locator('.your-sailor-again').scrollIntoViewIfNeeded();
+      if (!(await inView(page, '.your-sailor-again'))) {
+        found.push(`${s.name}: Start again at Port Royal is out of view`);
+      }
+      await page.getByRole('button', { name: 'Start again at Port Royal' }).click();
+      await expect(page.locator('.take-out')).toBeVisible();
+      found.push(...(await windowFaults(page, s.name, '.take-out')));
+      await page.getByRole('button', { name: 'Keep it' }).click();
+      await expect(page.locator('.take-out')).toHaveCount(0);
+    }
+    expect(found).toEqual([]);
+  });
+}
+
+test('at 20 px default text the menu and a notice grow by a quarter and the instruments keep their size; the menu stands over everything within the screen, its close in reach, the focus on it and back on its button', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the menu is the same on either back end');
+  await textSize(page, 20);
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  const found: string[] = [];
+  // The words' sizes: the screens for reading's a quarter larger than at
+  // 16 px, the instruments' as they are.
+  await page.evaluate(() => globalThis.keel.raiseNotice('new-world', {}));
+  await expect(page.locator('.notice-line .notice')).toBeVisible();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(page.locator('.menu')).toBeVisible();
+  const sizes = await page.evaluate(() => {
+    const size = (sel: string) => {
+      const e = document.querySelector(sel);
+      return e === null ? null : getComputedStyle(e).fontSize;
+    };
+    return {
+      menu: size('.menu-row'),
+      menuKey: size('.menu-chart button'),
+      notice: size('.notice-line .notice'),
+      readouts: size('.case .readouts'),
+      sheet: size('.sheet .control-label'),
+      pocket: size('.pocket-caption'),
+      pilot: size('.pilot-button'),
+    };
+  });
+  expect(sizes).toEqual({
+    menu: '18.75px',
+    menuKey: '18.75px',
+    notice: '18.75px',
+    readouts: '13px',
+    sheet: '13px',
+    pocket: '12px',
+    pilot: '15px',
+  });
+  await page.locator('.menu-x').click();
+  for (const s of screensAt(20)) {
     await page.setViewportSize({ width: s.width, height: s.height });
     await page.waitForFunction(
       ({ width, height }) => innerWidth === width && innerHeight === height,
       { width: s.width, height: s.height },
     );
-    await page.waitForTimeout(100);
-    await inSight(`${s.name}, the panel`, '.your-sailor', [
-      '.your-sailor-go',
-      '[data-readout=boat]',
-    ]);
-    await page.getByRole('button', { name: 'Your boat', exact: true }).click();
-    await expect(page.locator('.boat-look')).toBeVisible();
-    await inSight(`${s.name}, the boat’s look`, '.boat-look', [
-      '.boat-look-actions .start-go',
-      '.boat-look-actions .start-sign-in',
-    ]);
-    // Every swatch on the screen's width, and in view as the panel scrolls to it.
-    for (const radio of await page.locator('.boat-look [role=radio]').all()) {
-      await radio.scrollIntoViewIfNeeded();
-      const b = await radio.boundingBox();
-      if (
-        b === null ||
-        b.x + b.width > s.width + 0.5 ||
-        b.y < -0.5 ||
-        b.y + b.height > s.height + 0.5
-      ) {
-        found.push(`${s.name}, the boat’s look: a swatch is off the screen (${JSON.stringify(b)})`);
-      }
-    }
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Change boat', exact: true }).click();
-    await expect(page.locator('.change-boat')).toBeVisible();
-    await inSight(`${s.name}, the fleet’s boats`, '.change-boat', [
-      '.change-boat-list li:first-child .change-boat-choice',
-      '.change-boat .boat-look-actions .start-sign-in',
-    ]);
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    found.push(...(await menuFaults(page)).map((f) => `${s.name}: ${f}`));
   }
   expect(found).toEqual([]);
 });
+
+for (const text of TEXT_SIZES) {
+  test(`the way home’s question, racing and with shipmates aboard, fits every screen over the sea, its keys the head keys’ size; Back to Port Royal in the menu${atText(text)}`, async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+    await textSize(page, text);
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openScene(page, '', true);
+    const found: string[] = [];
+    for (const s of screensAt(text)) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width: s.width, height: s.height },
+      );
+      await page.evaluate(() =>
+        globalThis.keel.homeScene({ asking: true, racing: true, shipmates: true }),
+      );
+      await expect(page.locator('.home-question')).toContainText('Your shipmates come too.');
+      found.push(...(await windowFaults(page, s.name, '.home-question')));
+      await page.getByRole('button', { name: 'Stay', exact: true }).click();
+      await expect(page.locator('.home-question')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Menu' }).click();
+      const item = page.locator('.menu').getByRole('button', { name: 'Back to Port Royal' });
+      await item.scrollIntoViewIfNeeded();
+      if (!(await item.isVisible())) {
+        found.push(`${s.name}: no Back to Port Royal in the menu`);
+      }
+      await page.locator('.menu-x').click();
+    }
+    await page.evaluate(() => globalThis.keel.homeScene(null));
+    expect(found).toEqual([]);
+  });
+}
 
 test('a link’s parts on the player’s own panel fit every screen: a refused link’s words and ☆ Follow at its head, Set sail in view, the share within reach', async ({
   page,
@@ -2866,5 +3504,1155 @@ test('shipmates’ panel, threads and notices stand clear of the instruments, ab
     }
   }
   await page.evaluate(() => globalThis.keel.deckScene(null));
+  expect(found).toEqual([]);
+});
+
+/** What is wrong with the chart screen's strip and the log on it, on paper: off the screen, overlapping, too small, a key not the head's size. */
+async function logFaults(page: Page, collection: boolean): Promise<string[]> {
+  return page.evaluate((collection) => {
+    const out: string[] = [];
+    // The words' sizes, at the browser's default text size: 16 px, or more.
+    const scale = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
+    const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+    const strip = box('.chart-strip');
+    const sheet = document.querySelector<HTMLElement>('.log-sheet');
+    if (strip === null || sheet === null) {
+      return ['no strip or no log'];
+    }
+    const s = sheet.getBoundingClientRect();
+    const w = innerWidth;
+    const h = innerHeight;
+    if (strip.height > 48 || strip.left < -0.5 || strip.right > w + 0.5) {
+      out.push(
+        `the strip is ${Math.round(strip.width)} × ${Math.round(strip.height)} at ${Math.round(strip.left)}`,
+      );
+    }
+    // The sailor's name keeps its words whole: only a word wider than the
+    // log's whole head, portrait and all, may break.
+    const name = document.querySelector<HTMLElement>('.log-name h2');
+    const head = name?.closest<HTMLElement>('.log-id') ?? null;
+    if (name !== null && head !== null) {
+      const walk = document.createTreeWalker(name, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+        for (const m of (n.textContent ?? '').matchAll(/\S+/g)) {
+          const range = document.createRange();
+          range.setStart(n, m.index);
+          range.setEnd(n, m.index + m[0].length);
+          const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+          if (tops.size < 2) {
+            continue;
+          }
+          const whole = document.createElement('span');
+          whole.style.whiteSpace = 'nowrap';
+          whole.textContent = m[0];
+          name.append(whole);
+          const width = whole.getBoundingClientRect().width;
+          whole.remove();
+          if (width <= head.clientWidth) {
+            out.push(`the name breaks inside “${m[0]}”`);
+          }
+        }
+      }
+    }
+    const tabs = [...document.querySelectorAll('.chart-tab')].map((t) => t.textContent);
+    if (tabs.join(' ') !== 'Chart List News Log') {
+      out.push(`the tabs are ${tabs.join(', ')}`);
+    }
+    const inStrip = ['.chart-tabs', '.chart-position', '.chart-back'].map((sel) => ({
+      sel,
+      r: box(sel),
+    }));
+    for (const [i, a] of inStrip.entries()) {
+      if (
+        a.r === null ||
+        a.r.width < 1 ||
+        a.r.left < strip.left - 0.5 ||
+        a.r.right > strip.right + 0.5
+      ) {
+        out.push(`${a.sel} is not within the strip`);
+        continue;
+      }
+      for (const b of inStrip.slice(i + 1)) {
+        if (b.r !== null && Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left) > 0.5) {
+          out.push(`${a.sel} covers ${b.sel}`);
+        }
+      }
+    }
+    if (s.left < -0.5 || s.right > w + 0.5 || s.bottom > h + 0.5 || s.top < strip.bottom - 0.5) {
+      out.push(
+        `the sheet is off the screen or over the strip: ${Math.round(s.left)}, ${Math.round(s.top)}, ${Math.round(s.right)}, ${Math.round(s.bottom)}`,
+      );
+    }
+    const falls = box('.chart-falls');
+    if (
+      falls !== null &&
+      Math.min(falls.right, s.right) - Math.max(falls.left, s.left) > 0.5 &&
+      Math.min(falls.bottom, s.bottom) - Math.max(falls.top, s.top) > 0.5
+    ) {
+      out.push('the sheet covers the countdown');
+    }
+    // Paper: the chart's paper, opaque, in ink.
+    const st = getComputedStyle(sheet);
+    if (st.backgroundColor !== 'rgb(239, 228, 200)' || st.color !== 'rgb(59, 46, 34)') {
+      out.push(`the sheet is ${st.backgroundColor}, its ink ${st.color}`);
+    }
+    for (const el of [sheet, ...sheet.querySelectorAll<HTMLElement>('.log-side, .log-main')]) {
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push(`${el.className} is ${el.scrollWidth - el.clientWidth} px wider than it shows`);
+      }
+    }
+    const shown = (e: Element) => {
+      const r = e.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && (e as HTMLElement).checkVisibility();
+    };
+    for (const k of sheet.querySelectorAll('button.log-key')) {
+      const r = k.getBoundingClientRect();
+      const short = innerHeight <= 420 || (innerHeight <= 700 && innerHeight > innerWidth);
+      const tall = short ? 38 : 40;
+      if (
+        shown(k) &&
+        (Math.abs(r.height - tall) > 0.5 ||
+          r.width < 43.5 ||
+          (k.textContent !== '⋯' && getComputedStyle(k).fontSize !== `${14 * scale}px`))
+      ) {
+        out.push(
+          `the key “${k.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)}, not the head’s ${tall}`,
+        );
+      }
+    }
+    for (const k of sheet.querySelectorAll(
+      '.log-day:not(.log-day-heads), .log-cell, .log-toward-line, .log-toward-course',
+    )) {
+      const r = k.getBoundingClientRect();
+      if (shown(k) && r.height < 43.5) {
+        out.push(`“${k.textContent?.slice(0, 20)}” is ${Math.round(r.height)} px tall`);
+      }
+    }
+    // The keys chosen, inked in.
+    for (const k of sheet.querySelectorAll(
+      'button.log-key[aria-selected=true], button.log-key[aria-pressed=true]',
+    )) {
+      if (getComputedStyle(k).backgroundColor !== 'rgb(59, 46, 34)') {
+        out.push(`the chosen key “${k.textContent}” is not inked in`);
+      }
+    }
+    // No words under 13 px.
+    const walker = document.createTreeWalker(sheet, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+      const e = n.parentElement;
+      if (
+        e !== null &&
+        (n.textContent ?? '').trim() !== '' &&
+        shown(e) &&
+        Number.parseFloat(getComputedStyle(e).fontSize) < 13
+      ) {
+        out.push(`“${n.textContent?.trim().slice(0, 20)}” is ${getComputedStyle(e).fontSize}`);
+      }
+    }
+    if (collection) {
+      const cells =
+        [...sheet.querySelectorAll('.log-group')][0]?.querySelectorAll('.log-cell') ?? [];
+      const top = cells[0]?.getBoundingClientRect().top ?? 0;
+      const row = [...cells].filter(
+        (c) => Math.abs(c.getBoundingClientRect().top - top) < 1,
+      ).length;
+      const want = innerHeight > innerWidth ? 3 : innerWidth < 900 ? 5 : row;
+      if (row !== want && cells.length >= want) {
+        out.push(`${row} kinds a row, not ${want}`);
+      }
+    }
+    return out;
+  }, collection);
+}
+
+for (const text of TEXT_SIZES) {
+  test(`the chart screen’s Log tab holds a long log, its collection, who may read it, another’s, a machine’s, an empty one and one not there, on paper, on every screen${atText(text)}`, async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the log is the same on either back end');
+    await textSize(page, text);
+    test.setTimeout(150_000);
+    let own: () => object = longLog;
+    await standInLogs(page, () => own());
+    await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openScene(page, 'world=1', true);
+    const now = Date.now();
+    await page.evaluate((now) => {
+      // In the world's last days, its countdown under the strip held upright.
+      globalThis.keel.setWorldEnd({
+        epoch: now - 5 * 86_400_000,
+        ends: now + 2 * 86_400_000,
+        closing: now - 86_400_000,
+      });
+    }, now);
+    const found: string[] = [];
+    const check = async (where: string, collection = false) => {
+      for (const f of await logFaults(page, collection)) {
+        found.push(`${where}: ${f}`);
+      }
+    };
+    // The upright and the sideways phone first.
+    const screens = [
+      SCREENS[1],
+      SCREENS[5],
+      ...SCREENS.filter((s) => s !== SCREENS[1] && s !== SCREENS[5]),
+    ].filter((s) => screensAt(text).includes(s));
+    for (const s of screens) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        s,
+      );
+      own = longLog;
+      await page.evaluate(() => globalThis.keel.openLog({ kind: 'sailor', name: 'Nobody' }));
+      await expect(page.locator('.log-sheet .log-status')).toContainText('no such sailor');
+      await check(`${s.name}, a log not there`);
+      await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
+      await expect(page.locator('.log-day').nth(1)).toBeVisible();
+      // The Captain's pendant at the portrait's neck, beside the cockade.
+      await expect(page.locator('.log-ink-frame .log-pendant')).toHaveAttribute(
+        'aria-label',
+        /spyglass/,
+      );
+      await check(`${s.name}, a long log`);
+      await page.locator('.log-day:not(.log-day-heads)').first().click();
+      await check(`${s.name}, a day opened`);
+      await page.locator('.log-more').click();
+      await expect(page.locator('.log-who')).toBeVisible();
+      await check(`${s.name}, who may read it`);
+      await page.locator('.log-more').click();
+      await page.getByRole('tab', { name: 'Collection' }).click();
+      await page.locator('.log-cell').nth(2).click();
+      await check(`${s.name}, the collection`, true);
+      await page.getByRole('tab', { name: 'Ribbons' }).click();
+      await expect(page.locator('.log-ribbon').first()).toBeVisible();
+      // The next certificate heads one's own Ribbons, every task listed.
+      await expect(page.locator('.log-toward-task')).toHaveCount(7);
+      await check(`${s.name}, the ribbons`);
+      await page.locator('[data-key=older-ribbons]').click();
+      await expect(page.locator('.log-ribbon')).toHaveCount(45);
+      await check(`${s.name}, the older ribbons`);
+      // After the last certificate, its name alone.
+      own = masterLog;
+      await page.evaluate(() => globalThis.keel.openLog({ kind: 'own', tab: 'ribbons' }));
+      await expect(page.locator('.log-toward-head')).toHaveText('Master');
+      await check(`${s.name}, the ribbons after the last certificate`);
+      own = longLog;
+      await page.evaluate((name) => globalThis.keel.openLog({ kind: 'sailor', name }), LONG_NAME);
+      await expect(page.locator('.log-back')).toBeVisible();
+      // Their certificate at the head; never their way toward the next.
+      await expect(page.locator('[data-readout=log-certificate]')).toHaveText('Captain by hand');
+      await check(`${s.name}, another’s log`);
+      await page.evaluate(() =>
+        globalThis.keel.openLog({ kind: 'machine', id: '0', name: 'Clockwork Kestrel' }),
+      );
+      await expect(page.locator('.log-name')).toContainText('Machine sailor');
+      await check(`${s.name}, a machine sailor’s log`);
+      own = emptyLog;
+      await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
+      await expect(page.locator('.log-sheet .log-empty')).toBeVisible();
+      await check(`${s.name}, an empty log`);
+    }
+    await page.evaluate(() => globalThis.keel.openChart(null));
+    expect(found).toEqual([]);
+  });
+}
+
+/** What is wrong with the chart screen's strip and the news on it, on paper: off the screen, overlapping, too small, a key not the head's size; and how far down its sixth story ends, px. */
+async function newsFaults(page: Page): Promise<{ out: string[]; front: number }> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    // The words' sizes, at the browser's default text size: 16 px, or more.
+    const scale = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
+    const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+    const strip = box('.chart-strip');
+    const sheet = document.querySelector<HTMLElement>('.news-sheet');
+    if (strip === null || sheet === null) {
+      return { out: ['no strip or no news'], front: 0 };
+    }
+    const s = sheet.getBoundingClientRect();
+    const w = innerWidth;
+    const h = innerHeight;
+    if (strip.height > 48 || strip.left < -0.5 || strip.right > w + 0.5) {
+      out.push(`the strip is ${Math.round(strip.width)} × ${Math.round(strip.height)}`);
+    }
+    const tab = [...document.querySelectorAll('.chart-tab')].find((t) => t.textContent === 'News');
+    const dot = box('.chart-tab-dot');
+    const t = tab?.getBoundingClientRect() ?? null;
+    if (
+      t === null ||
+      (dot !== null &&
+        (dot.left < t.left || dot.right > t.right || dot.top < t.top || dot.bottom > t.bottom))
+    ) {
+      out.push('the News tab’s dot is outside the tab');
+    }
+    if (s.left < -0.5 || s.right > w + 0.5 || s.bottom > h + 0.5 || s.top < strip.bottom - 0.5) {
+      out.push(
+        `the sheet is off the screen or over the strip: ${Math.round(s.left)}, ${Math.round(s.top)}, ${Math.round(s.right)}, ${Math.round(s.bottom)}`,
+      );
+    }
+    const falls = box('.chart-falls');
+    if (
+      falls !== null &&
+      Math.min(falls.right, s.right) - Math.max(falls.left, s.left) > 0.5 &&
+      Math.min(falls.bottom, s.bottom) - Math.max(falls.top, s.top) > 0.5
+    ) {
+      out.push('the sheet covers the countdown');
+    }
+    // Paper: the chart's paper, opaque, with its grain, in ink.
+    const st = getComputedStyle(sheet);
+    if (
+      st.backgroundColor !== 'rgb(239, 228, 200)' ||
+      st.color !== 'rgb(59, 46, 34)' ||
+      !st.backgroundImage.startsWith('url(')
+    ) {
+      out.push(`the sheet is ${st.backgroundColor}, its ink ${st.color}`);
+    }
+    for (const el of [
+      sheet,
+      ...sheet.querySelectorAll<HTMLElement>('.news-masthead h2, .news-box'),
+    ]) {
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push(
+          `${el.className || el.tagName} is ${el.scrollWidth - el.clientWidth} px wider than it shows`,
+        );
+      }
+    }
+    const shown = (e: Element) => {
+      const r = e.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && (e as HTMLElement).checkVisibility();
+    };
+    const short = innerHeight <= 420 || (innerHeight <= 700 && innerHeight > innerWidth);
+    const tall = short ? 38 : 40;
+    for (const k of sheet.querySelectorAll('button.news-key')) {
+      const r = k.getBoundingClientRect();
+      if (
+        shown(k) &&
+        (Math.abs(r.height - tall) > 0.5 ||
+          r.width < 43.5 ||
+          getComputedStyle(k).fontSize !== `${14 * scale}px`)
+      ) {
+        out.push(
+          `the key “${k.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)}, not the head’s ${tall}`,
+        );
+      }
+    }
+    for (const k of sheet.querySelectorAll('.news-story')) {
+      const r = k.getBoundingClientRect();
+      if (r.height < 43.5) {
+        out.push(`“${k.textContent?.slice(0, 20)}” is ${Math.round(r.height)} px tall`);
+      }
+      // A story with a place is a tap anywhere on it.
+      const go = k.querySelector('.news-go');
+      if (go !== null) {
+        const reach = getComputedStyle(go, '::after');
+        if (reach.position !== 'absolute' || reach.inset !== '0px') {
+          out.push(`“${k.textContent?.slice(0, 20)}” is not a tap all over`);
+        }
+      }
+    }
+    // The words: body 16 px, none under 13 (at the browser's own text size).
+    const words = sheet.querySelector('.news-words');
+    if (words !== null && getComputedStyle(words).fontSize !== `${16 * scale}px`) {
+      out.push(`a story’s words are ${getComputedStyle(words).fontSize}`);
+    }
+    const walker = document.createTreeWalker(sheet, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+      const e = n.parentElement;
+      if (
+        e !== null &&
+        (n.textContent ?? '').trim() !== '' &&
+        shown(e) &&
+        Number.parseFloat(getComputedStyle(e).fontSize) < 13
+      ) {
+        out.push(`“${n.textContent?.trim().slice(0, 20)}” is ${getComputedStyle(e).fontSize}`);
+      }
+    }
+    const front = [
+      ...sheet.querySelectorAll(':scope > .news-stories:not(.news-lead) > .news-story'),
+    ];
+    const last = front[front.length - 1];
+    return {
+      out,
+      front:
+        last === undefined
+          ? 0
+          : last.getBoundingClientRect().bottom - s.top + sheet.scrollTop + (s.top - strip.bottom),
+    };
+  });
+}
+
+for (const text of TEXT_SIZES) {
+  test(`the chart screen’s News tab holds a full day’s edition, a new world’s first, a quiet day’s and an earlier one, on paper, on every screen, its front page within about one and a half screens${atText(text)}`, async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the news is the same on either back end');
+    await textSize(page, text);
+    test.setTimeout(150_000);
+    let today: () => object = fullDay;
+    await standInNews(page, () => today());
+    await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openScene(page, 'world=1', true);
+    const now = Date.now();
+    await page.evaluate((now) => {
+      globalThis.keel.newsFromServer();
+      // In the world's last days, its countdown under the strip held upright.
+      globalThis.keel.setWorldEnd({
+        epoch: now - 5 * 86_400_000,
+        ends: now + 2 * 86_400_000,
+        closing: now - 86_400_000,
+      });
+      globalThis.keel.openChart('chart');
+    }, now);
+    // Today's edition not yet read: the News tab's dot.
+    await expect(page.locator('.chart-tab-dot')).toBeVisible();
+    const found: string[] = [];
+    const fronts: string[] = [];
+    const check = async (where: string) => {
+      const { out, front } = await newsFaults(page);
+      for (const f of out) {
+        found.push(`${where}: ${f}`);
+      }
+      return front;
+    };
+    const open = async (edition: () => object) => {
+      today = edition;
+      await page.evaluate(() => {
+        globalThis.keel.openChart('chart');
+        globalThis.keel.openNews(null);
+      });
+      await expect(page.locator('.news-edition')).toBeVisible();
+    };
+    const screens = [
+      SCREENS[1],
+      SCREENS[5],
+      ...SCREENS.filter((s) => s !== SCREENS[1] && s !== SCREENS[5]),
+    ].filter((s) => screensAt(text).includes(s));
+    for (const s of screens) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        s,
+      );
+      await open(fullDay);
+      await expect(page.locator('.news-story')).toHaveCount(9);
+      const front = await check(`${s.name}, a full day`);
+      fronts.push(`${s.name}: ${(front / s.height).toFixed(2)}`);
+      if (s === SCREENS[1] && front > ((1.5 * text) / 16) * s.height) {
+        found.push(`${s.name}: the front page is ${(front / s.height).toFixed(2)} screens`);
+      }
+      await page.locator('.news-older').click();
+      await expect(page.locator('.news-edition')).toContainText('No. 3');
+      await check(`${s.name}, an earlier edition`);
+      await open(firstEdition);
+      await expect(page.locator('.news-lead .news-story')).toHaveCount(2);
+      await check(`${s.name}, a new world’s first edition`);
+      await open(quietDay);
+      await expect(page.locator('.news-figures')).toHaveText('A quiet day on the water.');
+      await check(`${s.name}, a quiet day`);
+    }
+    test
+      .info()
+      .annotations.push({ type: 'the front page, in screens', description: fronts.join('; ') });
+    await page.evaluate(() => globalThis.keel.openChart(null));
+    expect(found).toEqual([]);
+  });
+}
+
+/**
+ * What is wrong with a window of races ashore, open: any of it off the
+ * screen or spilling sideways; a key of its foot out of view or under
+ * another part; a key not the head keys' height (40 px, 38 on a small
+ * phone) with 14 px words.
+ */
+async function raceFaults(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((sel) => {
+    // The words' sizes, at the browser's default text size: 16 px, or more.
+    const scale = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
+    const el = document.querySelector(sel);
+    if (el === null) {
+      return [`no ${sel}`];
+    }
+    const out: string[] = [];
+    const r = el.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      out.push(`${sel} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`);
+    }
+    if (el.scrollWidth > el.clientWidth + 1) {
+      out.push(`${sel} spills sideways (${el.scrollWidth} > ${el.clientWidth})`);
+    }
+    // The head keys' height: 40 px, 38 on a small phone.
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    for (const b of el.querySelectorAll<HTMLElement>('button:not(.race-course, .notice-dismiss)')) {
+      const k = b.getBoundingClientRect();
+      const size = getComputedStyle(b).fontSize;
+      if (Math.abs(k.height - key) > 0.5 || size !== `${14 * scale}px`) {
+        out.push(`“${b.textContent}” is ${k.height.toFixed(1)} px tall, its words ${size}`);
+      }
+    }
+    for (const b of el.querySelectorAll<HTMLElement>('.race-foot button, .notice-act')) {
+      const k = b.getBoundingClientRect();
+      const at = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2);
+      if (at === null || !b.contains(at)) {
+        out.push(`“${b.textContent}” is under ${at?.className ?? 'nothing'}`);
+      }
+    }
+    return out;
+  }, sel);
+}
+
+for (const text of TEXT_SIZES) {
+  test(`races ashore’s windows fit every screen, their foot’s keys in view, every key the head keys’ size${atText(text)}`, async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === 'webgpu', 'the windows are the same on either back end');
+    await textSize(page, text);
+    test.setTimeout(180_000);
+    const state = await standInRaces(page, Date.now());
+    await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openScene(page, 'races', true);
+    const found: string[] = [];
+    const check = async (where: string, sel: string) => {
+      for (const f of await raceFaults(page, sel)) {
+        found.push(`${where}: ${f}`);
+      }
+    };
+    // The harbour race's notice, with Enter, ten minutes before.
+    await expect(page.locator('.notice.with-act')).toBeVisible({ timeout: 15_000 });
+    const screens = [
+      SCREENS[1],
+      SCREENS[5],
+      ...SCREENS.filter((s) => s !== SCREENS[1] && s !== SCREENS[5]),
+    ].filter((s) => screensAt(text).includes(s));
+    for (const s of screens) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        s,
+      );
+      if (s === SCREENS[1] || s === SCREENS[5]) {
+        await check(`${s.name}, the notice`, '.notice.with-act');
+      }
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
+      const make = page.locator('[data-panel=make-race]');
+      await expect(make.locator('#race-name')).toHaveValue('Saturday Triangle');
+      await check(`${s.name}, Make a race`, '[data-panel=make-race]');
+      await make.getByRole('button', { name: 'Later' }).click();
+      await make.locator('[data-course="island:3"]').click();
+      await check(`${s.name}, a later start on an island course`, '[data-panel=make-race]');
+      state.make = 'made';
+      await make.getByRole('button', { name: 'Make it' }).click();
+      await expect(make.locator('[data-readout=race-refused]')).toBeVisible();
+      await check(`${s.name}, refused`, '[data-panel=make-race]');
+      state.make = 'ok';
+      await make.getByRole('button', { name: 'Make it' }).click();
+      const share = page.locator('[data-panel=race-share]');
+      await expect(share).toBeVisible();
+      await check(`${s.name}, the share`, '[data-panel=race-share]');
+      await share.getByRole('button', { name: 'See the race' }).click();
+      const card = page.locator('[data-panel=race-card]');
+      await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+      await card.getByRole('button', { name: 'The race’s owner’s choices' }).click();
+      await check(`${s.name}, the owner’s card`, '[data-panel=race-card]');
+      await card.getByRole('button', { name: 'Close', exact: true }).click();
+      for (const code of [OTHERS, REFUSED]) {
+        await page.getByRole('button', { name: 'Menu' }).click();
+        await page.locator(`.menu-race[data-race=${code}]`).click();
+        await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+        await check(`${s.name}, the card of ${code}`, '[data-panel=race-card]');
+        await card.getByRole('button', { name: 'Close', exact: true }).click();
+        await expect(card).toHaveCount(0);
+      }
+    }
+    expect(found).toEqual([]);
+  });
+}
+
+/** What is wrong with the race line: not 32 pixels tall, or a word cut short or run out of it. */
+async function raceLineFaults(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const line = document.querySelector<HTMLElement>('.racer-line');
+    if (line === null) {
+      return ['no race line'];
+    }
+    const out: string[] = [];
+    const r = line.getBoundingClientRect();
+    if (Math.abs(r.height - 32) > 0.5) {
+      out.push(`the race line is ${r.height} px tall`);
+    }
+    for (const e of line.querySelectorAll<HTMLElement>('.rl-words > *, .rl-next > *, .rl-call')) {
+      if (e.offsetWidth === 0) {
+        continue;
+      }
+      if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1) {
+        out.push(`“${e.textContent}” is cut short in the race line`);
+      }
+      const b = e.getBoundingClientRect();
+      if (
+        b.left < r.left - 0.5 ||
+        b.right > r.right + 0.5 ||
+        b.top < r.top - 0.5 ||
+        b.bottom > r.bottom + 0.5
+      ) {
+        out.push(`“${e.textContent}” runs out of the race line`);
+      }
+    }
+    return out;
+  });
+}
+
+/** What is wrong with one of the race's windows: off the screen, spilling, a key not the head keys' size or under another part. */
+async function raceWindowFaults(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el === null) {
+      return [`no ${sel}`];
+    }
+    const out: string[] = [];
+    const r = el.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      out.push(`${sel} is off the screen`);
+    }
+    if (el.scrollWidth > el.clientWidth + 1) {
+      out.push(`${sel} spills sideways`);
+    }
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    for (const b of el.querySelectorAll<HTMLElement>('.rl-keys button')) {
+      const k = b.getBoundingClientRect();
+      if (Math.abs(k.height - key) > 0.5 || getComputedStyle(b).fontSize !== '14px') {
+        out.push(`“${b.textContent}” is ${k.height.toFixed(1)} px tall`);
+      }
+      el.scrollTop = el.scrollHeight;
+      const k2 = b.getBoundingClientRect();
+      const at = document.elementFromPoint(k2.left + k2.width / 2, k2.top + k2.height / 2);
+      if (at === null || !b.contains(at)) {
+        out.push(`“${b.textContent}” is under ${at?.className ?? 'nothing'}`);
+      }
+    }
+    return out;
+  }, sel);
+}
+
+test('the race line stands clear of every part and the boat on every screen, its words whole; the race’s windows fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(180_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate((long) => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.advance(30);
+    k.render();
+    k.camera('chase');
+    k.render();
+    // Everything out: the case's longest shape.
+    k.settings({ barometer: true, clock: true, pilotHead: true, rightOfWay: true });
+    k.raceGone(1, true);
+    k.raceTell(undefined, [
+      { name: long, boat: 'Gull' },
+      { name: '', boat: 'Petrel Of The Morning' },
+      { name: long, boat: 'Swift', machine: true },
+    ]);
+  }, LONG);
+  await expect(page.locator('.racer-line')).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  /** The race told in a state: before the start over the line, racing, a call at its longest. */
+  const states = {
+    before: () => {
+      const k = globalThis.keel;
+      const t = k.racing().told;
+      if (t === null) {
+        return;
+      }
+      k.raceTell({ start: t.warning + 120 * 30 });
+      const m = t.marks[0];
+      k.racePicture([{ state: 'placed', east: m?.east ?? 0, north: m?.north ?? 0 }, {}, {}]);
+      k.raceCall({ kind: 'other' });
+    },
+    racing: () => {
+      const k = globalThis.keel;
+      const m = k.racing().told?.marks[1];
+      k.raceTell({ start: 1 });
+      // The twelfth of twelve, far behind, far from its mark.
+      k.racePicture([
+        { place: 12, gap: 754.5, leg: 2, east: (m?.east ?? 0) + 1400, north: m?.north ?? 0 },
+        ...Array.from({ length: 11 }, (_, i) => ({ place: i + 1, gap: i * 0.5 })),
+      ]);
+    },
+    call: () => {
+      const k = globalThis.keel;
+      k.raceCall({ article: '16.1', number: 2, other: 1, added: 10 });
+    },
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    for (const [state, tell] of Object.entries(states)) {
+      await page.evaluate(tell);
+      await page.evaluate(() => globalThis.keel.render());
+      await expect(page.locator('.racer-line')).toHaveAttribute(
+        'data-state',
+        state === 'call' ? 'call' : state,
+      );
+      await page.waitForTimeout(100);
+      const where = `${s.name}, ${state}`;
+      for (const f of await raceLineFaults(page)) {
+        found.push(`${where}: ${f}`);
+      }
+      const seen = await parts(page);
+      for (const w of seen.words) {
+        found.push(`${where}: ${w}`);
+      }
+      const line = seen.parts.find(
+        (p) => p.name.startsWith('the line') && p.top < 60 + 0.5 && p.bottom - p.top < 33,
+      );
+      if (line === undefined) {
+        found.push(`${where}: no race line among the parts`);
+        continue;
+      }
+      if (
+        line.left < -0.5 ||
+        line.top < -0.5 ||
+        line.right > s.width + 0.5 ||
+        line.bottom > s.height + 0.5
+      ) {
+        found.push(`${where}: the race line is off the screen`);
+      }
+      const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          const a = all[i] as Box;
+          const b = all[j] as Box;
+          const names = [a.name, b.name];
+          const inCase = (n?: string) =>
+            n === 'the case' ||
+            n === 'the barometer pusher' ||
+            n === 'the clock pusher' ||
+            n === 'the board pusher';
+          const masthead = s.upright && names.some(inCase) && names.includes('the boat');
+          const own =
+            (names.includes('the case') && names.filter(inCase).length === 2) ||
+            (names.includes('the pocket chart') && names.includes('the weather pusher'));
+          if (!masthead && !own && overlap(a, b)) {
+            found.push(`${where}: ${a.name} covers ${b.name} (${edges(a)} and ${edges(b)})`);
+          }
+        }
+      }
+    }
+    // The race's windows: its ⋯, the finish's card, the results.
+    await page.locator('.racer-line .rl-more').click();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-more]')) {
+      found.push(`${s.name}, the race’s window: ${f}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.raceFinish({ number: 2, place: 1, elapsedMs: 570_000 });
+      k.raceFinish({ number: 1, place: 10, elapsedMs: 3_604_200, added: 30 });
+      // What the run counted, at its longest: a course's task done the
+      // autopilot way.
+      k.certified({ certificate: 3, task: 1, done: 4, of: 4, way: 'pilot' });
+    });
+    await expect(page.locator('[data-readout=race-certified]')).toBeVisible();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-finish]')) {
+      found.push(`${s.name}, the finish’s card: ${f}`);
+    }
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      const row = (number: number, place: number, how: string, awards: string[] = []) => ({
+        number,
+        place,
+        how,
+        elapsedMs: how === 'finished' ? 570_000 + place * 9_000 : 0,
+        added: place === 10 ? 30 : 0,
+        marks: 3,
+        toGo: how === 'placed' ? 1_234 : 0,
+        medal: '',
+        awards,
+      });
+      k.raceResults({
+        results: [
+          row(2, 1, 'finished', ['photo-finish', 'best-start']),
+          row(3, 2, 'finished', ['photo-finish', 'crowd']),
+          row(1, 10, 'placed', ['spoon']),
+          row(4, 0, 'ret'),
+        ],
+      });
+    });
+    await expect(page.locator('[data-panel=race-results]')).toBeVisible();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-results]')) {
+      found.push(`${s.name}, the results: ${f}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      const entrants = k.racing().told?.entrants;
+      k.raceGone(1, true);
+      k.raceTell(entrants === undefined ? {} : { entrants });
+    });
+  }
+  expect(found).toEqual([]);
+});
+
+test('the race bar stands at the foot, one row, clear of every part and the boat on every screen; the standings and its ⋯ fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(150_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await page.evaluate((long) => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.advance(30);
+    k.render();
+    k.camera('chase');
+    k.render();
+    k.settings({ barometer: true, clock: true });
+    k.raceGone(1, true);
+    k.raceTell({
+      entrants: Array.from({ length: 12 }, (_, i) => ({
+        number: i + 1,
+        name: i % 3 === 1 ? '' : long,
+        boat: 'Petrel Of The Morning',
+        machine: i % 3 === 2,
+        me: false,
+      })),
+    });
+    k.racePicture(
+      Array.from({ length: 12 }, (_, i) => ({ place: i + 1, gap: i * 61.5, leg: 2 })),
+      1,
+      12,
+    );
+    k.raceWatching(12);
+  }, LONG);
+  const bar = page.locator('.race-bar');
+  await expect(bar).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  const states = {
+    before: () => {
+      const k = globalThis.keel;
+      const t = k.racing().told;
+      k.raceTell({ start: (t?.warning ?? 0) + 120 * 30, entrants: t?.entrants ?? [] });
+    },
+    racing: () => {
+      const k = globalThis.keel;
+      k.raceTell({ start: 1, entrants: k.racing().told?.entrants ?? [] });
+      k.raceCall({ kind: 'rounded', number: 1, mark: 2, place: 1 });
+      k.raceCheered({ number: 12, count: 30, crowd: 30, mine: true });
+    },
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    for (const [state, tell] of Object.entries(states)) {
+      await page.evaluate(tell);
+      await page.evaluate(() => globalThis.keel.render());
+      await page.waitForTimeout(100);
+      const where = `${s.name}, ${state}`;
+      const seen = await parts(page);
+      for (const w of seen.words) {
+        found.push(`${where}: ${w}`);
+      }
+      const b = seen.parts.find((p) => p.name === 'the race bar');
+      if (b === undefined) {
+        found.push(`${where}: no race bar`);
+        continue;
+      }
+      if (b.bottom - b.top > 52) {
+        found.push(`${where}: the race bar is ${b.bottom - b.top} px tall: more than a row`);
+      }
+      if (b.left < -0.5 || b.right > s.width + 0.5 || b.bottom > s.height + 0.5) {
+        found.push(`${where}: the race bar is off the screen`);
+      }
+      if (s.height - b.bottom > 40) {
+        found.push(`${where}: the race bar is not at the foot (${Math.round(b.bottom)})`);
+      }
+      if (seen.parts.some((p) => p.name === 'the helm' || p.name === 'the sheet')) {
+        found.push(`${where}: a control that steers shows while watching`);
+      }
+      const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
+      for (const a of all) {
+        if (a !== b && overlap(a, b)) {
+          found.push(`${where}: the race bar and ${a.name} overlap (${edges(b)} and ${edges(a)})`);
+        }
+      }
+      if (state === 'racing' && !seen.parts.some((p) => p.name === 'the crier’s lines')) {
+        found.push(`${where}: no crier’s lines`);
+      }
+      for (const l of seen.parts.filter(
+        (p) => p.name.startsWith('the line') || p.name === 'the crier’s lines',
+      )) {
+        for (const a of all) {
+          if (a !== l && a.name !== 'the case' && !a.name.startsWith('the line') && overlap(a, l)) {
+            found.push(`${where}: ${l.name} covers ${a.name}`);
+          }
+        }
+      }
+      // Every key of the bar a 44 px touch, the name's slot ending in an ellipsis.
+      const keys = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('.race-bar button')].map((k) => {
+          const r = k.getBoundingClientRect();
+          return { name: k.getAttribute('aria-label') ?? k.innerText, w: r.width, h: r.height };
+        }),
+      );
+      for (const k of keys) {
+        if (k.h < 44 - 0.5 || k.w < 40 - 0.5) {
+          found.push(`${where}: “${k.name}” is ${k.w.toFixed(0)} × ${k.h.toFixed(0)} px`);
+        }
+      }
+    }
+    // The standings, over the room where the helm would be.
+    await bar.locator('.rb-words').click();
+    const sheet = await page.evaluate(() => {
+      const el = document.querySelector('[data-panel=race-standings]');
+      const bar = document.querySelector('.race-bar')?.getBoundingClientRect();
+      if (el === null || bar === undefined) {
+        return ['no standings'];
+      }
+      const out: string[] = [];
+      const r = el.getBoundingClientRect();
+      if (
+        r.left < -0.5 ||
+        r.top < -0.5 ||
+        r.right > innerWidth + 0.5 ||
+        r.bottom > innerHeight + 0.5
+      ) {
+        out.push('the standings are off the screen');
+      }
+      if (r.bottom > bar.top + 0.5) {
+        out.push('the standings cover the race bar');
+      }
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push('the standings spill sideways');
+      }
+      for (const row of el.querySelectorAll<HTMLElement>('.rb-row')) {
+        if (row.getBoundingClientRect().height < 40 - 0.5) {
+          out.push(`a row of the standings is ${row.getBoundingClientRect().height} px tall`);
+        }
+      }
+      return out;
+    });
+    for (const f of sheet) {
+      found.push(`${s.name}, the standings: ${f}`);
+    }
+    await page.locator('.rb-scrim').click({ position: { x: 4, y: 4 } });
+    await bar.locator('.rb-more').click();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-bar-more]')) {
+      found.push(`${s.name}, the bar’s ⋯: ${f}`);
+    }
+    await page.locator('[data-panel=race-bar-more]').getByRole('button', { name: 'Close' }).click();
+  }
+  expect(found).toEqual([]);
+});
+
+test('a race’s replay on the chart: its head under the strip and its time at the foot, clear of each other on every screen, its keys a 40 px touch; its windows and a gone world’s results fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(120_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const at = await page.evaluate(() => ({
+    east: globalThis.keel.world.pose.east,
+    north: globalThis.keel.world.pose.north + 600,
+  }));
+  await standInReplays(page, at.east, at.north, 12);
+  const box = (sel: string) =>
+    page.evaluate((s) => {
+      const r = document.querySelector(s)?.getBoundingClientRect();
+      return r === undefined
+        ? null
+        : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    }, sel);
+  const found: string[] = [];
+  const within = (
+    where: string,
+    name: string,
+    b: Omit<Box, 'name'> | null,
+    w: number,
+    h: number,
+  ) => {
+    if (b === null) {
+      found.push(`${where}: no ${name}`);
+      return false;
+    }
+    if (b.left < -0.5 || b.top < -0.5 || b.right > w + 0.5 || b.bottom > h + 0.5) {
+      found.push(`${where}: ${name} is off the screen (${edges({ name, ...b })})`);
+    }
+    return true;
+  };
+  // Every key of the parts as tall as the chart's keys (40 px), or a
+  // window's the head keys' (38 px on the shortest screens), whole within
+  // its part.
+  const keys = (sel: string) =>
+    page.evaluate((s) => {
+      const out: string[] = [];
+      const hud = document.querySelector('.hud');
+      const head =
+        hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+      for (const part of document.querySelectorAll(s)) {
+        const p = part.getBoundingClientRect();
+        const least = part.closest('.rl-window') !== null ? head : 40;
+        for (const k of part.querySelectorAll('button')) {
+          const r = k.getBoundingClientRect();
+          if (r.height < least - 0.5 || r.width < 39.5) {
+            out.push(
+              `the key “${k.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)} px`,
+            );
+          }
+          if (
+            r.left < p.left - 0.5 ||
+            r.right > p.right + 0.5 ||
+            r.top < p.top - 0.5 ||
+            r.bottom > p.bottom + 0.5
+          ) {
+            out.push(`the key “${k.textContent}” spills out of its part`);
+          }
+        }
+      }
+      return out;
+    }, sel);
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      s,
+    );
+    await page.evaluate((c) => globalThis.keel.replay(c), RACED);
+    await page.evaluate(() => {
+      globalThis.keel.replayed(90);
+      globalThis.keel.render();
+    });
+    await expect(page.locator('.rp-bar')).toBeVisible();
+    const where = s.name;
+    const strip = await box('.chart-strip');
+    const head = await box('.rp-head');
+    const bar = await box('.rp-bar');
+    within(where, 'the strip', strip, s.width, s.height);
+    if (within(where, 'the replay’s head', head, s.width, s.height) && head !== null) {
+      if (head.bottom - head.top > 56) {
+        found.push(`${where}: the replay’s head is ${Math.round(head.bottom - head.top)} px tall`);
+      }
+      if (
+        strip !== null &&
+        head.top < strip.bottom - 0.5 &&
+        overlap({ name: 's', ...strip }, { name: 'h', ...head })
+      ) {
+        found.push(`${where}: the replay’s head and the strip overlap`);
+      }
+    }
+    if (within(where, 'the replay’s time', bar, s.width, s.height) && bar !== null) {
+      const most = s.width >= 540 ? 52 : 100;
+      if (bar.bottom - bar.top > most) {
+        found.push(`${where}: the replay’s time is ${Math.round(bar.bottom - bar.top)} px tall`);
+      }
+      if (s.height - bar.bottom > 40) {
+        found.push(`${where}: the replay’s time is not at the foot`);
+      }
+      for (const o of [strip, head]) {
+        if (o !== null && overlap({ name: 'o', ...o }, { name: 'b', ...bar })) {
+          found.push(`${where}: the replay’s time overlaps the chart’s top`);
+        }
+      }
+    }
+    for (const k of await keys('.rp-bar')) {
+      found.push(`${where}: ${k}`);
+    }
+    // The standings and the results, each within the screen, Close in reach.
+    for (const [open, panel] of [
+      ['[data-readout=replay-standing]', 'replay-standings'],
+      ['.rp-bar >> text=Results', 'replay-results'],
+    ] as const) {
+      await page.locator(open).click();
+      const win = page.locator(`[data-panel=${panel}]`);
+      await expect(win).toBeVisible();
+      within(
+        `${where}, ${panel}`,
+        'the window',
+        await box(`[data-panel=${panel}]`),
+        s.width,
+        s.height,
+      );
+      for (const k of await keys(`[data-panel=${panel}] .rl-keys`)) {
+        found.push(`${where}, ${panel}: ${k}`);
+      }
+      const close = win.getByRole('button', { name: 'Close' });
+      await close.scrollIntoViewIfNeeded();
+      within(
+        `${where}, ${panel}`,
+        'Close',
+        await close
+          .boundingBox()
+          .then((b) =>
+            b === null
+              ? null
+              : { left: b.x, top: b.y, right: b.x + b.width, bottom: b.y + b.height },
+          ),
+        s.width,
+        s.height,
+      );
+      await close.click();
+    }
+    await page.getByRole('button', { name: 'Back to sea' }).click();
+    // A race whose world has gone: its results alone.
+    await page.evaluate((c) => globalThis.keel.replay(c), GONE);
+    const alone = page.locator('[data-panel=replay-alone]');
+    await expect(alone).toBeVisible();
+    within(
+      `${where}, the results alone`,
+      'the window',
+      await box('[data-panel=replay-alone]'),
+      s.width,
+      s.height,
+    );
+    for (const k of await keys('[data-panel=replay-alone] .rl-keys')) {
+      found.push(`${where}, the results alone: ${k}`);
+    }
+    await alone.getByRole('button', { name: 'Close' }).click();
+  }
   expect(found).toEqual([]);
 });

@@ -15,7 +15,7 @@
   background: none;
   color: var(--faint, rgb(242 239 231 / 65%));
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
   text-decoration: underline;
   cursor: pointer;
 }
@@ -23,7 +23,7 @@
 .new-link-line {
   margin: 0;
   color: var(--faint, rgb(242 239 231 / 65%));
-  font-size: 14px;
+  font-size: calc(14 * var(--text, 1px));
 }
 
 .new-link-ask {

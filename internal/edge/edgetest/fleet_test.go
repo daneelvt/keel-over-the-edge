@@ -76,7 +76,7 @@ func (fs *frames) check(t *testing.T, own bus.Account, ev *client.Event) map[bus
 		found := false
 		for _, b := range boats {
 			var want protocol.Boat
-			protocol.Quantise(&b.state, b.kind, b.sail, q.Far(), &want)
+			protocol.Quantise(&b.state, b.kind, b.sail, 0, q.Far(), &want)
 			if want == q {
 				if b.owner == own {
 					t.Fatalf("tick %d: the client's own boat is in its view", ev.Snapshot.Tick)

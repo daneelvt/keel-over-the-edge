@@ -49,6 +49,7 @@ func checkBoats(doc map[string]any) error {
 			}
 		}
 		problems = append(problems, checkDownwind(i, ph)...)
+		problems = append(problems, checkHulls(i, ph)...)
 		problems = append(problems, checkStations(i, m)...)
 		pairs, _ := m["startSheet"].([]any)
 		last := -1.0
@@ -103,9 +104,69 @@ func checkDownwind(i int, ph map[string]any) []string {
 	return problems
 }
 
+// checkHulls checks boat i's hulls: a boat of two hulls has a rudder and
+// a lateral plane on each, which the ground never pushes up, and a
+// monohull one of each and no flying drag; and a rig pitches the hull or
+// does not, its bows burying before it pitchpoles.
+func checkHulls(i int, ph map[string]any) []string {
+	var problems []string
+	num := func(g map[string]any, k string) float64 {
+		f, _ := g[k].(json.Number).Float64()
+		return f
+	}
+	hull, _ := ph["hull"].(map[string]any)
+	if step := num(hull, "rightingLeverStep"); 180/step != math.Trunc(180/step) {
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.hull.rightingLeverStep: 180° over %v° is not a whole number", i, step))
+	}
+	h, _ := ph["hulls"].(map[string]any)
+	foils, _ := ph["foils"].(map[string]any)
+	rudders, boards := num(h, "rudderCount"), num(h, "boardCount")
+	if num(h, "hullSpacing") > 0 {
+		if rudders != 2 || boards != 2 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: two hulls need two rudders and two lateral planes, not %v and %v", i, rudders, boards))
+		}
+		if num(foils, "fixed") != 1 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.foils.fixed: two hulls' lateral planes are fixed, 1", i))
+		}
+		if num(h, "rudderSpread") != 0 || num(h, "rudderLiftHeel") != 0 || num(h, "rudderClearHeel") != 0 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: two hulls' rudders are on their hulls, with no spread and no heels of their own", i))
+		}
+	} else {
+		if boards != 1 || num(h, "flyingDrag") != 1 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull has one board and a flying drag of 1", i))
+		}
+		spread, lift, clear := num(h, "rudderSpread"), num(h, "rudderLiftHeel"), num(h, "rudderClearHeel")
+		switch {
+		case rudders == 1 && (spread != 0 || lift != 0 || clear != 0):
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one rudder is on the centreline, with no spread and no heels of its own", i))
+		case rudders == 2 && !(spread > 0 && lift < clear):
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull's two rudders need a spread above 0, and the windward blade's root to leave the water (%v°) before its tip (%v°)", i, lift, clear))
+		case rudders != 1 && rudders != 2:
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull has one rudder or two, not %v", i, rudders))
+		}
+	}
+	p, _ := ph["pitch"].(map[string]any)
+	switch rig := num(p, "rigPitch"); {
+	case rig != 0 && rig != 1:
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.pitch.rigPitch: %v is neither 0 nor 1", i, rig))
+	case rig == 1 && !(num(p, "bowBuryPitch") > 0 && num(p, "bowBuryPitch") < num(p, "pitchpoleAngle")):
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.pitch: the bows bury at %v°, which must be above 0 and before the pitchpole at %v°", i, num(p, "bowBuryPitch"), num(p, "pitchpoleAngle")))
+	}
+	return problems
+}
+
 // stationsApart is how near two people's stations may be, in m: about a
 // person's breadth.
 const stationsApart = 0.45
+
+// lookoutField is the name of a boat's lookout's eye's height: spelled in
+// two, as the whole word is also a sailor look's id, which code may not
+// quote.
+const lookoutField = "look" + "out"
+
+// hullTop is how far beyond a hull's top a station of a boat of two hulls
+// may be, in m: its point at an edge of the deck.
+const hullTop = 0.01
 
 // railFromEdge is how far a station on the rail may be from the deck's edge,
 // in m: its point is the edge under the person.
@@ -135,10 +196,13 @@ func deckEdge(m map[string]any, z float64) float64 {
 
 // checkStations checks boat i's stations: one for each person it carries,
 // each on its deck within its hull (within its beam and its length, above
-// the waterline and below the boom), none on another, nor a windward one's
-// mirror (where it is drawn when the wind is on the other side) on one on
-// the other side; and one on the rail at the deck's edge. The client's
-// tests hold each to the model's deck itself.
+// the waterline and below the boom; a station aloft, above the boom, no
+// higher than its lookout's eye), none on another wherever the wind is
+// (a station to windward or to leeward drawn on its side or its mirror,
+// as the weather side has it); one on the rail at the deck's edge; and, on
+// a boat of two hulls, none outboard of her hulls' tops (and only there one
+// on a hull; one between them is on her bridgedeck, which checkPlaces holds
+// to her model). The client's tests hold each to the model's deck itself.
 func checkStations(i int, m map[string]any) []string {
 	var problems []string
 	stations, _ := m["stations"].([]any)
@@ -151,11 +215,19 @@ func checkStations(i int, m map[string]any) []string {
 		return f
 	}
 	beam, length := num(m["beam"]), num(m["lengthOverall"])
+	lookout := num(m[lookoutField])
 	ph, _ := m["physics"].(map[string]any)
 	rig, _ := ph["rig"].(map[string]any)
 	boom := num(rig["boomHeight"])
+	hulls, _ := ph["hulls"].(map[string]any)
+	spacing := num(hulls["hullSpacing"])
+	// A boat of two hulls: each hull's top reaches from the beam's half
+	// out, to as far inboard of its centreline as that is outboard.
+	hullOut := beam / 2
+	hullIn := spacing - hullOut
 	at := make([][3]float64, 0, len(stations))
-	windward := make([]bool, 0, len(stations))
+	// Each station's side: +1 drawn on the weather side, −1 on the lee, 0 where it is.
+	sides := make([]int, 0, len(stations))
 	for j, s := range stations {
 		st, _ := s.(map[string]any)
 		p, _ := st["at"].([]any)
@@ -168,29 +240,71 @@ func checkStations(i int, m map[string]any) []string {
 				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: on the rail %v m out, but the deck's edge is %v m out there", i, j, math.Abs(x), math.Round(edge*1000)/1000))
 			}
 		}
+		// Between the hulls, off their tops, only over the model's
+		// bridgedeck (checkPlaces).
+		if spacing > 0 && math.Abs(x) > hullOut+hullTop {
+			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: %v m out is not on a hull's top, from %v to %v m out", i, j, math.Abs(x), math.Round(hullIn*1000)/1000, hullOut))
+		}
+		if st["pose"] == "hull" && !(spacing > 0) {
+			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: on a hull, but the boat has one hull", i, j))
+		}
 		if 2*x > beam || 2*x < -beam || 2*z > length || 2*z < -length {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: (%v, %v) is outside the hull's %v by %v m", i, j, x, z, beam, length))
 		}
-		if !(y > 0 && y < boom) {
+		if st["pose"] == "aloft" {
+			if !(y >= boom && y <= lookout) {
+				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: aloft %v m up is not above the boom (%v m) and no higher than the lookout's eye (%v m)", i, j, y, boom, lookout))
+			}
+		} else if !(y > 0 && y < boom) {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: %v m up is not on a deck above the waterline and below the boom (%v m)", i, j, y, boom))
 		}
 		w, _ := st["windward"].(bool)
-		near := func(a, b [3]float64) bool {
-			dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
-			return dx*dx+dy*dy+dz*dz < stationsApart*stationsApart
+		l, _ := st["lee"].(bool)
+		side := 0
+		switch {
+		case w && l:
+			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: both to windward and to leeward", i, j))
+		case w:
+			side = 1
+		case l:
+			side = -1
 		}
-		here := [3]float64{x, y, z}
-		for k, o := range at {
-			if near(here, o) {
-				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: within %v m of stations[%d]", i, j, stationsApart, k))
-			}
-			// A windward station drawn on the other side: its mirror, against those there.
-			if (w || windward[k]) && (x < 0) != (o[0] < 0) && near([3]float64{-x, y, z}, o) {
-				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: to windward on the other side, within %v m of stations[%d]", i, j, stationsApart, k))
+		at = append(at, [3]float64{x, y, z})
+		sides = append(sides, side)
+	}
+	// Where each is drawn with the weather on either side: none within a
+	// person's breadth of another.
+	drawn := func(k, weather int) [3]float64 {
+		p := at[k]
+		if sides[k] == 0 {
+			return p
+		}
+		own := 1
+		if p[0] < 0 {
+			own = -1
+		}
+		if own != sides[k]*weather {
+			p[0] = -p[0]
+		}
+		return p
+	}
+	near := func(a, b [3]float64) bool {
+		dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
+		return dx*dx+dy*dy+dz*dz < stationsApart*stationsApart
+	}
+	for j := range at {
+		for k := range j {
+			for _, weather := range []int{1, -1} {
+				if near(drawn(j, weather), drawn(k, weather)) {
+					how := ""
+					if sides[j] != 0 || sides[k] != 0 {
+						how = map[int]string{1: " with the weather to starboard", -1: " with the weather to port"}[weather]
+					}
+					problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: within %v m of stations[%d]%s", i, j, stationsApart, k, how))
+					break
+				}
 			}
 		}
-		at = append(at, here)
-		windward = append(windward, w)
 	}
 	return problems
 }

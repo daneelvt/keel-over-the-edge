@@ -53,6 +53,7 @@ import type { Node } from 'three/webgpu';
 import { edgeLook, heightAboveSea, mistBetween, seaPoint } from '../edge/mist';
 import { SIZES } from '../predict/layout.gen';
 import { DOME_RADIUS } from './materials';
+import { changed, eachRender, kept } from './uploads';
 
 /** The most sources the GPU sums: the module's fog banks and rain. */
 export const AIR_SOURCES = 10;
@@ -69,31 +70,40 @@ const NOISE = { share: 0.25, scale: [170, 230], drift: [0.6, 0.45] } as const;
 /** How near a lit light must be, m, for its light in the fog about it to be drawn. */
 export const HALO_REACH = 300;
 
-/** What the air is drawn with: its uniforms, which the scene sets each frame. */
+/**
+ * What the air is drawn with: its uniforms, which the scene sets each frame,
+ * and its sources, sent to the GPU only on a frame they changed.
+ */
 export const airLook = {
   /** How many sources are summed. */
-  count: uniform(0, 'int'),
+  count: eachRender(uniform(0, 'int')),
   /** Each source's centre, m east and north, and the direction its along axis runs, sine and cosine. */
-  where: uniformArray(
-    Array.from({ length: AIR_SOURCES }, () => new Vector4()),
-    'vec4',
+  where: kept(
+    uniformArray(
+      Array.from({ length: AIR_SOURCES }, () => new Vector4()),
+      'vec4',
+    ),
   ),
   /** Each source's along and across coefficients, 1/m², its inverse scale height, 1/m, and its extinction at its centre at the sea, 1/m. */
-  shape: uniformArray(
-    Array.from({ length: AIR_SOURCES }, () => new Vector4()),
-    'vec4',
+  shape: kept(
+    uniformArray(
+      Array.from({ length: AIR_SOURCES }, () => new Vector4()),
+      'vec4',
+    ),
   ),
   /** Each source's top, m: nothing above it. */
-  top: uniformArray(
-    Array.from({ length: AIR_SOURCES }, () => new Vector4(NO_TOP, 0, 0, 0)),
-    'vec4',
+  top: kept(
+    uniformArray(
+      Array.from({ length: AIR_SOURCES }, () => new Vector4(NO_TOP, 0, 0, 0)),
+      'vec4',
+    ),
   ),
   /** World time, s, the noise drifts by; 1 to draw the noise, 0 for the rules' fog alone. */
-  seconds: uniform(0),
-  noise: uniform(1),
+  seconds: eachRender(uniform(0)),
+  noise: eachRender(uniform(1)),
   /** The lit light whose light the fog about it scatters: its scene place, its strength (0 for none) and its colour, linear. */
-  halo: uniform(new Vector4(0, 0, 0, 0)),
-  haloColour: uniform(new Color(1, 0.9, 0.7)),
+  halo: eachRender(uniform(new Vector4(0, 0, 0, 0))),
+  haloColour: eachRender(uniform(new Color(1, 0.9, 0.7))),
 };
 
 /** e^(−x) with x held above −60, for float32. */
@@ -282,6 +292,22 @@ export const haloBetween = (eye: Node<'vec3'>, p: Node<'vec3'>): Node<'vec3'> =>
     return (airLook.haloColour as unknown as Node<'vec3'>).mul(along.mul(h.w));
   })() as unknown as Node<'vec3'>;
 
+/** Sets an entry of a source's array, marking the array changed if it did. */
+function put(
+  list: typeof airLook.where,
+  i: number,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+): void {
+  const v = list.array[i] as Vector4;
+  if (v.x !== x || v.y !== y || v.z !== z || v.w !== w) {
+    v.set(x, y, z, w);
+    changed(list);
+  }
+}
+
 /**
  * Writes the module's sources (its airSource records) into the uniforms:
  * as many as there are room for.
@@ -292,9 +318,9 @@ export function setAirSources(records: Float64Array, fields: Record<string, numb
   for (let i = 0; i < n; i++) {
     const o = i * per;
     const v = (k: string): number => records[o + (fields[k] ?? 0)] ?? 0;
-    (airLook.where.array[i] as Vector4).set(v('east'), v('north'), v('sin'), v('cos'));
-    (airLook.shape.array[i] as Vector4).set(v('along'), v('across'), v('invHeight'), v('sigma'));
-    (airLook.top.array[i] as Vector4).set(Math.min(v('top'), NO_TOP), 0, 0, 0);
+    put(airLook.where, i, v('east'), v('north'), v('sin'), v('cos'));
+    put(airLook.shape, i, v('along'), v('across'), v('invHeight'), v('sigma'));
+    put(airLook.top, i, Math.min(v('top'), NO_TOP), 0, 0, 0);
   }
   airLook.count.value = n;
 }
@@ -309,9 +335,9 @@ export function heldRain(sigma: number, top: number): void {
   if (i >= AIR_SOURCES || !(sigma > 0)) {
     return;
   }
-  (airLook.where.array[i] as Vector4).set(0, 0, 0, 1);
-  (airLook.shape.array[i] as Vector4).set(0, 0, 0, sigma);
-  (airLook.top.array[i] as Vector4).set(top, 0, 0, 0);
+  put(airLook.where, i, 0, 0, 0, 1);
+  put(airLook.shape, i, 0, 0, 0, sigma);
+  put(airLook.top, i, top, 0, 0, 0);
   airLook.count.value = i + 1;
 }
 

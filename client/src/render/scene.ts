@@ -19,7 +19,7 @@
 // frames update the scene alone until the page lets them draw.
 
 import { signal } from '@preact/signals';
-import { type Color, type Vector2, Vector3, type Vector4 } from 'three';
+import { type Camera, type Color, type Vector2, Vector3, type Vector4 } from 'three';
 import { exp, float, fog, length, max, mix, positionView, positionWorld } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
 import { type Boat as BoatKind, catalog } from '../catalog';
@@ -30,6 +30,7 @@ import { edgeLook, KOSCHMIEDER } from '../edge/mist';
 import { closedIn, EndSlabs, type EndStage, endStage, risen } from '../edge/taken';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
+import { eachHull, type HullAt, hullRoom } from '../game/hullpose';
 import type { Land } from '../land/land';
 import type { BoatAt } from '../life/birds';
 import { type GullSource, LifeDraw, type LifeFrame, type SurfaceAt } from '../life/draw';
@@ -38,6 +39,7 @@ import { LifeStore } from '../life/store';
 import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
 import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
+import { NO_LAYERS, PLAIN_SEA, type SeaLayer } from '../ocean/seamaterial';
 import { rainShare } from '../ocean/water';
 import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
@@ -50,6 +52,7 @@ import { SkyWeather } from '../sky/weather';
 import { Birds } from './birds';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
+import { type RaceFrame, RaceMarks } from './committee';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { glowDark } from './daylight';
 import { DirtyAir } from './dirtyair';
@@ -61,28 +64,40 @@ import { GustRings } from './gustring';
 import { type BoatLantern, Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
 import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
-import { domeCentre } from './materials';
+import { domeCentre, domeDrop, horizonDistance } from './materials';
 import { Overlays } from './overlays';
+import { cockadeOf, PrizesAfloat, pendantOf } from './prizes';
 import {
   Adaptive,
+  type Display,
   type FrameWindow,
+  forget,
   pixelRatioOf,
   type Rung,
   remember,
-  rungName,
   SLOW,
   type Store,
+  sameShaders,
   startQuality,
   TIERS,
   type Tier,
   type TierName,
+  WAIT,
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
-import { CrewDeck, type CrewShown, helmLook, modelDeck, tillerOf } from './sailors/crew';
-import { type CrewPlan, crewPlan } from './sailors/crewrules';
+import { bridgeCrew } from './sailors/bridgecrew';
+import { bridgeBoat, namesBridgeClips } from './sailors/bridgedeck';
+import { namesCatClips } from './sailors/cat';
+import { CrewDeck, type CrewShown, helmLook, modelDeck, STEPPED, tillerOf } from './sailors/crew';
+import { type CrewPlan, crewPlan, type SailorNow } from './sailors/crewrules';
 import { FleetCrews, kindCrew } from './sailors/fleetcrews';
+import { catOf } from './sailors/onboat';
+import { pendantFiles } from './sailors/pendant';
+import { company } from './sailors/ship';
+import { shipPlan } from './sailors/shiprules';
 import { hullSolid } from './sailors/solid';
+import { namesYachtClips, yachtBoat } from './sailors/yacht';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
 import { look, Sky, toLinear } from './sky';
@@ -106,9 +121,15 @@ const END_LOOK = catalog.world.edge.end;
 const MIST_VEIL = 0.6;
 /** A tick of world time, µs. */
 const TICK_US = 1e6 / STEPS_PER_SECOND;
+/** How high over the sea a mark's tag stands, m: over its spar's flag. */
+const MARK_TAG_HEIGHT = 8;
 
-/** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
-const BENCHMARK = 6000;
+/**
+ * For this long after the scene first draws, the windows adaptive quality
+ * judges are short: the first seconds are the benchmark, and a slow device
+ * finds its rung within them.
+ */
+const BENCHMARK = 10_000;
 const BENCHMARK_WINDOW = 500;
 /**
  * A slow window probes the display again if the last probe is older than
@@ -140,6 +161,11 @@ export function sailorLookOf(cat: Looks, code: number): SailorLook {
   const l = lookOf(cat, code) ?? (lookOf(cat, PERSON_DEFAULT) as Look);
   return { art: artOf(cat, l), colours: coloursOf(cat, l), machine: isMachine(l) };
 }
+
+/** How near a tap must be to a boat's hull or sail to pick it, CSS pixels: a finger's width. */
+export const BOAT_TAP = 44;
+/** The height of a boat's sail's middle a tap is measured to, m. */
+const SAIL_TAP_HEIGHT = 3;
 
 /** No boats: the fleet before the game is online. */
 const NO_BOATS: readonly DrawnBoat[] = [];
@@ -240,6 +266,15 @@ export class SeaScene {
     catalog.world.places.kinds.findIndex((k) => k.site === 'wreck'),
     catalog.world.look.attenuation,
   );
+  /** The race committee's things in the sea: the courses laid, the world's beacons, the guns' smoke. */
+  readonly race = new RaceMarks(
+    catalog.world.committee,
+    catalog.world.towns.flags,
+    catalog.world.towns.smoke,
+    catalog.world.places.kinds.findIndex((k) => k.site === 'beacon'),
+  );
+  /** What every boat flies for its skipper's races, the own boat's too: one draw for their flags, one for their spoons. */
+  readonly prizes = new PrizesAfloat(catalog.world.committee, catalog.world.towns.flags);
   /** Sky time, once the scene knows the world's epoch; and the module that says where everything stands. */
   skyTime: SkyTime | null = null;
   skyPhysics: Physics | null = null;
@@ -273,6 +308,8 @@ export class SeaScene {
   lastWindow: FrameWindow | null = null;
   /** A window's length for adaptive quality that overrides the scene's own, ms (the tests). */
   windowMs: number | null = null;
+  /** The display's shorter side, CSS pixels, standing in for the screen's (the tests); null for the screen's own. */
+  screenShort: number | null = null;
   /** Called when the tier or the render scale in use changes: what the server is told. */
   onQuality: ((tier: number, scale: number) => void) | null = null;
   /** Called at the start of each drawn frame, with the real time since the last one (s) and now (ms). */
@@ -281,6 +318,16 @@ export class SeaScene {
   cover: Cover | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
+  /**
+   * A tag over a point of the sea while there is one: a race's next mark's
+   * number, or the course's name and distance; placed each frame where the
+   * camera sees it, and with sight, only while the point is within the
+   * camera's sight over the sea's curve.
+   */
+  markTagOf: (() => { east: number; north: number; text: string; sight?: boolean } | null) | null =
+    null;
+  #markTag: HTMLElement | null = null;
+  readonly #tagAt = new Vector3();
   /** Called after each frame is drawn, with the main thread's work on it, ms. */
   onDrawn: ((work: number) => void) | null = null;
   /** Whether the camera rests behind the boat, at its resting view and distance. */
@@ -320,10 +367,14 @@ export class SeaScene {
   /** The ground's height at a point, as the land holds it: what has no sea to break at the end. */
   readonly #groundAt = (east: number, north: number): number | null =>
     this.land?.heightAt(east, north) ?? null;
+  /** When the scene first drew, ms; −1 before. */
   #started = -1;
   #probed = Number.NEGATIVE_INFINITY;
   /** Counts the changes of quality asked for: one that takes long may be overtaken. */
   #applying = 0;
+  /** The rung last applied to this renderer, and the latest change of shaders while it compiles. */
+  #applied: Rung | null = null;
+  #shaders: Promise<void> = Promise.resolve();
 
   constructor(
     container: HTMLElement,
@@ -333,6 +384,8 @@ export class SeaScene {
     this.#query = options.query;
     this.#store = options.store;
     this.detail = options.detail;
+    // A beach cat's crew on her wire: the fleet draws it to them.
+    this.fleet.crewHook = (slot, out) => this.crews.hook(slot, out);
     this.stage = new Stage(container, backend, {
       frame: (gfx, info) => {
         const cover = this.cover;
@@ -378,7 +431,7 @@ export class SeaScene {
     };
     this.shadows = new Shadows(this.sky.light);
     this.ocean = new Ocean(scene);
-    this.edge = new EdgeScene(scene, this.ocean.uniforms, {
+    this.edge = new EdgeScene(scene, this.ocean.uniforms, this.ocean.pattern, {
       radius: catalog.world.disk.radius,
       mist: catalog.world.disk.mist,
       edge: catalog.world.edge,
@@ -417,6 +470,9 @@ export class SeaScene {
     scene.add(this.flags.mesh, this.smoke.mesh, this.cones.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
+    scene.add(this.race.root);
+    scene.add(this.prizes.root);
+    this.fleet.prizes = this.prizes;
     scene.add(this.birds.mesh, this.swimmers.mesh);
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
@@ -484,8 +540,53 @@ export class SeaScene {
     return this.skyPhysics?.skyAt(this.skyAt, east, north) ?? null;
   }
 
-  /** A tap on the open sea at (x, y) CSS pixels: a named star there shows its name. */
+  /**
+   * A tap on a boat in view: the boat drawn nearest (x, y) CSS pixels by
+   * its sail, within reach pixels of it, as onBoatTap takes it. True if it
+   * took the tap.
+   */
+  onBoatTap: ((east: number, north: number) => boolean) | null = null;
+
+  /** The other boat drawn whose sail is nearest (x, y) CSS pixels, within reach of it: where it is; null for none. */
+  boatAt(x: number, y: number, reach = BOAT_TAP): { east: number; north: number } | null {
+    const fs = this.fleetSource;
+    const canvas = this.stage.gfx?.canvas;
+    if (fs === null || canvas === undefined) {
+      return null;
+    }
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const o = this.origin.world;
+    const v = this.#tagAt;
+    let best: DrawnBoat | null = null;
+    let d = reach;
+    for (let i = 0; i < fs.count; i++) {
+      const b = fs.drawn[i] as DrawnBoat;
+      if (b.opacity < 0.5) {
+        continue;
+      }
+      // Its hull and its sail's middle: a tap on either is on the boat.
+      for (const up of [0.5, SAIL_TAP_HEIGHT]) {
+        v.set(b.east - o.x, up + b.heave, -(b.north - o.y)).project(this.stage.camera);
+        if (v.z < -1 || v.z > 1) {
+          continue;
+        }
+        const dist = Math.hypot(((v.x + 1) / 2) * w - x, ((1 - v.y) / 2) * h - y);
+        if (dist < d) {
+          d = dist;
+          best = b;
+        }
+      }
+    }
+    return best === null ? null : { east: best.east, north: best.north };
+  }
+
+  /** A tap on the open sea at (x, y) CSS pixels: a boat there taken by onBoatTap, or a named star there shows its name. */
   tap(x: number, y: number, now: number): string | null {
+    const boat = this.onBoatTap === null ? null : this.boatAt(x, y);
+    if (boat !== null && this.onBoatTap?.(boat.east, boat.north) === true) {
+      return null;
+    }
     const canvas = this.stage.gfx?.canvas;
     if (canvas === undefined || !this.drawSky) {
       return null;
@@ -535,10 +636,26 @@ export class SeaScene {
   /** The look the sailor at the helm is drawn in: whoever holds the controls', else the look last asked for. */
   #helmCode(): number {
     const crew = this.#crewShown;
+    // Aboard a ship, whoever is at the wheel until relieved.
+    const wheel = this.crew.wheelSeat;
+    const atWheel =
+      crew === null || wheel === null
+        ? null
+        : (crew.people.find((p) => p.seat === wheel)?.look ?? null);
     return (
-      (crew === null ? null : helmLook(crew)) ?? this.#lookShown ?? this.#ownLook ?? PERSON_DEFAULT
+      atWheel ??
+      (crew === null ? null : helmLook(crew)) ??
+      this.#lookShown ??
+      this.#ownLook ??
+      PERSON_DEFAULT
     );
   }
+
+  /** The ship's moment, as her company's rules need it: filled each frame. */
+  readonly #shipMoment = { yards: 0, foreYards: 0, reef: 0, heel: 0, wind: 0, time: 0 };
+
+  /** The seat drawn at the wheel when the helm was last drawn: a relief taking the spokes draws it again. */
+  #wheelDrawn: number | null = null;
 
   /** Whether the sailor at the helm is drawn in the look it is to be: whoever holds the controls'. */
   get helmDrawn(): boolean {
@@ -546,6 +663,16 @@ export class SeaScene {
   }
 
   #drawHelm(): Promise<void> {
+    this.#wearHelm();
+    return this.boat === null ? Promise.resolve() : this.#lookOn(this.boat);
+  }
+
+  /**
+   * Draws a boat's sailor at the helm in the look it is to be, and its
+   * sail's mark: the boat in view's, or one of the own boat's kinds about
+   * to come into view, which keeps the look it was last drawn in till told.
+   */
+  #lookOn(boat: Boat): Promise<void> {
     if (this.#crewShown === null && this.#lookShown === null && this.#ownLook === null) {
       return Promise.resolve();
     }
@@ -554,13 +681,16 @@ export class SeaScene {
     const skipper = crew?.people.find((p) => p.seat === 0);
     const helm = sailorLookOf(catalog, this.#helmCode());
     const mark = skipper === undefined ? helm.machine : sailorLookOf(catalog, skipper.look).machine;
-    return this.boat?.setLook(helm, mark) ?? Promise.resolve();
+    return boat.setLook(helm, mark);
   }
 
   /** The look the boat in view's sailor was last asked to be drawn in; null for the player's own. */
   #lookShown: number | null = null;
   /** Who is aboard the boat in view, as last told; null for nobody but its sailor. */
   #crewShown: CrewShown | null = null;
+  /** The boat's sailor as her crew follow them, and how she lies, each frame. */
+  readonly #sailorNow: SailorNow = { mode: 0, heel: 0, trim: 0, offset: 0, net: null };
+  readonly #lie = { pitch: 0, heave: 0, aft: 0 };
 
   /**
    * The sailors seated, the own boat's and the fleet's first look, once the
@@ -579,6 +709,15 @@ export class SeaScene {
     }
     await this.#lookAsked;
     const look = sailorLookOf(catalog, this.#ownLook ?? PERSON_DEFAULT);
+    // The certificates' pendants, loaded the first time someone wears one.
+    const pendants = catalog.pendants?.art.model;
+    if (pendants !== undefined) {
+      pendantFiles(
+        () => lazyArtUrl(pendants),
+        renderer,
+        (catalog.certificates ?? []).map((c) => c.pendantNode),
+      );
+    }
     await Promise.all([
       // At the helm, whoever holds the controls, if others are aboard.
       boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1),
@@ -630,6 +769,43 @@ export class SeaScene {
   #boatLook = { look: -1, name: '' };
 
   /**
+   * What the boat in view, the own or the one watched, flies for its
+   * skipper's races: a prize code (render/prizes.ts), its race number
+   * while it races (on its sail), on every kind the own boat has been.
+   */
+  setPrizes(code: number, number: number): void {
+    this.#prizes = { code: code >>> 0, number };
+    for (const b of this.#boats.values()) {
+      b.setRaceNumber(number);
+    }
+    this.#wearHelm();
+  }
+
+  /**
+   * The winner's cockade and the certificate's pendant on the sailor drawn
+   * at the helm, if they wear them: the skipper's by the boat's prizes;
+   * whoever of the crew holds the controls (or the wheel), by their own.
+   */
+  #wearHelm(): void {
+    const crew = this.#crewShown;
+    const seat = crew === null ? 0 : (this.crew.wheelSeat ?? crew.holder);
+    const at = crew?.people.find((p) => p.seat === seat);
+    const on = at?.cockade ?? (seat === 0 && cockadeOf(this.#prizes.code));
+    const pendant = at?.pendant ?? (seat === 0 ? pendantOf(this.#prizes.code) : 0);
+    for (const b of this.#boats.values()) {
+      b.wearCockade(on);
+      b.wearPendant(pendant);
+    }
+  }
+
+  #prizes = { code: 0, number: 0 };
+
+  /** The own boat's prizes, as setPrizes was last told. */
+  get ownPrizes(): { code: number; number: number } {
+    return this.#prizes;
+  }
+
+  /**
    * Loads the boat, and its sailor once the player's look is known
    * (sailAs). Its sails carry its kind's insignia.
    */
@@ -651,7 +827,9 @@ export class SeaScene {
     const boat = new Boat(k, catalog);
     await boat.load(k.name.slice(0, 1));
     boat.setBoatLook(this.#boatLook.look, this.#boatLook.name);
+    boat.setRaceNumber(this.#prizes.number);
     this.#boats.set(kind, boat);
+    this.#wearHelm();
     return boat;
   }
 
@@ -683,14 +861,22 @@ export class SeaScene {
     }
     this.#loadingKind = -1;
     const renderer = this.stage.renderer;
-    if (boat.sailor === null && renderer !== null) {
-      await this.#lookAsked;
-      await boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1);
+    if (renderer !== null) {
+      if (boat.sailor === null) {
+        await this.#lookAsked;
+        await boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1);
+      }
+      // A kind sailed before keeps the sailor it was drawn with: the look
+      // told since (a boat watched, or the own again) went to the boat in
+      // view then, not to it.
+      await this.#lookOn(boat);
     }
     if (this.kindIndex !== kind) {
       return;
     }
     this.#show(boat);
+    // And a look told while it came into view went to the boat before it.
+    await this.#drawHelm();
     this.sailorReady = true;
   }
 
@@ -728,14 +914,24 @@ export class SeaScene {
       chord: kind.physics.foils.boardChord,
     });
     const model = boat.model.children[0];
-    return crewPlan(
+    const plan = crewPlan(
       kind.stations,
       solid,
       boat.nodeAt('boom'),
       kind.physics.rig.foot,
-      model === undefined ? null : modelDeck(model),
+      model === undefined ? null : modelDeck(model, namesYachtClips(kind.art) ? STEPPED : []),
       model === undefined ? null : tillerOf(model),
     );
+    // A ship: her company's places and ways, which her model marks; a
+    // beach cat, her people's places; a cruising yacht, her deck.
+    plan.ship = shipPlan(kind.stations, company(boat.parts));
+    plan.cat = namesCatClips(kind.art)
+      ? catOf(boat.model, boat.parts, kind.physics.rig.foot)
+      : null;
+    plan.yacht = namesYachtClips(kind.art) ? yachtBoat(boat.parts) : null;
+    plan.bridge = namesBridgeClips(kind.art) ? bridgeCrew(bridgeBoat(boat.parts)) : null;
+    plan.cog = kind.physics.hull.centreOfGravity;
+    return plan;
   }
 
   /**
@@ -816,6 +1012,17 @@ export class SeaScene {
     } else {
       this.placeCamera(this.camera.rest);
     }
+  }
+
+  /**
+   * The world starts again where it is now, as on a page shown again after
+   * a while hidden: no wake or wake wave left from where the boats were,
+   * and the next frame's time step from now, not from the last frame.
+   */
+  afresh(): void {
+    this.ocean.wakes.clear();
+    this.ocean.wakeWaves.clear();
+    this.stage.restartFrames();
   }
 
   /** Whether the frame loop is to draw once the world is ready: not on a page under test, nor one without a renderer. */
@@ -964,6 +1171,7 @@ export class SeaScene {
       this.stats.restart(now);
     }
     this.#started = -1;
+    this.#applied = null;
     void this.#apply(false);
   }
 
@@ -973,15 +1181,52 @@ export class SeaScene {
     this.top = start.top;
     this.quality = new Adaptive(start.ladder, start.index);
     this.quality.enabled = start.adaptive;
-    this.stage.ratio = (dpr) => pixelRatioOf(this.rung, dpr);
+    this.quality.ratioOf = (r) => pixelRatioOf(this.top, r, this.display());
+    this.stage.ratio = (dpr) =>
+      pixelRatioOf(this.top, this.rung, { dpr, short: this.display().short });
+  }
+
+  /** The display drawn on: its pixel ratio, and its screen's shorter side. */
+  display(): Display {
+    const s = globalThis.screen;
+    return {
+      dpr: window.devicePixelRatio || 1,
+      short: this.screenShort ?? (s === undefined ? 0 : Math.min(s.width, s.height)),
+    };
   }
 
   /** The rung in use. */
   get rung(): Rung {
     const q = this.quality;
     return q === null
-      ? { tier: 'low', scale: 1, shadows: false, detail: { kind: 'none' } }
+      ? { tier: 'low', level: 0, shadows: false, detail: { kind: 'none' } }
       : q.rung;
+  }
+
+  /**
+   * Whether adaptive quality has judged the device where it is: the cover
+   * stays down until it has, so the sea first shows on a rung it can hold.
+   */
+  get qualitySettled(): boolean {
+    return this.quality?.settled ?? true;
+  }
+
+  /**
+   * Starts adaptive quality over as on a first visit (the tests): nothing
+   * remembered, the top of the ladder at the full rate, and the short
+   * windows of the first seconds again.
+   */
+  qualityAfresh(): Promise<void> {
+    const q = this.quality;
+    if (q === null) {
+      return Promise.resolve();
+    }
+    forget(this.#store);
+    q.enabled = true;
+    q.base = WAIT;
+    q.wait = WAIT;
+    this.#started = -1;
+    return this.setRung(0, 'afresh');
   }
 
   /** The tier in use. */
@@ -1004,6 +1249,26 @@ export class SeaScene {
     }
   }
 
+  /**
+   * The sea's layers left out by hand (the tests, the measures of what each
+   * costs), or null for the tier's own look.
+   */
+  seaLayersOff: ReadonlySet<SeaLayer> | null = null;
+  /** Whether the tiles a hull may reach are drawn apart, set by hand; null for the tier's way. */
+  seaApart: boolean | null = null;
+
+  /**
+   * Leaves the sea's layers out by hand, and draws the tiles a hull may
+   * reach apart or not; null for the tier's own look. Resolves once drawn.
+   */
+  setSeaLayers(off: ReadonlySet<SeaLayer> | null, apart: boolean | null = null): Promise<void> {
+    this.seaLayersOff = off;
+    this.seaApart = apart;
+    // The rung may be the same, but the sea's shaders are not.
+    this.#applied = null;
+    return this.#apply(true);
+  }
+
   /** Moves to a rung of the ladder by hand (the developer panel, the tests). */
   setRung(index: number, why = 'set'): Promise<void> {
     this.quality?.set(performance.now(), index, why);
@@ -1011,10 +1276,12 @@ export class SeaScene {
   }
 
   /**
-   * Brings the scene to the rung in use: the render scale, the sea's look,
-   * the foam map. A change of the sea's shaders is compiled before it is
-   * drawn when ahead is set, and adaptive quality judges nothing until it
-   * is in and a second has passed.
+   * Brings the scene to the rung in use: the render scale, the frame cap's
+   * rate, the sea's look, the foam map. A change of the sea's shaders is
+   * compiled before it is drawn when ahead is set, and adaptive quality
+   * judges nothing until it is in and a second has passed. A change of the
+   * render scale or the rate alone compiles nothing, and the next window
+   * is judged.
    */
   async #apply(ahead: boolean): Promise<void> {
     const q = this.quality;
@@ -1025,6 +1292,23 @@ export class SeaScene {
     const rung = q.rung;
     const tier = TIERS[rung.tier];
     q.quiet(performance.now(), Number.POSITIVE_INFINITY);
+    this.stage.cap.halved = q.halved;
+    const before = this.#applied;
+    this.#applied = rung;
+    if (before !== null && sameShaders(before, rung)) {
+      // The render target's size alone, or the rate: nothing is compiled,
+      // so nothing is waited for but a change of shaders still under way.
+      this.stage.resize();
+      this.onQuality?.(tier.number, this.stage.pixelRatio());
+      await this.#shaders;
+      if (change === this.#applying) {
+        this.shadows.light.castShadow = this.shadows.lit;
+        const now = performance.now();
+        q.unquiet(now, 0);
+        this.stats.restart(now);
+      }
+      return;
+    }
     this.stage.resize();
     const sh = this.shadows;
     sh.set(
@@ -1057,7 +1341,7 @@ export class SeaScene {
     this.swimmers.setTint(tier.name !== 'low');
     this.weather.setCapacity(tier.puffs, tier.streaks);
     this.onQuality?.(tier.number, this.stage.pixelRatio());
-    await Promise.all([
+    const shaders = Promise.all([
       lit,
       this.ocean.setQuality(
         {
@@ -1065,11 +1349,15 @@ export class SeaScene {
           anisotropy: tier.anisotropy,
           foamMap: tier.foamMap,
           wakeWaves: tier.wakeWaves,
+          omit: this.seaLayersOff ?? (tier.sea === 'plain' ? PLAIN_SEA : NO_LAYERS),
+          apart: this.seaApart ?? tier.sea === 'plain',
         },
         ahead ? (o) => this.stage.compile(o) : null,
         this.stage.gfx?.renderer ?? null,
       ),
-    ]);
+    ]).then(() => undefined);
+    this.#shaders = shaders.catch(() => undefined);
+    await shaders;
     if (change === this.#applying) {
       sh.light.castShadow = sh.lit;
     }
@@ -1087,11 +1375,12 @@ export class SeaScene {
     if (q === null || !q.enabled) {
       return;
     }
+    // The menu's 30, or a display of 30 Hz, leaves no lower rate to go to.
+    q.halvable = cap.halvable;
     const w: FrameWindow = {
       frames: st.frames,
       p90: st.p90,
       interval: cap.interval,
-      gpu: st.gpu,
       work: st.workMedian,
     };
     this.lastWindow = w;
@@ -1100,7 +1389,7 @@ export class SeaScene {
     if (
       w.interval > 0 &&
       w.p90 > SLOW * w.interval &&
-      q.index < q.ladder.length - 1 &&
+      q.index < q.bottom &&
       now - cap.probed > PROBE_AFTER + 2 * this.stats.window
     ) {
       cap.probe();
@@ -1110,6 +1399,7 @@ export class SeaScene {
       remember(this.#store, this.top, q.index);
       void this.#apply(true);
     }
+    cap.halved = q.halved;
   }
 
   /** The steps adaptive quality took, in words, the latest last. */
@@ -1118,9 +1408,7 @@ export class SeaScene {
     if (q === null) {
       return [];
     }
-    return q.log.map(
-      (s) => `${(s.at / 1000).toFixed(1)} s  ${s.why}: ${rungName(q.ladder[s.to] as Rung)}`,
-    );
+    return q.log.map((s) => `${(s.at / 1000).toFixed(1)} s  ${s.why}: ${q.nameOf(s.to)}`);
   }
 
   /**
@@ -1153,11 +1441,23 @@ export class SeaScene {
     const waves = ocean.wakeWaves;
     wakes.begin();
     waves.begin();
-    wakes.add(p.east, p.north, p.heading, speed, own);
     // The hull deeper than at rest where the sea under it stands above it:
-    // a boat that bobs makes rings.
+    // a boat that bobs makes rings. Each of a boat's hulls makes its own
+    // wake, and one lifted clear of the water none.
     const sink = Math.min(Math.max(this.#seaUnderBoat() - p.heave, -SINK_MOST), SINK_MOST);
-    waves.add(p.east, p.north, p.heading, sink, own);
+    const room = this.#hullRoom;
+    const kinds = catalog.boats;
+    const ownHull = this.kind.physics;
+    for (
+      let h = eachHull(ownHull.hulls.hullSpacing, p.east, p.north, p.heading, p.heel, room);
+      h-- > 0;
+    ) {
+      const at = room[h] as HullAt;
+      if (at.lift < ownHull.hull.hullDraught) {
+        wakes.add(at.east, at.north, p.heading, speed, own);
+        waves.add(at.east, at.north, p.heading, sink - at.lift, own);
+      }
+    }
     const fs = this.fleetSource;
     if (fs === null) {
       this.#stampLife();
@@ -1171,8 +1471,17 @@ export class SeaScene {
       if (b.opacity >= 0.5) {
         const ve = b.speed * Math.sin(b.heading) - current.east;
         const vn = b.speed * Math.cos(b.heading) - current.north;
-        wakes.add(b.east, b.north, b.heading, Math.hypot(ve, vn), b.kind);
-        waves.add(b.east, b.north, b.heading, 0, b.kind);
+        const k = (kinds[b.kind] ?? this.kind).physics;
+        for (
+          let h = eachHull(k.hulls.hullSpacing, b.east, b.north, b.heading, b.heel, room);
+          h-- > 0;
+        ) {
+          const at = room[h] as HullAt;
+          if (at.lift < k.hull.hullDraught) {
+            wakes.add(at.east, at.north, b.heading, Math.hypot(ve, vn), b.kind);
+            waves.add(at.east, at.north, b.heading, -at.lift, b.kind);
+          }
+        }
       }
     }
     // The sea's life's after the boats', in what room is left.
@@ -1374,6 +1683,12 @@ export class SeaScene {
         l.addAshore(t.east - o.x, t.top, -(t.north - o.y), lit);
       }
     }
+    // The race committee's lanterns: the marks' and the committee boats' riding lights.
+    const race = this.race;
+    for (let i = 0; this.drawSky && i < race.lanternCount; i++) {
+      const r = race.lanterns;
+      l.addAshore(r[3 * i] ?? 0, r[3 * i + 1] ?? 0, r[3 * i + 2] ?? 0, lanternLit(own));
+    }
     l.commit(this.stage.camera.fov, height);
   }
 
@@ -1443,6 +1758,34 @@ export class SeaScene {
       this.galeUp,
     );
     this.smoke.frame(chimneys, o, time, 0.25 + 0.75 * (1 - night));
+  }
+
+  /** The race committee's frame, reused, and the time its winds are asked at. */
+  #raceNow = 0;
+  readonly #raceFrame: RaceFrame = {
+    origin: { x: 0, y: 0 },
+    cameraEast: 0,
+    cameraNorth: 0,
+    time: 0,
+    lit: 0,
+    light: 1,
+    windAt: (east, north) => this.#windAt(east, north, this.#raceNow),
+    surface: null,
+  };
+
+  /** The race committee's things near the camera: boats, buoys, marks, beacons, flags and smoke. */
+  #drawRace(camera: Vector3, now: number, night: number): void {
+    const o = this.origin.world;
+    const f = this.#raceFrame;
+    this.#raceNow = now;
+    f.origin = o;
+    f.cameraEast = camera.x + o.x;
+    f.cameraNorth = -camera.z + o.y;
+    f.time = this.ticks / STEPS_PER_SECOND;
+    f.lit = night;
+    f.light = 0.25 + 0.75 * (1 - night);
+    f.surface = this.ocean.source === null ? null : this.#surface;
+    this.race.frame(f);
   }
 
   /** The lands used, so the towns' gulls are found again in a new one. */
@@ -1727,11 +2070,12 @@ export class SeaScene {
       this.#probed = cap.probed;
       this.stats.gap();
     }
-    if (this.#started < 0) {
+    if (this.#started < 0 && gfx !== null) {
       this.#started = now;
     }
     this.stats.window =
-      this.windowMs ?? (now - this.#started < BENCHMARK ? BENCHMARK_WINDOW : WINDOW);
+      this.windowMs ??
+      (this.#started >= 0 && now - this.#started < BENCHMARK ? BENCHMARK_WINDOW : WINDOW);
     if (gfx === null) {
       // Not drawn: the frames either side of it say nothing of the GPU.
       this.stats.gap();
@@ -1800,23 +2144,53 @@ export class SeaScene {
     // leaning out as the helm hikes; the helm not drawn while it walks
     // to or from the tiller in a change of hands.
     const helm = this.boat?.sailor ?? null;
+    const sm = this.#shipMoment;
+    sm.yards = this.pose.yardsTurn;
+    sm.foreYards = this.pose.foreYardsTurn;
+    sm.reef = this.pose.reef;
+    sm.heel = this.pose.heel;
+    sm.wind = this.wind.meanSpeed;
+    sm.time = this.ticks / STEPS_PER_SECOND;
+    const sn = this.#sailorNow;
+    sn.mode = this.pose.sailorMode;
+    sn.heel = this.pose.heel;
+    sn.trim = this.out[RECORDS.out.trim] ?? 0;
+    sn.offset = this.pose.sailor;
+    sn.net = helm?.runtime.netAt ?? null;
+    const lie = this.#lie;
+    lie.pitch = this.pose.pitch;
+    lie.heave = this.pose.heave;
+    lie.aft = this.pose.sailorAft;
     this.crew.sail(
       {
         dt: this.timeStep,
         boom: this.pose.boom,
         windOffBow: this.wind.meanFrom - this.pose.heading,
         depth: helm?.runtime.depth ?? 0,
+        ship: this.#shipMoment,
+        apparent: this.out[RECORDS.out.apparentWindSpeed] ?? 0,
+        sailor: sn,
       },
       this.pose.heel,
+      lie,
     );
     if (helm !== null) {
       helm.away = this.crew.helmAway;
+      helm.wayHeld = this.crew.helmHeld;
+    }
+    if (this.crew.wheelSeat !== this.#wheelDrawn) {
+      // A relief has taken the spokes: the wheel drawn in their look.
+      this.#wheelDrawn = this.crew.wheelSeat;
+      void this.#drawHelm();
     }
     this.crew.frame(camera.position, this.timeStep);
     const fs = this.fleetSource;
     // The other boats' crews, before the fleet: whose helm walks with them.
     this.crews.windFrom = this.wind.meanFrom;
+    this.crews.windSpeed = this.wind.meanSpeed;
+    this.crews.time = this.ticks / STEPS_PER_SECOND;
     this.crews.frame(fs?.drawn ?? [], fs?.count ?? 0, this.origin, camera.position, this.timeStep);
+    this.prizes.begin();
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;
       this.fleet.windSpeed = this.wind.meanSpeed;
@@ -1829,11 +2203,14 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    this.#ownPrizesDrawn();
+    this.prizes.end(this.origin.world, this.ticks / STEPS_PER_SECOND);
     const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
     this.birds.begin(this.origin.world, this.ticks / STEPS_PER_SECOND, 0.25 + 0.75 * (1 - night));
     this.#drawTowns(camera.position, now);
     this.#drawLife(camera.position, night > 0.5);
     this.birds.end();
+    this.#drawRace(camera.position, now, night);
     this.#drawLanterns(view.height, camera.position);
     this.#drawLights(view.height, camera.position, now);
     this.wrecks.frame(this.origin);
@@ -1897,8 +2274,69 @@ export class SeaScene {
       o.world.updateMatrixWorld();
       o.placeLabels(camera, view.width, view.height);
     }
+    this.#placeMarkTag(camera, view.width, view.height);
     this.#spray();
     this.onFrame?.();
+  }
+
+  /** The own boat's prizes, placed as its model is drawn, in the wind it feels. */
+  #ownPrizesDrawn(): void {
+    const b = this.boat;
+    const rig = b?.prizeRig ?? null;
+    if (b === null || rig === null || this.#prizes.code === 0 || !b.root.visible) {
+      return;
+    }
+    b.model.updateWorldMatrix(true, false);
+    const angle = this.out[RECORDS.out.apparentWindAngle] ?? 0;
+    const w = this.#ownWind;
+    w.speed = this.out[RECORDS.out.apparentWindSpeed] ?? 0;
+    w.from = this.pose.heading + angle;
+    this.prizes.add(
+      this.#prizes.code,
+      rig,
+      this.#placeOwn,
+      w,
+      0.37,
+      this.ticks / STEPS_PER_SECOND,
+      this.origin.world,
+    );
+  }
+
+  readonly #ownWind = { from: 0, speed: 0 };
+  readonly #placeOwn = (p: Vector3, out: Vector3): Vector3 =>
+    this.boat === null ? out.copy(p) : this.boat.model.localToWorld(out.copy(p));
+
+  /** The next mark's tag, over its spar, when the camera sees it; nothing when not. */
+  #placeMarkTag(camera: Camera, width: number, height: number): void {
+    const el = this.#markTag;
+    if (el === null) {
+      return;
+    }
+    const t = this.markTagOf?.() ?? null;
+    if (t === null) {
+      el.hidden = true;
+      return;
+    }
+    const ow = this.origin.world;
+    const d = Math.hypot(t.east - this.pose.east, t.north - this.pose.north);
+    // Within sight: the tag's height over the sea's curve from the camera's.
+    const cam = camera.position;
+    const seen =
+      t.sight !== true ||
+      Math.hypot(t.east - ow.x - cam.x, -(t.north - ow.y) - cam.z) <=
+        horizonDistance(cam.y) + horizonDistance(MARK_TAG_HEIGHT);
+    // Over the spar's top, dropped by the dome as the sea is.
+    const v = this.#tagAt
+      .set(t.east - ow.x, MARK_TAG_HEIGHT - domeDrop(d), -(t.north - ow.y))
+      .project(camera);
+    const on = seen && v.z < 1 && v.z > -1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+    el.hidden = !on;
+    if (on) {
+      if (el.textContent !== t.text) {
+        el.textContent = t.text;
+      }
+      el.style.transform = `translate(${(((v.x + 1) / 2) * width).toFixed(1)}px, ${(((1 - v.y) / 2) * height).toFixed(1)}px)`;
+    }
   }
 
   /** The player's boat as the dirty air and the right-of-way overlay want it. */
@@ -1917,11 +2355,23 @@ export class SeaScene {
   attachLabels(layer: HTMLElement | null): void {
     this.overlays.attachLabels(layer);
     this.rightOfWay.attachLabels(layer);
+    this.#markTag?.remove();
+    this.#markTag = null;
+    if (layer !== null) {
+      const el = document.createElement('span');
+      el.className = 'mark-tag';
+      el.dataset.readout = 'mark-tag';
+      el.hidden = true;
+      layer.append(el);
+      this.#markTag = el;
+    }
   }
 
   /** The boat as the gust rings want it: where, how it moves, and where the mean wind comes from. */
   readonly #ringBoat = { east: 0, north: 0, velEast: 0, velNorth: 0, windFrom: 0 };
 
+  /** Room for a boat's hulls, for its wakes and its bows. */
+  readonly #hullRoom = hullRoom();
   /** The spray's sources this frame: the player's bow, and the nearest others' on the tiers that have them. */
   readonly #sources: SpraySource[] = Array.from({ length: 4 }, () => ({
     east: 0,
@@ -1969,19 +2419,29 @@ export class SeaScene {
       heading: number,
       heave: number,
       pitch: number,
+      heel: number,
       speed: number,
       kind: number,
     ) => {
-      const half = (catalog.boats[kind] ?? this.kind).physics.hull.waterlineLength / 2;
-      const s = sources[n] as SpraySource;
-      s.east = east + Math.sin(heading) * half;
-      s.north = north + Math.cos(heading) * half;
-      s.height = heave + Math.sin(pitch) * half;
-      s.heading = heading;
-      s.speed = speed;
-      pts[n * 2] = s.east;
-      pts[n * 2 + 1] = s.north;
-      n++;
+      const k = (catalog.boats[kind] ?? this.kind).physics;
+      const half = k.hull.waterlineLength / 2;
+      // Each hull's bow, but one lifted clear of the water.
+      const room = this.#hullRoom;
+      for (let h = eachHull(k.hulls.hullSpacing, east, north, heading, heel, room); h-- > 0; ) {
+        const at = room[h] as HullAt;
+        if (at.lift >= k.hull.hullDraught || n >= sources.length) {
+          continue;
+        }
+        const s = sources[n] as SpraySource;
+        s.east = at.east + Math.sin(heading) * half;
+        s.north = at.north + Math.cos(heading) * half;
+        s.height = heave + Math.sin(pitch) * half;
+        s.heading = heading;
+        s.speed = speed;
+        pts[n * 2] = s.east;
+        pts[n * 2 + 1] = s.north;
+        n++;
+      }
     };
     bow(
       p.east,
@@ -1989,6 +2449,7 @@ export class SeaScene {
       p.heading,
       p.heave,
       p.pitch,
+      p.heel,
       this.out[RECORDS.out.speedThroughWater] ?? 0,
       this.kindIndex,
     );
@@ -2000,7 +2461,7 @@ export class SeaScene {
         if (b === undefined || (this.#nearDist[k] ?? Infinity) > HULL_REACH) {
           break;
         }
-        bow(b.east, b.north, b.heading, b.heave, b.pitch, b.speed, b.kind);
+        bow(b.east, b.north, b.heading, b.heave, b.pitch, b.heel, b.speed, b.kind);
       }
     }
     const wind = this.wind;

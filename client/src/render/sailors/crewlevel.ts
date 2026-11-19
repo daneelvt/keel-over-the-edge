@@ -20,7 +20,8 @@
 //   3 hair colour
 //   4–6 the frame: the rows of the matrix from the person's boat's model
 //     to the level's parent (the identity for the boat the level is under)
-//   7 unused
+//   7 1 if they wear the winner's cockade, the pendant they wear (0 none,
+//     else the certificate's place and one), then unused
 //   8 on: three texels a bone, the rows of its matrix from the figure's
 //     bind pose to the boat's model.
 //
@@ -33,7 +34,7 @@ import {
   type Color,
   DataTexture,
   FloatType,
-  InstancedMesh,
+  type Mesh,
   NearestFilter,
   RGBAFormat,
   type Texture,
@@ -57,9 +58,16 @@ import {
   vertexIndex,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+import { catalog } from '../../catalog';
+import { instances } from '../uploads';
+import { cockadeColours } from './cockade';
 import type { FleetLooks } from './fleetlooks';
 import { ROW_HEAD, SailorRows, skinRow } from './fleetsailors';
 import { sailorMaterial } from './material';
+import { noPendants, pendantMaterial, pendantVertex, whenPendants } from './pendant';
+
+/** The winner's cockade's colours, linear. */
+const COCKADE_COLOURS = cockadeColours(catalog.world.committee.prizes.cockade);
 
 /** The pool's width, texels. */
 const POOL_WIDTH = 2048;
@@ -162,7 +170,12 @@ export class CrewLevel {
   /** The people's rows, grown as more are drawn. */
   rows: SailorRows;
   readonly #rowsUsers: { value: Texture }[] = [];
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
+  /** The pendants its people wear, a draw of its own; null for a level too far to show them. */
+  readonly pendants: Mesh | null = null;
+  /** How many of the rows written since the last commit wear a pendant; and of those committed. */
+  #wearing = 0;
+  wearing = 0;
   /** How many are drawn. */
   count = 0;
 
@@ -174,16 +187,19 @@ export class CrewLevel {
     vertices: number,
     figures: number,
     looks: FleetLooks,
+    /** Whether its people wear their pendants: near enough to see them. */
+    pendants = false,
   ) {
     this.pool = new Pool(`crew ${name} figures`, vertices * figures);
     this.rows = new SailorRows(ROW_HEAD + 3 * bones, 8, `crew ${name} rows`);
-    const nodes = crewNodes(this.pool, this.rows.texture, this.#rowsUsers);
+    const nodes = crewNodes(this.pool, this.rows.texture, this.#rowsUsers, looks);
     const material = sailorMaterial(looks.atlas.texture as Texture, looks.mask.texture as Texture, {
       vertex: nodes.vertex,
       uv: nodes.uv,
       normal: nodes.normal,
       glow: float(LAMPS) as unknown as Node<'float'>,
       instance: { ...nodes, users: { atlas: looks.atlas.users, mask: looks.mask.users } },
+      cockade: { coords: nodes.cockade, wears: float(1), colours: COCKADE_COLOURS },
     });
     material.name = `crew ${name}`;
     // Only as many vertices as the largest figure; each instance draws its own.
@@ -191,12 +207,21 @@ export class CrewLevel {
     g.setAttribute('position', new BufferAttribute(new Float32Array(3 * vertices), 3));
     // Read by nothing but the material's default normal, which the vertex node replaces.
     g.setAttribute('normal', new BufferAttribute(new Float32Array(3 * vertices), 3));
-    this.mesh = new InstancedMesh(g, material, LEVEL_MOST);
+    this.mesh = instances(g, material);
     this.mesh.name = `crew ${name}`;
     this.mesh.count = 0;
     this.mesh.visible = false;
     // Placed by its vertex node: the instance matrices stay the identity.
     this.mesh.frustumCulled = false;
+    if (pendants) {
+      const m = pendantMaterial(pendantNodes(this.rows.texture, this.#rowsUsers, looks));
+      m.name = `crew ${name} pendants`;
+      this.pendants = instances(noPendants(), m);
+      this.pendants.name = m.name;
+      this.pendants.count = 0;
+      this.pendants.visible = false;
+      this.pendants.frustumCulled = false;
+    }
   }
 
   /** Room for n rows: the rows' texture made taller, its rows kept, if they do not fit. */
@@ -217,16 +242,30 @@ export class CrewLevel {
     old.texture.dispose();
   }
 
-  /** Row r's head: the figure, its look's layer, whether a machine, and the colours. */
+  /** Row r's head: the figure, its look's layer, whether a machine, the colours, whether they wear the winner's cockade, and the pendant they wear (0 none). */
   head(
     r: number,
     figure: Placed,
     colours: { main: Color; skin: Color; hair: Color },
     layer: number,
     machine: boolean,
+    cockade = false,
+    pendant = 0,
   ): void {
     const d = this.rows.data;
     const o = 4 * this.rows.width * r;
+    d[o + 28] = cockade ? 1 : 0;
+    d[o + 29] = this.pendants === null ? 0 : pendant;
+    if (this.pendants !== null && pendant > 0) {
+      this.#wearing++;
+      const mesh = this.pendants;
+      whenPendants((p) => {
+        if (mesh.geometry !== p.all) {
+          mesh.geometry.dispose();
+          mesh.geometry = p.all;
+        }
+      });
+    }
     d[o] = figure.offset;
     d[o + 1] = figure.count;
     d[o + 2] = layer;
@@ -269,6 +308,14 @@ export class CrewLevel {
     this.count = count;
     this.mesh.count = count;
     this.mesh.visible = count > 0;
+    if (this.pendants !== null) {
+      // None worn, no draw.
+      const n = this.#wearing > 0 ? count : 0;
+      this.pendants.count = n;
+      this.pendants.visible = n > 0;
+      this.wearing = this.#wearing;
+      this.#wearing = 0;
+    }
     this.rows.texture.needsUpdate = true;
   }
 
@@ -278,12 +325,49 @@ export class CrewLevel {
   }
 }
 
+/**
+ * The pendants' vertex in a level: each instance a row, its pendant (row
+ * texel 7's second) on its look's place, skinned by the pendant bone's
+ * matrix in the row and put in the row's frame.
+ */
+function pendantNodes(
+  rowsTexture: Texture,
+  rowsUsers: { value: Texture }[],
+  looks: FleetLooks,
+): Node<'vec3'> {
+  const t = texture(rowsTexture);
+  rowsUsers.push(t);
+  const row = int(instanceIndex);
+  const at = (x: number): Node<'vec4'> => t.load(ivec2(x, row)) as unknown as Node<'vec4'>;
+  const figure = at(0);
+  const f0 = at(4);
+  const f1 = at(5);
+  const f2 = at(6);
+  const layer = int(figure.z.add(0.5));
+  const bone = vec4(looks.pendantBone, 0, 0, 0) as unknown as Node<'vec4'>;
+  return pendantVertex({
+    worn: at(7).y as unknown as Node<'float'>,
+    at: (looks.pendants.at.element(layer) as unknown as Node<'vec4'>)
+      .xyz as unknown as Node<'vec3'>,
+    facing: (looks.pendants.facing.element(layer) as unknown as Node<'vec4'>)
+      .xyz as unknown as Node<'vec3'>,
+    skin: (p, n) => skinRow(t, row, bone, vec4(1, 0, 0, 0) as unknown as Node<'vec4'>, p, n),
+    place: (p) => {
+      const p4 = vec4(p, 1);
+      return vec3(dot(f0, p4), dot(f1, p4), dot(f2, p4)) as unknown as Node<'vec3'>;
+    },
+    turn: (n) => vec3(dot(f0.xyz, n), dot(f1.xyz, n), dot(f2.xyz, n)) as unknown as Node<'vec3'>,
+  });
+}
+
 /** A level's vertex and per-instance values, as nodes. */
 function crewNodes(
   pool: Pool,
   rowsTexture: Texture,
   rowsUsers: { value: Texture }[],
+  looks: FleetLooks,
 ): {
+  cockade: Node<'vec3'>;
   vertex: Node<'vec3'>;
   uv: Node<'vec2'>;
   normal: Node<'vec3'>;
@@ -329,6 +413,12 @@ function crewNodes(
   })() as unknown as Node<'vec3'>;
   return {
     vertex,
+    // The winner's cockade, on the figure as bound, where the row wears it.
+    cockade: looks.cockadeCoords(
+      a.xyz as unknown as Node<'vec3'>,
+      figure.z as unknown as Node<'float'>,
+      at(7).x.greaterThan(0.5) as unknown as Node<'bool'>,
+    ),
     uv: varying(vec2(a.w, b.w)) as unknown as Node<'vec2'>,
     normal: varying(modelWorldMatrix.mul(vec4(n, 0)).xyz) as unknown as Node<'vec3'>,
     main: varying(main.xyz) as unknown as Node<'vec3'>,

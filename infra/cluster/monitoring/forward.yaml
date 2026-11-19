@@ -4,7 +4,9 @@
 # vmalert's rules through it). VictoriaLogs' is in logs/. Each from the
 # lower part of k3s's Service range, which Kubernetes keeps for addresses
 # chosen by hand (KEP-3070). The forward is dialled from the node, which
-# kube-router always lets through. No route leads to them.
+# kube-router always lets through. The machine also routes both to the
+# tailnet, for the tailnet's admins alone, so the owner's phone opens them
+# with no tunnel; nothing on the internet routes to them.
 apiVersion: v1
 kind: Service
 metadata:

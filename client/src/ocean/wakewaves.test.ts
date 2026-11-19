@@ -8,7 +8,7 @@ import { type HullShape, hullShape } from './hulls';
 import { GRAVITY } from './spectrum';
 import { trackWavelength, type WakeGrid, wakeAngle } from './wakemeasure';
 import { wakeDamping } from './wakewaves';
-import { immersion, type WakeDamping, WakeWavesReference } from './wakewavescpu';
+import { immersion, SAMPLES, type WakeDamping, WakeWavesReference } from './wakewavescpu';
 
 const boat = catalog.boats[0] as (typeof catalog.boats)[number];
 
@@ -85,6 +85,28 @@ describe('a hull', () => {
     const displaced = boat.physics.hull.displacement / 1025;
     expect(volume).toBeGreaterThan(0.6 * displaced);
     expect(volume).toBeLessThan(1.2 * displaced);
+  });
+
+  test('lays its pressure as every point of every texel reads it, turned and off the centre', () => {
+    const field = new WakeWavesReference(64, 16, wakeDamping());
+    const hull = { east: 1.3, north: -0.6, heading: 2.1, sink: 0.02 };
+    field.press(shape, [hull], 0.25, -0.5);
+    const n = field.size;
+    const s = Math.sin(hull.heading);
+    const c = Math.cos(hull.heading);
+    for (let row = 0; row < n; row++) {
+      for (let col = 0; col < n; col++) {
+        let sum = 0;
+        for (let a = 0; a < SAMPLES; a++) {
+          const dn = -0.5 + (row + (a + 0.5) / SAMPLES - n / 2) * field.texel - hull.north;
+          for (let b = 0; b < SAMPLES; b++) {
+            const de = 0.25 + (col + (b + 0.5) / SAMPLES - n / 2) * field.texel - hull.east;
+            sum += immersion(shape, de * c - dn * s, -(de * s + dn * c), hull.sink);
+          }
+        }
+        expect(field.pressure[row * n + col]).toBe(sum / (SAMPLES * SAMPLES));
+      }
+    }
   });
 
   test('at rest sits in its dent and makes no waves', () => {

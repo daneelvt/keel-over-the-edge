@@ -245,7 +245,8 @@ func TestUpwindInWaves(t *testing.T) {
 }
 
 // With no waves the boat sails exactly as in flat water: a calm sea and no
-// sea give the same numbers, and the hull neither heaves nor pitches.
+// sea give the same numbers, and the hull neither heaves nor pitches, but
+// for a boat whose rig pitches her, which pitches to her rig alone.
 func TestNoSeaNoChange(t *testing.T) {
 	var sf scenarioFile
 	readJSON(t, scenariosFile, &sf)
@@ -271,7 +272,7 @@ func TestNoSeaNoChange(t *testing.T) {
 			if s != s2 || o != o2 {
 				t.Fatalf("%s, step %d: a calm sea differs from flat water:\n flat %+v\n calm %+v", sc.Name, i, s, s2)
 			}
-			if s.Heave != 0 || s.HeaveRate != 0 || s.Pitch != 0 || s.PitchRate != 0 {
+			if s.Heave != 0 || s.HeaveRate != 0 || !b.rigPitch && (s.Pitch != 0 || s.PitchRate != 0) {
 				t.Fatalf("%s, step %d: the hull moved in flat water: %+v", sc.Name, i, s)
 			}
 			still := e.CurrentEast == 0 && e.CurrentNorth == 0

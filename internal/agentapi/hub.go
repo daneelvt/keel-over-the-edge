@@ -51,6 +51,11 @@ type record struct {
 	result  bus.Result
 	// why is an Ashore's reason.
 	why uint8
+	// words are a race event's words for the account, race its race's
+	// key, and call whether it is a call on its boat.
+	words string
+	race  uint32
+	call  bool
 }
 
 // Recorder is handed a world's frames as they are published: a
@@ -58,6 +63,9 @@ type record struct {
 type Recorder struct {
 	hub *hub
 	sea *Sea
+	// raced is the tick of the newest race event recorded: the ticking
+	// goroutine's alone.
+	raced int64
 }
 
 // Record copies what f tells of machine sailors for the hub, and pokes it.
@@ -82,6 +90,12 @@ func (r *Recorder) Record(f *bus.Frame) {
 			put(record{tick: f.Tick, kind: evLeft, account: e.Account, boat: e.Reply.Boat, result: e.Reply.Result})
 		case e.Op == bus.Ashore:
 			put(record{tick: f.Tick, kind: evAboard, account: e.Account, boat: e.Reply.Boat, slot: e.Reply.Slot, result: e.Reply.Result, why: e.Why})
+		case e.Op == bus.Certify:
+			kind := evCertificate
+			if e.Certified.Earned {
+				kind = evCertified
+			}
+			put(record{tick: f.Tick, kind: kind, account: e.Account, words: certifiedWords(r.sea.Catalog, &e.Certified)})
 		}
 	}
 	for i := range f.Edges {
@@ -103,6 +117,7 @@ func (r *Recorder) Record(f *bus.Frame) {
 		}
 		put(record{tick: f.Tick, kind: evCharted, subject: c.Subject, owner: c.Owner, boat: c.Boat, x: c.X, y: c.Y})
 	}
+	r.raceEvents(f, put)
 	if f.Ended {
 		put(record{tick: f.Tick, kind: evWorldEnded})
 	}
@@ -263,6 +278,23 @@ func (h *hub) dispatch(r recordFor) {
 			hm.slot, hm.boat, hm.queued, hm.ordered = r.slot, r.boat, false, false
 		}
 		e = event{Tick: r.tick, Kind: evAboard, Words: ashoreEventWords(r.why, r.result)}
+	case evCertificate, evCertified:
+		// Told after a race's own events of the same tick, as a race's
+		// are after a report.
+		e = event{Tick: max(r.tick, hm.seq+1, hm.ring.last()), Kind: r.kind, Words: r.words}
+	case evRace, evRacePlaced, evRaceAsked:
+		// A race tells several events in one tick (a lone boat finishes
+		// and ends its race at once), each its own record: one handed on
+		// after a report told its tick goes after that report, as a
+		// line does, or it would never be told.
+		e = event{Tick: max(r.tick, hm.seq+1, hm.ring.last()), Kind: r.kind, Words: r.words}
+		if r.call {
+			if hm.raceCalls == nil {
+				hm.raceCalls = map[uint32][]string{}
+			}
+			calls := append(hm.raceCalls[r.race], r.words)
+			hm.raceCalls[r.race] = calls[max(len(calls)-mostCalls, 0):]
+		}
 	case evOver:
 		e = event{Tick: r.tick, Kind: evOver, Words: "over the falls: your boat starts again at the start"}
 	case evTaken:
@@ -368,6 +400,8 @@ func (h *hub) boatEvents(f *bus.Frame, sl int32, mode uint8, aground bool) {
 // boatEventsOf tells a helm of the boat's capsizes and groundings.
 func (h *hub) boatEventsOf(hm *helm, f *bus.Frame, sl int32, mode uint8, aground bool) {
 	switch {
+	case mode != physics.Sailing && h.modes[sl] == physics.Sailing && pitchpoled(h.sea.boat(f.Kind[sl]), &f.State[sl]):
+		hm.event(event{Tick: f.Tick, Kind: evCapsized, Words: "pitchpoled: the bows buried and your sailor went over them; swimming back to her"})
 	case mode != physics.Sailing && h.modes[sl] == physics.Sailing:
 		hm.event(event{Tick: f.Tick, Kind: evCapsized, Words: "capsized: your sailor is in the water, righting the boat"})
 	case mode == physics.Sailing && h.modes[sl] != physics.Sailing:

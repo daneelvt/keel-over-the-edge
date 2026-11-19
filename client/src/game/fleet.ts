@@ -17,6 +17,14 @@
 // tick of the first sample that flags it (the edge's fallPose), until it
 // leaves the view.
 //
+// A page shown again after a while hidden starts again from the newest
+// snapshot (snap): every boat drawn where it is now, at its pace, with
+// nothing eased from where it was, no speed from the jump, and the render
+// ticks set at once. The lateness of the window before the page was hidden
+// stands for the window after it, as though it had come just before: the
+// network did not change while the page was away, so the delays stay as
+// they were and the render tick runs at real time from the first frame.
+//
 // Times are world ticks, as floats: 30 a second. Nothing here allocates
 // once made.
 
@@ -84,8 +92,10 @@ const F = {
   foreYardsTurn: 15,
   kite: 16,
   hoist: 17,
+  trim: 18,
+  aft: 19,
 } as const;
-const FIELDS = 18;
+const FIELDS = 20;
 
 /**
  * The slot fields the wire may carry beyond those every boat has: the
@@ -155,6 +165,13 @@ export interface DrawnBoat {
   /** The downwind sail's clew's angle, radians, positive to starboard, and how far it is hoisted, 0 … 1; 0 for a boat with none. */
   kite: number;
   hoist: number;
+  /**
+   * A boat whose rig pitches her: her trim, radians, bow up, which float.ts
+   * adds to the pitch the waves give her; and how far aft of their place her
+   * sailor stands, metres. 0 for any other boat.
+   */
+  trim: number;
+  aft: number;
   /** 0 … 1: how far it has faded in. */
   opacity: number;
   /** 0 near … 1 far: where its delay is between the bands'. */
@@ -175,15 +192,23 @@ export interface DrawnBoat {
   name: string;
   /** Who is aboard it, as the server told it while it is near: null for nobody but its skipper. Never a name. */
   crew: BoatCrew | null;
+  /** What it flies for its skipper's races in the world: a prize code (render/prizes.ts); 0 for none. */
+  prizes: number;
+  /** Its race number while it races, 0 for none. */
+  raceNumber: number;
   /** Counts the boats its slot has held: another boat in the slot, another count. */
   entered: number;
   /** Whether its helm is drawn elsewhere this frame, walking with the crew as the controls change hands: set by the crew's drawing. */
   helmAway: boolean;
+  /** On a beach cat, whether her crew crossing her net is in her helm's way this frame: set by the crew's drawing. */
+  helmHeld: boolean;
+  /** On a beach cat, where her helm crossing her net is across it (x, m, + starboard), as last drawn near; null if not crossing it or not drawn near. */
+  helmNet: number | null;
 }
 
-/** Who is aboard a boat in view: each person's seat and look, the skipper (seat 0) first, and the seat of whoever holds the controls. */
+/** Who is aboard a boat in view: each person's seat and look, whether they wear the winner's cockade and the pendant they wear (0 none), the skipper (seat 0) first, and the seat of whoever holds the controls. */
 export interface BoatCrew {
-  people: readonly { seat: number; look: number }[];
+  people: readonly { seat: number; look: number; cockade?: boolean; pendant?: number }[];
   holder: number;
 }
 
@@ -210,6 +235,8 @@ export function newDrawnBoat(): DrawnBoat {
     foreYardsTurn: 0,
     kite: 0,
     hoist: 0,
+    trim: 0,
+    aft: 0,
     opacity: 0,
     far: 0,
     motion: 0,
@@ -221,8 +248,12 @@ export function newDrawnBoat(): DrawnBoat {
     boatLook: -1,
     name: '',
     crew: null,
+    prizes: 0,
+    raceNumber: 0,
     entered: 0,
     helmAway: false,
+    helmHeld: false,
+    helmNet: null,
   };
 }
 
@@ -238,6 +269,9 @@ class Boat {
   boatLook = 0;
   name = '';
   crew: BoatCrew | null = null;
+  /** Its prize code and race number, as told for its slot. */
+  prizes = 0;
+  raceNumber = 0;
   /** Counts the boats this slot has held. */
   entered = 0;
   readonly ring = new Float64Array(SAMPLES * FIELDS);
@@ -308,6 +342,8 @@ class Boat {
     r[k + F.foreYardsTurn] = yardsTurn(f[o + SLOT.foreYards] ?? 0);
     r[k + F.kite] = f[o + SLOT.kite] ?? 0;
     r[k + F.hoist] = f[o + SLOT.hoist] ?? 0;
+    r[k + F.trim] = f[o + SLOT.trim] ?? 0;
+    r[k + F.aft] = f[o + SLOT.aft] ?? 0;
     const falling = f[o + SLOT.falling] ?? 0;
     r[k + F.falling] = falling;
     if (falling === 0) {
@@ -331,6 +367,8 @@ class Boat {
     out.boatLook = this.boatLook;
     out.name = this.name;
     out.crew = this.crew;
+    out.prizes = this.prizes;
+    out.raceNumber = this.raceNumber;
     out.entered = this.entered;
     out.tick = rt;
     out.fall = rt >= this.fallTick ? (rt - this.fallTick) / TICKS_PER_SECOND : -1;
@@ -365,6 +403,8 @@ class Boat {
       // The clew's angle blended as the jib's: it crosses in a gybe through
       // aft, as the crew takes it round.
       out.kite = this.#mix(i, F.kite, t);
+      out.trim = this.#mix(i, F.trim, t);
+      out.aft = this.#mix(i, F.aft, t);
       const discrete = t < 0.5 ? i + 1 : i;
       out.mode = this.at(discrete, F.mode);
       out.sail = this.at(discrete, F.sail);
@@ -408,6 +448,8 @@ class Boat {
     out.foreYardsTurn = this.at(i, F.foreYardsTurn);
     out.kite = this.at(i, F.kite);
     out.hoist = this.at(i, F.hoist);
+    out.trim = this.at(i, F.trim);
+    out.aft = this.at(i, F.aft);
   }
 }
 
@@ -422,6 +464,12 @@ class Band {
   constructor(base: number) {
     this.base = base;
     this.delay = base;
+  }
+
+  /** Forgets the render tick and the delay: a new connection's data. */
+  reset(): void {
+    this.tick = Number.NaN;
+    this.delay = this.base;
   }
 
   /** Moves the render tick dt ticks on, toward data − delay, never back. */
@@ -470,6 +518,8 @@ export class Fleet {
   readonly #sorted = new Float64Array(1024);
   #lateN = 0;
   #lateNext = 0;
+  /** A snap: the next snapshot's lateness comes just after the window's newest. */
+  #restamp = false;
   /** The least and the spread of the lateness, µs. */
   #least = 0;
   #spread = 0;
@@ -482,6 +532,8 @@ export class Fleet {
   readonly #names: string[] = Array.from({ length: VIEW_SLOTS }, () => '');
   /** The crews by view slot, as the server told them: of the boat the slot holds as of the next snapshot. */
   readonly #crews: (BoatCrew | null)[] = Array.from({ length: VIEW_SLOTS }, () => null);
+  /** Each view slot's prize code and race number, as last told, two to a slot. */
+  readonly #prizes = new Uint32Array(2 * VIEW_SLOTS);
 
   /** The boats drawn this frame: drawn[0 … count). */
   readonly drawn: DrawnBoat[] = Array.from({ length: 2 * VIEW_SLOTS }, newDrawnBoat);
@@ -530,6 +582,8 @@ export class Fleet {
         b.kind = f[o + SLOT.kind] ?? 0;
         b.name = this.#names[i] ?? '';
         b.crew = this.#crews[i] ?? null;
+        b.prizes = this.#prizes[2 * i] ?? 0;
+        b.raceNumber = this.#prizes[2 * i + 1] ?? 0;
       }
       if (f[o + SLOT.present] === 1 && f[o + SLOT.sampled] === 1 && b.present) {
         b.add(f, o, tick);
@@ -561,7 +615,13 @@ export class Fleet {
   crews(
     list: readonly {
       slot: number;
-      people: readonly { seat: number; look: number; machine?: boolean }[];
+      people: readonly {
+        seat: number;
+        look: number;
+        machine?: boolean;
+        cockade?: boolean;
+        pendant?: number;
+      }[];
       holder: number;
     }[],
   ): void {
@@ -569,21 +629,83 @@ export class Fleet {
       if (c.slot >= 0 && c.slot < VIEW_SLOTS) {
         this.#crews[c.slot] =
           c.people.length > 1
-            ? { people: c.people.map((p) => ({ seat: p.seat, look: p.look })), holder: c.holder }
+            ? {
+                people: c.people.map((p) => ({
+                  seat: p.seat,
+                  look: p.look,
+                  ...(p.cockade === true ? { cockade: true } : {}),
+                  ...((p.pendant ?? 0) > 0 ? { pendant: p.pendant } : {}),
+                })),
+                holder: c.holder,
+              }
             : null;
       }
     }
   }
 
-  /** Forgets every boat, fading them out: a new connection. */
+  /**
+   * Takes boats' prizes by view slot: each the prize code and race number
+   * of the boat its slot holds as of the next snapshot, kept for the next
+   * boat it holds until told again. The own boat's are not the fleet's.
+   */
+  prizes(list: readonly { slot: number; own: boolean; prizes: number; number: number }[]): void {
+    for (const p of list) {
+      if (!p.own && p.slot >= 0 && p.slot < VIEW_SLOTS) {
+        this.#prizes[2 * p.slot] = p.prizes;
+        this.#prizes[2 * p.slot + 1] = p.number;
+        const b = this.#boats[p.slot] as Boat;
+        if (b.present) {
+          b.prizes = p.prizes;
+          b.raceNumber = p.number;
+        }
+      }
+    }
+  }
+
+  /** Forgets every boat, fading them out, and the render ticks and the lateness: a new connection. */
   clear(): void {
     this.#names.fill('');
     this.#crews.fill(null);
+    this.#prizes.fill(0);
     for (const b of this.#boats) {
       if (b.present) {
         this.#fadeOut(b);
       }
     }
+    this.near.reset();
+    this.far.reset();
+    this.#forgetLateness();
+  }
+
+  /**
+   * Starts again from the next snapshot, as after a while hidden: each
+   * boat keeps its slot, but none of its samples, nothing eased and no
+   * speed from the jump; none fades out where it was; the render ticks are
+   * set from the next data at once; the lateness's window is moved up to
+   * it, as though it had come just before.
+   */
+  snap(): void {
+    for (const b of this.#boats) {
+      b.count = 0;
+      b.next = 0;
+      b.ease = 0;
+      b.motion = MOTION.interpolated;
+      // Drawn at none, its first frame back measures no speed (update).
+      b.drawn.opacity = 0;
+      b.drawn.speed = 0;
+    }
+    this.#ghostCount = 0;
+    this.near.tick = Number.NaN;
+    this.far.tick = Number.NaN;
+    this.#restamp = this.#lateN > 0;
+  }
+
+  #forgetLateness(): void {
+    this.#lateN = 0;
+    this.#lateNext = 0;
+    this.#least = 0;
+    this.#spread = 0;
+    this.#restamp = false;
   }
 
   /**
@@ -710,6 +832,14 @@ export class Fleet {
   /** Notes a snapshot's lateness, µs, at a world tick; keeps the least and the spread up to date. */
   #lateness(late: number, at: number): void {
     const cap = this.#late.length;
+    if (this.#restamp) {
+      this.#restamp = false;
+      const newest = this.#lateAt[(this.#lateNext - 1 + cap) % cap] ?? at;
+      const by = at - 1 - newest;
+      for (let i = 0; i < this.#lateN; i++) {
+        this.#lateAt[i] = (this.#lateAt[i] ?? 0) + by;
+      }
+    }
     this.#late[this.#lateNext] = late;
     this.#lateAt[this.#lateNext] = at;
     this.#lateNext = (this.#lateNext + 1) % cap;
@@ -747,6 +877,8 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.foreYardsTurn = a.foreYardsTurn;
   b.kite = a.kite;
   b.hoist = a.hoist;
+  b.trim = a.trim;
+  b.aft = a.aft;
   b.opacity = a.opacity;
   b.far = a.far;
   b.motion = a.motion;
@@ -758,6 +890,10 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.boatLook = a.boatLook;
   b.name = a.name;
   b.crew = a.crew;
+  b.prizes = a.prizes;
+  b.raceNumber = a.raceNumber;
   b.entered = a.entered;
   b.helmAway = a.helmAway;
+  b.helmHeld = a.helmHeld;
+  b.helmNet = a.helmNet;
 }

@@ -135,6 +135,76 @@ stage:
     at: [0.0, 36.0, 0.0]
     knee: 0.12
     span: 1.2
+  # The tall ship, whose company stands, sits, walks, climbs, hauls and
+  # lies out about her decks and aloft (build/stage.py's Ship): her model,
+  # set this far forward of the dinghy in the stage's scene, clear of every
+  # other stage; her `company` node gives the places the clips made there
+  # are placed from, on the starboard side (the port's the mirror).
+  ship:
+    boat: boats/tall-ship.glb
+    at: [0.0, 80.0, 0.0]
+  # The beach cat, whose sailors sit on her windward hull, sit out from it,
+  # lie out on the wire, cross her net and right her standing on her lower
+  # hull (build/stage.py's Cat): her model, set this far forward of the
+  # dinghy in the stage's scene, clear of every other stage, and a copy of
+  # her lying on her side this far to starboard of her (her mast reaches
+  # 9 m to port of it); her `aboard` node gives the places the clips made
+  # there are placed from, on the starboard side (the port's the mirror).
+  # Sat on her hull facing inboard, the hips this far outboard of the
+  # deck's inner edge; sitting out, this far inboard of its outer edge.
+  cat:
+    boat: boats/beach-cat.glb
+    at: [0.0, 50.0, 0.0]
+    capsized: [13.0, 0.0, 0.0]
+    seat: { in: 0.22 }
+    hike: { in: 0.05 }
+  # The cruising yacht, whose helm stands or sits at her windward wheel,
+  # whose crew sit on her cockpit's benches and on her rail under her
+  # lifelines, and cross her cockpit and her coachroof at a crouch
+  # (build/stage.py's Yacht): her model, set this far to starboard of the
+  # dinghy in the stage's scene, clear of every other stage; her nodes give
+  # the places the clips made there are placed from, on the starboard side
+  # (the port's the mirror). At her wheel the hands hold its rim, each this
+  # many degrees from its top (to starboard as the helm sees it) and this
+  # far in from the rim's middle (within its wood), standing;
+  # sat by it, the inboard hand. Sat on the side deck outboard of the
+  # wheel facing forward, the helm's hips are this far aft of the wheel
+  # and this far outboard of the deck's inner edge, the feet braced this
+  # far forward of them, by her capstan. Sat on the bench, the hips this
+  # far in from its front edge (the idles': its edge this far from the
+  # knees).
+  # On the rail, the knees' joints this far out from the deck's edge. Her
+  # cockpit is crossed this far aft of her table, forward of the wheels
+  # (forward of the table there is no room fore and aft for a crouch); her
+  # coachroof this far aft of its fore end, forward of the
+  # mast, over its scuttle (aft of the mast her boom is 0.72 m over the
+  # roof, lower than a crouching figure's hat).
+  cruiser:
+    boat: boats/yacht.glb
+    at: [40.0, 0.0, 0.0]
+    grips: { yacht-wheel-left: [-45, 0.0], yacht-wheel-right: [45, 0.0], yacht-seat: [82, 0.0] }
+    helm-seat: { aft: 0.47, out: 0.15, brace: 0.75 }
+    bench: { in: 0.2, knee: 0.24 }
+    rail: { knee: 0.1 }
+    cockpit: { table: 0.5 }
+    roof: { fore: 0.5 }
+  # The cruising catamaran, whose helm stands at her raised wheel or sits
+  # on the settle behind it, whose company sit beside the helm, round her
+  # table, on her aft bench and her lounger, walk her cockpit and climb her
+  # helm's ladder (build/stage.py's Bridgedeck): her model, set this far to
+  # port of the dinghy in the stage's scene, clear of every other stage;
+  # her nodes give the places the clips made there are placed from. At her
+  # wheel the hands hold its rim, each this many degrees from its top (to
+  # starboard as the helm sees it) and this far in from the rim's middle.
+  # Sat on the settle at the wheel, the hips this far behind its front
+  # edge; on any other seat, this far (the idles: its edge this far from
+  # the knees).
+  bridgedeck:
+    boat: boats/catamaran.glb
+    at: [-40.0, 0.0, 0.0]
+    grips: { bridge-wheel-left: [-45, 0.0], bridge-wheel-right: [45, 0.0] }
+    wheel-seat: { in: 0.06 }
+    seat: { in: 0.2, knee: 0.24 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

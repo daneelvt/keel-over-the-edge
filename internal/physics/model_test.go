@@ -95,7 +95,7 @@ func TestResistance(t *testing.T) {
 		near(t, "drag area", lookup(b.dragArea[:], v, b.dragAreaInvStep), c.area, 1e-12)
 		m := motion{u: v, cosHeel: 1}
 		var l loads
-		b.hullLoads(&m, &l)
+		b.hullLoads(&m, &l, 1)
 		near(t, "resistance", -l.X, 0.5*waterDensity*c.area*v*v, 1e-9)
 	}
 	// Beyond the table, its last value.

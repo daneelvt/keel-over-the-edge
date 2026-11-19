@@ -9,9 +9,22 @@
 // queue, or is idle, a watch ended; it may wait for a boat while it
 // watches. The controls go to the server only while it sails: watching or
 // idle, only the acknowledgements and the Pings do.
+//
+// While the page is hidden it draws no frames and reads no records, so the
+// worker keeps only the newest snapshot's, every enter and leave since the
+// page last had one folded into it, and hands it over once the page is
+// shown. Every other message is passed on as it comes: none of them rides
+// in a snapshot.
 
-import type { FromWorker, HelloVersions, Status, ToWorker, Traffic } from '../../net/messages';
-import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
+import type {
+  FromWorker,
+  HelloVersions,
+  RaceWatchAsk,
+  Status,
+  ToWorker,
+  Traffic,
+} from '../../net/messages';
+import { FLEET_RECORD_BYTES, fleetOf, foldHeld, VIEW_SLOTS, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
 import { harbourOf, lightSeen, Session } from './session';
 
@@ -22,6 +35,7 @@ type DeckAsk = Extract<
     type:
       | 'knock'
       | 'answer'
+      | 'courseTo'
       | 'hand'
       | 'take'
       | 'giveBack'
@@ -31,7 +45,9 @@ type DeckAsk = Extract<
       | 'say'
       | 'mute'
       | 'block'
-      | 'report';
+      | 'report'
+      | 'raceRetire'
+      | 'home';
   }
 >;
 
@@ -41,6 +57,8 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
       return s.knockCommand(now, m.token, m.machine, m.shipmate ?? '');
     case 'answer':
       return s.answerCommand(now, m.knock, m.let);
+    case 'courseTo':
+      return s.courseToCommand(now, m.sailor);
     case 'hand':
       return s.handCommand(now, m.to);
     case 'take':
@@ -61,6 +79,10 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
       return s.blockCommand(now, m.who, m.on);
     case 'report':
       return s.reportCommand(now, m.who, m.reason, m.note);
+    case 'raceRetire':
+      return s.raceRetireCommand(now);
+    case 'home':
+      return s.homeCommand(now);
   }
 }
 
@@ -112,6 +134,8 @@ export class NetWorker {
   };
   /** The sailor the page last asked to watch, which every Hello asks for; "" to sail. */
   #watch = '';
+  /** Or the race's boat it last asked to watch; null for none. */
+  #raceWatch: RaceWatchAsk | null = null;
   /** The connection sails its own boat; watches another's; waits in the queue for a boat. */
   #sailing = false;
   #watching = false;
@@ -120,6 +144,13 @@ export class NetWorker {
   readonly #pool: ArrayBuffer[] = [];
   /** Records made: a few at first, then none while the page hands them back. */
   made = 0;
+  /** The page is hidden: snapshots are held, the newest only. */
+  #hidden = false;
+  /** The newest snapshot's record while the page is hidden, or null. */
+  #held: ArrayBuffer | null = null;
+  /** What the snapshots held did to each view slot, and which enters were of the same boat. */
+  readonly #heldChange = new Uint8Array(VIEW_SLOTS);
+  readonly #heldRelook = new Uint8Array(VIEW_SLOTS);
 
   constructor(deps: NetDeps) {
     this.#d = deps;
@@ -136,6 +167,7 @@ export class NetWorker {
         this.#url = m.url;
         this.#session = new Session(m.versions as HelloVersions);
         this.#session.watch = this.#watch;
+        this.#session.raceWatch = this.#raceWatch;
         this.#session.tier = this.#tier;
         this.#session.renderScale = this.#scale;
         this.#connect();
@@ -169,6 +201,19 @@ export class NetWorker {
           this.#arm();
         }
         break;
+      case 'watchRace':
+        this.#ask('', m.ask);
+        if (!this.#takeBack() && this.#session !== null) {
+          this.#send(this.#session.watchRaceCommand(this.#d.now(), m.ask));
+          this.#arm();
+        }
+        break;
+      case 'cheer':
+        if (this.#session !== null) {
+          this.#send(this.#session.cheerCommand(this.#d.now()));
+          this.#arm();
+        }
+        break;
       case 'sail':
         this.#ask('');
         if (!this.#takeBack() && this.#session !== null) {
@@ -190,6 +235,7 @@ export class NetWorker {
         break;
       case 'knock':
       case 'answer':
+      case 'courseTo':
       case 'hand':
       case 'take':
       case 'giveBack':
@@ -200,6 +246,8 @@ export class NetWorker {
       case 'mute':
       case 'block':
       case 'report':
+      case 'raceRetire':
+      case 'home':
         if (this.#session !== null) {
           this.#send(deckCommand(this.#session, this.#d.now(), m));
           this.#arm();
@@ -210,12 +258,27 @@ export class NetWorker {
           this.#session.frameMs = Math.round(m.ms);
         }
         break;
+      case 'fetched':
+        if (this.#session !== null) {
+          this.#session.fetchedBytes += Math.max(0, Math.round(m.bytes));
+        }
+        break;
       case 'quality':
         this.#tier = Math.max(0, Math.round(m.tier));
         this.#scale = Math.max(0, Math.round(m.scale * 100));
         if (this.#session !== null) {
           this.#session.tier = this.#tier;
           this.#session.renderScale = this.#scale;
+        }
+        break;
+      case 'hidden':
+        this.#hidden = m.on;
+        if (!m.on) {
+          if (m.settle === true && this.#session !== null) {
+            this.#session.clock.settle(this.#d.now());
+            this.#d.post({ type: 'clock', clock: { ...this.#session.clock.state } });
+          }
+          this.#handHeld();
         }
         break;
       case 'wake':
@@ -256,11 +319,13 @@ export class NetWorker {
     return true;
   }
 
-  /** What every Hello from now on asks for: a sailor's boat to watch, or "" to sail. */
-  #ask(sailor: string): void {
+  /** What every Hello from now on asks for: a sailor's boat to watch, or a race's, or "" and none to sail. */
+  #ask(sailor: string, race: RaceWatchAsk | null = null): void {
     this.#watch = sailor;
+    this.#raceWatch = race;
     if (this.#session !== null) {
       this.#session.watch = sailor;
+      this.#session.raceWatch = race;
     }
   }
 
@@ -350,10 +415,13 @@ export class NetWorker {
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
+          // A snapshot held is the last boat's or the last connection's.
+          this.#dropHeld();
           break;
         }
         case 'snapshot': {
-          const record = this.#pool.pop() ?? this.#record();
+          const held = this.#hidden ? this.#held : null;
+          const record = held ?? this.#pool.pop() ?? this.#record();
           const views = s.views;
           writeRecord(
             record,
@@ -364,7 +432,12 @@ export class NetWorker {
             r.flags,
             this.#d.now(),
           );
-          this.#d.post({ type: 'snapshot', data: record }, [record]);
+          if (this.#hidden) {
+            foldHeld(fleetOf(record), this.#heldChange, this.#heldRelook, held === null);
+            this.#held = record;
+          } else {
+            this.#d.post({ type: 'snapshot', data: record }, [record]);
+          }
           break;
         }
         case 'dropped':
@@ -437,6 +510,18 @@ export class NetWorker {
         case 'shipmates':
           this.#d.post({ type: 'shipmates' });
           break;
+        case 'shipmateAt':
+          this.#d.post({ type: 'shipmateAt', at: r.at });
+          break;
+        case 'courseEnded':
+          this.#d.post({ type: 'courseEnded', sailor: r.sailor, why: r.why });
+          break;
+        case 'lifted':
+          this.#d.post({ type: 'lifted', tick: r.tick, soon: r.soon });
+          break;
+        case 'shipmateCourse':
+          this.#d.post({ type: 'shipmateCourse', name: r.name });
+          break;
         case 'look':
           this.#d.post({ type: 'look', look: r.look });
           break;
@@ -446,6 +531,9 @@ export class NetWorker {
         case 'boatNames':
           this.#d.post({ type: 'boatNames', names: r.names });
           break;
+        case 'boatPrizes':
+          this.#d.post({ type: 'boatPrizes', prizes: r.prizes });
+          break;
         case 'crews':
           this.#d.post({ type: 'crews', crews: r.crews });
           break;
@@ -454,7 +542,7 @@ export class NetWorker {
           break;
         case 'pong':
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
-          this.#d.post({ type: 'traffic', ...this.#traffic });
+          this.#d.post({ type: 'traffic', ...this.#traffic, made: this.made });
           break;
         case 'restart':
           this.#d.post({ type: 'restart', inMs: r.inMs });
@@ -476,6 +564,30 @@ export class NetWorker {
         case 'bump':
           this.#d.post({ type: 'bump', bump: r.bump });
           break;
+        case 'raceTold':
+          this.#d.post({ type: 'raceTold', told: r.told });
+          break;
+        case 'raceSignal':
+          this.#d.post({ type: 'raceSignal', signal: r.signal });
+          break;
+        case 'racePicture':
+          this.#d.post({ type: 'racePicture', picture: r.picture });
+          break;
+        case 'raceCall':
+          this.#d.post({ type: 'raceCall', call: r.call });
+          break;
+        case 'raceFinish':
+          this.#d.post({ type: 'raceFinish', finish: r.finish });
+          break;
+        case 'raceResults':
+          this.#d.post({ type: 'raceResults', results: r.results });
+          break;
+        case 'raceCheered':
+          this.#d.post({ type: 'raceCheered', cheered: r.cheered });
+          break;
+        case 'certified':
+          this.#d.post({ type: 'certified', certified: r.certified });
+          break;
         case 'chunks':
           this.#d.post({ type: 'chunks', chunks: r.chunks });
           break;
@@ -492,7 +604,7 @@ export class NetWorker {
           this.#d.post({ type: 'life', life: r.life, drop: r.drop });
           break;
         case 'chart':
-          this.#d.post({ type: 'chart', entries: r.entries, whole: r.whole });
+          this.#d.post({ type: 'chart', entries: r.entries, courses: r.courses, whole: r.whole });
           break;
         case 'forecast':
           this.#d.post({ type: 'forecast', forecast: r.forecast, past: r.past });
@@ -548,6 +660,26 @@ export class NetWorker {
     const ms = plan.kind === 'wait' ? plan.ms : 0;
     this.#setStatus('waiting', ms);
     this.#wait = this.#d.setTimeout(() => this.#connect(), ms);
+  }
+
+  /** Hands the page the snapshot held while it was hidden, if one came. */
+  #handHeld(): void {
+    const held = this.#held;
+    if (held !== null) {
+      this.#held = null;
+      this.#d.post({ type: 'snapshot', data: held }, [held]);
+    }
+  }
+
+  /** Lets the snapshot held go, to be filled again. */
+  #dropHeld(): void {
+    const held = this.#held;
+    if (held !== null) {
+      this.#held = null;
+      if (this.#pool.length < POOL) {
+        this.#pool.push(held);
+      }
+    }
   }
 
   #record(): ArrayBuffer {

@@ -116,6 +116,9 @@ type Config struct {
 	// Fleet, if not nil, is the accounts' fleets, as a human's card lists
 	// its boats.
 	Fleet *fleet.Fleet
+	// Certificates, if not nil, is a sailor's certificate and its next
+	// one's count in a line, as its card shows them.
+	Certificates func(ctx context.Context, id store.AccountID) (string, error)
 	// Stopped is the set loaded as keel started.
 	Stopped *Set
 	Log     *slog.Logger

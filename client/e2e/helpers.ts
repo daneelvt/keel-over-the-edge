@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { inflateSync } from 'node:zlib';
-import { type APIResponse, type BrowserContext, expect, type Page, test } from '@playwright/test';
+import {
+  type APIRequestContext,
+  type APIResponse,
+  type BrowserContext,
+  expect,
+  type Page,
+  test,
+} from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import type { KeelHooks } from '../src/dev/hooks';
 import { assertPasskey, createPasskey, type Passkey } from './passkey';
@@ -230,6 +237,16 @@ export async function answerBorn(page: Page, month = 'April', year = '2001'): Pr
 }
 
 /**
+ * A token of the human check, as the start screen's widget gets one from
+ * tools/e2e's stand-in for Cloudflare Turnstile: good for one new sailor.
+ */
+export async function checkToken(request: APIRequestContext): Promise<string> {
+  const res = await request.post('/turnstile/issue', { data: { action: 'new-sailor' } });
+  expect(res.status(), await res.text()).toBe(200);
+  return ((await res.json()) as { token: string }).token;
+}
+
+/**
  * Makes a sailor in the context, as the start screen does, through the
  * server's routes, with a passkey of the test's own: its session's cookie
  * is the context's.
@@ -237,7 +254,7 @@ export async function answerBorn(page: Page, month = 'April', year = '2001'): Pr
 export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<Made> {
   const name = `${word} ${stamp()}`;
   const begun = await context.request.post('/account/begin', {
-    data: { name, ...aLook(), born: BORN },
+    data: { name, ...aLook(), born: BORN, check: await checkToken(context.request) },
   });
   expect(begun.status(), await begun.text()).toBe(200);
   const { passkey, answer } = createPasskey(await begun.json(), new URL(begun.url()).origin);
@@ -245,6 +262,32 @@ export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<
   expect(done.status(), await done.text()).toBe(201);
   const body = (await done.json()) as { name: string; recoveryCode: string };
   return { name: body.name, passkey, recoveryCode: body.recoveryCode };
+}
+
+/** The owner's routes, on keel's internal listener (tools/e2e). */
+const INTERNAL = 'http://127.0.0.1:19090';
+
+/**
+ * Every boat opened to a sailor, as the owner's box on its card does: a
+ * test's sailor is new and holds no certificate, so a boat bigger than the
+ * Jolly boat is closed to it until this. `account` is the account's id, or
+ * a human sailor's name, found as the owner's search finds it.
+ */
+export async function everyBoat(request: APIRequestContext, account: string): Promise<void> {
+  let id = account;
+  if (!/^[0-9a-f-]{32,36}$/i.test(account)) {
+    const res = await request.post(`${INTERNAL}/owner/api/accounts/search`, {
+      data: { text: account, sort: 'active-new', page: 0 },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+    const found = (await res.json()) as { accounts: { id: string; name: string }[] };
+    id = found.accounts.find((a) => a.name === account)?.id ?? '';
+    expect(id, `the account of ${account}`).not.toBe('');
+  }
+  const set = await request.post(`${INTERNAL}/owner/api/every-boat`, {
+    data: { account: id, on: true },
+  });
+  expect(set.status(), await set.text()).toBe(200);
 }
 
 /** The codes of the context's sailor's links to watch, as GET /api/me tells them: its own, and its fleet's. */

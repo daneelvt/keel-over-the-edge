@@ -7,6 +7,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 )
 
 // apply applies one command to the next frame, records it as an event and
@@ -23,7 +24,7 @@ func (w *World) apply(c *bus.Command) {
 		if s := slotOf(f, c.Boat); s >= 0 {
 			r = bus.Reply{Result: bus.Left, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
 			sailor = f.Owner[s]
-			w.free(s)
+			w.free(s, bus.EndReturned)
 		}
 	case bus.SetWeather:
 		wx := c.Weather
@@ -98,6 +99,28 @@ func (w *World) apply(c *bus.Command) {
 		r = w.ashore(c)
 	case bus.SetHolder:
 		r = w.setHolder(c)
+	case bus.RacePlace:
+		r = w.racePlace(c)
+	case bus.RaceRetire:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if committee.Retire(f, c.Account) {
+			r.Result = bus.Done
+		}
+	case bus.RaceWritten:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if c.Race != nil && committee.Drop(f, c.Race.ID, c.Race.Run) {
+			r.Result = bus.Done
+		}
+	case bus.RaceCheer:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if committee.Cheer(f, c.Account, c.Cheers) {
+			r.Result = bus.Done
+		}
+	case bus.Certify:
+		// Nothing changes: the frame's event carries the news out.
+		r = bus.Reply{Result: bus.Done, Slot: -1}
+	case bus.Lift:
+		r = w.lift(c.Boat)
 	default:
 		return
 	}
@@ -157,6 +180,23 @@ func (w *World) teleport(f *bus.Frame, s int32, c *bus.Command) {
 	f.Voyage[s].Placed = true
 }
 
+// lift lifts a boat home at its skipper's word: out of the race it sails
+// in, if any, its voyage ended, lifted, and started again at the start on
+// a new one, as after a fall over the lip: at rest, its course cleared,
+// those aboard still aboard. The new voyage earns as any other. A boat
+// falling over the lip is on its way home already, and is not lifted.
+func (w *World) lift(boat uint64) bus.Reply {
+	f := w.next
+	s := slotOf(f, boat)
+	if s < 0 || f.Voyage[s].Falling() {
+		return bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: boat}
+	}
+	committee.Retire(f, f.Owner[s])
+	w.voyageEnds(f, s, bus.EndLifted)
+	w.startAgain(f, s)
+	return bus.Reply{Result: bus.Done, Slot: s, Boat: boat, Gen: f.Gen[s]}
+}
+
 // expire takes out the boats whose grace has ended, each recorded as an
 // event of its own: a Leave with the result Expired, which a replay does
 // not apply again, since the tick does it; and gives up the places in the
@@ -181,20 +221,21 @@ func (w *World) expire() {
 		boat := f.Boat[s]
 		r := bus.Reply{Result: bus.Expired, Slot: s, Boat: boat, Gen: f.Gen[s], Tick: f.Tick}
 		sailor := f.Owner[s]
-		w.free(s)
+		w.free(s, bus.EndExpired)
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Leave, Boat: boat, Account: sailor}, Reply: r})
 	}
 	w.launch()
 }
 
-// free ends the voyage of the boat in slot s of the next frame, unless it
-// ended going over the lip, and empties the slot.
-func (w *World) free(s int32) {
+// free puts ashore those aboard the boat in slot s of the next frame, ends
+// its voyage, how, unless it ended going over the lip, and empties the
+// slot.
+func (w *World) free(s int32, how uint8) {
 	f := w.next
-	if w.edge != nil && !f.Voyage[s].Falling() {
-		w.voyageEnds(f, s)
-	}
 	w.landCrew(f, s, bus.AshoreLeft)
+	if !f.Voyage[s].Falling() {
+		w.voyageEnds(f, s, how)
+	}
 	f.Holder[s] = bus.Account{}
 	f.Occupied[s] = false
 	f.Stay[s], f.Unseen[s] = false, false

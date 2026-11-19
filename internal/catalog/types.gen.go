@@ -194,6 +194,9 @@ type Boat struct {
 	// Physics corresponds to the JSON schema field "physics".
 	Physics BoatPhysics `json:"physics"`
 
+	// The most boats of this kind in one race.
+	Racers int `json:"racers"`
+
 	// Its sheet for a start from rest: pairs of an angle off the wind, in degrees,
 	// and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read
 	// linearly between them.
@@ -219,6 +222,17 @@ type BoatArt struct {
 	// with headsails, and a node for each of the boat's lights, named as the light,
 	// where its lantern is.
 	Model ArtPath `json:"model"`
+
+	// The files of clips beside each sailor look's clips (<version>.<name>.glb) its
+	// people aboard are drawn with, loaded only when someone is drawn aboard one of
+	// its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire,
+	// crossing her net, righting her); cruiser, a cruising yacht's (at her wheel,
+	// standing and sat by it, on her cockpit's bench, on her rail under her
+	// lifelines, crossing her cockpit and her coachroof); bridgedeck, a cruising
+	// catamaran's (at her raised wheel, standing and sat on the helm seat, beside the
+	// helm, on her cockpit's seats round her table, on her aft bench and her lounger,
+	// walking her cockpit, up and down her helm's ladder).
+	SailorClips []SailorClip `json:"sailorClips,omitempty,omitzero"`
 }
 
 type BoatCloth struct {
@@ -300,6 +314,12 @@ type BoatPhysics struct {
 	// Hull corresponds to the JSON schema field "hull".
 	Hull PhysicsHull `json:"hull"`
 
+	// Hulls corresponds to the JSON schema field "hulls".
+	Hulls PhysicsHulls `json:"hulls"`
+
+	// Pitch corresponds to the JSON schema field "pitch".
+	Pitch PhysicsPitch `json:"pitch"`
+
 	// Rates corresponds to the JSON schema field "rates".
 	Rates PhysicsRates `json:"rates"`
 
@@ -316,28 +336,60 @@ type BoatPhysics struct {
 // A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
 type BoatPoint []float64
 
+// One boat's polar.
+type BoatPolar struct {
+	// The boat's id.
+	Boat string `json:"boat"`
+
+	// For each wind, her best angle down the wind, degrees, and the speed she makes
+	// good away from it, knots.
+	Down [][]float64 `json:"down"`
+
+	// Her speed through the water, knots: a row for each wind, a column for each
+	// angle, 0 where she cannot sail.
+	Speed [][]float64 `json:"speed"`
+
+	// For each wind, her best angle up the wind, degrees, and the speed she makes
+	// good toward it there, knots.
+	Up [][]float64 `json:"up"`
+}
+
 // A place aboard where a person is drawn: standing on the deck, seated as a
-// dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a
-// keelboat's rail with the legs over the side; to windward, if it says so.
+// dinghy's helmsman sits on the side deck (on a ship, sat on a hatch), hiking out
+// on its rail, sat on a keelboat's rail with the legs over the side, leaning on a
+// ship's rail, or in a ship's top; to windward or to leeward, if it says so.
 type BoatStation struct {
 	// In m in the model's frame. Standing, the deck between the feet; seated, the
 	// seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just
 	// within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m
-	// below it; on the rail, the deck's edge at the sheer under the person, who sits
-	// facing outboard, the hips just within it and the legs over the side.
+	// below it (on a ship, a hatch's edge on its grating, the feet on the deck before
+	// it); on the rail, the deck's edge at the sheer under the person, who sits
+	// facing outboard, the hips just within it and the legs over the side; on a hull,
+	// the hull's deck at its inner edge, on its top, the person facing across the
+	// net; on a bench, its front edge on its top, the person sat on it facing the way
+	// the station faces, the feet on the floor before it; leaning, the cap rail's
+	// inner edge on its top, the forearms on it; aloft, the top's floor by the mast,
+	// the person out toward the shrouds on the weather side.
 	At BoatPoint `json:"at"`
 
 	// The way the person faces, in degrees clockwise from the bow seen from above: 0
 	// forward, 90 to starboard, 180 aft, 270 to port.
 	Facing float64 `json:"facing"`
 
+	// Whether the person is to leeward, as windward is to windward: the station's
+	// mirror across the centreline (and its facing's) when its own side is the
+	// weather side. Not with windward.
+	Lee *bool `json:"lee,omitempty,omitzero"`
+
 	// Pose corresponds to the JSON schema field "pose".
 	Pose StationPose `json:"pose"`
 
 	// Whether the person sits to windward, as a crew does: on the side away from the
 	// boom, the station's mirror across the centreline (and its facing's) when that
-	// is the other side, and crossing the boat at a crouch in a tack or a gybe. Not
-	// said, the station is where it is.
+	// is the other side, and crossing the boat at a crouch in a tack or a gybe. On a
+	// ship with yards, her weather side is the side her after yards are braced for,
+	// and the person walks across when it changes. Not said, the station is where it
+	// is.
 	Windward *bool `json:"windward,omitempty,omitzero"`
 }
 
@@ -419,6 +471,10 @@ type Catalog struct {
 	// Boat types.
 	Boats []Boat `json:"boats"`
 
+	// The certificates, in the order they are earned: each opens boats to the sailor
+	// who holds it or a later one.
+	Certificates []Certificate `json:"certificates,omitempty,omitzero"`
+
 	// Encounters corresponds to the JSON schema field "encounters".
 	Encounters Encounters `json:"encounters"`
 
@@ -433,6 +489,12 @@ type Catalog struct {
 
 	// Notices corresponds to the JSON schema field "notices".
 	Notices Notices `json:"notices"`
+
+	// Pendants corresponds to the JSON schema field "pendants".
+	Pendants *Pendants `json:"pendants,omitempty,omitzero"`
+
+	// Polars corresponds to the JSON schema field "polars".
+	Polars *Polars `json:"polars,omitempty,omitzero"`
 
 	// SailorOptions corresponds to the JSON schema field "sailorOptions".
 	SailorOptions SailorOptions `json:"sailorOptions"`
@@ -449,6 +511,90 @@ type Catalog struct {
 
 	// World corresponds to the JSON schema field "world".
 	World World `json:"world"`
+}
+
+// A certificate: its name, its pendant, the boats it opens, and its tasks, of
+// which it needs some. Every task counts only what the sailor sails alone, since
+// the certificate before it was earned.
+type Certificate struct {
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Its name: "You're a Deckhand!"
+	Name string `json:"name"`
+
+	// How many of its tasks earn it.
+	Needs int `json:"needs"`
+
+	// The boats it opens, by their ids: each boat is opened by one certificate at
+	// most, and one opened by none is open to every sailor.
+	Opens []ID `json:"opens"`
+
+	// The pendant worn by those who hold it, in words.
+	Pendant string `json:"pendant"`
+
+	// The pendant's node in the pendants' model.
+	PendantNode string `json:"pendantNode"`
+
+	// Tasks corresponds to the JSON schema field "tasks".
+	Tasks []CertificateTask `json:"tasks"`
+}
+
+type CertificateCourse string
+
+const CertificateCourseIsland CertificateCourse = "island"
+const CertificateCourseLong CertificateCourse = "long"
+const CertificateCourseLongTriangle CertificateCourse = "long-triangle"
+const CertificateCourseShort CertificateCourse = "short"
+const CertificateCourseTriangle CertificateCourse = "triangle"
+
+// A task toward a certificate: a course, sailed as a time trial (courses, with
+// what sailing it by hand asks and what the autopilot's longer way asks), or a
+// measure of the sailor's log reaching a mark (measure and at).
+type CertificateTask struct {
+	// The mark a log task's measure reaches: at least this, or for the lip at most
+	// this.
+	At *float64 `json:"at,omitempty,omitzero"`
+
+	// A course task's courses: a buoy course by its shape and length, or any island
+	// course.
+	Courses []CertificateCourse `json:"courses,omitempty,omitzero"`
+
+	// Hand corresponds to the JSON schema field "hand".
+	Hand *CertificateWay `json:"hand,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// A log task's measure: the distance sailed alone (NM), places seen, places
+	// charted first, kinds of the sea's life met, nights at sea, gales ridden out,
+	// storms ridden out or landfalls in fog, the closest approach to the lip survived
+	// (m, at most at), worlds sailed in, falls over the edge, and every weather met
+	// (a gale, a storm, fog and a night).
+	Measure *Measure `json:"measure,omitempty,omitzero"`
+
+	// Its words, as the log and the tools list it.
+	Name string `json:"name"`
+
+	// Venture corresponds to the JSON schema field "venture".
+	Venture *CertificateWay `json:"venture,omitempty,omitzero"`
+}
+
+// What a course task asks of runs sailed one way: the least medal (finish for any
+// finish), how many runs, whether each on a different course of the world, and
+// whether one on each of its courses.
+type CertificateWay struct {
+	// Apart corresponds to the JSON schema field "apart".
+	Apart *bool `json:"apart,omitempty,omitzero"`
+
+	// Each corresponds to the JSON schema field "each".
+	Each *bool `json:"each,omitempty,omitzero"`
+
+	// Medal corresponds to the JSON schema field "medal".
+	Medal Medal `json:"medal"`
+
+	// Runs corresponds to the JSON schema field "runs".
+	Runs *int `json:"runs,omitempty,omitzero"`
 }
 
 // The chart key's line for each of what the chart draws that is not a kind of
@@ -669,6 +815,20 @@ const CloudFormFog CloudForm = "fog"
 const CloudFormNone CloudForm = "none"
 const CloudFormStorm CloudForm = "storm"
 
+// Where a race's winner wears the cockade: on the hat's left side, or on the
+// coat's left breast for a look with no hat.
+type Cockade struct {
+	// Its middle on the figure as it is bound, m: across to its left, up and forward.
+	At []float64 `json:"at"`
+
+	// The way it faces out from the cloth, the same axes.
+	Facing []float64 `json:"facing"`
+
+	// Its middle on the inked portrait, as shares of its width from the left and of
+	// its height from the top.
+	Inked []float64 `json:"inked"`
+}
+
 // A colony's birds: where they nest, and how they look, fly and call.
 type ColonyBirds struct {
 	// Look corresponds to the JSON schema field "look".
@@ -680,6 +840,86 @@ type ColonyBirds struct {
 
 // A colour, as #rrggbb in sRGB.
 type Colour string
+
+// The race committee's things in the sea: the committee boat, the pin buoy, the
+// marks, the beacons, the signal flags and the signal gun's smoke.
+type Committee struct {
+	// The committee's models: a glTF binary with the nodes committee-boat (with gun,
+	// muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern
+	// and number), pin-buoy (with flag-staff and lantern) and beacon-spar.
+	Art CommitteeArt `json:"art"`
+
+	// How the committee boat lies at her anchor.
+	Boat CommitteeBoat `json:"boat"`
+
+	// The bunting's dyes, each by the letter a flag's rows name it with.
+	Dyes []SignalDye `json:"dyes"`
+
+	// The signal flags.
+	Flags []SignalFlag `json:"flags"`
+
+	// The signal gun's smoke.
+	Gun CommitteeGun `json:"gun"`
+
+	// A mark's spar above the water, in m.
+	Mark float64 `json:"mark"`
+
+	// What a sailor's races in a world show on the water while it lasts.
+	Prizes Prizes `json:"prizes"`
+
+	// They are drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+}
+
+// The committee's models: a glTF binary with the nodes committee-boat (with gun,
+// muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern
+// and number), pin-buoy (with flag-staff and lantern) and beacon-spar.
+type CommitteeArt struct {
+	// Model corresponds to the JSON schema field "model".
+	Model ArtPath `json:"model"`
+}
+
+// How the committee boat lies at her anchor.
+type CommitteeBoat struct {
+	// Over this, there and back, in s.
+	Period float64 `json:"period"`
+
+	// Her anchor's cable, in m.
+	Scope float64 `json:"scope"`
+
+	// Her stern swings this far each way, in degrees.
+	Sheer float64 `json:"sheer"`
+}
+
+// The signal gun's smoke.
+type CommitteeGun struct {
+	// The air stops them over this, in s.
+	Drag float64 `json:"drag"`
+
+	// A puff gathers its rise over this, in s.
+	Gathers float64 `json:"gathers"`
+
+	// A puff fades over this, in s.
+	Life float64 `json:"life"`
+
+	// Puffs a report throws.
+	Puffs int `json:"puffs"`
+
+	// The smoke is drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+
+	// A puff rises at this at most, in m/s.
+	Rise float64 `json:"rise"`
+
+	// A puff's width at the muzzle and at its end, in m.
+	Size []float64 `json:"size"`
+
+	// Its rise is halved after this, in s.
+	Slows float64 `json:"slows"`
+
+	// They leave the muzzle at this, in m/s.
+	Throw float64 `json:"throw"`
+}
 
 // Each age's weight.
 type ConeAges struct {
@@ -703,6 +943,59 @@ type ConeShape struct {
 
 	// Its height.
 	Height float64 `json:"height"`
+}
+
+// Racing areas: circles of open water off Port Royal where a buoy course is laid
+// to the wind.
+type CourseAreas struct {
+	// Areas' centres lie at least this far apart, m.
+	Apart float64 `json:"apart"`
+
+	// An area keeps this far from the start's fan, m.
+	Fan float64 `json:"fan"`
+
+	// Boats no longer than this race in the areas; their water is deep enough for
+	// each, m.
+	Longest float64 `json:"longest"`
+
+	// An area keeps this far from land and shoal water, m.
+	Margin float64 `json:"margin"`
+
+	// The most areas a world has.
+	Most int `json:"most"`
+
+	// An area keeps this far from Port Royal's harbour mouth, m.
+	Mouth float64 `json:"mouth"`
+
+	// An area's radius, m.
+	Radius float64 `json:"radius"`
+
+	// Candidates every this far out, m.
+	Step float64 `json:"step"`
+
+	// Candidates every this many degrees round.
+	Turn float64 `json:"turn"`
+
+	// Every part of an area lies within this of Port Royal's centre, nautical miles.
+	Within float64 `json:"within"`
+}
+
+// Where an island course's start and finish lie off a port.
+type CourseSite struct {
+	// A site keeps this far from the start's fan, m.
+	Fan float64 `json:"fan"`
+
+	// The nearest a site is to its port's waterfront, m.
+	From float64 `json:"from"`
+
+	// Clear water round a site, m: room for the line and the start behind it.
+	Room float64 `json:"room"`
+
+	// The furthest, m.
+	To float64 `json:"to"`
+
+	// How far off its port's way out a site may lie, degrees.
+	Turn float64 `json:"turn"`
 }
 
 // The water pouring over the lip.
@@ -734,6 +1027,12 @@ type Curtain struct {
 	// Its last row, in s after the brink.
 	To float64 `json:"to"`
 }
+
+type Cut string
+
+const CutFlag Cut = "flag"
+const CutPennant Cut = "pennant"
+const CutSwallowtail Cut = "swallowtail"
 
 // The world's end, staged on every phone by the world clock: the falls heard and
 // the mist closing in, then the near sea's tiles breaking off and falling toward
@@ -1568,6 +1867,9 @@ type LifeKind struct {
 	// Its weight times this within the habitat's colony distance of a colony.
 	NearColony *float64 `json:"nearColony,omitempty,omitzero"`
 
+	// Meeting it is rare enough to be a story of the day's news.
+	News *bool `json:"news,omitempty,omitzero"`
+
 	// Over corresponds to the JSON schema field "over".
 	Over *LifeOver `json:"over,omitempty,omitzero"`
 
@@ -1863,6 +2165,27 @@ type Machine struct {
 	Versions []SailorVersion `json:"versions"`
 }
 
+type Measure string
+
+const MeasureDistance Measure = "distance"
+const MeasureEveryWeather Measure = "every-weather"
+const MeasureFalls Measure = "falls"
+const MeasureGales Measure = "gales"
+const MeasureLifeKinds Measure = "life-kinds"
+const MeasureLip Measure = "lip"
+const MeasureNights Measure = "nights"
+const MeasurePlacesCharted Measure = "places-charted"
+const MeasurePlacesSeen Measure = "places-seen"
+const MeasureStormsOrFogs Measure = "storms-or-fogs"
+const MeasureWorlds Measure = "worlds"
+
+type Medal string
+
+const MedalBronze Medal = "bronze"
+const MedalFinish Medal = "finish"
+const MedalGold Medal = "gold"
+const MedalSilver Medal = "silver"
+
 // A feature a name may need, by its word, and what shows it: 0 or false for a test
 // it does not have; a feature with none is never shown.
 type NameFeature struct {
@@ -1937,17 +2260,18 @@ const NestCliff Nest = "cliff"
 const NestStack Nest = "stack"
 const NestTrees Nest = "trees"
 
-// The news sheet: its columns, and how its items are folded and paged.
+// The news: a daily edition of chosen stories, its columns, and the kinds of story
+// with their scores.
 type News struct {
 	// Columns corresponds to the JSON schema field "columns".
 	Columns []NewsColumn `json:"columns"`
 
-	// A sailor's places charted within this of an island's item are folded into it,
-	// in minutes.
-	Fold float64 `json:"fold"`
+	// Edition corresponds to the JSON schema field "edition".
+	Edition NewsEdition `json:"edition"`
 
-	// Items to a page.
-	Page int `json:"page"`
+	// The kinds of story, each written as a candidate with its score; the edition
+	// shows the best.
+	Stories []NewsStory `json:"stories"`
 }
 
 // A column of the news sheet.
@@ -1955,18 +2279,105 @@ type NewsColumn struct {
 	// ID corresponds to the JSON schema field "id".
 	ID ID `json:"id"`
 
-	// What its items tell of: what is charted, or the world itself, its end.
+	// What its items tell of: the stories, or the world itself, its end.
 	Of Of `json:"of"`
 
 	// Its heading.
 	Title string `json:"title"`
 }
 
+// How a day's edition is chosen from the day's candidates.
+type NewsEdition struct {
+	// A crew in company: this many aboard, the skipper with them.
+	Aboard int `json:"aboard"`
+
+	// A story's score eases with its age through the day: halved after this many
+	// hours.
+	Ease float64 `json:"ease"`
+
+	// A record at the falls: an approach survived within this of the lip, m, nearer
+	// than any boat's before it this world.
+	Falls float64 `json:"falls"`
+
+	// A story about a sailor in the recent editions has its score times this.
+	GiveWay float64 `json:"giveWay"`
+
+	// Milestones corresponds to the JSON schema field "milestones".
+	Milestones NewsMilestones `json:"milestones"`
+
+	// The most stories of one kind on the front page.
+	OfKind int `json:"ofKind"`
+
+	// How many editions back a sailor named in one gives way to one who was not.
+	Recent int `json:"recent"`
+
+	// A run is a candidate for the day's longest from this distance, in nautical
+	// miles.
+	Run float64 `json:"run"`
+
+	// The most stories in the reader's own box, about their shipmates, the sailors
+	// they follow and themselves.
+	Shipmates int `json:"shipmates"`
+
+	// The most stories on the front page.
+	Stories int `json:"stories"`
+
+	// A crew in company: each of them aboard this long, in minutes.
+	Together float64 `json:"together"`
+}
+
+// A sailor's milestones: each time their log's distance, worlds or places charted
+// pass a multiple of these.
+type NewsMilestones struct {
+	// Nautical miles sailed.
+	Distance float64 `json:"distance"`
+
+	// Places charted.
+	Places int `json:"places"`
+
+	// Worlds sailed.
+	Worlds int `json:"worlds"`
+}
+
+// A kind of story: what makes it, and its score.
+type NewsStory struct {
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// What makes it: a great discovery first sighted; a record at the falls; a rare
+	// creature met; a crew in company; a sailor's first charting ever; the day's
+	// longest run; a milestone; any other charting; a course opened by charting; a
+	// race won; a time trial sailed to gold or better; a certificate earned.
+	Of NewsStoryOf `json:"of"`
+
+	// How interesting it is: the edition shows the highest first.
+	Score int `json:"score"`
+
+	// For a certificate earned: its score by the certificate, one for each in the
+	// certificates' order; score is for any it has no score for.
+	Scores []int `json:"scores,omitempty,omitzero"`
+}
+
+type NewsStoryOf string
+
+const NewsStoryOfCertificate NewsStoryOf = "certificate"
+const NewsStoryOfCharting NewsStoryOf = "charting"
+const NewsStoryOfCourse NewsStoryOf = "course"
+const NewsStoryOfCrew NewsStoryOf = "crew"
+const NewsStoryOfFirst NewsStoryOf = "first"
+const NewsStoryOfGreat NewsStoryOf = "great"
+const NewsStoryOfLife NewsStoryOf = "life"
+const NewsStoryOfMilestone NewsStoryOf = "milestone"
+const NewsStoryOfRace NewsStoryOf = "race"
+const NewsStoryOfRecord NewsStoryOf = "record"
+const NewsStoryOfRun NewsStoryOf = "run"
+const NewsStoryOfTrial NewsStoryOf = "trial"
+
 // A kind of notice: what raises it, its words, how urgent it is, whether it can be
 // switched off and how long it stays.
 type NoticeKind struct {
-	// For a notice of the world's end near: the times before the end it is raised at,
-	// in minutes.
+	// For a notice of the world's end near, or of a race about to start: the times
+	// before it it is raised at, in minutes.
 	Before []float64 `json:"before,omitempty,omitzero"`
 
 	// Its words for several at once: {count} is filled in.
@@ -1982,8 +2393,12 @@ type NoticeKind struct {
 	Name string `json:"name"`
 
 	// What raises it: a place the player charts, a great discovery by anyone, the
-	// world closing, its end near, a new world begun, a new gale warning, or a sailor
-	// the player follows setting sail.
+	// world closing, its end near, a new world begun, a new gale warning, a sailor
+	// the player follows setting sail, a harbour race about to start, a race the
+	// player entered about to start, a task of the player's next certificate done, a
+	// certificate earned, the course the player set reached, a shipmate sailing to
+	// the player, the player alongside a boat they sailed to, or a course to a boat
+	// ended.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -1993,8 +2408,10 @@ type NoticeKind struct {
 	Switchable bool `json:"switchable"`
 
 	// Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the
-	// player's own time), {left} (the time left), and for a gale warning {wind},
-	// {when} and {where} are filled in.
+	// player's own time), {left} (the time left), for a gale warning {wind}, {when}
+	// and {where}, and for a certificate {cert} (its name), {task} (the task's),
+	// {done} and {of} (the tasks done of those it needs) and {boats} (the boats it
+	// opens, as a sentence opens) are filled in.
 	Text string `json:"text"`
 }
 
@@ -2014,13 +2431,52 @@ const OfWorld Of = "world"
 
 type On string
 
+const OnCertificateEarned On = "certificate-earned"
 const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
+const OnCourseAlongside On = "course-alongside"
+const OnCourseEnded On = "course-ended"
+const OnCourseReached On = "course-reached"
 const OnFallsComing On = "falls-coming"
 const OnFallsSoon On = "falls-soon"
 const OnFollowedSailed On = "followed-sailed"
 const OnGaleWarned On = "gale-warned"
+const OnHarbourRace On = "harbour-race"
 const OnNewWorld On = "new-world"
+const OnRaceSoon On = "race-soon"
+const OnShipmateCourse On = "shipmate-course"
+const OnTaskDone On = "task-done"
+
+// Where the certificate's pendant hangs: where its cord runs through its bail, on
+// the figure as it is bound, clear of the clothes in front of the breastbone.
+type PendantPlace struct {
+	// Where its cord runs through its bail, on the figure as it is bound, m: across
+	// to its left, up and forward.
+	At []float64 `json:"at"`
+
+	// The way its face looks out from the clothes under it, the same axes.
+	Facing []float64 `json:"facing"`
+
+	// Where its cord runs through its bail on the inked portrait, as shares of its
+	// width from the left and of its height from the top.
+	Inked []float64 `json:"inked"`
+}
+
+// The certificates' pendants, worn on a cord at the neck by those who hold one:
+// the highest held.
+type Pendants struct {
+	// The pendants' art.
+	Art PendantsArt `json:"art"`
+}
+
+// The pendants' art.
+type PendantsArt struct {
+	// The pendants' model: a glTF binary of a node for each pendant, its origin where
+	// the cord runs through its bail, x across, y up and z out from the chest, its
+	// back on z = 0; its parts' colours in its vertices, their metalness and
+	// roughness in its second texture coordinate.
+	Model ArtPath `json:"model"`
+}
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
@@ -2352,7 +2808,8 @@ type PhysicsHull struct {
 
 	// The hull's half-beam at the sheer at 11 stations equally spaced from the
 	// transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a
-	// point.
+	// point; a boat of two hulls (hulls.hullSpacing) has a flat bow, the last the
+	// bows' half-spread.
 	Outline []float64 `json:"outline"`
 
 	// Damping of the pitch, as a fraction of critical.
@@ -2361,9 +2818,14 @@ type PhysicsHull struct {
 	// Moment of inertia in pitch, added inertia included, in kg·m².
 	PitchInertia float64 `json:"pitchInertia"`
 
-	// Righting lever (GZ) with the sailor on the centreline, every 10° of heel from
-	// 0° to 180°, in m.
+	// Righting lever (GZ) with the sailor on the centreline, every rightingLeverStep
+	// of heel from 0°, in m. Beyond the last, the last.
 	RightingLever []float64 `json:"rightingLever"`
+
+	// Heel between entries of rightingLever, in degrees: 10 reaches 180°, 5 reaches
+	// 90° (a catamaran's lever, which peaks within a few degrees of upright, held
+	// beyond). 180° over it is a whole number.
+	RightingLeverStep float64 `json:"rightingLeverStep"`
 
 	// The hull's own roll damping, in N·m·s/rad. The foils and sails damp through
 	// their flow.
@@ -2407,6 +2869,72 @@ type PhysicsHull struct {
 
 	// Moment of inertia in yaw, added inertia included, in kg·m².
 	YawInertia float64 `json:"yawInertia"`
+}
+
+// A boat of two hulls, a catamaran: one body whose stability, foils and drag take
+// its hulls' values. A monohull has a spacing of 0, one rudder and one board, and
+// a flying drag of 1.
+type PhysicsHulls struct {
+	// Boards, or hulls' lateral planes, each the one board's lift and drag: 1, or 2
+	// on a boat of two hulls.
+	BoardCount float64 `json:"boardCount"`
+
+	// The drag area's share with the windward hull clear: one hull at twice the load
+	// has less wetted area than two.
+	FlyingDrag float64 `json:"flyingDrag"`
+
+	// Between the hulls' centrelines, in m: 0 for one hull. The drawing, the sea, the
+	// wake and the contacts read it: the boat heels about its lee hull.
+	HullSpacing float64 `json:"hullSpacing"`
+
+	// The heel at which the windward hull leaves the water, in degrees: it is clear
+	// 5° later, its rudder and lateral plane with it.
+	LiftHeel float64 `json:"liftHeel"`
+
+	// On one hull with two rudders, the heel at which the windward blade's tip leaves
+	// the water, in degrees: from it only the lee blade steers. 0 for any other boat.
+	RudderClearHeel float64 `json:"rudderClearHeel"`
+
+	// Rudders, each the one rudder's lift and drag: 1, or 2, one on each hull of a
+	// boat of two hulls, or a pair either side of one hull's centreline
+	// (rudderSpread).
+	RudderCount float64 `json:"rudderCount"`
+
+	// On one hull with two rudders, the heel at which the windward blade's root
+	// leaves the water in still water, in degrees: from it the blade's share of the
+	// steering falls. 0 for any other boat.
+	RudderLiftHeel float64 `json:"rudderLiftHeel"`
+
+	// Each of one hull's two rudders' stock off the centreline, in m: 0 for a rudder
+	// on the centreline, and on a boat of two hulls, whose rudders are on its hulls.
+	RudderSpread float64 `json:"rudderSpread"`
+}
+
+// Pitch from the rig: the sails' drive, high above the centre of gravity, and the
+// hull's resistance below it pitch the bow down, and the sailor steps aft to hold
+// it up. Past bowBuryPitch the bows bury: their spring weakens and their drag
+// grows; past pitchpoleAngle the sailor is thrown off over the bow. None where
+// rigPitch is 0, the rest unread: the pitch is the waves' alone.
+type PhysicsPitch struct {
+	// How far aft of the helm's place the sailor steps to hold the bow up, in m.
+	AftReach float64 `json:"aftReach"`
+
+	// The hull's drag area grows by this share of itself for each degree past
+	// bowBuryPitch.
+	BowBuryDrag float64 `json:"bowBuryDrag"`
+
+	// The trim, bow down off the water's surface, at which the lee bow's deck meets
+	// the water, in degrees.
+	BowBuryPitch float64 `json:"bowBuryPitch"`
+
+	// The share of the pitch spring's slope left past bowBuryPitch.
+	BowBuryRestoring float64 `json:"bowBuryRestoring"`
+
+	// Past this trim, bow down, the sailor is thrown off over the bow, in degrees.
+	PitchpoleAngle float64 `json:"pitchpoleAngle"`
+
+	// 1 where the rig pitches the hull, else 0.
+	RigPitch float64 `json:"rigPitch"`
 }
 
 // How fast the sailor's hands move the rudder and the sheet.
@@ -2778,8 +3306,8 @@ type PlaceKind struct {
 	// Its name, as the world page lists it.
 	Name string `json:"name"`
 
-	// Its charting is an item of the news of its own; otherwise it is folded into its
-	// island's.
+	// Its charting is an item of its own in the sheet a chart makes of itself,
+	// offline; online every charting is a candidate story of the day's news.
 	News *bool `json:"news,omitempty,omitzero"`
 
 	// The rule its sites are found by.
@@ -2929,6 +3457,19 @@ type PlantKind struct {
 	Trunk Colour `json:"trunk"`
 }
 
+// The boats' polars: each boat's steady speed in flat water by the true wind's
+// speed and angle, written by tools/polar.
+type Polars struct {
+	// The angles off the true wind, degrees, evenly spaced, ascending.
+	Angles []float64 `json:"angles"`
+
+	// Boats corresponds to the JSON schema field "boats".
+	Boats []BoatPolar `json:"boats"`
+
+	// The true winds, knots 10 m up, evenly spaced, ascending.
+	Winds []float64 `json:"winds"`
+}
+
 // Its harbour: a basin entered through a narrows, carved into the island.
 type PortHarbour struct {
 	// The basin's width, the least and the most, in m.
@@ -2976,6 +3517,57 @@ type PortPiers struct {
 
 	// Their width, in m.
 	Width float64 `json:"width"`
+}
+
+// The winner's cockade: a pleated rosette of ribbon.
+type PrizeCockade struct {
+	// Its width, m.
+	Across float64 `json:"across"`
+
+	// Its middle's button.
+	Button Colour `json:"button"`
+
+	// Its ribbon.
+	Ribbon Colour `json:"ribbon"`
+}
+
+// A carved wooden spoon on its lanyard.
+type PrizeSpoon struct {
+	// Its wood.
+	Colour Colour `json:"colour"`
+
+	// Its lanyard from the rail, m.
+	Lanyard float64 `json:"lanyard"`
+
+	// Its length, m.
+	Length float64 `json:"length"`
+}
+
+// What a sailor's races in a world show on the water while it lasts.
+type Prizes struct {
+	// Races sailed in the world for the racing burgee.
+	Burgee int `json:"burgee"`
+
+	// The winner's cockade: a pleated rosette of ribbon.
+	Cockade PrizeCockade `json:"cockade"`
+
+	// Races sailed in the world for the gilded burgee.
+	Gilded int `json:"gilded"`
+
+	// A winner's pennants flown, the latest wins'.
+	Pennants int `json:"pennants"`
+
+	// Races run in the world for the committee's flag.
+	Ran int `json:"ran"`
+
+	// They are drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+
+	// A carved wooden spoon on its lanyard.
+	Spoon PrizeSpoon `json:"spoon"`
+
+	// Wooden spoons hung from the stern, the latest.
+	Spoons int `json:"spoons"`
 }
 
 // The water at a quay's foot, in m.
@@ -3103,6 +3695,10 @@ type SailorArt struct {
 	// and on the picker's stage.
 	Close ArtPath `json:"close"`
 
+	// Where a race's winner wears the cockade: on the hat's left side, or on the
+	// coat's left breast for a look with no hat.
+	Cockade Cockade `json:"cockade"`
+
 	// The sailor's far level: one rigid figure posed seated at the helm, with the
 	// place node that seats it in the boat model; drawn in the fleet.
 	Far ArtPath `json:"far"`
@@ -3115,6 +3711,10 @@ type SailorArt struct {
 	// near the camera.
 	Model ArtPath `json:"model"`
 
+	// Where the certificate's pendant hangs: where its cord runs through its bail, on
+	// the figure as it is bound, clear of the clothes in front of the breastbone.
+	Pendant PendantPlace `json:"pendant"`
+
 	// The colour portrait's base, AVIF: head and shoulders, shaded, its option
 	// regions in neutral grey.
 	Portrait ArtPath `json:"portrait"`
@@ -3126,6 +3726,12 @@ type SailorArt struct {
 	// colour (red), the skin or metal (green) and the hair (blue).
 	PortraitMask ArtPath `json:"portraitMask"`
 }
+
+type SailorClip string
+
+const SailorClipBridgedeck SailorClip = "bridgedeck"
+const SailorClipCat SailorClip = "cat"
+const SailorClipCruiser SailorClip = "cruiser"
 
 type SailorOption struct {
 	// Its colour, sRGB, #rrggbb.
@@ -3301,10 +3907,69 @@ type Sheet struct {
 	Trim string `json:"trim"`
 }
 
+type Signal string
+
+const SignalBurgee Signal = "burgee"
+const SignalClass Signal = "class"
+const SignalCommittee Signal = "committee"
+
+// A dye of the bunting.
+type SignalDye struct {
+	// Colour corresponds to the JSON schema field "colour".
+	Colour Colour `json:"colour"`
+
+	// The letter a flag's rows name it by.
+	Letter string `json:"letter"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name"`
+}
+
+// A signal flag: what it signals, its cut and size, and its design.
+type SignalFlag struct {
+	// The boat whose class it is, by the boat's id: a class pennant's.
+	Boat *ID `json:"boat,omitempty,omitzero"`
+
+	// Its cut: a flag, oblong; a pennant, tapering to a point; or a swallowtail,
+	// tapering a little and forked at the fly.
+	Cut Cut `json:"cut"`
+
+	// Its depth at the hoist, in m.
+	Hoist float64 `json:"hoist"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// From the hoist to the fly, in m.
+	Length float64 `json:"length"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name"`
+
+	// Its design: rows of dyes' letters from the head down, each from the hoist to
+	// the fly, all of one length.
+	Rows []string `json:"rows"`
+
+	// What it signals: a race's boats' class, the preparatory signal, an individual
+	// recall, a postponement, a mark or the pin; or, flown by a sailor's boat for the
+	// world, a race won (in that race's colour), races sailed (the racing burgee,
+	// then the gilded) or races run (the committee's flag).
+	Signal Signal `json:"signal"`
+}
+
+const SignalGilded Signal = "gilded"
+const SignalMark Signal = "mark"
+const SignalPin Signal = "pin"
+const SignalPostponement Signal = "postponement"
+const SignalPreparatory Signal = "preparatory"
+const SignalRecall Signal = "recall"
+const SignalVictory Signal = "victory"
+
 type Site string
 
 const SiteAnchorage Site = "anchorage"
 const SiteBar Site = "bar"
+const SiteBeacon Site = "beacon"
 const SiteCove Site = "cove"
 const SiteHarbour Site = "harbour"
 const SiteLagoon Site = "lagoon"
@@ -3429,7 +4094,11 @@ type StartMoorings struct {
 
 type StationPose string
 
+const StationPoseAloft StationPose = "aloft"
+const StationPoseBench StationPose = "bench"
 const StationPoseHiking StationPose = "hiking"
+const StationPoseHull StationPose = "hull"
+const StationPoseLeaning StationPose = "leaning"
 const StationPoseRail StationPose = "rail"
 const StationPoseSeated StationPose = "seated"
 const StationPoseStanding StationPose = "standing"
@@ -4677,6 +5346,12 @@ type World struct {
 	// Chart corresponds to the JSON schema field "chart".
 	Chart WorldChart `json:"chart"`
 
+	// Committee corresponds to the JSON schema field "committee".
+	Committee Committee `json:"committee"`
+
+	// Courses corresponds to the JSON schema field "courses".
+	Courses WorldCourses `json:"courses"`
+
 	// Disk corresponds to the JSON schema field "disk".
 	Disk WorldDisk `json:"disk"`
 
@@ -4776,6 +5451,67 @@ type WorldChart struct {
 
 	// Worth corresponds to the JSON schema field "worth".
 	Worth ChartWorth `json:"worth"`
+}
+
+// Courses for races, made with the world: racing areas off Port Royal and island
+// courses, and the checks a course passes.
+type WorldCourses struct {
+	// Areas corresponds to the JSON schema field "areas".
+	Areas CourseAreas `json:"areas"`
+
+	// A reef or bar within this of a way gets a beacon, m.
+	Beacon float64 `json:"beacon"`
+
+	// The most beacons a course may need.
+	Beacons int `json:"beacons"`
+
+	// Of the sixteen winds, how many give the way a leg to beat up.
+	Beat int `json:"beat"`
+
+	// The least leg that counts as a beat, m.
+	BeatLeg float64 `json:"beatLeg"`
+
+	// Water under the deepest boat's keel along a way, m.
+	Depth float64 `json:"depth"`
+
+	// A course from Port Royal is short below the first and long from the second, by
+	// the Jolly boat's expected minutes.
+	Lengths []float64 `json:"lengths"`
+
+	// How far a course's way keeps from land and shoal water, m.
+	Margin float64 `json:"margin"`
+
+	// A boat is offered a course whose expected time in the typical wind is within
+	// these, minutes.
+	Minutes []float64 `json:"minutes"`
+
+	// No way runs further from the centre, nautical miles.
+	Mist float64 `json:"mist"`
+
+	// Every narrows on a way is at least this many of a boat's lengths wide for it to
+	// be offered the course.
+	Narrows float64 `json:"narrows"`
+
+	// How many of the nearest islands a site rounds one at a time.
+	Near int `json:"near"`
+
+	// How many of the nearest other ports a site runs to.
+	Ports int `json:"ports"`
+
+	// The islands a course rounds lie within this of its site, nautical miles.
+	Reach float64 `json:"reach"`
+
+	// How many island courses a world has, the least it aims for and the most.
+	Set []int `json:"set"`
+
+	// Site corresponds to the JSON schema field "site".
+	Site CourseSite `json:"site"`
+
+	// How often the narrows are sampled along a way, m.
+	Step float64 `json:"step"`
+
+	// A tour's islands lie within this of each other, nautical miles.
+	Tour float64 `json:"tour"`
 }
 
 // The disk.
@@ -5445,4 +6181,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "0e5e1240a73a066f"
+const Version = "3ffedd6a7cd63a06"

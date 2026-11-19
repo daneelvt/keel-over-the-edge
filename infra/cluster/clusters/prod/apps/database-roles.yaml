@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The read-only roles' passwords, which the accounts workflow made and
-# wrote into Infisical: CloudNativePG sets each role's from its Secret.
+# The passwords of the read-only roles and of the contributor agreement
+# keeper's role, which the accounts workflow made and wrote into
+# Infisical: CloudNativePG sets each role's from its Secret, and the
+# keeper connects with its own.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -46,3 +48,26 @@ spec:
     - secretKey: password
       remoteRef:
         key: /keel/DB_GRAFANA_PASSWORD
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keel-db-agreement
+  namespace: keel
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical
+  target:
+    name: keel-db-agreement
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: agreement
+        password: "{{ .password }}"
+  data:
+    - secretKey: password
+      remoteRef:
+        key: /keel/DB_AGREEMENT_PASSWORD

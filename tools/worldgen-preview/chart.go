@@ -9,6 +9,7 @@ import (
 	"html"
 	"image"
 	"image/color"
+	"math"
 	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -148,6 +149,8 @@ func worldChart(b *worldgen.Bundle, c *chartConfig, v view, terrain []byte) []by
 			x+7, y-4, html.EscapeString(name), html.EscapeString(l.Notation))
 	}
 	fmt.Fprintln(&s, `</g>`)
+	// The racing areas and the island courses.
+	s.Write(coursesLayer(b, v))
 	// The scale: a nautical mile.
 	mile := 1852 / v.Scale
 	fmt.Fprintf(&s, `<g id="scale" stroke="#fff" fill="#fff" font-size="11"><path d="M20 %.1fh%.1fm0 -4v8m-%.1f -8v8" stroke-width="1.5"/><text x="20" y="%.1f">1 nautical mile</text></g>`+"\n",
@@ -177,4 +180,64 @@ func lightColour(notation string) string {
 		return "#3cff7d"
 	}
 	return "#fff3c4"
+}
+
+// courseColours are the courses' colours, one after another.
+var courseColours = []string{"#ff6f59", "#43aa8b", "#f9c74f", "#577590", "#f3722c", "#90be6d", "#f94144", "#4d908e",
+	"#f8961e", "#277da1", "#c77dff", "#ffafcc"}
+
+// rayLength is how long a rounding ray is drawn, m.
+const rayLength = 260
+
+// coursesLayer draws the racing areas, each a circle lettered A1, A2 …; and
+// the island courses, each its way dashed in a colour of its own and
+// numbered at its middle, its site a square, its rounding rays as short
+// strokes from where they start, and its beacons as triangles.
+func coursesLayer(b *worldgen.Bundle, v view) []byte {
+	var s bytes.Buffer
+	fmt.Fprintln(&s, `<g id="areas" font-size="11" font-weight="bold">`)
+	for _, a := range b.Areas {
+		x, y := v.Px(a.X, a.Y)
+		fmt.Fprintf(&s, `<circle cx="%.1f" cy="%.1f" r="%.1f" fill="#ffffff22" stroke="#ffffff" stroke-width="1.4"><title>racing area %d, %.0f m across, %.1f m deep at least</title></circle>`+"\n",
+			x, y, a.Radius/v.Scale, a.Number+1, 2*a.Radius, a.Depth)
+		fmt.Fprintf(&s, `<text x="%.1f" y="%.1f" fill="#fff" text-anchor="middle" dy="4">A%d</text>`+"\n", x, y, a.Number+1)
+	}
+	fmt.Fprintln(&s, `</g>`)
+	fmt.Fprintln(&s, `<g id="courses" fill="none" stroke-linecap="round" stroke-linejoin="round">`)
+	for i, c := range b.Courses {
+		colour := courseColours[i%len(courseColours)]
+		var d strings.Builder
+		for k, p := range c.Way {
+			x, y := v.Px(p[0], p[1])
+			if k == 0 {
+				fmt.Fprintf(&d, "M%.1f %.1f", x, y)
+			} else {
+				fmt.Fprintf(&d, "L%.1f %.1f", x, y)
+			}
+		}
+		fmt.Fprintf(&s, `<path d="%s" stroke="%s" stroke-width="2" stroke-dasharray="5 3"><title>%d %s: %s, %.1f NM</title></path>`+"\n",
+			d.String(), colour, c.Number+1, html.EscapeString(c.Kind), html.EscapeString(c.Name), c.Length/1852)
+		for _, r := range c.Rays {
+			x0, y0 := v.Px(r.X, r.Y)
+			x1, y1 := v.Px(r.X+rayLength*math.Sin(r.Bearing), r.Y+rayLength*math.Cos(r.Bearing))
+			fmt.Fprintf(&s, `<path d="M%.1f %.1fL%.1f %.1f" stroke="%s" stroke-width="1.2"/>`+"\n", x0, y0, x1, y1, colour)
+		}
+		for _, site := range []worldgen.CourseSite{c.Start, c.Finish} {
+			x, y := v.Px(site.X, site.Y)
+			fmt.Fprintf(&s, `<rect x="%.1f" y="%.1f" width="7" height="7" fill="%s" stroke="#111" stroke-width="0.8"/>`+"\n", x-3.5, y-3.5, colour)
+		}
+		mid := c.Way[len(c.Way)/2]
+		x, y := v.Px(mid[0], mid[1])
+		fmt.Fprintf(&s, `<text x="%.1f" y="%.1f" fill="%s" stroke="#111" stroke-width="2.5" paint-order="stroke" font-size="12" font-weight="bold" text-anchor="middle">%d</text>`+"\n",
+			x, y, colour, c.Number+1)
+	}
+	for _, p := range b.Places {
+		if p.Details.Marks == 0 {
+			continue
+		}
+		x, y := v.Px(p.X, p.Y)
+		fmt.Fprintf(&s, `<path d="M%.1f %.1fl4 7h-8z" fill="#111" stroke="#fff" stroke-width="1"><title>%s</title></path>`+"\n", x, y-4, html.EscapeString(p.Name))
+	}
+	fmt.Fprintln(&s, `</g>`)
+	return s.Bytes()
 }

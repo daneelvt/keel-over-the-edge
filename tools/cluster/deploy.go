@@ -366,7 +366,7 @@ func (c *cluster) secrets(ctx context.Context, rm resmap.ResMap, host string) (e
 	if _, err := c.kubectl(ctx, bytes.NewReader(namespaces), "apply", "--server-side", "--field-manager=tools-cluster", "-f", "-"); err != nil {
 		return err
 	}
-	for _, role := range []string{"keel", "reader", "grafana"} {
+	for _, role := range []string{"keel", "reader", "grafana", "agreement"} {
 		name := "keel-db-" + role
 		if role == "keel" {
 			name = "keel-db-app"

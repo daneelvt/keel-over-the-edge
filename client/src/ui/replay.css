@@ -1,0 +1,170 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* A race replayed on the chart: its name and the standings cased under
+   the chart's strip, one line each; at the foot, in the weather's time's
+   place, Play, the slider and its clock, the speeds, Results and Share,
+   in one row held sideways and two held upright. Over the screen before
+   the sea, a race's results alone stand in a layer of their own. */
+
+.rp-host {
+  z-index: 30;
+}
+
+.rp-head {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(560px, 100%);
+  padding: 3px 10px 4px;
+}
+
+.rp-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rp-name {
+  font-weight: 600;
+}
+
+.rp-faint {
+  color: var(--faint);
+}
+
+.rp-standing {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font:
+    500 14px "Alegreya Sans",
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Each place keeps its number, colour and the start of its name; a long
+   name gives way first. */
+.rp-place {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  align-items: center;
+  min-width: 5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-place-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-place b {
+  color: var(--gold);
+}
+
+.rp-dot {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border: 1px solid rgb(0 0 0 / 55%);
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+/* The foot: the weather's time's row, its keys after the slider. */
+.chart-time.rp-bar {
+  flex-wrap: wrap;
+}
+
+.rp-keys {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.rp-speeds {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.rp-speed {
+  min-width: 40px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Held upright the keys take a row of their own under the slider. */
+@media (max-width: 539px) {
+  .rp-keys {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+}
+
+/* The standings and a trial's runs: a row a boat, a tap following it. */
+.rp-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud .rp-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font:
+    500 15px "Alegreya Sans",
+    sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hud .rp-row[aria-pressed="true"] {
+  background: rgb(232 180 80 / 16%);
+}
+
+.hud .rp-row:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.rp-row-place {
+  width: 22px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.hud .rp-run {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rp-crew {
+  display: block;
+}

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import { build, type Plugin, type ServerOptions, searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { licences } from './build/licences.ts';
+import { serviceWorker, workerOn } from './build/sw.ts';
 
 // tools/dev sets these: the local certificate, and where keel serve listens.
 const cert = process.env.KEEL_DEV_CERT;
@@ -11,6 +13,9 @@ const key = process.env.KEEL_DEV_KEY;
 const playAddr = process.env.KEEL_PLAY_ADDR ?? '127.0.0.1:8080';
 // keel's listener for AI apps: the MCP address.
 const agentsAddr = process.env.KEEL_AGENTS_ADDR ?? '127.0.0.1:8081';
+// The browser tests' stand-in for Cloudflare Turnstile (tools/e2e), whose
+// script and token are on the page's own origin under /turnstile/.
+const turnstileAddr = process.env.KEEL_TURNSTILE_ADDR ?? '127.0.0.1:18088';
 
 // The net worker is bundled apart; its packages join the page's notice.
 const workerPackages = new Set<string>();
@@ -47,6 +52,8 @@ const server: ServerOptions = {
     },
     // The world's chunks, at the addresses the game connection hands out.
     '/w/': { target: `http://${playAddr}`, changeOrigin: false },
+    // The human check's stand-in, when keel is set up with it (tools/e2e).
+    '/turnstile/': { target: `http://${turnstileAddr}`, changeOrigin: false },
     // The game connection. Vite does not check a WebSocket's Origin before
     // proxying it; keel does.
     '/ws': { target: `ws://${playAddr}`, ws: true, changeOrigin: false },
@@ -59,6 +66,27 @@ const server: ServerOptions = {
 if (cert && key) {
   server.https = { cert: readFileSync(cert), key: readFileSync(key) };
 }
+
+// HTTP/1.1 only, when KEEL_DEV_HTTP1 asks: over https Vite serves HTTP/2,
+// and WebKit on Linux (libsoup) leaves a module request pending for good
+// once a page asks for some four hundred of them over HTTP/2; the tests'
+// WebKit page asks for more. Node's HTTP/2 server sets its own protocols
+// from its options, but offers each connection the server's list, so the
+// list is replaced once the server is made: http/1.1 alone, as TLS's ALPN
+// writes it (its length, then its name). A built page is a few files and
+// is never served so.
+const http1: Plugin = {
+  name: 'http1',
+  apply: 'serve',
+  configureServer(s) {
+    if (process.env.KEEL_DEV_HTTP1 && s.httpServer !== null) {
+      (s.httpServer as { ALPNProtocols?: Buffer }).ALPNProtocols = Buffer.from(
+        '\x08http/1.1',
+        'latin1',
+      );
+    }
+  },
+};
 
 // The sandbox's worlds: .dev/worlds/<seed>.world and its chart,
 // <seed>.chart, which go run ./tools/dev -world <seed> writes, served at
@@ -105,16 +133,90 @@ const dressingRoom: Plugin = {
   },
 };
 
+// The sound room, built apart in the same way (vite.sounds.config.ts).
+const soundRoom: Plugin = {
+  name: 'sound-room',
+  apply: 'build',
+  async closeBundle() {
+    await build({ configFile: 'vite.sounds.config.ts', logLevel: 'warn' });
+  },
+};
+
+// For the sound room, by the development server alone: the recordings
+// dropped into art/sound/candidates (not committed) and the masters, listed
+// at /sound-candidates/ and each served at /sound-candidates/<name> and
+// /sound-candidates/masters/<name>.
+const soundTypes: Record<string, string> = {
+  '.wav': 'audio/wav',
+  '.flac': 'audio/flac',
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.webm': 'audio/webm',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+};
+const soundCandidates: Plugin = {
+  name: 'sound-candidates',
+  apply: 'serve',
+  configureServer(s) {
+    const dirs = {
+      candidates: '../art/sound/candidates',
+      masters: '../art/sound/recorded/masters',
+    };
+    const list = (dir: string): string[] =>
+      existsSync(dir)
+        ? readdirSync(dir)
+            .filter((f) => extname(f).toLowerCase() in soundTypes)
+            .sort()
+        : [];
+    s.middlewares.use('/sound-candidates', (req, res, next) => {
+      const url = decodeURIComponent((req.url ?? '').split('?')[0] ?? '');
+      if (url === '/' || url === '') {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify({ candidates: list(dirs.candidates), masters: list(dirs.masters) }));
+        return;
+      }
+      const m = /^\/(masters\/)?([^/]+)$/.exec(url);
+      const name = m?.[2] ?? '';
+      const dir = m?.[1] === undefined ? dirs.candidates : dirs.masters;
+      if (m === null || !list(dir).includes(name)) {
+        next();
+        return;
+      }
+      res.setHeader(
+        'Content-Type',
+        soundTypes[extname(name).toLowerCase()] ?? 'application/octet-stream',
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(readFileSync(`${dir}/${name}`));
+    });
+  },
+};
+
 export default defineConfig({
   server,
+  // The build's ID, as the image is built with it (BUILD in the
+  // Dockerfile); "dev" for the development server and the tests. And
+  // whether the page registers the service worker: not in a build with
+  // KEEL_SW=off (build/sw.ts).
+  define: {
+    __KEEL_BUILD__: JSON.stringify(process.env.KEEL_BUILD ?? 'dev'),
+    __KEEL_SW__: JSON.stringify(workerOn()),
+  },
   // The net worker's packages, bundled for the development server from the
   // start: found only when a page first starts the worker, they would be
   // bundled then, and every page open at that moment reloaded.
   optimizeDeps: { include: ['@bufbuild/protobuf', '@bufbuild/protobuf/codegenv2'] },
   build: {
     // three.js with its WebGPU renderer is most of the game's first chunk;
-    // its size is reported by build/size.ts against the 4 MB critical set.
+    // the first download, it with the rest, is held to 4 MB on the wire by
+    // e2e/critical.spec.ts.
     chunkSizeWarningLimit: 1500,
+    // The files the service worker keeps are read from it (build/sw.ts);
+    // it is written to dist/.vite/, which keel never serves.
+    manifest: true,
     rolldownOptions: {
       // The game, the developer page with its physics check, and the
       // game's pages of plain words: the Rules of the sea, staying safe,
@@ -134,14 +236,23 @@ export default defineConfig({
     plugins: () => [licences({ allowedFile, shared: workerPackages, emit: false })],
   },
   plugins: [
+    http1,
     devWorlds,
+    serviceWorker(),
     approvePage,
     dressingRoom,
+    soundRoom,
+    soundCandidates,
     licences({
       allowedFile,
       shared: workerPackages,
       extra: [
         { name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' },
+        {
+          name: 'Libre Caslon Text (font)',
+          licence: 'OFL-1.1',
+          file: 'src/fonts/LibreCaslonText-OFL.txt',
+        },
         {
           name: 'Alegreya Sans (font)',
           licence: 'OFL-1.1',

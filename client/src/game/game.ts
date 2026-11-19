@@ -18,12 +18,16 @@
 //
 // Watching another sailor's boat, nothing the player holds steers it: the
 // keys move no control, and the free camera is not offered.
+//
+// M turns the sound off and on, saying so under the readout.
 
 import { effect, signal } from '@preact/signals';
+import { CHEER, type CheerSound, cheerOf } from '../audio/cheer';
 import { SoundEngine } from '../audio/engine';
 import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
+import { GUN, type GunReport, gunReport } from '../audio/gun';
 import { KNOCK, knockOf } from '../audio/knock';
 import {
   isLifeCall,
@@ -34,7 +38,7 @@ import {
   waterSounds,
 } from '../audio/life';
 import type { ThunderInput } from '../audio/thunder';
-import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
+import { edgeInput, motionInput, type SoundInput, soundInput } from '../audio/voices';
 import { catalog } from '../catalog';
 import {
   ApproachWatch,
@@ -47,6 +51,7 @@ import {
   OVER_THE_FALLS,
   overhang,
 } from '../edge/over';
+import { keysGo } from '../input/focused';
 import { HelmInput } from '../input/helm';
 import { KeyInput } from '../input/keys';
 import {
@@ -70,10 +75,12 @@ import type { SeaScene } from '../render/scene';
 import { HOURS, hourAt, skyPeriods } from '../sky/skytime';
 import { HudModel, PUSHED_OFF } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
+import { soundNotice } from '../ui/soundwords';
 import { bumpLine } from '../ui/verdict';
 import { bumpedLine } from '../ui/watchwords';
 import { STEPS_PER_SECOND, WorldClock } from './clock';
 import type { BoatDriver, Pacer } from './driver';
+import { hullLift } from './hullpose';
 import { StepLoop } from './loop';
 
 const DEG = Math.PI / 180;
@@ -144,6 +151,8 @@ export class Game implements PilotActions {
   #speed = 0;
   #pushes = 0;
   #lastTime = 0;
+  /** Whether the recordings have been asked for. */
+  #recording = false;
 
   /** The own boat's kind's rudder's travel and the boom's least and most, radians. */
   get #rudderMax(): number {
@@ -215,6 +224,7 @@ export class Game implements PilotActions {
       world.stage.cap.limit = s.frameRate;
       world.setDetail(s.detail);
       world.sky.nightLight = s.nightLight;
+      this.sound.volumes(s.volume, s.seaVolume, s.soundsVolume);
       this.sound.enabled = s.sound;
       this.helm.centreOnRelease = s.centreHelm;
       world.overlays.set(s.windOverlay, s.forcesOverlay);
@@ -253,19 +263,30 @@ export class Game implements PilotActions {
     this.loop.accumulator = 0;
   }
 
+  /** Turns the sound off or on, as the M key does, saying so under the readout from now (ms). */
+  toggleSound(now: number): void {
+    const on = !this.settings.value.value.sound;
+    this.settings.set({ sound: on });
+    this.hud.showBump(soundNotice(on), now);
+  }
+
   /** Listens to the keyboard, the camera's pointers and the page's visibility. */
   listen(doc: Document, surface: HTMLElement): void {
-    const typing = (e: Event): boolean => {
-      const t = e.target;
-      return (
-        t instanceof HTMLInputElement ||
-        t instanceof HTMLSelectElement ||
-        t instanceof HTMLTextAreaElement
-      );
-    };
     const free = this.world.freeCam;
     doc.addEventListener('keydown', (e) => {
-      if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) {
+      // Keys go to what has the focus: a field types, a focused key, list
+      // or window has its own (all but Escape), the helm and the sheet
+      // their arrows.
+      const go = keysGo(e.target);
+      if (go === 'typing' || e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+      if (go === 'aside' && e.code !== 'Escape') {
+        return;
+      }
+      if (e.code === 'KeyM' && !e.repeat) {
+        this.toggleSound(e.timeStamp);
+        e.preventDefault();
         return;
       }
       if (e.code === 'KeyF' && !e.repeat && this.canFly()) {
@@ -286,7 +307,7 @@ export class Game implements PilotActions {
         this.keys.release();
         return;
       }
-      if (this.keys.down(e.code, e.shiftKey)) {
+      if (this.keys.down(e.code, e.shiftKey, go === 'aside' ? 'page' : go)) {
         e.preventDefault();
       }
     });
@@ -572,6 +593,8 @@ export class Game implements PilotActions {
     w.overlays.setPilot(this.pilot.on);
     if (d !== null) {
       d.states.blend(this.clock.alpha, w.pose);
+      // Heeled about her lee hull, if she has two.
+      w.pose.heave += hullLift(w.kind.physics.hulls.hullSpacing, w.pose.heel);
       d.decorate?.(w.pose, dt);
       if (this.pilot.on) {
         // Held on the boat's new tack after it gybed by itself: what the
@@ -641,7 +664,16 @@ export class Game implements PilotActions {
     // rig's yards too (a headsail's stay is not the rigging that sings).
     const { rig, square } = w.kind.physics;
     this.#sound.sailArea = rig.sailArea + square.squareForeArea + square.squareAfterArea;
+    if (s !== undefined) {
+      motionInput(s, this.#sound);
+    }
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
+    // The recordings, once the game is under way: never in its first
+    // download, and taking over from the synthesis as each arrives.
+    if (!this.#recording) {
+      this.#recording = true;
+      this.sound.record();
+    }
     this.#harbour(now, look);
     this.#features(now, look);
     this.#life(now, look);
@@ -833,6 +865,64 @@ export class Game implements PilotActions {
     look: 0,
     flashes: [],
   };
+
+  /** The last report of a signal gun the player was given to hear, null for none (the tests). */
+  lastGun: GunReport | null = null;
+
+  /**
+   * Fires the signal gun of a course laid in the sea: a burst of smoke from
+   * its committee boat's muzzle, and its report, as loud as loud (1 for a
+   * signal, more for the start's and the winner's), heard at full level by
+   * a racer or a spectator of the race (inRace), and by anyone else as a
+   * sound of the world. False for a course with no committee boat.
+   */
+  fireGun(course: number, loud = 1, inRace = true): boolean {
+    const w = this.world;
+    const at = w.race.fire(course, loud, w.ticks / STEPS_PER_SECOND);
+    if (at === null) {
+      return false;
+    }
+    const listener = { east: w.pose.east, north: w.pose.north };
+    this.lastGun = gunReport(GUN, at, listener, w.lookBearing(), loud, inRace);
+    if (this.lastGun !== null) {
+      this.sound.gun(this.lastGun);
+    }
+    return true;
+  }
+
+  /** How many times the bell was rung near, whether heard or not (the tests). */
+  bellsRung = 0;
+
+  /** Rings the harbour's bell near, strokes times: a certificate earned. */
+  bell(strokes: number): void {
+    this.bellsRung++;
+    this.sound.bell(strokes);
+  }
+
+  /** The last crowd's cheer the player was given to hear, null for none (the tests). */
+  lastCheer: CheerSound | null = null;
+
+  /**
+   * A crowd's cheer heard: count cheers' worth; own, the player's own
+   * "Huzzah!"; racer, the crowd on the quay cheering the player's boat.
+   */
+  cheer(count: number, own: boolean, racer: boolean): void {
+    this.lastCheer = cheerOf(CHEER, count, own, racer);
+    this.sound.cheer(this.lastCheer);
+  }
+
+  /** A cheer's bunting bursts from the masthead of the boat in view: count cheers' worth. */
+  bunting(count: number): void {
+    const w = this.world;
+    const rig = w.kind.physics.rig;
+    w.race.cheer(
+      w.pose.east,
+      w.pose.north,
+      rig.boomHeight + rig.luff,
+      count,
+      w.ticks / STEPS_PER_SECOND,
+    );
+  }
 
   #thunder(now: number, look: number): void {
     const w = this.world;

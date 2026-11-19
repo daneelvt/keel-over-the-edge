@@ -119,11 +119,23 @@ const (
 	outAshore
 	outChat
 	outCrews
+	outRaceTold
+	outRacePicture
+	outRaceSignal
+	outRaceCall
+	outRaceFinish
+	outRaceResults
+	outRaceCheered
+	outBoatPrizes
+	outCertified
+	outCourse
+	outLifted
 	outs
 )
 
 var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted", "island_caps", "forecast", "watch_ended", "watchers", "agent_lamp", "look_changed",
-	"boat_look_changed", "boat_names", "life", "knock", "knocking", "crew", "handed", "ashore", "chat", "crews"}
+	"boat_look_changed", "boat_names", "life", "knock", "knocking", "crew", "handed", "ashore", "chat", "crews", "race_told", "race_picture",
+	"race_signal", "race_call", "race_finish", "race_results", "race_cheered", "boat_prizes", "certified", "course", "lifted"}
 
 // Changes aboard boats.
 const (
@@ -203,6 +215,7 @@ type metrics struct {
 	knocks                        [len(knockNames)]prometheus.Counter
 	deck                          [decks_]prometheus.Counter
 	aboard                        prometheus.Gauge
+	minute                        minuteObservers
 }
 
 // knock counts what a knocker was told.
@@ -292,6 +305,7 @@ func newMetrics(m *obs.Metrics) metrics {
 		x.deck[i] = m.EdgeDeck.WithLabelValues(n)
 	}
 	x.aboard = m.EdgeAboard
+	x.minute = newMinuteObservers(m)
 	return x
 }
 

@@ -76,6 +76,32 @@ func (c *Catalog) Capacities() []int {
 	return out
 }
 
+// Polar is boat i's polar, from the catalog's tables, or nil if the
+// catalog has none for it.
+func (c *Catalog) Polar(i int) *physics.Polar {
+	if c.Polars == nil || i < 0 || i >= len(c.Boats) {
+		return nil
+	}
+	for _, b := range c.Polars.Boats {
+		if b.Boat != string(c.Boats[i].ID) {
+			continue
+		}
+		p := &physics.Polar{Winds: c.Polars.Winds, Angles: c.Polars.Angles, Speeds: b.Speed}
+		for _, r := range b.Up {
+			if len(r) == 2 {
+				p.Up = append(p.Up, [2]float64{r[0], r[1]})
+			}
+		}
+		for _, r := range b.Down {
+			if len(r) == 2 {
+				p.Down = append(p.Down, [2]float64{r[0], r[1]})
+			}
+		}
+		return p
+	}
+	return nil
+}
+
 // StartSheets are each boat's sheet for a start from rest, by its index:
 // pairs of an angle off the wind, degrees, and the sheet there.
 func (c *Catalog) StartSheets() [][][2]float64 {
@@ -192,4 +218,31 @@ func (c *Catalog) PrepareEncounters() *physics.EncounterPrepared {
 	e := new(physics.EncounterPrepared)
 	physics.PrepareEncounters(&p, e)
 	return e
+}
+
+// StoryScore is the score of the news's kind of story that of makes, 0
+// for a kind the catalog has none of.
+func (c *Catalog) StoryScore(of NewsStoryOf) int {
+	for _, s := range c.News.Stories {
+		if s.Of == of {
+			return s.Score
+		}
+	}
+	return 0
+}
+
+// CertificateScore is the score of the news's story of the certificate at
+// place i of the ladder earned: its own, or the kind's score for one it
+// has none of; 0 for a catalog with no such story.
+func (c *Catalog) CertificateScore(i int) int {
+	for _, s := range c.News.Stories {
+		if s.Of != NewsStoryOfCertificate {
+			continue
+		}
+		if i >= 0 && i < len(s.Scores) {
+			return s.Scores[i]
+		}
+		return s.Score
+	}
+	return 0
 }

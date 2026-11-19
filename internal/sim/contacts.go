@@ -120,12 +120,13 @@ func (w *World) contacts() {
 	buildGrid(f)
 }
 
-// placed reports whether a command put boat s where it is this tick, or it
-// started again after going over the lip: its pairs start afresh, as boats
+// placed reports whether a command put boat s where it is this tick, the
+// race committee placed it on a line, or it started again after going over
+// the lip: its pairs start afresh, as boats
 // that have just come near, since nothing they did brought them there.
 func (w *World) placed(s int32) bool {
 	f := w.next
-	if slices.Contains(w.restarted, s) {
+	if slices.Contains(w.restarted, s) || slices.Contains(w.racePlaced, s) {
 		return true
 	}
 	for i := range f.Events {
@@ -175,6 +176,19 @@ func (w *World) bump(f *bus.Frame, p *bus.Pair, c *physics.Contact, v physics.Ve
 		X: c.X, Y: c.Y, Closing: c.Closing,
 		Fault: uint8(v.Fault), Article: uint8(v.FaultArticle),
 	})
+	// Each voyage counts its bumps, at fault and not.
+	a, b := &f.Voyage[p.A].Log, &f.Voyage[p.B].Log
+	switch uint8(v.Fault) {
+	case physics.First:
+		a.BumpsAt++
+		b.BumpsNot++
+	case physics.Second:
+		a.BumpsNot++
+		b.BumpsAt++
+	default:
+		a.BumpsNot++
+		b.BumpsNot++
+	}
 }
 
 // settle works out boat s's true wind at its place at f's tick and the wake

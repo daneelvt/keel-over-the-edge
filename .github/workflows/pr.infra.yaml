@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Runs only when the cluster's manifests, their schemas, k3s's settings, or
-# the tools that render, check, release and apply them changed.
+# the tools that render, check, release and apply them changed. The hand
+# steps' Markdown under infra/ is read by people, not by these checks.
 name: pr.infra
 
 on:
@@ -34,7 +35,7 @@ jobs:
               - 'go.sum'
               - '.github/workflows/release.yaml'
               - 'renovate.json'
-              - 'infra/**'
+              - 'infra/**/!(*.md)'
               - 'tools/cluster/**'
               - 'tools/release/**'
               - 'tools/dashboards/**'

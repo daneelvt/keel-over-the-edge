@@ -50,6 +50,10 @@ type viewer struct {
 	welcomes  int
 	boatLooks []*pb.BoatLookChanged
 	names     map[uint32]string
+	// prizes are the boats' prizes by view slot as last told, and own the
+	// own boat's.
+	prizes map[uint32]*pb.BoatPrize
+	own    *pb.BoatPrize
 	// crews are the other boats' crews by view slot, as last told (an empty
 	// one deleted), and allCrews every one told, in order.
 	crews    map[uint32]*pb.Crew
@@ -70,6 +74,18 @@ type viewer struct {
 	reported  *pb.Reported
 	// shipmates counts the Shipmates told: the list changed.
 	shipmates int
+	// certified are what the sailor's certificates came to, in order.
+	certified []*pb.Certified
+
+	// at are where a course's boat was told, in order; courseEnded the
+	// latest end told; sailedTo the names of those told to sail to it.
+	at          []*pb.ShipmateAt
+	courseEnded *pb.CourseEnded
+	sailedTo    []string
+
+	// lifted are the answers to the lifts home asked for, and the lifts
+	// told aboard, in order.
+	lifted []*pb.Lifted
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -128,7 +144,7 @@ func (v *viewer) take(r client.Received) {
 	case *pb.ServerMessage_Welcome:
 		v.welcome, v.snaps, v.queued = m.Welcome, 0, nil
 		v.welcomes++
-		v.names, v.crews = nil, nil
+		v.names, v.crews, v.prizes, v.own = nil, nil, nil, nil
 	case *pb.ServerMessage_WatchEnded:
 		v.ended = m.WatchEnded
 	case *pb.ServerMessage_Queued:
@@ -168,6 +184,16 @@ func (v *viewer) take(r client.Received) {
 		v.reported = m.Reported
 	case *pb.ServerMessage_Shipmates:
 		v.shipmates++
+	case *pb.ServerMessage_Certified:
+		v.certified = append(v.certified, m.Certified)
+	case *pb.ServerMessage_ShipmateAt:
+		v.at = append(v.at, m.ShipmateAt)
+	case *pb.ServerMessage_CourseEnded:
+		v.courseEnded = m.CourseEnded
+	case *pb.ServerMessage_ShipmateCourse:
+		v.sailedTo = append(v.sailedTo, m.ShipmateCourse.GetName())
+	case *pb.ServerMessage_Lifted:
+		v.lifted = append(v.lifted, m.Lifted)
 	case *pb.ServerMessage_Crews:
 		if v.crews == nil {
 			v.crews = map[uint32]*pb.Crew{}
@@ -178,6 +204,17 @@ func (v *viewer) take(r client.Received) {
 				delete(v.crews, c.GetSlot())
 			} else {
 				v.crews[c.GetSlot()] = c
+			}
+		}
+	case *pb.ServerMessage_BoatPrizes:
+		if v.prizes == nil {
+			v.prizes = map[uint32]*pb.BoatPrize{}
+		}
+		for _, p := range m.BoatPrizes.GetPrizes() {
+			if p.GetOwn() {
+				v.own = p
+			} else {
+				v.prizes[p.GetSlot()] = p
 			}
 		}
 	case *pb.ServerMessage_BoatNames:

@@ -27,6 +27,7 @@ import { call, reasonOf } from '../account/passkeys';
 import { reasonText } from '../account/reasons';
 import { SHARE } from './deckwords';
 import { COME_ABOARD, comeAboardText } from './machinewords';
+import { useModal } from './modal';
 import { PlayerText } from './player';
 import { queueLines } from './queue';
 import { loadSettings, saveWatchChoice, type WatchSort, type WatchWho } from './settings';
@@ -82,6 +83,7 @@ import {
   LEAVE_DETAIL,
   LEAVE_QUESTION,
   MORE,
+  NEWS,
   READING,
   SAIL,
   SEARCH,
@@ -237,28 +239,28 @@ export function pickOne(rows: readonly WatchRow[], random = Math.random): string
   return top[Math.min(top.length - 1, Math.floor(random() * top.length))]?.name ?? null;
 }
 
-/** The question before the own boat leaves the water to watch; Escape is Stay. */
+/**
+ * The question before the own boat leaves the water to watch: Stay takes
+ * the focus, and Escape is Stay; the rest of the page is inert while it is
+ * asked.
+ */
 export function LeaveQuestion({ leave, stay }: { leave: () => void; stay: () => void }) {
-  // Heard as soon as it is drawn.
-  useLayoutEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        stay();
-      }
-    };
-    document.addEventListener('keydown', key);
-    return () => document.removeEventListener('keydown', key);
-  }, [stay]);
+  const ref = useModal(stay, { inert: true, focus: '[data-stay]' });
   return (
-    <section class="watch-question" role="alertdialog" aria-labelledby="watch-leave-title">
+    <section
+      class="watch-question"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="watch-leave-title"
+      ref={ref}
+    >
       <h2 id="watch-leave-title">{LEAVE_QUESTION}</h2>
       <p>{LEAVE_DETAIL}</p>
       <div class="watch-buttons">
         <button type="button" class="watch-go" onClick={leave}>
           {LEAVE}
         </button>
-        <button type="button" onClick={stay}>
+        <button type="button" data-stay onClick={stay}>
           {STAY}
         </button>
       </div>
@@ -469,6 +471,7 @@ export function WatchList({
   from = server,
   className = 'panel watch-list',
   fleet = '',
+  pick: pickAtOnce = false,
 }: {
   choose: (sailor: string) => void;
   ask: () => boolean;
@@ -477,10 +480,19 @@ export function WatchList({
   className?: string;
   /** The code of the fleet's link the page was opened by: This fleet, first and chosen; '' for none. */
   fleet?: string;
+  /**
+   * Opened to pick one at once, as Pick one for me does, from everyone at
+   * sea: once the first page is read; the list as it is when fewer than
+   * two can be watched.
+   */
+  pick?: boolean;
 }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<WatchSort>(() => loadSettings().watchSort);
-  const [who, setWho] = useState<ListWho>(() => (fleet !== '' ? 'fleet' : loadSettings().watchWho));
+  const [who, setWho] = useState<ListWho>(() =>
+    fleet !== '' ? 'fleet' : pickAtOnce ? 'all' : loadSettings().watchWho,
+  );
+  const picking = useRef(pickAtOnce);
   const [list, setList] = useState<Listing | null>(null);
   const [failed, setFailed] = useState(false);
   const [asking, setAsking] = useState<string | null>(null);
@@ -521,6 +533,13 @@ export function WatchList({
           scrolled.current = 0;
           if (scroller.current !== null) {
             scroller.current.scrollTop = 0;
+          }
+          if (picking.current) {
+            picking.current = false;
+            const name = p === null ? null : pickOne(p.sailors);
+            if (name !== null) {
+              watch(name);
+            }
           }
         });
       },
@@ -759,7 +778,14 @@ export function WatchList({
  * Nothing while the own boat sails. A long name ends in an ellipsis, and
  * the plate's label says it whole.
  */
-export function WatchBar({ view }: { view: WatchView }) {
+export function WatchBar({
+  view,
+  news = null,
+}: {
+  view: WatchView;
+  /** Opens the news, where the chart screen is not yet to be had (before the sea); null at sea. */
+  news?: (() => void) | null;
+}) {
   const w = view.watching.value;
   const place = view.place.value;
   const ended = view.ended.value;
@@ -839,6 +865,11 @@ export function WatchBar({ view }: { view: WatchView }) {
         ) : null}
       </div>
       {another}
+      {news !== null ? (
+        <button type="button" class="head-key watch-news" onClick={news}>
+          {NEWS}
+        </button>
+      ) : null}
       {share}
       {come}
       {sail}
@@ -967,11 +998,11 @@ export function WatchShare({
   );
 }
 
-/** What the screen shows of watching before the sea: the plate, and the list while it is open. */
-export function WatchParts({ view }: { view: WatchView }) {
+/** What the screen shows of watching before the sea: the plate, with the news, and the list while it is open. */
+export function WatchParts({ view, news = null }: { view: WatchView; news?: (() => void) | null }) {
   return (
     <>
-      <WatchBar view={view} />
+      <WatchBar view={view} news={news} />
       <SeaWatchList view={view} />
     </>
   );
@@ -979,14 +1010,18 @@ export function WatchParts({ view }: { view: WatchView }) {
 
 /**
  * Before the sea is shown: why a watch the page opened with was refused,
- * or the place in the spectators' queue, and the list; until the result
- * takes it away.
+ * or the place in the spectators' queue, the list, and the day's news;
+ * until the result takes it away.
  */
-export function showWatchWaiting(parent: HTMLElement, view: WatchView): () => void {
+export function showWatchWaiting(
+  parent: HTMLElement,
+  view: WatchView,
+  news: (() => void) | null = null,
+): () => void {
   const host = document.createElement('div');
   host.className = 'hud watch-waiting';
   parent.append(host);
-  render(<WatchParts view={view} />, host);
+  render(<WatchParts view={view} news={news} />, host);
   return () => {
     render(null, host);
     host.remove();

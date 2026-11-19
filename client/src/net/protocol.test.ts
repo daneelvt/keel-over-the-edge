@@ -83,6 +83,8 @@ interface GoldenBoat {
   fore: number;
   kite: number;
   hoist: number;
+  trim: number;
+  aft: number;
 }
 
 /** A view's boats as the golden vectors list them. */
@@ -110,6 +112,8 @@ function boatsOf(v: View): GoldenBoat[] {
       fore: at(Q.fore),
       kite: at(Q.kite),
       hoist: at(Q.hoist),
+      trim: at(Q.trim),
+      aft: at(Q.aft),
     });
   }
   return out;
@@ -364,6 +368,14 @@ describe('the snapshot', () => {
     expect(f[six + SLOT.hoist]).toBeCloseTo(128 / 255, 12);
     expect(f[last + SLOT.hoist]).toBe(1);
     expect([f[one + SLOT.kite], f[one + SLOT.hoist]]).toEqual([0, 0]);
+    // A beach cat: her sailor on the wire past a byte's reach, her trim
+    // bow down and her sailor stepped aft.
+    const seven = slotAt(7);
+    expect(f[seven + SLOT.kind]).toBe(4);
+    expect(f[seven + SLOT.sailor]).toBeCloseTo(-2.16, 10);
+    expect(f[seven + SLOT.trim]).toBeCloseTo((-9 * Math.PI) / 360, 12);
+    expect(f[seven + SLOT.aft]).toBeCloseTo(0.64, 10);
+    expect([f[one + SLOT.trim], f[one + SLOT.aft]]).toEqual([0, 0]);
     expect([f[one + SLOT.jib], f[one + SLOT.reef]]).toEqual([0, 0]);
     // The own boat reads from the record as from the snapshot.
     const own = newSnapshot();

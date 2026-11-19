@@ -61,7 +61,8 @@ const adminUsage = `usage: keel admin [-addr host:port] [-json] <command> [argum
                        how long an AI app's approval lasts: 90d, 12h, 30m
   actions [ID]         the record of the owner's actions
   settings             links to come aboard: how long a link lasts, and
-                       whether links and boarding are on for everyone
+                       whether links and boarding are on for everyone;
+                       chat's switches; and new sailors'
   links on|off [-yes]  every skipper's links work, or none does: off ends
                        every live link for good
   boarding on|off      anyone may come aboard a boat, or nobody
@@ -75,6 +76,11 @@ const adminUsage = `usage: keel admin [-addr host:port] [-json] <command> [argum
                        or off for everyone
   countries CODES      chat off in these countries, two letters each,
                        comma separated: BR,AU; "" clears them
+  newsailors N         how many new sailors one address (an IPv4 address,
+                       or an IPv6 /56) may make in 24 hours, from 1 to 1000
+  humancheck on|off    the human check (Cloudflare Turnstile) on every new
+                       sailor, or none: off lets new sailors in unchecked,
+                       the count still holding
   reports              the reports open, a child's safety first
   report ID            a report whole, with the lines it holds
   act ID ACTION [-days N] [-reason TEXT] [-line N -at TIME]
@@ -85,8 +91,26 @@ const adminUsage = `usage: keel admin [-addr host:port] [-json] <command> [argum
                        shows them), purge, hold, release, under-13,
                        referred (-referred: to whom, and its reference)
 
-Without -yes, stop, revoke, delete, lifetime, links off, linklife, chat off
-and act say what they would do, and do nothing.
+  agreements list      every contributor agreement signature, voided ones
+                       too
+  agreements export    the same as CSV, for the owner's own copy: keep it
+                       off the repository
+  agreements add LOGIN -name NAME -note TEXT [-guardian NAME
+      -guardian-email EMAIL] [-version N] [-id NUMBER] [-yes]
+                       record a signature by hand: a contributor under 18,
+                       with their parent's or guardian's consent by e-mail,
+                       or one made on paper; their pull requests are
+                       checked again
+  agreements void ID -reason TEXT [-yes]
+                       void a mistaken signature; it is kept, marked void
+
+  The agreements commands reach keel agreement's internal listener, not
+  keel's: run them in its pod,
+    kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements list
+
+Without -yes, stop, revoke, delete, lifetime, links off, linklife, chat off,
+act, agreements add and agreements void say what they would do, and do
+nothing.
 
   -addr  keel's internal listener (default KEEL_INTERNAL_ADDR, or
          127.0.0.1:9090)
@@ -248,6 +272,10 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 	at := fs.String("at", "", "")
 	referred := fs.String("referred", "", "")
 	note := fs.String("note", "", "")
+	guardian := fs.String("guardian", "", "")
+	guardianEmail := fs.String("guardian-email", "", "")
+	version := fs.Int("version", 0, "")
+	githubID := fs.Int64("id", 0, "")
 	pos, err := parseMixed(fs, rest)
 	if err != nil {
 		return errUsage
@@ -420,6 +448,20 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 			req.SpectatorChat = &on
 		}
 		return c.settings(ctx, req, stderr)
+	case "newsailors":
+		n, err := strconv.Atoi(strings.Join(pos, " "))
+		if len(pos) != 1 || err != nil {
+			fmt.Fprintln(stderr, "keel admin newsailors: N, how many new sailors one address may make in a day, from 1 to 1000")
+			return errUsage
+		}
+		return c.settings(ctx, owner.SettingsRequest{NewSailorsPerAddress: &n}, stderr)
+	case "humancheck":
+		if len(pos) != 1 || (pos[0] != "on" && pos[0] != "off") {
+			fmt.Fprintln(stderr, "keel admin humancheck: on|off")
+			return errUsage
+		}
+		on := pos[0] == "on"
+		return c.settings(ctx, owner.SettingsRequest{HumanCheck: &on}, stderr)
 	case "countries":
 		if len(pos) != 1 {
 			fmt.Fprintln(stderr, `keel admin countries: CODES, two letters each, comma separated: BR,AU; "" clears them`)
@@ -510,6 +552,9 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 				writeAction(stdout, &a)
 			}
 		})
+	case "agreements":
+		return c.agreements(ctx, pos, agreementFlags{name: *name, note: *note, reason: *reason, guardian: *guardian,
+			guardianEmail: *guardianEmail, version: *version, githubID: *githubID, yes: *yes}, stdout, stderr)
 	}
 	fmt.Fprintf(stderr, "keel admin: unknown command %q\n\n%s", verb, adminUsage)
 	return errUsage
@@ -545,6 +590,7 @@ func writeSettings(w io.Writer, s owner.SettingsJSON) {
 	}
 	fmt.Fprintf(w, "chat %s; shipmates' messages %s; spectators reading machine sailors' chat %s; chat off in %s\n",
 		onOff[s.Chat], onOff[s.ShipmateMessages], onOff[s.SpectatorChat], countries)
+	fmt.Fprintf(w, "new sailors: %d an address a day; the human check %s\n", s.NewSailorsPerAddress, onOff[s.HumanCheck])
 }
 
 func (c *adminClient) search(ctx context.Context, req owner.SearchRequest, stderr io.Writer) error {

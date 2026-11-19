@@ -42,6 +42,53 @@ built files are committed; the catalog's `art.model` names them, and
   a fractional rig with swept spreaders, deadeyes and trapeze wires, a
   square-headed, fully battened main, a self-tacking jib on its horse, a
   gennaker on a bowsprit, a centreboard and a kick-up rudder.
+- `boats/beach-cat/build.ts`: the beach cat, two narrow rockered hulls in
+  carvel planking with laid decks, ash beams lashed to oak pylons and a net
+  of tarred hemp between them, a spruce mast of teardrop section on a
+  bronze ball, shrouds on deadeyes and a bridled forestay, two trapeze
+  wires a side, a fully battened square-headed main and a jib, the hulls'
+  keels, and two kick-up rudders whose arms the crossbar joins. Its hull's
+  volume is one hull's, measured about its own centreline, and its offset.
+- `boats/yacht/build.ts`: the yacht, carvel planked on a cruising sloop's
+  lines with a plumb bow and a broad stern, a copper bottom and round bronze
+  portlights; a laid deck and a varnished coachroof with windows of small
+  panes in lead cames, wooden dead-lights and glazed scuttles; an
+  oiled-canvas tilt on ash laths; a cockpit open to a hinged stern door,
+  with teak benches, a table and two spoked wheels before wooden binnacles;
+  small timber capstans; iron stanchions, pulpit and pushpit and two hemp
+  lifelines; a fractional rig with two pairs of spreaders on oak
+  cross-trees, shrouds on deadeyes, a main in its lazy bag and a genoa on a
+  roller of pine; a fin keel with a lead bulb, two rudders either side of
+  her centreline, an ash bumkin with an iron anchor; brass sidelights on
+  her pulpit and a sternlight at her transom. Its hull's `lever` data are
+  her sections and appendages, which `tools/lever` heels for her righting
+  lever. Its `wheel` node says how far out its two wheels are (`spread`),
+  each a child of its own, `wheel-port` and `wheel-starboard`; and it
+  names the places its people's ways read: `coachroof`, `table`, `bridle`,
+  `bench` and `lifelines`.
+- `boats/catamaran/build.ts`: the catamaran, two carvel hulls with plumb
+  bows, a knuckle and flared topsides, coppered below, joined by a
+  bridgedeck under a varnished round-house of small-paned windows all round
+  with dead-lights and two glazed doors shut, its planked roof carried aft
+  over the cockpit on varnished posts as a poop, open over the helm; a
+  raised helm platform to port up an oak companion ladder with a bronze
+  rail, a spoked wheel aft of a wooden console with a brass hood, a settle
+  for two and two small capstans; the cockpit's L-shaped teak bench and
+  table, the aft crossbeam's bench with its turned oak rail, the lounger;
+  oak beams forward with hemp nets between, an iron anchor at a timber
+  roller and a windlass; iron horses for the main sheet and the
+  self-tacking jib; iron stanchions, pulpits and pushpits with hemp
+  lifelines; a spruce rig on oak cross-trees with shrouds on deadeyes and
+  no backstay, a fully battened main in its lazy bag and a jib on a roller
+  of pine; two copper-sheathed keels and two oak rudders whose arms a tie
+  rod joins; oak steps on the transoms; brass sidelights on the forward
+  decks and a poop-lantern hung at the roof's after edge. Its hull's
+  `lever` data are both hulls' sections with the bridgedeck and the
+  round-house, and its `bridgedeck` the plan between the hulls, its
+  underside and the roof's top at its after end. Its `wheel` node stands
+  off the centreline, with no spread; the `sailor` node is the helm's
+  stance aft of it.
+- `pendants/build.ts`: the certificates' pendants (below).
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -103,6 +150,9 @@ go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
 go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on every look
 go run ./tools/sailors -add trapeze,trapeze-low      # and the harness with them
 go run ./tools/sailors -add rail,rail-out,crouch-enter,crouch-walk,crouch-exit
+go run ./tools/sailors -add cat-helm,cat-hike,hull,hull-wire,cat-trapeze,cat-trapeze-low,cat-righting,net-crouch-enter,net-crouch-left,net-crouch-right,net-crouch-exit,net-crawl-left,net-crawl-right
+go run ./tools/sailors -add yacht-wheel,yacht-wheel-seated,yacht-habit-wheel,bench,bench-shift,bench-nod,bench-talk,bench-braced,yacht-rail,yacht-rail-out,cockpit-crouch-walk,roof-crouch-walk
+go run ./tools/sailors -add bridge-wheel,bridge-habit-wheel,bridge-wheel-seated,helm-seat,helm-seat-shift,helm-seat-nod,helm-seat-talk,table-sit,table-shift,table-nod,table-talk,table-braced,beam-sit,beam-shift,beam-nod,beam-talk,beam-braced,lounger-sit,lounger-shift,lounger-nod,lounger-talk,cockpit-walk,cockpit-turn-left,cockpit-turn-right,stairs-up,stairs-down
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -193,7 +243,12 @@ deck, 0.75 m to the rim, 8 spokes), placed from the helmsman's place
 (`place-helm-wheel` is from the figure's space to the `sailor` node's),
 and written to a file of their own, `<version>.wheel.glb`, which only a
 boat steered by a wheel loads. The game keeps the hands on the spokes as
-the wheel turns with the rudder. `-add` makes only the clips named (as the
+the wheel turns with the rudder. A boat of two wheels says how far out
+each is (`extras.wheel.spread`), its hubs `ahead` of and `up` from the
+`sailor` node, which stands between them; each wheel is a child of the
+`wheel` node, `wheel-port` and `wheel-starboard`, turned alike, and the
+helmsman stands aft of the windward one, the clips' hands brought in to
+its smaller rim. `-add` makes only the clips named (as the
 game asks for them) on each committed look and writes their file, adding
 them to it if it has others, those kept byte for byte; nothing else is
 written, and garments it must make again go into `.dev`.
@@ -236,6 +291,199 @@ deck while crouched, and the elbows as far as keeps the fingers off it;
 the coat's chains hanging from the body as it bends. They are not placed.
 All seven are written to `<version>.rail.glb`, which only a boat with
 someone at a station on her rail loads.
+
+The tall ship's company stand, sit, walk, haul and lie out aboard her.
+Her model's `company` node gives, on her starboard side, in her frame (the
+yard's in its node's), the places their clips are made against: her
+quarterdeck's rail (the cap's inner edge, on its top), the fore hatch's
+forward edge on its grating, the quarterdeck's ladder, the main shrouds,
+their ratlines, futtock and topmast shrouds, the main top, the main topsail
+yard's node with its footrope, and the main brace's lead and a point along
+its fall. The sailors' stage imports her far forward of the rest
+(`tables.yaml`'s `stage.ship`, `build/stage.py`'s `Ship`); her hull, her
+mainmast's spars and top and her main yards are solid to the gates, her
+ropes too but to what holds them (the hands, the feet; on the yard, the
+hands hold it). Their clips are in two files. `<version>.ship.glb`, about her
+decks: Quaternius' `Idle_LookAround_Loop` (`look-about`, the hand the source
+raises to the brow kept down: a hat's brim is in its way),
+`Idle_FoldArms_Loop` (`fold-arms`), `Idle_Talking_Loop` (`talking`) and
+`Walk_Loop` (`walk`, a foot bearing on the deck moving back at 0.9 m/s), set
+on a flat deck and not placed; `Idle_Rail_Loop` (`leaning`), leaning on her
+rail facing outboard with the forearms laid on the cap rail's top at her
+rail's height over her deck (the back bent as far as brings the shoulders
+within reach of it, and the body kept off the bulwark under it), placed
+from the rail's point; and `Sitting_Idle_Loop`,
+`Sitting_Idle02_Loop`, `Sitting_Nodding_Loop` and `Sitting_Talking_Loop`
+(`hatch-sit`, `hatch-shift`, `hatch-nod`, `hatch-talk`), sat on the hatch's
+forward edge facing forward, the buttocks on its grating and the cloth laid
+on it, placed from the edge. `<version>.aloft.glb`, her work and aloft, each
+with its `-port`: `haul`, hauling the main brace's fall hand over hand facing
+its lead, the hands brought along the fall toward it to 76% and 73% of the arm
+from the shoulder, the forward hand the further (placed from the
+fall's point 1.6 m from its lead, 0.1 m over it); `aloft`, standing in the
+main top as far out as leaves a hand 77% of the arm from a topmast shroud
+(placed from the top's floor at her centreline); and `yard`, lying over the
+main topsail yard, the hips over it as high as the legs reach down to the
+footrope a fifth of the way out along its run, the belly on it and the
+hands on its fore side (placed from the yard's axis over that point, in its
+node's frame). A clip with no `-port` is put on her port side by its place
+seen in the mirror. The machines have neither `fold-arms`, `hatch-talk`,
+`leaning` nor `haul`: their hands would meet their plates, their long coats
+the deck and the rail. The Bosun leans with her forearms a little further
+over the rail, for her loose sleeves (`bosun-leaning`, named `leaning`).
+
+A beach cat's people sit on her windward hull, sit out from it, lie out
+on the wire from it, cross her net and right her. Her model's `aboard`
+node gives, on her starboard side, in her frame: at the helm's and the
+crew's stations the hull's deck at its inner and outer edges, the side
+bar's top and the hiking strap's underside; the net (its height where it
+is laced, its fore and aft edges, its sag); the boom's underside at its
+lowest; and the righting line lying on the net. The sailors' stage imports
+her forward of the rest (`tables.yaml`'s `stage.cat`, `build/stage.py`'s
+`Cat`), and a copy of her lying on her side beside her; her hulls, decks,
+beams, side bars and fittings are solid to the gates, her net as the plane
+it is laced at, and her straps and ropes too but to the hands and feet
+(a new gate, "clear of the cat"); sat on her, the cloth is laid on her
+decks and net. Her clips are `<version>.cat.glb`, which only a kind whose
+catalog art names `cat` in `sailorClips` loads: `cat-helm` (sat on the
+hull's deck by its inner edge, the legs across the net and the feet under
+the strap, the aft hand on the extension and the other on the mainsheet)
+and `hull` (the crew so at the crew's station, a hand on the jib sheet,
+the other on the knee), placed from the deck's inner edge at their
+station; `cat-hike` (sitting out on the outer edge), `cat-trapeze` and
+`cat-trapeze-low` (the skiff's two on the wire, the crouch standing 15 mm
+higher, the man's heel being through her rounder edge) and `hull-wire`
+(the crew on the wire, a hand on the jib sheet, the other on the trapeze's
+handle), placed from the deck's outer edge; each with its `-port`.
+`cat-righting` is the tall ship's `haul` set on her lower hull as she lies
+on her side, leaning further back, each hand brought from its shoulder
+toward where the righting line leaves her upper hull, placed from where
+the feet stand. The crossings of her net facing forward are Quaternius'
+(`Crouch_Enter`, `Crouch_Left_Loop`, `Crouch_Right_Loop`, `Crouch_Exit`:
+`net-crouch-enter`, `-left`, `-right`, `-exit`; `Crawl_Left_Loop`,
+`Crawl_Right_Loop`: `net-crawl-left`, `-right`), set on the net (a
+retarget's `stage: cat-net`) and placed from its middle on her centreline,
+the loops stepping to their side (a retarget's `way`, at its `speed`).
+Crawling (`crawl`), the hands and knees are held on the net while they
+bear as the feet are, the back's arch shared along it, the forearms' turn
+kept within their range and the palms flat where the wrists allow; the
+crawl plays slower than the library's (its `seconds`) and smoothed more
+(its `smooth`), easing its hitches. On the net a knee is as thick as the
+figure's dressed one, a deep stride's knee lifts the body rather than
+meet the net, a bearing foot bent past its range raises its heel, and the
+whole stands as high as keeps its lowest vertex (but the cloth laid on the
+net) on it. The Chartmaker crawls to the left with
+the hands nearer the body (a retarget's `pull`, `chartmaker-net-crawl-left`
+named `net-crawl-left`), clear of the man's hat's brim. There is no clip
+going down onto the hands and knees or up off them: the library's
+`Crawl_Enter` and `Crawl_Exit` did not pass the gates.
+
+A cruising yacht's people stand and sit at her windward wheel, sit on her
+cockpit's windward bench and on her windward rail under her lifelines, and
+cross her cockpit and her coachroof at a crouch. The sailors' stage imports
+her to starboard of the rest (`tables.yaml`'s `stage.cruiser`,
+`build/stage.py`'s `Yacht`) and reads her places from her model's nodes, on
+her starboard side: the stance aft of her starboard wheel (the `sailor` node
+moved out by the `wheel` node's `spread`), its hub and rim; the side deck's
+inner edge outboard of the wheel, and the deck forward of it by her capstan;
+the `bench` node's front edge, top and sole; the deck's edge at the `rail`
+node, and her two lifelines there between their stanchions (the
+`lifelines` node); the sole on her centreline aft of her table (the `table`
+node) and her coachroof's top on her centreline aft of its fore end (the
+`coachroof` node). Her hull, decks, benches, coachroof, sprayhood, table,
+binnacles, capstans, stanchions, pulpit, pushpit, mast and boom are solid
+to the gates, her ropes (the lifelines above all, her rigging, her sheets)
+too but to what holds them (the hands; on her rail, the forearms laid over
+the upper lifeline), and her wheels' wood but to the hands that hold it (a
+gate, "clear of the yacht"); sat on her, the cloth is laid on her decks and
+bench, and is through her if it is under her decks, benches, coachroof or
+table. Her clips are `<version>.cruiser.glb`, which only a kind whose
+catalog art names `cruiser` in `sailorClips` loads (the catalog's check
+refuses code quoting a kind's id, so the file is not named after the
+kind):
+
+- `yacht-wheel`, the wheel's `helm-wheel` made at her wheel (a clip's
+  `restage`), its hands on her rim 45° either side of its top, and
+  `yacht-habit-wheel`, each look's habit at the wheel made so (a clip made
+  `of` another); `yacht-wheel-seated`, sat on the side deck outboard of the
+  wheel facing forward, the legs along the deck and the outboard foot
+  braced against the capstan forward, leaning forward, the inboard hand on
+  the rim's outboard side, the other on its thigh: placed from the stance;
+- `bench`, `bench-shift`, `bench-nod` and `bench-talk`, Quaternius'
+  `Sitting_*` sat on the bench facing inboard (a retarget's `stage:
+  yacht-bench`, the bench's edge `bench.knee` from the knees), and
+  `bench-braced`, leaning back against the bench's back, the forward foot
+  braced further out on the sole: placed from the bench's front edge;
+- `yacht-rail` and `yacht-rail-out`, sat on the deck's edge facing
+  outboard, the legs over the side under the lower lifeline, the forearms
+  laid over the upper, sitting up and leaning on it: placed from the deck's
+  edge;
+- `cockpit-crouch-walk` and `roof-crouch-walk`, Quaternius'
+  `Crouch_Fwd_Loop` facing across her (to port) at a crouch, set on her sole
+  aft of the table (forward of it, by the coachroof's after face, there is
+  no room fore and aft for a crouch) and on her coachroof's top forward of
+  the mast (aft of it her boom is lower over the roof than a crouching
+  figure's hat), placed from where each is crossed on her centreline.
+
+Those at the wheel, braced on the bench and on the rail have their
+`-port`; the bench's idles and the crossings are turned onto the port side,
+as a seat facing inboard is. The machines have no `bench-talk`.
+
+A cruising catamaran's people stand at her raised wheel and sit on the
+settle behind it, sit beside the helm, round her table, on her aft bench
+and on her lounger, walk her cockpit and go up and down her helm's ladder.
+The sailors' stage imports her to port of the rest (`tables.yaml`'s
+`stage.bridgedeck`, `build/stage.py`'s `Bridgedeck`) and reads her places
+from her model's nodes: the helm's stance (the `sailor` node), her wheel's
+hub and the grips on its rim (the `wheel` node); and her `seats` node's
+data: each seat's front edge where its clips are made (at a station of
+hers), the way one sat there faces, the floor before it and the top of its
+back; her table; her ladder's foot, landing, treads and rail; the sole
+where her cockpit is walked; her floors' plans. Every place belongs to a
+family whose own place it is placed from and whose way it faces: a clip's
+`-port` is at the same place, the figure its own mirror image (her places
+are hers alone, none mirrored across her), and a stage target's offset is
+in its family's frame (ahead as it faces, to the figure's left, up). Her
+hulls, bridgedeck, saloon, roof and its posts, platform, settle, console,
+capstans, ladder, seats, table, mast and boom are solid to the gates, her
+ropes and her bronze rails too but to the hands, and her wheel's wood but
+to the hands that hold it (a gate, "clear of the catamaran"); sat on her
+or on her ladder, the cloth is laid on her seats, floors and treads, and is
+through her if it is under a top of hers. Her clips are `<version>.bridgedeck.glb`, which only a
+kind whose catalog art names `bridgedeck` in `sailorClips` loads (the
+catalog's check refuses code quoting a kind's id):
+
+- `bridge-wheel`, the wheel's `helm-wheel` made at her wheel (a clip's
+  `restage: bridgedeck`), and `bridge-habit-wheel`, each look's habit at
+  the wheel made so; `bridge-wheel-seated`, sat on the settle behind the
+  stance, facing forward, the hands on the thighs (the settle is aft of
+  where the helm stands, the wheel beyond a hand's reach from it): placed
+  from the stance;
+- the ship's company's four sitting idles (Quaternius' `Sitting_*`) on each
+  of her seats (a retarget's `stage: bridge-helm`, `bridge-table`,
+  `bridge-beam`, `bridge-lounger`; the seat's edge `seat.knee` from the
+  knees): `helm-seat`, `-shift`, `-nod`, `-talk` beside the helm;
+  `table-sit`, `-shift`, `-nod`, `-talk` round her table; `beam-` on her
+  aft bench; `lounger-` on her lounger; placed from that seat's place;
+- `table-braced`, sat at the table's bench's front edge leaning in, the
+  right hand gripping the table's edge, the feet set wide; `beam-braced`,
+  sat on the aft bench leaning back against its rail, the left leg braced
+  out on the sole: placed from their seat's place;
+- `cockpit-walk` (`Walk_Loop`, its feet moving back at 0.9 m/s), and
+  `cockpit-turn-left` and `-right` (`Turn90_L`, `Turn90_R`, played over
+  1.8 s), on her sole: placed from where it is walked;
+- `stairs-up` and `stairs-down`, once through, the body carried up her
+  ladder from its foot to its landing facing up it, and down it facing aft:
+  key poses a step apart, the feet set on the treads (a pose's place
+  `bridge-stairs` or `bridge-landing`, its `shift` up and along the ladder),
+  the foot that steps next up on its toes, what is under a stepping foot
+  rising early in the step going up and falling late going down
+  (`motion.LADDER_UP`), the hands at the hips (clear of its rail and of the
+  settle beside it), a coat's front falling from the knee; what of the
+  cloth meets a tread is laid on it, as a seated figure's is on its seat;
+  placed from the ladder's foot and its landing.
+
+Those at the wheel and the braced have their `-port`.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through
@@ -283,12 +531,121 @@ and a paddle's share out from its root to its tip (v). The script fails if
 a body is not as long as it was built or is over its triangles' budget;
 `client/build/swimmers.test.ts` checks the committed file.
 
+## The race committee
+
+`committee/build.ts` builds the race committee's things in the sea into
+`committee/committee.glb`, the catalog's `world.committee.art.model`, four
+root nodes laid out as the boats are, each origin on the waterline:
+
+- `committee-boat`: a gaff cutter of about eleven metres at a single
+  anchor, carvel planked, her topsides blacked with a gilt cove line, a
+  white boot top and a copper bottom; a laid deck, a varnished skylight and
+  companion, a long tiller; a spruce mast with crosstrees and a topmast, a
+  bowsprit, tarred shrouds and stays, the mainsail furled on its boom with
+  the gaff lowered onto it; her cable out over the stem. She is dressed
+  overall: a line from the bowsprit's end over the topmast's head to the
+  boom's end, the catalog's signal flags bent on it in turn, their designs
+  read from `world.committee.flags`. On her foredeck a small brass signal
+  gun on an oak carriage, its muzzle to starboard. Her empty nodes: `gun`;
+  `muzzle`, where its smoke leaves it; `halyard`, the starboard crosstree's
+  end, where the race's signals are hoisted; `hawse`; `riding-light`.
+- `cask-mark`: a cask painted madder red with blacked iron hoops, a white
+  spar through it banded black each metre, the catalog's `mark` metres
+  high, a white board box about the spar for the mark's number and a
+  lantern on an arm under the top. Its empty nodes: `flag-staff`, `lantern`
+  and `number`, whose `extras.face` says how far out the board's faces are.
+- `pin-buoy`: a smaller cask in weld yellow with a shorter spar, its
+  `flag-staff` and `lantern`.
+- `beacon-spar`: a tarred pole standing from twelve metres under the water,
+  a white band at the water, and an iron cage for a topmark.
+
+Every part's colour is in its vertices and every material is plain, so the
+page merges each node into one instanced draw, its parts' roughness and
+metalness carried in its vertices.
+
+## The pendants
+
+`pendants/build.ts` builds the certificates' pendants into
+`pendants/pendants.glb`, the catalog's `pendants.art.model`, a root node
+for each, named as a certificate's `pendantNode`: `anchor` (copper),
+`wheel` (a bronze ship's wheel), `compass-rose` (a silver star raised on a
+blackened disc), `spyglass` (silver, hung across the chest) and `sunburst`
+(gold), each about three centimetres, at most 480 triangles with its bail
+and cord. Each hangs from a bail, a small ring square to its face; its
+origin is where the cord runs through the bail, x across, y up and z out
+from the chest, its back (the bail's too) on z = 0. The cord's two ends
+rise up and back from the bail, to pass under the clothes at the neck.
+Every part's colour is in its vertices and its metalness and roughness in
+its second texture coordinate, so one plain material draws them all. The
+script fails on a pendant over its triangles or out of its size, and on a
+certificate whose pendant it does not build;
+`client/src/render/sailors/pendant.test.ts` checks the committed file and
+where each look's figures wear it.
+
+## The log's glyphs
+
+`glyphs/build.py`, run by Blender from the repository's root
+(`/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup
+--python art/glyphs/build.py`), draws a small inked glyph of every kind of
+the sea's life and every boat, from the game's own models (the swimmers,
+the birds as `client/src/render/birds.ts` flies them, the boats), in the
+manner of the sailors' inked portraits: `glyphs/<kind id>.webp`, 96 × 96,
+lossless, transparent round the figure, the paper inside it and the ink.
+The log's collection shows each found kind so, and a kind not yet found as
+its silhouette; `client/src/ui/logglyphs.test.ts` checks that every kind
+has its glyph.
+
+## The website's pictures
+
+`website/` (the website, keelovertheedge.com) shows pictures of the game
+taken from the game itself: `website/pictures/`, run by hand on a Mac
+(`cd website && npm run pictures`), stages each in the client's offline
+sandbox with the browser tests' hooks, screenshots it in Chrome, and
+encodes the picks to `website/`: AVIF and JPEG at their widths, named
+`<picture>-<width>`, and `manifest.json`, which lists each picture's
+words, take, files and sizes, the boat at the edge for each hour at sea,
+and the game's art the page shows as it is (the inked portraits, the
+log's glyphs). They are art like the rest of this folder: taken again,
+not edited, whenever the game's look changes
+(`docs/development.md`, "The website").
+
 ## Sound
 
 `sound/*.json` are the recipes the client's sound engine plays: filter
 bands, levels and curves for the wind, the rigging, the flogging sail, the
 water on the hull and the sea about the boat. They are art like the models. Each names the art licence
 in its first field, `licence`.
+
+`sound/mix.json` is the mix, which only the page reads: each bus's
+balance, the limiter, the fades, the curve the bed's levels are played on
+and each voice's trim, the calm's lapping, and the tones that make the
+synthesis gentle. The other recipes' numbers are what the server's lookout
+hears too, so how loud a sound is in the mix is changed here, not there.
+It also holds the bed's families as layers, each matched in loudness to its
+synthesis, and the sounds only the page plays: the bow's slaps, the sheet
+and the boom, the halyards in port, the surf.
+
+`sound/recorded/` holds the recordings: masters under `masters/` as FLAC
+at 48 kHz, and beside them what is built from each, `<name>.webm` (Opus),
+`<name>.m4a` (AAC) and `<name>.json`, its numbers: which voice plays it
+and at what gain. `sound/SOURCES.md` lists each master's original, its
+licence (CC0, or the owner's own) and SHA-256; `go run ./tools/sounds
+-check` checks them and their sizes, and `cd client && npm run sounds`
+encodes the masters. The steps to add one are in `SOURCES.md`. Until a
+voice has a recording, its synthesis plays. `sound/candidates/` is not
+committed: recordings dropped there are heard in the sound room.
+
+The race committee's signal gun is played from `gun.json`: the crack of
+its blast, a thump falling in pitch, the boom of low-passed noise, and the
+boom's echoes off the water, each later, fainter and duller.
+
+The crowd cheering a boat in a race is played from `cheer.json`: a few
+voices' "huzzah", each a breath and an open vowel through its formants,
+its pitch rising on the stress and falling away; more voices, a roar and
+claps for a bigger crowd; near and bright for a spectator's own cheer,
+distant from the quay for the racer cheered. It is synthesised: the
+sound engine's `cheer` is the one place a recorded crowd would take its
+place.
 
 The lighthouses' fog signals are played from the recipe named for their
 device (`twotone`, `diaphone`, `siren`, `reedhorn`), and thunder from

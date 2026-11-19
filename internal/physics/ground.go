@@ -237,7 +237,7 @@ func (o *outline) normal(i int, sin, cos float64) (nx, ny float64) {
 func landTouch(o *outline, sin, cos, cx, cy float64) (nx, ny, depth, px, py float64, ok bool) {
 	best := math.Inf(-1)
 	fromHull, edge := false, 0
-	for i := range outlinePoints {
+	for i := range int(o.n) {
 		ex, ey := o.normal(i, sin, cos)
 		low := math.Inf(1)
 		for k := range 6 {
@@ -254,7 +254,7 @@ func landTouch(o *outline, sin, cos, cx, cy float64) (nx, ny, depth, px, py floa
 	for k := range 6 {
 		mx, my := hexNormalX[k], hexNormalY[k]
 		low := math.Inf(1)
-		for i := range outlinePoints {
+		for i := range int(o.n) {
 			x, y := o.corner(i, sin, cos)
 			low = min2(low, float64(mx*x)+float64(my*y))
 		}
@@ -281,7 +281,7 @@ func landTouch(o *outline, sin, cos, cx, cy float64) (nx, ny, depth, px, py floa
 	// A corner of the hull pokes into the hexagon.
 	nx, ny = -hexNormalX[edge], -hexNormalY[edge]
 	high := math.Inf(-1)
-	for i := range outlinePoints {
+	for i := range int(o.n) {
 		x, y := o.corner(i, sin, cos)
 		if d := float64(nx*x) + float64(ny*y); d > high {
 			high, px, py = d, x, y

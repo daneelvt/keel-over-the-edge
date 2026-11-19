@@ -30,8 +30,8 @@ import {
   Float32BufferAttribute,
   Group,
   InstancedInterleavedBuffer,
-  InstancedMesh,
   InterleavedBufferAttribute,
+  type Mesh,
 } from 'three';
 import {
   attribute,
@@ -61,6 +61,7 @@ import type { Birds } from './birds';
 import { headingToRotationY } from './coords';
 import { basicMaterial, bendScene, horizonDistance } from './materials';
 import { type Chimney, Smoke } from './smoke';
+import { instances } from './uploads';
 
 /** A fully developed sea's peak period, s, for waves of significant height h, m (Pierson and Moskowitz 1964). */
 export function wavePeriod(h: number): number {
@@ -165,9 +166,9 @@ export class Features {
 
   readonly #world: World;
   readonly #chunks = new Map<number, ChunkPart[]>();
-  readonly #falls: InstancedMesh;
+  readonly #falls: Mesh;
   readonly #fallData: InstancedInterleavedBuffer;
-  readonly #puffs: InstancedMesh;
+  readonly #puffs: Mesh;
   readonly #puffPlace: InstancedInterleavedBuffer;
   readonly #puffShade: InstancedInterleavedBuffer;
 
@@ -202,7 +203,7 @@ export class Features {
   }
 
   /** The curtains: a strip ROWS long and COLS across, a unit wide and deep, bent and sized by each fall's data. */
-  #makeFalls(): [InstancedMesh, InstancedInterleavedBuffer] {
+  #makeFalls(): [Mesh, InstancedInterleavedBuffer] {
     const pos: number[] = [];
     const idx: number[] = [];
     for (let r = 0; r <= ROWS; r++) {
@@ -260,7 +261,7 @@ export class Features {
       .mul(mix(float(0.55), float(0.9), smoothstep(0.3, 0.7, flow)));
     m.colorNode = vec3(0.9, 0.93, 0.95).mul(this.light) as unknown as Node<'vec3'>;
     m.opacityNode = alpha as unknown as Node<'float'>;
-    const mesh = new InstancedMesh(g, m, FALLS);
+    const mesh = instances(g, m);
     mesh.name = 'falls';
     mesh.count = 0;
     mesh.frustumCulled = false;
@@ -268,7 +269,7 @@ export class Features {
   }
 
   /** The spray and the spouts: soft billboards, placed on the CPU each frame. */
-  #makePuffs(): [InstancedMesh, InstancedInterleavedBuffer, InstancedInterleavedBuffer] {
+  #makePuffs(): [Mesh, InstancedInterleavedBuffer, InstancedInterleavedBuffer] {
     const g = new BufferGeometry();
     g.setAttribute(
       'corner',
@@ -311,7 +312,7 @@ export class Features {
       vec3(0.92, 0.94, 0.95).mul(this.light),
       soft.mul(vShade.x).mul(0.8),
     ) as unknown as Node<'vec4'>;
-    const mesh = new InstancedMesh(g, m, PUFFS);
+    const mesh = instances(g, m);
     mesh.name = 'spray';
     mesh.count = 0;
     mesh.frustumCulled = false;

@@ -3,8 +3,12 @@
 // A boat's wheel as its sailor needs it, from the boat's model: a node
 // `wheel` whose data says it is one ({"wheel": {"radius": r, "spokes": n}}),
 // its origin the hub, its axle fore and aft; and the `sailor` node, where
-// the helmsman stands between the feet on the deck, facing forward. Read by
-// the nodes' data, never by which boat it is.
+// the helmsman stands between the feet on the deck, facing forward. A boat
+// of two wheels says how far out each is (its `spread`): the node is then
+// on the centreline, at their hubs' height and station, with a child for
+// each, `wheel-port` and `wheel-starboard`, and the `sailor` node between
+// them, the helmsman standing aft of whichever wheel the physics puts the
+// sailor at. Read by the nodes' data, never by which boat it is.
 
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three';
 import type { WheelHelm } from './runtime';
@@ -18,9 +22,13 @@ export function wheelClips(clips: string): string {
   return clips.replace(/\.clips\.glb$/, '.wheel.glb');
 }
 
-/** A wheel's numbers from its node's data, or null if the node says it is none. */
-export function wheelData(data: unknown): { radius: number; spokes: number } | null {
-  const w = (data as { wheel?: { radius?: unknown; spokes?: unknown } } | undefined)?.wheel;
+/** A wheel's numbers from its node's data, or null if the node says it is none: its spread 0 for one wheel on the centreline. */
+export function wheelData(
+  data: unknown,
+): { radius: number; spokes: number; spread: number } | null {
+  const w = (
+    data as { wheel?: { radius?: unknown; spokes?: unknown; spread?: unknown } } | undefined
+  )?.wheel;
   if (
     w === undefined ||
     typeof w.radius !== 'number' ||
@@ -30,7 +38,19 @@ export function wheelData(data: unknown): { radius: number; spokes: number } | n
   ) {
     return null;
   }
-  return { radius: w.radius, spokes: Math.round(w.spokes) };
+  const spread = typeof w.spread === 'number' && w.spread > 0 ? w.spread : 0;
+  return { radius: w.radius, spokes: Math.round(w.spokes), spread };
+}
+
+/** The nodes that turn with the rudder: a boat's two wheels, or its one. */
+export function wheelNodes(parts: Map<string, Object3D>): Object3D[] {
+  const port = parts.get('wheel-port');
+  const starboard = parts.get('wheel-starboard');
+  if (port !== undefined && starboard !== undefined) {
+    return [port, starboard];
+  }
+  const one = parts.get('wheel');
+  return one === undefined ? [] : [one];
 }
 
 /** A node's frame in an ancestor's (the model's; null, its topmost's), from the local transforms between them. */
@@ -62,6 +82,7 @@ export function wheelOf(parts: Map<string, Object3D>, model: Object3D | null): W
     hub: new Vector3().setFromMatrixPosition(at),
     radius: data.radius,
     spokes: data.spokes,
+    spread: data.spread,
     turn: 0,
   };
 }

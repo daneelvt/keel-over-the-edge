@@ -28,8 +28,8 @@ import {
   CustomBlending,
   DynamicDrawUsage,
   InstancedInterleavedBuffer,
-  InstancedMesh,
   MaxEquation,
+  type Mesh,
   OneFactor,
   type Vector3,
 } from 'three';
@@ -51,6 +51,7 @@ import type { Node } from 'three/webgpu';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
 import { basicMaterial, bendScene, horizonDistance } from './materials';
+import { instances } from './uploads';
 
 /** A flash as the page keeps it: from the module's flash record. */
 export interface FlashSeen {
@@ -178,7 +179,7 @@ export interface CloudFlash {
 }
 
 export class Lightning {
-  readonly mesh: InstancedMesh;
+  readonly mesh: Mesh;
   /** The flashes of the last minute, in the order they strike. */
   readonly flashes: FlashSeen[] = [];
   /** Whether the player asked for reduced motion: no pulses. */
@@ -236,7 +237,7 @@ export class Lightning {
     g.setAttribute('corner', new BufferAttribute(new Float32Array([-1, 0, 1, 0, 1, 1, -1, 1]), 2));
     g.setAttribute('position', new BufferAttribute(new Float32Array(12), 3));
     g.setIndex([0, 1, 2, 0, 2, 3]);
-    this.mesh = new InstancedMesh(g, m, SEGMENTS_MOST);
+    this.mesh = instances(g, m);
     this.mesh.name = 'bolts';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;

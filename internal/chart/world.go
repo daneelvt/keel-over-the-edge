@@ -35,12 +35,13 @@ type Subject struct {
 	News  bool
 	// An island's: its land's bounds, m east and north (west, south, east,
 	// north), its highest, its zone and its class of scenery, and its
-	// model, by its index in World.Models, or -1.
+	// model, by its index in World.Models, or -1; and its biome.
 	Bounds  [4]float64
 	Highest float64
 	Zone    string
 	Class   string
 	Model   int
+	Biome   string
 	// Light is a lighthouse's light, by its index in the bundle's lights,
 	// or -1; Ship a wreck's ship's name; Sunk, that she lies sunk.
 	Light int
@@ -67,6 +68,16 @@ type World struct {
 	FogSignals []int
 	// Weather is the catalog's weather, prepared: what Calm sees by.
 	Weather *physics.WeatherPrepared
+	// Courses are the world's island courses, as its bundle holds them;
+	// CourseSubjects each one's subjects, every one of which must be
+	// charted for it to open; Boats the boats' kinds' ids, by the catalog's
+	// index, which a course's boats name.
+	Courses        []worldgen.Course
+	CourseSubjects [][]int32
+	Boats          []string
+	// Areas are the world's racing areas off Port Royal, open from the
+	// world's start.
+	Areas []worldgen.Area
 
 	byIsland, byPlace, byFeature map[int32]int32
 }
@@ -100,6 +111,24 @@ func KindOf(w string) uint8 {
 		return sight.Feature
 	}
 	return 0
+}
+
+// WorldOf is a world of the subjects given and nothing else: no sight
+// table, no models. For tests, and for what reads a world's subjects
+// alone.
+func WorldOf(subjects []Subject) *World {
+	w := &World{Subjects: subjects, byIsland: map[int32]int32{}, byPlace: map[int32]int32{}, byFeature: map[int32]int32{}}
+	for i, s := range subjects {
+		switch s.Kind {
+		case sight.Island:
+			w.byIsland[s.Number] = int32(i)
+		case sight.Place:
+			w.byPlace[s.Number] = int32(i)
+		case sight.Feature:
+			w.byFeature[s.Number] = int32(i)
+		}
+	}
+	return w
 }
 
 // Index is the subject of a kind and number, or −1.
@@ -180,7 +209,8 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 		s := Subject{
 			Subject: sight.Subject{Kind: sight.Island, Number: is.Number, Island: -1, X: is.X, Y: is.Y, Top: is.Highest, Seen: sight.ByLand},
 			Name:    is.Name, Title: is.Name, Sort: sizes[is.Size], Highest: is.Highest, Zone: is.Zone, Class: is.Class, Model: -1, Light: -1,
-			News: true,
+			Biome: is.Biome,
+			News:  true,
 		}
 		if is.Group >= 0 {
 			for _, g := range b.Groups {
@@ -252,6 +282,12 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 		if s.Seen == sight.ByView && s.Top <= 0 {
 			s.Seen, s.Reach = sight.Awash, cs.Sight.Awash
 		}
+		// A beacon is charted with the reef or bar it marks.
+		if kind.Site == catalog.SiteBeacon {
+			if marks, ok := w.byPlace[p.Details.Marks]; ok {
+				s.Seen, s.Reach, s.With = sight.Hidden, 0, marks+1
+			}
+		}
 		w.byPlace[p.Number] = int32(len(w.Subjects))
 		w.Subjects = append(w.Subjects, s)
 	}
@@ -322,6 +358,26 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 		Clear: cat.World.Lights.ClearAir * light.NauticalMile, Contrast: cat.Weather.Visibility.Contrast,
 		Threshold: cat.World.Lights.Threshold,
 	})
+
+	// The island courses, and what each needs charted to open.
+	for _, k := range cat.Boats {
+		w.Boats = append(w.Boats, string(k.ID))
+	}
+	w.Courses, w.Areas = b.Courses, b.Areas
+	for _, c := range b.Courses {
+		var need []int32
+		for _, n := range c.Islands {
+			if i, ok := w.byIsland[n]; ok {
+				need = append(need, i)
+			}
+		}
+		for _, n := range c.Places {
+			if i, ok := w.byPlace[n]; ok {
+				need = append(need, i)
+			}
+		}
+		w.CourseSubjects = append(w.CourseSubjects, need)
+	}
 
 	// The main port's island and everything on it are known from the start.
 	if main >= 0 {

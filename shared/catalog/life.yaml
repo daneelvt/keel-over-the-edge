@@ -76,7 +76,9 @@ life:
   # m; how far it is drawn, m; and its look. Wingspans and wingbeats from
   # the field guides (Audubon, Cornell Lab's Birds of the World); a herring
   # gull beats 2.5 times a second, a laughing gull 4.0 (Tobalske and
-  # Dial; Condor).
+  # Dial; Condor). A kind marked news is rare enough that meeting it is a
+  # story for the day's news: the whales, the rays, a shark, the glowing
+  # water and a booby come aboard.
   kinds:
     # The only gull that breeds in the Lesser Antilles: about harbours and
     # anchorages, following boats for scraps, its laugh a "ha-ha-ha".
@@ -498,6 +500,7 @@ life:
     # sleeps with its head under its wing if night comes aboard.
     - id: brown-booby-aboard
       name: Brown booby
+      news: true
       plural: Brown boobies
       form: bird
       family: birds
@@ -530,6 +533,7 @@ life:
     # long white pectorals; breaches that repeat "like a cannon".
     - id: humpback-whale
       name: Humpback whale
+      news: true
       plural: Humpback whales
       form: whale
       family: big
@@ -553,6 +557,7 @@ life:
     # about 45° forward and to the left from the offset blowhole.
     - id: sperm-whale
       name: Sperm whale
+      news: true
       plural: Sperm whales
       form: whale
       family: big
@@ -574,6 +579,7 @@ life:
     # the islands; logging at the surface together, low bushy blows.
     - id: pilot-whale
       name: Pilot whale
+      news: true
       plural: Pilot whales
       collective: pod
       form: whale
@@ -599,6 +605,7 @@ life:
     # smack, sometimes for hours (scubadiverlife.com).
     - id: mobula-ray
       name: Mobula ray
+      news: true
       plural: Mobula rays
       collective: school
       form: ray
@@ -621,6 +628,7 @@ life:
     # large and rounded, its tips white; slow at the surface.
     - id: oceanic-whitetip
       name: Oceanic whitetip shark
+      news: true
       plural: Oceanic whitetip sharks
       form: fin
       family: water
@@ -645,6 +653,7 @@ life:
     # light (utmsi.utexas.edu; goodoldboat.com). A patch of it lasts hours.
     - id: glowing-water
       name: Glowing water
+      news: true
       plural: Glowing water
       form: glow
       family: night

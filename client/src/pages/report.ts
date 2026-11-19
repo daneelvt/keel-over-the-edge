@@ -3,7 +3,11 @@
 // The notice page: its form sent to the game's owner, the answer said
 // under it, the form put away once the notice is received.
 
+import '../boot/policy';
+import { sendViolations } from '../boot/report';
 import { type Notice, noticeOf, noticeProblem, SENT, sendNotice } from './notice';
+
+sendViolations();
 
 const form = document.querySelector<HTMLFormElement>('#notice');
 const problem = document.querySelector<HTMLElement>('#notice-problem');

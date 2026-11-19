@@ -20,6 +20,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
@@ -234,9 +235,10 @@ func TestRestartKeepsTheBoats(t *testing.T) {
 			t.Fatalf("closed with %d, bell in %d ms", h.code, h.inMs)
 		}
 		start, before := h.first.State, h.last.State
+		run := voyageRun(t, db, welcome.GetBoat())
 
 		s2 := again(t, vars, db)
-		_, in2, w2 := connect(t, s2, token)
+		ws2, in2, w2 := connect(t, s2, token)
 		if !w2.GetRejoined() || w2.GetBoat() != welcome.GetBoat() {
 			t.Fatalf("welcomed back to boat %d (rejoined %v), had %d", w2.GetBoat(), w2.GetRejoined(), welcome.GetBoat())
 		}
@@ -262,6 +264,24 @@ func TestRestartKeepsTheBoats(t *testing.T) {
 			if !strings.Contains(metrics, want) {
 				t.Errorf("/metrics lacks %q", want)
 			}
+		}
+		// The voyage's log came through the restart: its distance run,
+		// from when it began.
+		if again := voyageRun(t, db, welcome.GetBoat()); again.Began != run.Began || again.Run < run.Run || run.Run < 20 {
+			t.Errorf("the voyage's log across the restart: %+v, was %+v", again, run)
+		}
+		// The sailor goes, and the boat's grace runs out: its voyage is in
+		// the log, with the distance run before the restart.
+		ws2.Close(websocket.StatusNormalClosure, "")
+		time.Sleep(sim.GraceTicks/physics.StepsPerSecond*time.Second + 2*time.Second)
+		var logged []store.LogVoyage
+		for _, v := range db.logRows().Voyages {
+			if v.Boat == welcome.GetBoat() {
+				logged = append(logged, v)
+			}
+		}
+		if len(logged) != 1 || logged[0].How != store.LogExpired || logged[0].Run < run.Run || !logged[0].Logged || logged[0].World != 1 {
+			t.Errorf("the voyage in the log: %+v", logged)
 		}
 		s2.stop(t)
 		_, events, _ := db.state()
@@ -690,4 +710,24 @@ func TestPlaceRoute(t *testing.T) {
 			t.Errorf("the logs lack the boat placed:\n%s", s.logs.String())
 		}
 	})
+}
+
+// voyageRun is the log of boat's voyage in the world's checkpoint.
+func voyageRun(t *testing.T, db *memDB, boat uint64) bus.VoyageLog {
+	t.Helper()
+	cp, _, _ := db.state()
+	if cp == nil {
+		t.Fatal("no checkpoint")
+	}
+	f := bus.NewFrame(sim.Capacity)
+	if err := sim.ReadSnapshot(cp.Data, f); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range f.Live {
+		if f.Boat[s] == boat {
+			return f.Voyage[s].Log
+		}
+	}
+	t.Fatalf("boat %d is not in the checkpoint", boat)
+	return bus.VoyageLog{}
 }

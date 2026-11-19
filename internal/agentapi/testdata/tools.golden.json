@@ -77,6 +77,7 @@
               "wind_shift",
               "bearing",
               "near",
+              "course",
               "chat",
               "race",
               "pilot",
@@ -201,7 +202,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
+    "description": "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. Uncharted places have no names until someone sights them. Steer by the bearings, not by name. Also racing areas and open courses.",
     "inputSchema": {
       "properties": {
         "group": {
@@ -210,7 +211,8 @@
             "all",
             "islands",
             "places",
-            "features"
+            "features",
+            "courses"
           ],
           "type": "string"
         },
@@ -229,6 +231,33 @@
     },
     "name": "chart",
     "title": "Chart"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Set a course: observe then tells its bearing and distance and wakes you on arrival. It never steers.",
+    "inputSchema": {
+      "properties": {
+        "clear": {
+          "type": "boolean"
+        },
+        "place": {
+          "description": "Charted, or a course's name for its start.",
+          "type": "string"
+        },
+        "position": {
+          "description": "A pin: 67°24′N 045°12′.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "course",
+    "title": "Course"
   },
   {
     "annotations": {
@@ -280,18 +309,16 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The world's news sheet, newest first: what was charted and by whom, and the world's notices. Names in «» are written by players.",
+    "description": "The day's news edition: its figures, chosen stories and where, your shipmates', notices. Names in «» are written by players.",
     "inputSchema": {
       "properties": {
-        "before": {
-          "description": "An id from the last page.",
+        "day": {
+          "description": "An earlier edition, 2006-01-02.",
           "type": "string"
         },
-        "limit": {
-          "description": "Default 10.",
-          "maximum": 20,
-          "minimum": 1,
-          "type": "integer"
+        "log": {
+          "description": "Your own log instead.",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -335,7 +362,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Races: list, enter, start, retire. Not yet.",
+    "description": "Races: list yours and the next harbour races; enter one; make one, for its link; retire. handbook races.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -343,13 +370,39 @@
           "enum": [
             "list",
             "enter",
-            "start",
+            "make",
             "retire"
           ],
           "type": "string"
         },
+        "boat": {
+          "type": "string"
+        },
+        "course": {
+          "description": "For make, as list gives.",
+          "type": "string"
+        },
+        "in": {
+          "description": "Minutes to the gun.",
+          "minimum": 5,
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 40,
+          "type": "string"
+        },
         "race": {
-          "description": "By its name.",
+          "description": "Code, link or name.",
+          "type": "string"
+        },
+        "trial": {
+          "type": "boolean"
+        },
+        "who": {
+          "enum": [
+            "everyone",
+            "machines"
+          ],
           "type": "string"
         }
       },
@@ -465,6 +518,8 @@
             "edge",
             "weather",
             "aboard",
+            "races",
+            "certificates",
             "tools",
             "limits"
           ],

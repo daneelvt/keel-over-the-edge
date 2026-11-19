@@ -4,10 +4,18 @@
     "includes": [
       "**",
       "!dist",
+      "!test-results",
       "!src/catalog/*.gen.*",
       "!src/predict/*.gen.*",
       "!src/net/gen",
-      "!src/net/*.gen.*"
+      "!src/net/*.gen.*",
+      "!**/website/worker/gen",
+      "!**/website/dist",
+      "!**/website/.wrangler",
+      "!**/website/out",
+      "!**/website/site/gen",
+      "!**/website/test-results",
+      "!**/website/playwright-report"
     ]
   },
   "formatter": {

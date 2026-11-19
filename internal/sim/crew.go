@@ -70,12 +70,12 @@ func (w *World) board(c *bus.Command) bus.Reply {
 		return r
 	}
 	if i := f.Aboard(c.Account); i >= 0 {
-		w.leaveCrew(f, i)
+		w.leaveCrew(f, i, bus.EndAboard)
 	}
 	if o := afloatIn(f, c.Account); o >= 0 {
 		boat := f.Boat[o]
 		gone := bus.Reply{Result: bus.Gone, Slot: o, Boat: boat, Gen: f.Gen[o], Tick: f.Tick}
-		w.free(o)
+		w.free(o, bus.EndAboard)
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Leave, Boat: boat, Account: c.Account}, Reply: gone})
 	}
 	if q := queued(f, c.Account); q >= 0 {
@@ -94,10 +94,11 @@ func (w *World) board(c *bus.Command) bus.Reply {
 	return r
 }
 
-// leaveCrew takes f.Crew[i] off their boat, the controls back to its
+// leaveCrew takes f.Crew[i] off their boat, how, the controls back to its
 // skipper if they held them, and returns who they were.
-func (w *World) leaveCrew(f *bus.Frame, i int) bus.Aboard {
+func (w *World) leaveCrew(f *bus.Frame, i int, how uint8) bus.Aboard {
 	a := f.Crew[i]
+	w.aboardEnded(f, &a, how)
 	f.Crew = slices.Delete(f.Crew, i, i+1)
 	f.Deck[a.Slot]++
 	if f.Holder[a.Slot] == a.Account {
@@ -159,7 +160,7 @@ func (w *World) ashore(c *bus.Command) bus.Reply {
 	if why != bus.AshorePut {
 		why = bus.AshoreChose
 	}
-	return w.land(f, w.leaveCrew(f, i), why)
+	return w.land(f, w.leaveCrew(f, i, bus.EndAshore), why)
 }
 
 // landCrew puts everyone aboard the boat in slot s ashore, for why: the
@@ -171,6 +172,9 @@ func (w *World) landCrew(f *bus.Frame, s int32, why uint8) {
 		return
 	}
 	aboard := slices.Clone(f.Crew[lo:hi])
+	for i := range aboard {
+		w.aboardEnded(f, &aboard[i], bus.EndLanded)
+	}
 	f.Crew = slices.Delete(f.Crew, lo, hi)
 	f.Holder[s] = bus.Account{}
 	f.Deck[s]++
@@ -290,7 +294,7 @@ func (w *World) crewGone() {
 			i++
 			continue
 		}
-		a := w.leaveCrew(f, i)
+		a := w.leaveCrew(f, i, bus.EndAshore)
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Ashore, Account: a.Account, Boat: a.Boat, Why: bus.AshoreGone},
 			Reply: bus.Reply{Result: bus.Ashored, Slot: -1, Tick: f.Tick}})
 	}

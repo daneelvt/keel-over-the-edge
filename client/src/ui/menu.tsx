@@ -4,30 +4,40 @@
 // device's settings. How light the night is drawn, first, the sea showing
 // the change behind the menu as the slider moves; the frame rate (60, or 30
 // to save battery), how much the sea is drawn with (as much as the device
-// runs well, or the least), sound, the beginners' overlays, whether
+// runs well, or the least), the sound (its switch, and how loud it all is,
+// the sea and wind, and every other sound), the beginners' overlays, whether
 // the helm returns to the centre when let go, and whether the camera comes
 // back behind the boat by itself. The full screen where the
 // page can take it, with how to install the game where that gives more of
-// the screen. Online, the player's shipmates, a sailor to watch, the link
+// the screen, an Install key once the browser has offered to. Online, the player's shipmates, a sailor to watch, the link
 // that asks others to sail with the player (while their own boat is in
 // the water), who may watch the player's own boat and their link to watch
-// them, shared with a picture of the view. It stands over everything at
+// them, shared with a picture of the view; Make a race, and the player's
+// races ahead, each a tap from its card; Back to Port Royal, while the
+// player sails their own boat, which asks first. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
-import { useLayoutEffect } from 'preact/hooks';
 import type { FullScreen } from '../boot/fullscreen';
+import { type HomeScreen, homeScreen } from '../boot/homescreen';
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
 import type { Countdown } from './countdown';
 import { canShareLink, type DeckView, machineShared } from './decklazy';
 import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
+import type { HomeView } from './home';
+import { BACK_TO_PORT_ROYAL } from './homewords';
+import { INSTALL, INSTALL_CHROME, INSTALL_HOME_SCREEN } from './installwords';
 import { sailWithMeFor } from './machinewords';
+import { Modal } from './modal';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
+import type { RacesView } from './raceslazy';
+import { MAKE_A_RACE, whenLine } from './racewords';
 import type { SettingsSignal } from './settings';
 import { SHIPMATES } from './shipmatewords';
+import { percentText, SEA_AND_WIND, SOUND, SOUNDS, VOLUME } from './soundwords';
 import { useWatch, type WatchView } from './watchlazy';
 import { STOP_WATCHING, WATCH_A_SAILOR } from './watchwords';
 
@@ -66,22 +76,6 @@ function Toggle({
   );
 }
 
-/** Takes focus into the menu as it opens, and back to its button as it closes. */
-function FocusIn() {
-  useLayoutEffect(() => {
-    document.querySelector<HTMLElement>('.menu')?.focus();
-    return () => {
-      // Unless the focus has gone elsewhere, as to a panel the menu opened.
-      const a = document.activeElement;
-      const b = document.querySelector<HTMLElement>('.menu-button');
-      if (b !== null && (a === null || a === document.body || a.closest('.menu') !== null)) {
-        b.focus();
-      }
-    };
-  }, []);
-  return null;
-}
-
 /** The night light's value in words, for a screen reader. */
 export function nightLightText(v: number): string {
   if (v <= 0) {
@@ -118,25 +112,100 @@ function NightLight({ settings }: { settings: SettingsSignal }) {
   );
 }
 
-/** How to install the game from Chrome's menu on Android, where it then opens full screen every time. */
-export const INSTALL_CHROME = 'Every time, without the bars: ⋮ → Add to home screen → Install.';
+/** A slider of the Sound block, as Night light's, its value shown as a percentage, applied as it moves. */
+function SoundSlider({
+  id,
+  label,
+  value,
+  set,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  set: (v: number) => void;
+}) {
+  return (
+    <div class="menu-range">
+      <label for={id}>{label}</label>
+      <div class="menu-range-row">
+        <input
+          id={id}
+          type="range"
+          name={id}
+          min={0}
+          max={1}
+          step={0.05}
+          value={value}
+          aria-valuetext={percentText(value)}
+          onInput={(e) => set(Number(e.currentTarget.value))}
+        />
+        <span class="menu-range-value" aria-hidden="true">
+          {percentText(value)}
+        </span>
+      </div>
+    </div>
+  );
+}
 
-/** How to add the game to an iPhone's Home Screen, where it opens without Safari's bars. */
-export const INSTALL_HOME_SCREEN =
-  'Tap Share, then Add to Home Screen; keep Open as Web App on; open Keel from its icon. Your sailor comes with you; this phone’s settings start fresh.';
+/** The sound: its switch, the mute, and how loud it all is, the sea and wind, and every other sound. */
+function SoundBlock({ settings }: { settings: SettingsSignal }) {
+  const s = settings.value.value;
+  return (
+    <fieldset class="menu-sound" aria-label={SOUND}>
+      <Toggle name="sound" label={SOUND} on={s.sound} set={(sound) => settings.set({ sound })} />
+      <SoundSlider
+        id="volume"
+        label={VOLUME}
+        value={s.volume}
+        set={(volume) => settings.set({ volume })}
+      />
+      <SoundSlider
+        id="sea-volume"
+        label={SEA_AND_WIND}
+        value={s.seaVolume}
+        set={(seaVolume) => settings.set({ seaVolume })}
+      />
+      <SoundSlider
+        id="sounds-volume"
+        label={SOUNDS}
+        value={s.soundsVolume}
+        set={(soundsVolume) => settings.set({ soundsVolume })}
+      />
+    </fieldset>
+  );
+}
+
+/** Install, once the browser has offered to install the game: its own question. */
+function InstallKey({ home }: { home: HomeScreen }) {
+  return (
+    <div class="menu-chart">
+      <button type="button" onClick={() => void home.install()}>
+        {INSTALL}
+      </button>
+    </div>
+  );
+}
 
 /**
  * The full screen: the switch where the page can take it, and how to
- * install the game where that gives more; on an iPhone, which has no
- * switch, the steps to the Home Screen, folded under their row.
+ * install the game where that gives more, an Install key once the browser
+ * has offered to; on an iPhone, which has no switch, the steps to the Home
+ * Screen, folded under their row.
  */
-function FullScreenRows({ full }: { full: FullScreen }) {
+function FullScreenRows({
+  full,
+  home = homeScreen(),
+}: {
+  full: FullScreen;
+  home?: HomeScreen | null;
+}) {
   const { offer } = full;
+  const install = home?.prompt.value != null ? <InstallKey home={home} /> : null;
   if (offer.switch) {
     return (
       <>
         <Toggle name="full-screen" label="Full screen" on={full.on.value} set={full.turn} />
-        {offer.install === 'chrome' ? <p class="menu-note">{INSTALL_CHROME}</p> : null}
+        {install ?? (offer.install === 'chrome' ? <p class="menu-note">{INSTALL_CHROME}</p> : null)}
       </>
     );
   }
@@ -153,7 +222,42 @@ function FullScreenRows({ full }: { full: FullScreen }) {
       </details>
     );
   }
-  return null;
+  return install;
+}
+
+/** Make a race, and the player's own races ahead under it, each opening its card. */
+function MenuRaces({ races, close }: { races: RacesView; close: () => void }) {
+  const mine = races.board.value?.mine ?? [];
+  const now = races.now();
+  return (
+    <div class="menu-races">
+      <button
+        type="button"
+        class="menu-race"
+        onClick={() => {
+          races.make.value = true;
+          close();
+        }}
+      >
+        {MAKE_A_RACE}
+      </button>
+      {mine.slice(0, 3).map((r) => (
+        <button
+          type="button"
+          key={r.code}
+          class="menu-race menu-race-mine"
+          data-race={r.code}
+          onClick={() => {
+            races.card.value = r.code;
+            close();
+          }}
+        >
+          <span class="menu-race-name">{r.name}</span>
+          <span class="menu-race-when">{whenLine(r.startsAt, now)}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** "Sailing as" and the sailor's name; nothing in the offline sandbox. */
@@ -179,6 +283,8 @@ export function Menu({
   watch = null,
   deck = null,
   fullScreen = null,
+  races = null,
+  home = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -202,23 +308,23 @@ export function Menu({
   deck?: DeckView | null;
   /** The full screen's switch; null where it is not run. */
   fullScreen?: FullScreen | null;
+  /** Races ashore; null in the offline sandbox. */
+  races?: RacesView | null;
+  /** The way home; null in the offline sandbox. */
+  home?: HomeView | null;
 }) {
   const s = settings.value.value;
   return (
     <>
-      <FocusIn />
+      {/* The focus in as it opens, and back to its button as it closes. */}
+      <Modal of=".menu" close={close} back=".menu-button" />
       <div class="menu-scrim" aria-hidden="true" onClick={close} />
       <section
         class="panel menu"
         role="dialog"
+        aria-modal="true"
         aria-label="Settings"
         tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation();
-            close();
-          }
-        }}
       >
         <header class="menu-head">
           <h2>Settings</h2>
@@ -318,6 +424,20 @@ export function Menu({
               ) : null}
             </div>
           ) : null}
+          {home !== null && home.offered() ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  home.asking.value = true;
+                  close();
+                }}
+              >
+                {BACK_TO_PORT_ROYAL}
+              </button>
+            </div>
+          ) : null}
+          {races !== null ? <MenuRaces races={races} close={close} /> : null}
           {connection !== null ? <RoundTrip view={connection} /> : null}
           {end !== null && end.when.value !== '' ? (
             <p class="menu-end" data-readout="ends">
@@ -356,11 +476,12 @@ export function Menu({
               <option value="low">Low</option>
             </select>
           </label>
+          <SoundBlock settings={settings} />
           <Toggle
-            name="sound"
-            label="Sound"
-            on={s.sound}
-            set={(sound) => settings.set({ sound })}
+            name="show-cheers"
+            label="Show cheers in a race"
+            on={s.showCheers}
+            set={(showCheers) => settings.set({ showCheers })}
           />
           <Toggle
             name="wind-overlay"

@@ -213,9 +213,17 @@ export class WakeWavesReference {
       const hull = hulls[h] as WakeHull;
       const own = hull.shape ?? shape;
       let reach = 0;
+      let beam = 0;
       for (const st of own.stations) {
         reach = Math.max(reach, Math.hypot(st[0] ?? 0, st[1] ?? 0));
+        beam = Math.max(beam, st[1] ?? 0);
       }
+      const aft = own.stations[0]?.[0] ?? 0;
+      const fore = own.stations[own.stations.length - 1]?.[0] ?? 0;
+      // A texel's points lie within half its diagonal of its centre: one
+      // whose centre is that far outside the hull's waterline, in its own
+      // frame, has none inside, and no immersion.
+      const margin = texel * Math.SQRT1_2;
       const s = Math.sin(hull.heading);
       const c = Math.cos(hull.heading);
       const c0 = Math.max(Math.floor((hull.east - reach - east) / texel + half), 0);
@@ -224,6 +232,16 @@ export class WakeWavesReference {
       const r1 = Math.min(Math.ceil((hull.north + reach - north) / texel + half), n);
       for (let row = r0; row < r1; row++) {
         for (let col = c0; col < c1; col++) {
+          const ce = east + (col + 0.5 - half) * texel - hull.east;
+          const cn = north + (row + 0.5 - half) * texel - hull.north;
+          const cz = -(ce * s + cn * c);
+          if (
+            cz - margin >= aft ||
+            cz + margin <= fore ||
+            Math.abs(ce * c - cn * s) - margin >= beam
+          ) {
+            continue;
+          }
           // The mean over the texel, so that a hull moving less than a
           // texel moves its pressure as smoothly: SAMPLES² points.
           let sum = 0;

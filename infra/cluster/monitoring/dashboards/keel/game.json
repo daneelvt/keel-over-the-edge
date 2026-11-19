@@ -1197,6 +1197,402 @@
       "gridPos": {
         "x": 0,
         "y": 37,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Data an hour at sea, by role",
+      "description": "What a player's hour at sea takes, sailing or watching: each connection's bytes each minute, both ways over the game connection and what its page fetched over HTTP (models, land, code), as an hour; the median and the 90th percentile over the last hour.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, role) (rate(keel_edge_minute_bytes_bucket{direction=\"all\"}[1h]))) * 60",
+          "legendFormat": "{{role}}, median",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.9, sum by (le, role) (rate(keel_edge_minute_bytes_bucket{direction=\"all\"}[1h]))) * 60",
+          "legendFormat": "{{role}}, 90th",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 71,
+      "gridPos": {
+        "x": 6,
+        "y": 37,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Start-up, first and return visits",
+      "description": "From the link to the reveal, as the pages report it once their sailor is known: the median and the 90th percentile over the last hour, and the median to the start screen, by visit: first, return (from the browser's cache) or worker (served by the service worker).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, visit) (rate(keel_client_startup_seconds_bucket{stage=\"reveal\"}[1h])))",
+          "legendFormat": "{{visit}}, reveal, median",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.9, sum by (le, visit) (rate(keel_client_startup_seconds_bucket{stage=\"reveal\"}[1h])))",
+          "legendFormat": "{{visit}}, reveal, 90th",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, visit) (rate(keel_client_startup_seconds_bucket{stage=\"start\"}[1h])))",
+          "legendFormat": "{{visit}}, start screen, median",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 72,
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors in the pages, by build",
+      "description": "Errors the players' pages met and reported, a minute, by the build they ran. ClientErrors warns past one a minute for 15 minutes; keel's log has each (\"a page's error\").",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (build) (rate(keel_client_errors_total[$__rate_interval])) * 60",
+          "legendFormat": "{{build}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 73,
+      "gridPos": {
+        "x": 18,
+        "y": 37,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "New sailors an hour, and those refused",
+      "description": "Sailors made in the last hour, beside those refused before the passkey prompt: by address (too many new sailors from one address in a day) or by the human check. Over 60 made an hour warns (NewSailorsSurge). A crowd from one post is made; a farm of accounts is refused.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(increase(keel_accounts_created_total[1h]))",
+          "legendFormat": "made",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (reason) (increase(keel_new_sailors_refused_total[1h]))",
+          "legendFormat": "refused ({{reason}})",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 74,
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Human checks an hour, by result",
+      "description": "Cloudflare's check of each new sailor, by result: passed, refused, a token spent already, Cloudflare unavailable (more than 3 in 10 minutes warns: HumanCheckUnavailable), or none asked with the check switched off on the world page.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (result) (increase(keel_human_checks_total[1h]))",
+          "legendFormat": "{{result}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 75,
+      "gridPos": {
+        "x": 8,
+        "y": 44,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Page policy violations an hour, by directive",
+      "description": "What the pages' Content Security Policy refused, or would refuse while it is only reported, by directive, as the pages report it. Each is in keel's log at info, with the blocked address's origin and path and where in the page it came from.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (directive) (increase(keel_client_policy_violations_total[1h]))",
+          "legendFormat": "{{directive}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 76,
+      "gridPos": {
+        "x": 16,
+        "y": 44,
         "w": 8,
         "h": 7
       }
@@ -1209,7 +1605,7 @@
       "id": 59,
       "gridPos": {
         "x": 0,
-        "y": 44,
+        "y": 51,
         "w": 24,
         "h": 1
       }
@@ -1279,7 +1675,7 @@
       "id": 60,
       "gridPos": {
         "x": 0,
-        "y": 45,
+        "y": 52,
         "w": 6,
         "h": 7
       }
@@ -1337,7 +1733,7 @@
       "id": 61,
       "gridPos": {
         "x": 6,
-        "y": 45,
+        "y": 52,
         "w": 6,
         "h": 7
       }
@@ -1419,7 +1815,7 @@
       "id": 62,
       "gridPos": {
         "x": 12,
-        "y": 45,
+        "y": 52,
         "w": 6,
         "h": 7
       }
@@ -1489,7 +1885,7 @@
       "id": 63,
       "gridPos": {
         "x": 18,
-        "y": 45,
+        "y": 52,
         "w": 6,
         "h": 7
       }
@@ -1502,7 +1898,7 @@
       "id": 31,
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 59,
         "w": 24,
         "h": 1
       }
@@ -1572,7 +1968,7 @@
       "id": 32,
       "gridPos": {
         "x": 0,
-        "y": 53,
+        "y": 60,
         "w": 8,
         "h": 7
       }
@@ -1630,7 +2026,7 @@
       "id": 33,
       "gridPos": {
         "x": 8,
-        "y": 53,
+        "y": 60,
         "w": 8,
         "h": 7
       }
@@ -1688,7 +2084,7 @@
       "id": 34,
       "gridPos": {
         "x": 16,
-        "y": 53,
+        "y": 60,
         "w": 8,
         "h": 7
       }
@@ -1746,7 +2142,7 @@
       "id": 35,
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 67,
         "w": 8,
         "h": 7
       }
@@ -1804,7 +2200,7 @@
       "id": 36,
       "gridPos": {
         "x": 8,
-        "y": 60,
+        "y": 67,
         "w": 8,
         "h": 7
       }
@@ -1862,7 +2258,7 @@
       "id": 37,
       "gridPos": {
         "x": 16,
-        "y": 60,
+        "y": 67,
         "w": 4,
         "h": 7
       }
@@ -1932,7 +2328,7 @@
       "id": 38,
       "gridPos": {
         "x": 20,
-        "y": 60,
+        "y": 67,
         "w": 4,
         "h": 7
       }
@@ -1990,7 +2386,7 @@
       "id": 39,
       "gridPos": {
         "x": 0,
-        "y": 67,
+        "y": 74,
         "w": 8,
         "h": 7
       }
@@ -2048,7 +2444,7 @@
       "id": 40,
       "gridPos": {
         "x": 8,
-        "y": 67,
+        "y": 74,
         "w": 8,
         "h": 7
       }
@@ -2106,7 +2502,7 @@
       "id": 41,
       "gridPos": {
         "x": 16,
-        "y": 67,
+        "y": 74,
         "w": 8,
         "h": 7
       }
@@ -2164,7 +2560,7 @@
       "id": 57,
       "gridPos": {
         "x": 0,
-        "y": 74,
+        "y": 81,
         "w": 12,
         "h": 7
       }
@@ -2258,7 +2654,7 @@
       "id": 58,
       "gridPos": {
         "x": 12,
-        "y": 74,
+        "y": 81,
         "w": 12,
         "h": 7
       }
@@ -2271,7 +2667,7 @@
       "id": 42,
       "gridPos": {
         "x": 0,
-        "y": 81,
+        "y": 88,
         "w": 24,
         "h": 1
       }
@@ -2329,7 +2725,7 @@
       "id": 43,
       "gridPos": {
         "x": 0,
-        "y": 82,
+        "y": 89,
         "w": 8,
         "h": 7
       }
@@ -2387,7 +2783,7 @@
       "id": 44,
       "gridPos": {
         "x": 8,
-        "y": 82,
+        "y": 89,
         "w": 8,
         "h": 7
       }
@@ -2457,7 +2853,7 @@
       "id": 45,
       "gridPos": {
         "x": 16,
-        "y": 82,
+        "y": 89,
         "w": 8,
         "h": 7
       }
@@ -2515,7 +2911,7 @@
       "id": 46,
       "gridPos": {
         "x": 0,
-        "y": 89,
+        "y": 96,
         "w": 8,
         "h": 7
       }
@@ -2585,7 +2981,7 @@
       "id": 47,
       "gridPos": {
         "x": 8,
-        "y": 89,
+        "y": 96,
         "w": 8,
         "h": 7
       }
@@ -2643,7 +3039,7 @@
       "id": 48,
       "gridPos": {
         "x": 16,
-        "y": 89,
+        "y": 96,
         "w": 8,
         "h": 7
       }
@@ -2701,7 +3097,7 @@
       "id": 49,
       "gridPos": {
         "x": 0,
-        "y": 96,
+        "y": 103,
         "w": 8,
         "h": 7
       }
@@ -2771,7 +3167,7 @@
       "id": 50,
       "gridPos": {
         "x": 8,
-        "y": 96,
+        "y": 103,
         "w": 8,
         "h": 7
       }
@@ -2829,7 +3225,7 @@
       "id": 51,
       "gridPos": {
         "x": 16,
-        "y": 96,
+        "y": 103,
         "w": 8,
         "h": 7
       }
@@ -2911,7 +3307,7 @@
       "id": 52,
       "gridPos": {
         "x": 0,
-        "y": 103,
+        "y": 110,
         "w": 8,
         "h": 7
       }
@@ -2969,7 +3365,7 @@
       "id": 53,
       "gridPos": {
         "x": 8,
-        "y": 103,
+        "y": 110,
         "w": 8,
         "h": 7
       }
@@ -3027,7 +3423,7 @@
       "id": 54,
       "gridPos": {
         "x": 16,
-        "y": 103,
+        "y": 110,
         "w": 8,
         "h": 7
       }
@@ -3085,7 +3481,7 @@
       "id": 55,
       "gridPos": {
         "x": 0,
-        "y": 110,
+        "y": 117,
         "w": 12,
         "h": 7
       }
@@ -3143,7 +3539,7 @@
       "id": 56,
       "gridPos": {
         "x": 12,
-        "y": 110,
+        "y": 117,
         "w": 12,
         "h": 7
       }
@@ -3156,7 +3552,7 @@
       "id": 16,
       "gridPos": {
         "x": 0,
-        "y": 117,
+        "y": 124,
         "w": 24,
         "h": 1
       }
@@ -3230,7 +3626,7 @@
       "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 118,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3300,7 +3696,7 @@
       "id": 18,
       "gridPos": {
         "x": 8,
-        "y": 118,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3358,7 +3754,7 @@
       "id": 19,
       "gridPos": {
         "x": 16,
-        "y": 118,
+        "y": 125,
         "w": 4,
         "h": 7
       }
@@ -3416,7 +3812,7 @@
       "id": 20,
       "gridPos": {
         "x": 20,
-        "y": 118,
+        "y": 125,
         "w": 4,
         "h": 7
       }
@@ -3474,7 +3870,7 @@
       "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 125,
+        "y": 132,
         "w": 8,
         "h": 7
       }
@@ -3544,7 +3940,7 @@
       "id": 22,
       "gridPos": {
         "x": 8,
-        "y": 125,
+        "y": 132,
         "w": 8,
         "h": 7
       }
@@ -3602,7 +3998,7 @@
       "id": 23,
       "gridPos": {
         "x": 16,
-        "y": 125,
+        "y": 132,
         "w": 8,
         "h": 7
       }
@@ -3615,7 +4011,7 @@
       "id": 24,
       "gridPos": {
         "x": 0,
-        "y": 132,
+        "y": 139,
         "w": 24,
         "h": 1
       }
@@ -3697,7 +4093,7 @@
       "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 133,
+        "y": 140,
         "w": 8,
         "h": 7
       }
@@ -3773,7 +4169,7 @@
       "id": 26,
       "gridPos": {
         "x": 8,
-        "y": 133,
+        "y": 140,
         "w": 8,
         "h": 7
       }
@@ -3843,7 +4239,7 @@
       "id": 27,
       "gridPos": {
         "x": 16,
-        "y": 133,
+        "y": 140,
         "w": 8,
         "h": 7
       }
@@ -3913,7 +4309,7 @@
       "id": 28,
       "gridPos": {
         "x": 0,
-        "y": 140,
+        "y": 147,
         "w": 12,
         "h": 7
       }
@@ -3950,7 +4346,7 @@
       "id": 29,
       "gridPos": {
         "x": 12,
-        "y": 140,
+        "y": 147,
         "w": 12,
         "h": 7
       }
@@ -3963,7 +4359,7 @@
       "id": 64,
       "gridPos": {
         "x": 0,
-        "y": 147,
+        "y": 154,
         "w": 24,
         "h": 1
       }
@@ -4039,7 +4435,7 @@
       "id": 65,
       "gridPos": {
         "x": 0,
-        "y": 148,
+        "y": 155,
         "w": 8,
         "h": 7
       }
@@ -4127,7 +4523,7 @@
       "id": 66,
       "gridPos": {
         "x": 8,
-        "y": 148,
+        "y": 155,
         "w": 8,
         "h": 7
       }
@@ -4227,7 +4623,7 @@
       "id": 67,
       "gridPos": {
         "x": 16,
-        "y": 148,
+        "y": 155,
         "w": 8,
         "h": 7
       }
@@ -4315,7 +4711,7 @@
       "id": 68,
       "gridPos": {
         "x": 0,
-        "y": 155,
+        "y": 162,
         "w": 8,
         "h": 7
       }
@@ -4391,7 +4787,7 @@
       "id": 69,
       "gridPos": {
         "x": 8,
-        "y": 155,
+        "y": 162,
         "w": 8,
         "h": 7
       }
@@ -4479,7 +4875,7 @@
       "id": 70,
       "gridPos": {
         "x": 16,
-        "y": 155,
+        "y": 162,
         "w": 8,
         "h": 7
       }

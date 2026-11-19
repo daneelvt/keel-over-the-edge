@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The contributor agreement keeper: keel agreement, from the game's own
+# image, the server of the GitHub App that checks each pull request to the
+# game's repository for its authors' signed agreement. Its page, where a
+# contributor signs, and GitHub's webhook are under /agreement on the
+# players' host (routes.yaml), whose origin each cluster's entry point
+# gives it from keel's own configuration; its internal listener answers
+# the probes and the owner's keel admin agreements, run in its pod. It
+# reaches the database as its own role, agreement, which may touch its
+# two tables alone (database.yaml). Its own name, never keel's: keel's
+# Service, policies and scrape do not select it.
+#
+# Until the owner registers the App (infra/MANUAL-STEPS.md), its ID and
+# client ID are empty and its Secret holds nothing: the keeper runs "not
+# set up", its page saying signing is not open yet, the webhook refused,
+# and is ready all the same.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keel-agreement
+  labels:
+    app.kubernetes.io/name: keel-agreement
+spec:
+  # One is enough: a pull request waits for its check while it restarts,
+  # and nothing else does.
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keel-agreement
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keel-agreement
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Its tables are made by keel migrate, in keel's pod: until they are
+      # there and readable, it is not ready.
+      containers:
+        - name: agreement
+          image: ghcr.io/daneelvt/keel
+          args: [agreement]
+          ports:
+            - name: page
+              containerPort: 8082
+            - name: internal
+              containerPort: 9090
+            - name: metrics
+              containerPort: 9091
+          envFrom:
+            - configMapRef:
+                name: keel-agreement
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keel-db-agreement
+                  key: password
+            # The App's credentials and the address shown for a guardian
+            # and for privacy requests, which the owner puts in by hand.
+            # Each may be missing: the pod starts without them, "not set
+            # up". They are read when it starts.
+            - name: KEEL_AGREEMENT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: keel-agreement
+                  key: GITHUB_APP_PRIVATE_KEY
+                  optional: true
+            - name: KEEL_AGREEMENT_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keel-agreement
+                  key: GITHUB_APP_WEBHOOK_SECRET
+                  optional: true
+            - name: KEEL_AGREEMENT_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keel-agreement
+                  key: GITHUB_APP_CLIENT_SECRET
+                  optional: true
+            - name: KEEL_AGREEMENT_CONTACT
+              valueFrom:
+                secretKeyRef:
+                  name: keel-agreement
+                  key: CONTACT_EMAIL
+                  optional: true
+            # About two thirds of the memory limit: the rest is the
+            # process's own and its buffers'.
+            - name: GOMEMLIMIT
+              value: 64MiB
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          # /livez answers from the first moment; /readyz once its
+          # database answers and its tables are readable.
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: internal
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: internal
+            periodSeconds: 5
+            failureThreshold: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: db-ca
+              mountPath: /etc/keel/db-ca
+              readOnly: true
+      volumes:
+        # The database's CA certificate alone, never its key.
+        - name: db-ca
+          secret:
+            secretName: keel-db-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
+---
+# Its page alone, for Traefik. The internal listener has no port here: the
+# kubelet's probes reach the pod, and the owner's tool runs inside it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: keel-agreement
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: keel-agreement
+  ports:
+    - name: page
+      port: 8082
+      targetPort: page

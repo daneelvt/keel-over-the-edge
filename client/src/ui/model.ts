@@ -8,6 +8,9 @@
 // hand over, without a render, and only when it has moved.
 
 import { signal } from '@preact/signals';
+import { turnOf } from '../chart/course';
+import { courseLine } from '../chart/coursewords';
+import { distanceText } from '../chart/store';
 import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
@@ -21,6 +24,18 @@ export const SIGNAL_INTERVAL = 100;
 const SAILOR_LINES = ['', 'In the water', 'Righting the boat', 'Climbing back in'];
 /** The line while the hull is on the bottom or against land. */
 export const AGROUND = 'Aground';
+
+/**
+ * The sailor's line: what the sailor is doing out of the boat, or aground;
+ * empty while sailing as usual. What the boat does under them, a hull
+ * flying or her bows burying, shows in how she looks, not in words.
+ */
+export function sailorLine(mode: number, out: Float64Array): string {
+  if (mode !== 0) {
+    return SAILOR_LINES[mode] ?? '';
+  }
+  return (out[RECORDS.out.aground] ?? 0) !== 0 ? AGROUND : '';
+}
 /** The line a push off the ground shows, for BUMP_LINE. */
 export const PUSHED_OFF = 'Pushed off';
 
@@ -242,6 +257,56 @@ export class SheetText {
   }
 }
 
+/** The rudder's greatest angle, degrees, until a kind of boat is known: the Jolly boat's. */
+export const RUDDER_ANGLE = 40;
+
+/**
+ * The helm's words for assistive technology: the rudder's angle the helm
+ * asks for, in whole degrees, and to which side; helm is −1 hard to port
+ * … 1 hard to starboard, rudder the boat's greatest angle in degrees.
+ */
+export function helmText(helm: number, rudder = RUDDER_ANGLE): string {
+  const deg = Math.round(Math.abs(helm) * rudder);
+  if (deg === 0) {
+    return 'Helm amidships';
+  }
+  return `Helm ${deg}° to ${helm < 0 ? 'port' : 'starboard'}`;
+}
+
+/** The helm's aria-valuetext, written only when the whole degree or its side changes. */
+export class HelmText {
+  el: HTMLElement | SVGElement | null = null;
+  /** What was written: the whole degrees, negative to port; NaN for nothing. */
+  #said = Number.NaN;
+  /** The boat's greatest rudder angle, degrees. */
+  #rudder = RUDDER_ANGLE;
+
+  /** Writes the words for the helm, only as the whole degree or its side changes: a frame allocates nothing otherwise. */
+  set(helm: number): void {
+    if (this.el === null) {
+      return;
+    }
+    const deg = Math.round(Math.abs(helm) * this.#rudder) * (helm < 0 ? -1 : 1);
+    if (deg === this.#said || (deg === 0 && this.#said === 0)) {
+      return;
+    }
+    this.#said = deg;
+    this.el.setAttribute('aria-valuetext', helmText(helm, this.#rudder));
+  }
+
+  /** The boat's greatest rudder angle: written afresh at the next setting. */
+  rudder(deg: number): void {
+    this.#rudder = deg;
+    this.#said = Number.NaN;
+  }
+
+  /** Forgets what was written (a new element was attached). */
+  attach(el: HTMLElement | SVGElement | null): void {
+    this.el = el;
+    this.#said = Number.NaN;
+  }
+}
+
 /** What the controls are called on a kind of boat, and whether it reefs: the catalog's controls and its sails' reefs. */
 export interface HudControls {
   sheet: { name: string; trim: string; ease: string };
@@ -263,6 +328,8 @@ export interface HudKind {
   controls: { sheet: HudControls['sheet']; reef: readonly string[] };
   physics: {
     rig: { reefs: readonly number[] };
+    /** The rudder's greatest angle, degrees, for the helm's words. */
+    foils?: { rudderAngle: number };
     headsails?: { headsailReefs: readonly number[] };
     square?: { squareForeArea: number; squareAfterArea: number; squareReefs: readonly number[] };
     downwind?: { downwindArea: number };
@@ -331,6 +398,14 @@ export function reefLine(c: HudControls | null, reef: number): string {
   return c === null || level === 0 ? '' : (c.reef[level] ?? '');
 }
 
+/** The course as the compass reads it: where it is from a boat, and its arrival. */
+export interface CompassCourse {
+  /** The course from a boat at (east, north): its point and name; null with none shown. */
+  aim(east: number, north: number): { east: number; north: number; name: string } | null;
+  /** Told where the sailor's boat is: a course reached is said and clears. */
+  arrive(east: number, north: number): void;
+}
+
 /** The helm's knob travels along an arc of this many degrees each side of the top. */
 export const HELM_ARC = 55;
 
@@ -367,6 +442,12 @@ export class HudModel {
   readonly reefed = signal('');
   /** Whether the downwind sail is set, more than half hoisted: the sheet's word is its own. */
   readonly kite = signal(false);
+  /** How far the course is, as the compass's window at its foot reads it; empty with none shown. */
+  readonly courseDistance = signal('');
+  /** The course in words, read out beside the compass; empty with none shown. */
+  readonly courseWords = signal('');
+  /** The course set on the chart, which the compass points to; null without. */
+  course: CompassCourse | null = null;
   #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
@@ -377,6 +458,8 @@ export class HudModel {
   readonly rose = new Moved(rotate, 0.1);
   /** The wind's mark on the rim, at the direction the wind of the last three seconds comes from. */
   readonly windMark = new Moved(rotate, 0.1);
+  /** The course's mark on the rim, outside the ticks, at the course's bearing from the boat. */
+  readonly courseMark = new Moved(rotate, 0.1);
   /** The helm's knob (the target) and its shadow (where the rudder is). */
   readonly helmKnob = new Moved(rotate, 0.1);
   readonly helmActual = new Moved(rotate, 0.1);
@@ -391,6 +474,7 @@ export class HudModel {
   readonly helmValue = new Moved((el, v) => el.setAttribute('aria-valuenow', v.toFixed(2)), 0.01);
   readonly sheetValue = new Moved((el, v) => el.setAttribute('aria-valuenow', v.toFixed(2)), 0.01);
   readonly sheetText = new SheetText();
+  readonly helmText = new HelmText();
   /** The clinometer's needle. */
   readonly clinometer = new Moved(rotate, 0.1);
 
@@ -400,6 +484,7 @@ export class HudModel {
   setKind(kind: HudKind): void {
     this.controls.value = controlsOf(kind);
     this.sheetText.words(this.controls.value.sheet);
+    this.helmText.rudder(kind.physics.foils?.rudderAngle ?? RUDDER_ANGLE);
   }
 
   /** Shows a bump's line from now (ms) for BUMP_LINE. */
@@ -444,6 +529,12 @@ export class HudModel {
     // shadow, less wind and a header.
     a.add(time * 1000, wind.shadowSpeed, wind.shadowFrom);
     this.windMark.set(((a.from - pose.heading) * 180) / Math.PI);
+    const aim = this.course?.aim(pose.east, pose.north) ?? null;
+    if (aim !== null) {
+      this.courseMark.set(
+        turnOf(Math.atan2(aim.east - pose.east, aim.north - pose.north), pose.heading),
+      );
+    }
     this.helmKnob.set(helm * HELM_ARC);
     this.helmActual.set(rudder * HELM_ARC);
     this.sheetKnob.set(sheet);
@@ -453,6 +544,7 @@ export class HudModel {
     // The sail by world time, so a frame's length makes no difference.
     this.sailHold.add(time, out, pose.sailorMode === 0);
     this.sheetText.set(sheet, this.sail.peek());
+    this.helmText.set(helm);
     this.clinometer.set((pose.heel * 180) / Math.PI);
     if (this.held || now - this.#lastWrite < SIGNAL_INTERVAL) {
       return;
@@ -466,14 +558,27 @@ export class HudModel {
     // gust shows as the knots rising while the force holds.
     this.wind.value = windText(a.speed, a.from, wind.meanSpeed);
     // On the bottom or against land, while the sailor sails.
-    const aground = out[RECORDS.out.aground] ?? 0;
-    this.sailor.value =
-      pose.sailorMode === 0 && aground !== 0 ? AGROUND : (SAILOR_LINES[pose.sailorMode] ?? '');
+    this.sailor.value = sailorLine(pose.sailorMode, out);
     this.pilot.value = pilotText(pilot, way, watch, left);
     this.sail.value = this.sailHold.shown;
     const c = this.controls.peek();
     this.reefed.value = downwindLine(c, pose.hoist, pose.hoistTarget) || reefLine(c, pose.reef);
     this.kite.value = c?.downwind === true && pose.hoist >= 0.5;
+    // A course reached clears: the mark and the window go with it.
+    this.course?.arrive(pose.east, pose.north);
+    const to = this.course?.aim(pose.east, pose.north) ?? null;
+    if (to === null) {
+      this.courseDistance.value = '';
+      this.courseWords.value = '';
+    } else {
+      const d = Math.hypot(to.east - pose.east, to.north - pose.north);
+      this.courseDistance.value = distanceText(d);
+      this.courseWords.value = courseLine(
+        to.name,
+        Math.atan2(to.east - pose.east, to.north - pose.north),
+        d,
+      );
+    }
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';
     }

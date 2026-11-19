@@ -54,7 +54,10 @@ import {
 } from './api';
 import { hidden } from './life';
 import type { Act } from './lifecycle';
+import { LogPart } from './log';
+import { figuresWords } from './logwords';
 import { AISignIn, MAX_CAP, plural } from './machines';
+import { RacingSettings } from './racing';
 import { reportsOn } from './reportwords';
 import { SailWithSettings } from './settings';
 
@@ -62,9 +65,9 @@ import { SailWithSettings } from './settings';
 export const CARD_EVERY = 5000;
 
 /**
- * An account's flag or its priority: what was clicked holds until the
- * world's reading agrees, so a reading still on its way does not set the
- * box back.
+ * An account's flag, its priority or every boat: what was clicked holds
+ * until the world's reading agrees, so a reading still on its way does not
+ * set the box back.
  */
 function AccountBox({
   name,
@@ -73,7 +76,7 @@ function AccountBox({
   disabled,
   flag,
 }: {
-  name: 'flag' | 'priority';
+  name: 'flag' | 'priority' | 'every-boat';
   label: string;
   on: boolean;
   disabled: boolean;
@@ -108,12 +111,17 @@ function AccountBox({
   );
 }
 
-/** An account's owner's flag, for a human's account alone, and its priority, for any. */
+/**
+ * An account's owner's flag, for a human's account alone, its priority,
+ * for any, and on its card every boat, for any: every kind of boat opened
+ * to its sailor whatever its certificates.
+ */
 export function AccountBoxes({
   account,
   sailor,
   tools,
   priority,
+  everyBoat,
   human,
   act,
 }: {
@@ -121,6 +129,8 @@ export function AccountBoxes({
   sailor: string;
   tools: boolean;
   priority: boolean;
+  /** Every boat's box, on the card alone: whether it is set, and its control. */
+  everyBoat?: { on: boolean; act: (body: unknown, what: string) => Promise<boolean> };
   human: boolean;
   act: (path: 'flag' | 'priority', body: unknown, what: string) => Promise<boolean>;
 }) {
@@ -147,6 +157,25 @@ export function AccountBoxes({
           )
         }
       />
+      {everyBoat !== undefined ? (
+        <>
+          {' '}
+          <AccountBox
+            name="every-boat"
+            label="every boat"
+            on={everyBoat.on}
+            disabled={false}
+            flag={(on) =>
+              everyBoat.act(
+                { account, on },
+                on
+                  ? `every boat opened to ${who}`
+                  : `every boat closed to ${who}, from its next change of boat`,
+              )
+            }
+          />
+        </>
+      ) : null}
     </>
   );
 }
@@ -264,6 +293,7 @@ function Search({
                 <th>Last active</th>
                 <th>Its machine sailors last active</th>
                 <th>At sea</th>
+                <th>Log</th>
                 <th>Flags</th>
                 <th>Stopped</th>
               </tr>
@@ -293,6 +323,9 @@ function Search({
                     ))}
                   </td>
                   <td>{r.atSea ? 'at sea' : r.queued ? 'waiting' : ''}</td>
+                  <td class="small" data-field="row-log">
+                    {figuresWords(answer.logs?.[r.id])}
+                  </td>
                   <td>
                     {[r.tools ? 'owner’s' : '', r.priority ? 'priority' : '']
                       .filter((w) => w !== '')
@@ -318,6 +351,7 @@ function Search({
                       <td title={momentWords(m.lastActiveAt)}>{m.lastActive}</td>
                       <td />
                       <td>{m.atSea ? 'at sea' : m.queued ? 'waiting' : ''}</td>
+                      <td class="small">{figuresWords(answer.logs?.[m.id])}</td>
                       <td>{m.priority ? 'priority' : ''}</td>
                       <td>{m.stopped ? 'stopped' : ''}</td>
                     </tr>
@@ -698,6 +732,20 @@ function Card({
             </dd>
           </>
         ) : null}
+        {card.certificate !== undefined && card.certificate !== '' ? (
+          <>
+            <dt>Certificate</dt>
+            <dd data-field="card-certificate">{card.certificate}</dd>
+          </>
+        ) : null}
+        {card.log !== undefined ? (
+          <>
+            <dt>Log</dt>
+            <dd data-field="card-log">
+              <LogPart key={card.id} id={card.id} log={card.log} />
+            </dd>
+          </>
+        ) : null}
         {card.owner !== undefined ? (
           <>
             <dt>Its human</dt>
@@ -800,6 +848,10 @@ function Card({
             sailor={card.name}
             tools={card.tools}
             priority={card.priority}
+            everyBoat={{
+              on: card.everyBoat ?? false,
+              act: (body, what) => actHere('every-boat', body, what),
+            }}
             human={human}
             act={actHere}
           />
@@ -888,6 +940,7 @@ export function AccountsTab({
         </section>
         {accounts !== null ? <AISignIn accounts={accounts} act={act} /> : null}
         {accounts !== null ? <SailWithSettings act={act} /> : null}
+        {accounts !== null ? <RacingSettings act={act} /> : null}
         <Search open={open} chosen={chosen} again={again} />
       </div>
       <aside>

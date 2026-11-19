@@ -19,6 +19,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
@@ -27,18 +28,21 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
+	"github.com/daneelvt/keel-over-the-edge/internal/news"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/shipmates"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
+	"github.com/daneelvt/keel-over-the-edge/internal/status"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
@@ -76,8 +80,10 @@ type process struct {
 	passkeys *auth.Passkeys
 	looks    *looks.Book
 	// fleet is the accounts' fleets: the boat each sailor takes to sea,
-	// swaps and changes the look of.
+	// swaps and changes the look of; ladder the certificates, which open
+	// kinds of boat to sailors.
 	fleet   *fleet.Fleet
+	ladder  *certs.Ladder
 	page    *api.Page
 	ownPage *api.Page
 	flight  *obs.Flight
@@ -96,6 +102,9 @@ type process struct {
 	// owner's hand on them, across worlds.
 	ties    *aboard.Ties
 	reports *review.Service
+	// newSailors are the limits on making a new sailor: the address key
+	// and the human check, made as keel starts.
+	newSailors *api.NewSailors
 	// shipmates is shipmates, across worlds; who is a shipmate is held in
 	// ties.
 	shipmates *shipmates.Service
@@ -130,7 +139,10 @@ type process struct {
 	carriedMu sync.Mutex
 	carried   counts
 
-	status atomic.Pointer[api.Status]
+	// access checks the website's status's requests came through
+	// Cloudflare Access; nil if it is not set up, and the status is not
+	// served.
+	access api.Access
 }
 
 // counts are a world half's counters, carried over as it closes so the
@@ -277,8 +289,16 @@ type worldHalf struct {
 	forecasts *forecast.Issuer
 	// sea is the world as the machine sailors' tools reach it.
 	sea *agentapi.Sea
+	// news is the world's news, a day's edition at a time.
+	news *news.Service
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
+	// status is the world as the website shows it.
+	status *status.Builder
+	// races are the world's races ashore, and clerk the races' clerk,
+	// between them and the committee in the world.
+	races *race.Service
+	clerk *race.Clerk
 	// chat is the world's chat aboard: every line is said through it.
 	chat *chat.Hub
 	// tally finds who sails together aboard the world's boats.
@@ -293,6 +313,7 @@ type worldHalf struct {
 
 	stopLoop, stopSailors, stopEncoder, stopWatch  context.CancelFunc
 	loopDone, inputsDone, sailorsDone, encoderDone chan struct{}
+	clerkDone                                      chan struct{}
 	lastingDone, watchDone                         chan struct{}
 	closed                                         bool
 }
@@ -331,7 +352,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	world, err := sim.New(sim.Config{
 		Kinds: p.kinds, StartSheets: cat.StartSheets(), Capacities: cat.Capacities(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
-		Life: rw.life,
+		Life: rw.life, Races: raceStage(cat, rw.bundle),
 	})
 	if err != nil {
 		return nil, err
@@ -368,6 +389,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.chat = chat.NewHub(b.Frames, aboard.Rules{Switches: p.switches, Ties: p.ties}, time.Now)
 	h.chat.Metrics = p.metrics
 	h.tally = shipmates.NewTally(b.Frames, p.chatDB(), time.Now, p.log, p.metrics)
+	// The races first: the game's connections ask them every boat's prizes.
+	h.races = p.racesOf(h)
 	h.game = edge.New(edge.Config{
 		LookCode: p.lookCode,
 		BoatOf:   p.boatOf,
@@ -385,22 +408,32 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Link:  p.sailLink, Knocker: p.knocker, Switches: p.switches, Capacities: cat.Capacities(), CrewLimit: cfg.CrewLimit,
 		Refuser: p.ties,
 		Chat:    h.chat, Talker: p.talker, Tie: p.tie, Report: p.report, CountryHeader: countryHeader,
-		Machines: p.agents.core,
+		Machines:  p.agents.core,
+		RaceNames: p.raceNames(h),
+		WatchByID: p.watchTargetByID,
+		RaceOf:    p.raceOf(h),
+		Prizes:    func(a bus.Account) uint32 { return uint32(h.races.PrizesOf(a)) },
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
 		Build: p.build, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Hold: b.Commands.Server(), Log: p.log, Metrics: p.metrics,
-		Chart: rw.charts.model, Written: rw.charts.model.Add, FoldWithin: rw.charts.model.FoldWithin(),
+		Chart: rw.charts.model, Written: rw.charts.model.Add, News: newsRules(cat, cfg.Schedule.Zone), Boats: boatIDs(cat),
+		Logbook: bookOf(rw, cat), Examiner: certs.Judge{L: p.ladder},
+		// A certificate earned changes the pendant its sailor wears.
+		Earned: func(id store.AccountID) { h.races.Reread(bus.Account(id)) },
 	})
+	h.news = p.newsOf(row)
+	h.clerk = p.clerkOf(h)
 	h.sea = p.seaOf(h, rw, sighting)
 	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))
+	logs := p.logsOf(row.Number)
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
-		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat,
+		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat, logs: logs, news: h.news,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
@@ -418,12 +451,11 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Chunks:    rw.chunks,
 		Models:    modelsOf(rw.charts),
 
-		News:        news{db: p.db, world: row.ID},
-		NewsPage:    cat.News.Page,
+		News:        h.news,
 		Notices:     p.db,
 		NoticeKinds: noticeKinds(cat),
 		Status:      p.statusNow,
-		Website:     websiteOf(cfg.PlayOrigin),
+		Access:      p.access,
 
 		// Sailing together: the links are made at the play origin; the
 		// Deck, the world sailed, tells a link's page of the boat.
@@ -433,13 +465,25 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Origin:   cfg.PlayOrigin,
 		Deck:     h.game,
 		Chat:     chatting{p},
+		Ashore:   h.game,
+
+		NewSailors: p.newSailors,
 	}
 	if p.shipmates != nil {
 		playCfg.Shipmates = p.shipmates
 	}
+	playCfg.Logs = logs
+	// The pages' policies: enforced, or reported only.
+	playCfg.PolicyReport = cfg.PolicyReport
+	playCfg.CheckOrigin = checkOrigin(cfg)
+	playCfg.Races = h.races
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
 	playCfg.Watch = h.watch
+	h.status = status.New(status.Config{
+		Frames: b.Frames, Chart: rw.charts.model, Catalog: cat, Timeline: timeline, Sky: cat.PrepareSky(), Epoch: epoch,
+		World: row.Number, Ends: h.ends, Schedule: cfg.Schedule, Boats: h.watch.Liveliest, Limit: cfg.StatusBoats, Log: p.log,
+	})
 	p.agents.apiConfig(&playCfg, p)
 	h.play = api.Handler(playCfg)
 	p.log.Info("world ready", "world", row.Number, "kinds", len(p.kinds), "capacity", world.Capacity(), "limit", world.Limit(),
@@ -552,11 +596,15 @@ func (h *worldHalf) start() {
 		var wg sync.WaitGroup
 		wg.Go(func() { h.tools.Run(encoderCtx) })
 		wg.Go(func() { h.forecasts.Run(encoderCtx) })
-		wg.Go(func() { p.publishStatus(encoderCtx, h) })
 		wg.Go(func() { h.chat.Run(encoderCtx) })
 		wg.Go(func() { h.tally.Run(encoderCtx) })
 		h.game.Run(encoderCtx)
 		wg.Wait()
+	}()
+	h.clerkDone = make(chan struct{})
+	go func() {
+		defer close(h.clerkDone)
+		h.clerk.Run(sailorsCtx)
 	}()
 	go func() {
 		defer close(h.sailorsDone)
@@ -573,10 +621,14 @@ func (h *worldHalf) start() {
 		dev := devRoutes(sailorsCtx, h.bus, p.cat, h.ready.charts, p.log)
 		end := endRoute(p, h)
 		sailed := sailedRoute(h)
+		races := racesRoute(h)
 		p.devRoutes.set(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/debug/end":
 				end.ServeHTTP(w, r)
+				return
+			case "/debug/races":
+				races.ServeHTTP(w, r)
 				return
 			case "/debug/sailed":
 				sailed.ServeHTTP(w, r)
@@ -620,6 +672,9 @@ func (h *worldHalf) close(how closeHow) int64 {
 	h.closed = true
 	h.stopSailors()
 	<-h.sailorsDone
+	if h.clerkDone != nil {
+		<-h.clerkDone
+	}
 	h.stopLoop()
 	<-h.loopDone
 	last := h.world.Now()
@@ -789,6 +844,12 @@ func (p *process) knocker(ctx context.Context, a bus.Account) (edge.Knocker, err
 
 func (p *process) watchTarget(ctx context.Context, key string) (watch.Target, error) {
 	t, err := p.db.WatchTarget(ctx, key)
+	return watch.Target(t), err
+}
+
+// watchTargetByID finds a sailor to watch by their account: a race's boat.
+func (p *process) watchTargetByID(ctx context.Context, a bus.Account) (watch.Target, error) {
+	t, err := p.db.WatchTargetByID(ctx, store.AccountID(a))
 	return watch.Target(t), err
 }
 

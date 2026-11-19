@@ -99,7 +99,7 @@ func (w *World) setBoat(c *bus.Command) bus.Reply {
 	lo, hi := f.CrewOf(s)
 	for i := hi - 1; i >= lo; i-- {
 		if int(f.Crew[i].Seat) >= room {
-			w.landed = append(w.landed, landing{a: w.leaveCrew(f, i), why: bus.AshoreLeft})
+			w.landed = append(w.landed, landing{a: w.leaveCrew(f, i, bus.EndLanded), why: bus.AshoreLeft})
 		}
 	}
 	r.Result, r.Gen = bus.Done, f.Gen[s]

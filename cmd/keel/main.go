@@ -8,6 +8,7 @@
 //	keel worldgen make the world of a seed and check it
 //	keel restore-test  restore the database's backups into a throwaway cluster and check them
 //	keel admin    the owner's hand on accounts, through a running keel's internal listener
+//	keel agreement  the keeper of the contributor agreement: its GitHub App's server and signing page
 package main
 
 import (
@@ -31,7 +32,10 @@ commands:
   restore-test  restore the database's backups into a throwaway cluster
            and check them
   admin    find, stop, start, revoke or delete accounts, through a running
-           keel's internal listener
+           keel's internal listener; list, export, enter or void
+           contributor agreement signatures, through keel agreement's
+  agreement  the keeper of the contributor agreement: the GitHub App's
+           server, and the page where contributors sign it
 `
 
 func main() {
@@ -81,6 +85,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		err = restoreTest(ctx, args[1:], getenv, stdout, stderr)
 	case "admin":
 		err = admin(ctx, args[1:], getenv, os.Stdin, stdout, stderr)
+	case "agreement":
+		err = agreementCmd(ctx, args[1:], getenv, stdout, stderr)
 	case "help", "-h", "-help", "--help":
 		fmt.Fprint(stdout, usage)
 		return 0

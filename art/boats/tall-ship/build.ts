@@ -63,6 +63,8 @@ interface Detail {
   upperStrakes: number;
   /** Whether each strake shows its seam, a dark line along its lower edge. */
   seams: boolean;
+  /** Rows across a strake below the gold wale without seams, so the run keeps the tuck's square. */
+  tuckRows: number;
   /** The decks in planks, or plain. */
   plankedDeck: boolean;
   /** Around masts, yards and the other round spars. */
@@ -90,6 +92,7 @@ const NEAR: Detail = {
   strakes: 6,
   upperStrakes: 7,
   seams: true,
+  tuckRows: 1,
   plankedDeck: true,
   round: 10,
   squareCols: 10,
@@ -111,6 +114,7 @@ const FAR: Detail = {
   strakes: 1,
   upperStrakes: 1,
   seams: false,
+  tuckRows: 3,
   plankedDeck: false,
   round: 5,
   squareCols: 3,
@@ -570,6 +574,8 @@ function band(
   to: (u: number) => number,
   rows: number[],
   colour: (row: number, i: number) => Vec3,
+  /** Collects the girths of its edge at the transom, for the transom to meet. */
+  atTransom?: number[],
 ): void {
   const grid: number[][] = rows.map(() => []);
   stations().forEach((u, i) => {
@@ -577,6 +583,9 @@ function band(
     const g1 = Math.max(g0, to(u));
     rows.forEach((s, r) => {
       const g = g0 + (g1 - g0) * s;
+      if (i === 0) {
+        atTransom?.push(g);
+      }
       const k = m.vertex(section(u, g), colour(r, i), [s, u]);
       m.normal(k, surfaceNormal(u, g));
       (grid[r] as number[]).push(k);
@@ -594,8 +603,10 @@ function strakes(
   to: (u: number) => number,
   n: number,
   seed: number,
+  atTransom: number[],
+  rows = 1,
 ): void {
-  const seam = D.seams ? [0, 0.1, 1] : [0, 1];
+  const seam = D.seams ? [0, 0.1, 1] : Array.from({ length: rows + 1 }, (_, i) => i / rows);
   for (let k = 0; k < n; k++) {
     const tone = 0.94 + 0.12 * jitter(k + seed);
     band(
@@ -604,6 +615,7 @@ function strakes(
       (u) => lerp(from(u), to(u), (k + 1) / n),
       seam,
       (r) => shade(TOPSIDES, D.seams && r === 0 ? tone * 0.55 : tone),
+      atTransom,
     );
   }
 }
@@ -625,6 +637,9 @@ function planking(): {
   const gold0 = g(goldFrom);
   const gold1 = g(goldTo);
   const cream = g((u) => railAt(u) - CREAM_STRAKE);
+  // Every girth the shell's edge has at the transom, so the transom's edge
+  // runs through the same points and no slit opens between them.
+  const girths: number[] = [];
 
   const side = new MeshBuilder('copper');
   const rows = Array.from({ length: D.copperRows + 1 }, (_, i) => i / D.copperRows);
@@ -638,21 +653,23 @@ function planking(): {
       const tone = 0.88 + 0.2 * jitter(sheet + 300);
       return shade(mix(COPPER, VERDIGRIS, jitter(sheet + 700) > 0.85 ? 0.35 : 0), tone);
     },
+    girths,
   );
   const paintSide = new MeshBuilder('paint');
-  band(paintSide, water, boot, [0, 1], () => BOOT);
+  band(paintSide, water, boot, [0, 1], () => BOOT, girths);
   band(
     paintSide,
     cream,
     () => 1,
     [0, 1],
     () => CREAM,
+    girths,
   );
   const giltSide = new MeshBuilder('gilt');
-  band(giltSide, gold0, gold1, [0, 0.5, 1], (r) => (r === 1 ? [1, 1, 1] : [0.8, 0.8, 0.8]));
+  band(giltSide, gold0, gold1, [0, 0.5, 1], (r) => (r === 1 ? [1, 1, 1] : [0.8, 0.8, 0.8]), girths);
   const sides = new MeshBuilder('topsides');
-  strakes(sides, boot, gold0, D.strakes, 40);
-  strakes(sides, gold1, cream, D.upperStrakes, 60);
+  strakes(sides, boot, gold0, D.strakes, 40, girths, D.tuckRows);
+  strakes(sides, gold1, cream, D.upperStrakes, 60, girths);
 
   const copper = new MeshBuilder('copper');
   const paint = new MeshBuilder('paint');
@@ -668,7 +685,7 @@ function planking(): {
     to.append(from);
     to.append(from, true);
   }
-  topsides.append(transom());
+  topsides.append(transom(girths));
   return { copper, paint, topsides, gilt };
 }
 
@@ -681,12 +698,20 @@ const transomTop = (x: number): number => {
   return railAt(0) + TAFFRAIL_CROWN * (1 - t * t);
 };
 
-/** The transom's outline, from the tuck up the starboard side, over the crowned top, and down the port side. */
-function transomOutline(inset: number): Vec3[] {
+/**
+ * The transom's outline, from the tuck up the starboard side, over the
+ * crowned top, and down the port side: up the side through the girths
+ * given (the planking's own at the transom), or evenly round.
+ */
+function transomOutline(inset: number, girths?: number[]): Vec3[] {
   const n = 2 * D.round;
+  const sorted = [...(girths ?? Array.from({ length: n + 1 }, (_, i) => i / n))].sort(
+    (a, b) => a - b,
+  );
+  const gs = sorted.filter((g, i) => i === 0 || g - (sorted[i - 1] as number) > 1e-9);
   const right: Vec3[] = [];
-  for (let i = 0; i <= n; i++) {
-    const p = section(0, i / n);
+  for (const g of gs) {
+    const p = section(0, g);
     right.push([Math.max(0, p[0] - inset), p[1], p[2]]);
   }
   const top = right[right.length - 1] as Vec3;
@@ -699,10 +724,13 @@ function transomOutline(inset: number): Vec3[] {
   return [...right, ...crown, ...left];
 }
 
-/** The transom: flat across the hull's after end, from the tuck to the taffrail, in the boat's paint. */
-function transom(): MeshBuilder {
+/**
+ * The transom: flat across the hull's after end, from the tuck to the
+ * taffrail, in the boat's paint; its edge through the planking's girths there.
+ */
+function transom(girths: number[]): MeshBuilder {
   const m = new MeshBuilder('topsides');
-  const ring = transomOutline(0).map((p) => m.vertex(p, TOPSIDES));
+  const ring = transomOutline(0, girths).map((p) => m.vertex(p, TOPSIDES));
   const mid = m.vertex([0, (TUCK_Y + railAt(0)) / 2, TRANSOM_Z], TOPSIDES);
   for (const k of [...ring, mid]) {
     m.normal(k, [0, 0, 1]);
@@ -910,8 +938,8 @@ function bulwarks(): { inner: MeshBuilder; rail: MeshBuilder } {
       inner.strip(rows[r] as number[], rows[r + 1] as number[], true);
     }
   }
-  // The cap rail: its top, and its outer and inner edges.
-  const us = stations().filter((u) => u > 0);
+  // The cap rail: its top, and its outer and inner edges, aft into the taffrail's.
+  const us = stations();
   const out: number[][] = [[], [], [], []];
   for (const u of us) {
     const y = railAt(u);
@@ -936,29 +964,56 @@ function bulwarks(): { inner: MeshBuilder; rail: MeshBuilder } {
   const rails = new MeshBuilder('rail');
   rails.append(rail);
   rails.append(rail, true);
-  // The taffrail's cap, across the transom's crowned top.
+  // The taffrail's cap, across the transom's crowned top: its after face,
+  // its top, its fore face and its underside, and its ends over the cap rail's.
   const n = 2 * D.round;
   const half = breadth(0, railAt(0) - 0.001) + 0.05;
-  const top: number[] = [];
-  const back: number[] = [];
-  const fore: number[] = [];
-  for (let i = 0; i <= n; i++) {
-    const x = -half + (2 * half * i) / n;
+  const aft = TRANSOM_Z + 0.06;
+  const forward = TRANSOM_Z - BULWARK_T - 0.04;
+  const corners = (x: number): Vec3[] => {
     const y = transomTop(x);
-    top.push(rails.vertex([x, y + 0.06, TRANSOM_Z + 0.06]));
-    fore.push(rails.vertex([x, y + 0.06, TRANSOM_Z - BULWARK_T - 0.04]));
-    back.push(rails.vertex([x, y - CAP, TRANSOM_Z + 0.06]));
+    return [
+      [x, y - CAP, aft],
+      [x, y + 0.06, aft],
+      [x, y + 0.06, forward],
+      [x, y - CAP, forward],
+    ];
+  };
+  for (let f = 0; f < 4; f++) {
+    const lower: number[] = [];
+    const upper: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const c = corners(-half + (2 * half * i) / n);
+      lower.push(rails.vertex(c[f] as Vec3));
+      upper.push(rails.vertex(c[(f + 1) % 4] as Vec3));
+    }
+    rails.strip(lower, upper);
   }
-  rails.strip(back, top, true);
-  rails.strip(top, fore, true);
-  // The transom's inner face over the quarterdeck.
-  const face = transomOutline(BULWARK_T)
-    .filter((p) => p[1] >= levelAt(0, QUARTERDECK) - 0.05)
-    .map((p): Vec3 => [p[0], p[1], TRANSOM_Z - BULWARK_T]);
+  for (const s of [-1, 1]) {
+    const [a, b, c, d] = corners(s * half).map((p) => rails.vertex(p));
+    rails.triFacing(a as number, b as number, c as number, [s, 0, 0]);
+    rails.triFacing(a as number, c as number, d as number, [s, 0, 0]);
+  }
+  // The transom's inner face over the quarterdeck, from under the deck's
+  // edge up to the taffrail, its sides behind the bulwarks' inner faces.
+  const foot = levelAt(0, QUARTERDECK) - 0.05;
+  const outline = transomOutline(BULWARK_T - 0.1);
+  const cut = (p: Vec3, q: Vec3): Vec3 => {
+    const t = (foot - p[1]) / (q[1] - p[1]);
+    return [lerp(p[0], q[0], t), foot, TRANSOM_Z];
+  };
+  const first = outline.findIndex((p) => p[1] >= foot);
+  const last = outline.length - 1 - first;
+  const face = [
+    cut(outline[first - 1] as Vec3, outline[first] as Vec3),
+    ...outline.slice(first, last + 1),
+    cut(outline[last + 1] as Vec3, outline[last] as Vec3),
+  ].map((p): Vec3 => [p[0], p[1], TRANSOM_Z - BULWARK_T]);
   const mid = all.vertex([0, (levelAt(0, QUARTERDECK) + railAt(0)) / 2, TRANSOM_Z - BULWARK_T]);
   const ring = face.map((p) => all.vertex(p, INNER));
-  for (let i = 0; i + 1 < ring.length; i++) {
-    all.triFacing(mid, ring[i] as number, ring[i + 1] as number, [0, 0, -1]);
+  for (let i = 0; i < ring.length; i++) {
+    const next = ring[(i + 1) % ring.length] as number;
+    all.triFacing(mid, ring[i] as number, next, [0, 0, -1]);
   }
   return { inner: all, rail: rails };
 }
@@ -1021,6 +1076,42 @@ function decks(): MeshBuilder {
 }
 
 /**
+ * The ladders at the breaks: this far out from the centreline, their run
+ * fore and aft this share of their rise, a step about every so high; half
+ * as wide as this; their treads this thick (half) and deep (half); and the
+ * breastwork's rail this far clear of a ladder's middle each side.
+ */
+const LADDER_X = 1.5;
+const LADDER_RUN = 0.55;
+const LADDER_STEP = 0.3;
+const LADDER_HALF = 0.3;
+const LADDER_TREAD = 0.025;
+const LADDER_DEPTH = 0.09;
+const LADDER_GAP = 0.45;
+
+/**
+ * A break's ladder on a side (s): its foot on the waist's deck, its head at
+ * the raised deck's edge, and how many rises it has (its treads between).
+ */
+function ladderAt(
+  u: number,
+  level: Level,
+  facing: number,
+  s: number,
+): { foot: Vec3; head: Vec3; steps: number } {
+  const z = zAt(u);
+  const x = s * LADDER_X;
+  const y0 = deckSurface(x, u, WAIST, deckHalf(u, WAIST));
+  const y1 = deckSurface(x, u, level, deckHalf(u, level));
+  const run = (y1 - y0) * LADDER_RUN;
+  return {
+    foot: [x, y0, z + facing * run],
+    head: [x, y1, z],
+    steps: Math.round((y1 - y0) / LADDER_STEP),
+  };
+}
+
+/**
  * The breaks of the quarterdeck and the forecastle: each a bulkhead from
  * the waist's deck up to the raised one, with a breastwork rail on
  * balusters along its edge, and ladders down to the waist.
@@ -1035,18 +1126,29 @@ function breaks(): { paint: MeshBuilder; rail: MeshBuilder } {
     const z = zAt(u);
     const w = deckHalf(u, level);
     const ww = deckHalf(u, WAIST);
+    // The bulkhead from the waist's deck up to the raised deck's, out to
+    // her sides behind the bulwarks' inner faces.
     const n = 8;
-    const lower: number[] = [];
-    const upper: number[] = [];
-    for (let i = 0; i <= n; i++) {
-      const x = -w + (2 * w * i) / n;
-      lower.push(paint.vertex([x, deckSurface(x, u, WAIST, ww), z], INNER));
-      upper.push(paint.vertex([x, deckSurface(x, u, level, w), z], INNER));
+    const heights = 2;
+    const rows: number[][] = [];
+    for (let r = 0; r <= heights; r++) {
+      const f = r / heights;
+      const half = breadth(u, lerp(levelAt(u, WAIST), levelAt(u, level), f)) - 0.05;
+      const row: number[] = [];
+      for (let i = 0; i <= n; i++) {
+        const x = -half + (2 * half * i) / n;
+        const y = lerp(deckSurface(x, u, WAIST, ww), deckSurface(x, u, level, w), f);
+        row.push(paint.vertex([x, y, z], INNER));
+      }
+      rows.push(row);
     }
-    for (let i = 0; i < n; i++) {
-      const [a, b, c, d] = [lower[i], lower[i + 1], upper[i + 1], upper[i]] as number[];
-      paint.triFacing(a as number, b as number, c as number, [0, 0, facing]);
-      paint.triFacing(a as number, c as number, d as number, [0, 0, facing]);
+    for (let r = 0; r < heights; r++) {
+      for (let i = 0; i < n; i++) {
+        const [lo, up] = [rows[r] as number[], rows[r + 1] as number[]];
+        const [a, b, c, d] = [lo[i], lo[i + 1], up[i + 1], up[i]] as number[];
+        paint.triFacing(a as number, b as number, c as number, [0, 0, facing]);
+        paint.triFacing(a as number, c as number, d as number, [0, 0, facing]);
+      }
     }
     if (!D.small) {
       continue;
@@ -1055,8 +1157,15 @@ function breaks(): { paint: MeshBuilder; rail: MeshBuilder } {
     const deckY = deckSurface(0, u, level, w);
     const top = deckY + 0.95;
     const zr = z - facing * 0.08;
-    rail.box([-w, top - 0.08, zr - 0.07], [w, top, zr + 0.07]);
-    const ladder = 1.5;
+    const ladder = LADDER_X;
+    // The breastwork's rail stops either side of each ladder's head.
+    for (const [a, b] of [
+      [-w, -ladder - LADDER_GAP],
+      [-ladder + LADDER_GAP, ladder - LADDER_GAP],
+      [ladder + LADDER_GAP, w],
+    ] as [number, number][]) {
+      rail.box([a, top - 0.08, zr - 0.07], [b, top, zr + 0.07]);
+    }
     for (let x = -w + 0.2; x <= w - 0.1; x += 0.42) {
       if (Math.abs(Math.abs(x) - ladder) < 0.5) {
         continue;
@@ -1082,19 +1191,17 @@ function breaks(): { paint: MeshBuilder; rail: MeshBuilder } {
     }
     // A ladder each side, from the waist up the break.
     for (const s of [1, -1]) {
-      const x = s * ladder;
-      const y0 = deckSurface(x, u, WAIST, ww);
-      const y1 = deckSurface(x, u, level, w);
-      const run = (y1 - y0) * 0.55;
-      const foot: Vec3 = [x, y0, z + facing * run];
-      const head: Vec3 = [x, y1, z];
-      for (const side of [-0.3, 0.3]) {
+      const { foot, head, steps } = ladderAt(u, level, facing, s);
+      const x = foot[0];
+      for (const side of [-LADDER_HALF, LADDER_HALF]) {
         rail.tube([add(foot, [side, 0, 0]), add(head, [side, 0.05, 0])], [0.035], 4);
       }
-      const steps = Math.round((y1 - y0) / 0.3);
       for (let i = 1; i < steps; i++) {
         const p = lerp3(foot, head, i / steps);
-        rail.box([x - 0.3, p[1] - 0.025, p[2] - 0.09], [x + 0.3, p[1] + 0.025, p[2] + 0.09]);
+        rail.box(
+          [x - LADDER_HALF, p[1] - LADDER_TREAD, p[2] - LADDER_DEPTH],
+          [x + LADDER_HALF, p[1] + LADDER_TREAD, p[2] + LADDER_DEPTH],
+        );
       }
     }
   }
@@ -1494,6 +1601,26 @@ function topsailYard(name: string, y: SquareYard, z: number): NodeDef {
   };
 }
 
+/** A mast's three yards, the lower, the topsail and the topgallant: each rides on its sail's head. */
+function squareYardsOf(m: Mast, area: number): SquareYard[] {
+  const w = sailWidth(area);
+  return [
+    { y: LOWER_YARD_Y + 0.2, r: 0.2, half: w / 2 + 0.9, lift: m.cap - 0.2 },
+    {
+      y: TOPSAIL_YARD_Y + 0.15,
+      r: 0.15,
+      half: (TOPSAIL_HEAD_W * w) / 2 + 0.7,
+      lift: m.topmastHead - 0.2,
+    },
+    {
+      y: TOPGALLANT_YARD_Y + 0.1,
+      r: 0.1,
+      half: (TOPGALLANT_HEAD_W * w) / 2 + 0.5,
+      lift: m.truck - 0.4,
+    },
+  ];
+}
+
 /**
  * The fore or main yards: the lower yard, the topsail yard and the
  * topgallant yard, with their sails, the course, topsail and topgallant.
@@ -1511,22 +1638,7 @@ function squareYards(
   const black = new MeshBuilder('blackwood');
   const ropes = new MeshBuilder('rope');
   const w = sailWidth(area);
-  // Each yard rides on its sail's head.
-  const yards = [
-    { y: LOWER_YARD_Y + 0.2, r: 0.2, half: w / 2 + 0.9, lift: m.cap - 0.2 },
-    {
-      y: TOPSAIL_YARD_Y + 0.15,
-      r: 0.15,
-      half: (TOPSAIL_HEAD_W * w) / 2 + 0.7,
-      lift: m.topmastHead - 0.2,
-    },
-    {
-      y: TOPGALLANT_YARD_Y + 0.1,
-      r: 0.1,
-      half: (TOPGALLANT_HEAD_W * w) / 2 + 0.5,
-      lift: m.truck - 0.4,
-    },
-  ];
+  const yards = squareYardsOf(m, area);
   const zs = yards.map((y) => yardZ(m, y.y, y.r));
   yards.forEach((y, i) => {
     const own = i === 1;
@@ -1603,6 +1715,24 @@ function squareYards(
   };
 }
 
+/**
+ * A yard's footropes: from this far out from its middle to this far in
+ * from its arm, this far below it at their ends and sagging this much
+ * more at their middle, this far aft of it; in this many lengths.
+ */
+const FOOTROPE = { from: 0.6, inset: 0.2, below: 0.25, sag: 0.55, aft: 0.12, lengths: 4 };
+
+/** A yard's footrope on a side (s), the yard at height y and z: its points, from the middle out. */
+function footrope(y: number, z: number, half: number, s: number): Vec3[] {
+  const path: Vec3[] = [];
+  for (let i = 0; i <= FOOTROPE.lengths; i++) {
+    const f = i / FOOTROPE.lengths;
+    const x = s * lerp(FOOTROPE.from, half - FOOTROPE.inset, f);
+    path.push([x, y - FOOTROPE.below - FOOTROPE.sag * Math.sin(Math.PI * f), z + FOOTROPE.aft]);
+  }
+  return path;
+}
+
 /** A yard's lifts, from its arms up to the mast, and its footropes, sagging under it; or one of them. */
 function rigYard(
   m: MeshBuilder,
@@ -1625,15 +1755,20 @@ function rigYard(
       );
     }
     if (footropes) {
-      const path: Vec3[] = [];
-      for (let i = 0; i <= 4; i++) {
-        const f = i / 4;
-        const x = s * lerp(0.6, half - 0.2, f);
-        path.push([x, y - 0.25 - 0.55 * Math.sin(Math.PI * f), z + 0.12]);
-      }
-      rope(m, path, 0.025);
+      rope(m, footrope(y, z, half, s), 0.025);
     }
   }
+}
+
+/** The mizzen's two yards: the crossjack and the mizzen topsail's. */
+function mizzenYardsOf(): SquareYard[] {
+  const m = MIZZEN;
+  const footW = MIZZEN_TOPSAIL_FOOT;
+  const headW = MIZZEN_TOPSAIL_HEAD_W * footW;
+  return [
+    { y: CROSSJACK_Y + 0.14, r: 0.14, half: footW / 2 + 0.6, lift: m.cap - 0.2 },
+    { y: MIZZEN_TOPSAIL_YARD_Y + 0.1, r: 0.1, half: headW / 2 + 0.5, lift: m.topmastHead - 0.2 },
+  ];
 }
 
 /** The mizzen's yards: the bare crossjack yard, and the mizzen topsail on its yard. */
@@ -1644,10 +1779,7 @@ function mizzenYards(): YardsOut {
   const ropes = new MeshBuilder('rope');
   const footW = MIZZEN_TOPSAIL_FOOT;
   const headW = MIZZEN_TOPSAIL_HEAD_W * footW;
-  const yards = [
-    { y: CROSSJACK_Y + 0.14, r: 0.14, half: footW / 2 + 0.6, lift: m.cap - 0.2 },
-    { y: MIZZEN_TOPSAIL_YARD_Y + 0.1, r: 0.1, half: headW / 2 + 0.5, lift: m.topmastHead - 0.2 },
-  ];
+  const yards = mizzenYardsOf();
   const zs = yards.map((y) => yardZ(m, y.y, y.r));
   yards.forEach((y, i) => {
     const own = i === 1;
@@ -1951,6 +2083,8 @@ function bowsprit(): { spar: MeshBuilder; black: MeshBuilder; rope: MeshBuilder 
 const SHROUD_R = 0.032;
 const STAY_R = 0.045;
 const RATLINE_R = 0.012;
+/** How far apart the ratlines are, one above the next. */
+const RATLINE_EVERY = 0.42;
 /** The deadeyes' radius and thickness. */
 const DEADEYE_R = 0.13;
 
@@ -1968,6 +2102,63 @@ const channelOf = (m: Mast, z0: number, z1: number): Channel => ({
 });
 const CHANNEL_OUT = 0.7;
 const channelX = (c: Channel, z: number): number => breadth(uAt(z), c.y) + CHANNEL_OUT - 0.08;
+
+/** Where a mast's lower shrouds are made fast under its top. */
+const shroudHead = (m: Mast): number => m.top - 0.35;
+
+/**
+ * A mast's lower shrouds on a side, fore to aft along its channel, in the
+ * ship's frame: each from under the top to the upper deadeye's top.
+ */
+function lowerShrouds(m: Mast, count: number, c: Channel, s: number): [Vec3, Vec3][] {
+  const head = shroudHead(m);
+  const lines: [Vec3, Vec3][] = [];
+  for (let i = 0; i < count; i++) {
+    const z = lerp(c.z0 + 0.3, c.z1 - 0.3, i / Math.max(1, count - 1));
+    const top: Vec3 = [
+      s * mastR(m, head),
+      head,
+      m.z + lerp(-0.15, 0.25, i / Math.max(1, count - 1)),
+    ];
+    lines.push([top, [s * channelX(c, z), c.y + 0.85 + DEADEYE_R, z]]);
+  }
+  return lines;
+}
+
+/** The heights of the lower shrouds' lowest and highest ratlines' range. */
+const lowerRatlines = (m: Mast, c: Channel): [number, number] => [c.y + 1.3, shroudHead(m) - 0.8];
+
+/**
+ * A mast's futtock shrouds on a side, in its node's frame: each from the
+ * top's rim down to a band round the mast.
+ */
+function futtockShrouds(m: Mast, s: number): [Vec3, Vec3][] {
+  const out: [Vec3, Vec3][] = [];
+  const count = m.topgallant === null ? 2 : 3;
+  for (let i = 0; i < count; i++) {
+    const z = lerp(-0.4, 0.6, i / Math.max(1, count - 1));
+    out.push([
+      [s * (m.topHalf - 0.1), m.top - 0.1, z],
+      [s * (mastR(m, m.top - 2.2) + 0.02), m.top - 2.2, z * 0.3],
+    ]);
+  }
+  return out;
+}
+
+/** Where a mast's topmast shrouds are made fast, under the crosstrees or the topmast's head. */
+const topmastShroudHead = (m: Mast): number => (m.crosstrees ?? m.topmastHead) - 0.3;
+
+/**
+ * A mast's topmast shrouds on a side, in its node's frame: each from the
+ * topmast's head down to the top's rim, over its futtock shroud.
+ */
+function topmastShrouds(m: Mast, s: number): [Vec3, Vec3][] {
+  const head = topmastShroudHead(m);
+  return futtockShrouds(m, s).map(([rim]) => [
+    [s * mastR(m, head), head, rim[2] * 0.3],
+    [rim[0], m.top + 0.15, rim[2]],
+  ]);
+}
 
 /**
  * A mast's standing rigging, in its node's frame: its lower shrouds from
@@ -1999,21 +2190,14 @@ function shrouds(
       [s > 0 ? x0 + CHANNEL_OUT : -x0, c.y + 0.07, c.z1],
     );
   }
-  const head = m.top - 0.35;
   for (const s of [1, -1]) {
     // The lower shrouds, from fore to aft along the channel.
-    const lines: [Vec3, Vec3][] = [];
-    for (let i = 0; i < count; i++) {
-      const z = lerp(c.z0 + 0.3, c.z1 - 0.3, i / Math.max(1, count - 1));
+    const lines = lowerShrouds(m, count, c, s);
+    for (const [top, end] of lines) {
+      const z = end[2];
       const upper: Vec3 = [s * channelX(c, z), c.y + 0.85, z];
       const lower: Vec3 = [s * channelX(c, z), c.y + 0.3, z];
-      const top: Vec3 = [
-        s * mastR(m, head),
-        head,
-        m.z + lerp(-0.15, 0.25, i / Math.max(1, count - 1)),
-      ];
-      lines.push([top, add(upper, [0, DEADEYE_R, 0])]);
-      rope(ropes, [local(top), local(add(upper, [0, DEADEYE_R, 0]))], SHROUD_R);
+      rope(ropes, [local(top), local(end)], SHROUD_R);
       // The deadeyes and their lanyard; the chain down the topsides.
       rope(hullRope, [upper, lower], 0.018, 3);
       for (const p of [upper, lower]) {
@@ -2035,30 +2219,20 @@ function shrouds(
       );
     }
     // Ratlines across the lower shrouds.
+    const [from, to] = lowerRatlines(m, c);
     ratlines(
       ropes,
       lines.map(([a, b]) => [local(a), local(b)]),
-      c.y + 1.3,
-      head - 0.8,
+      from,
+      to,
     );
     // The futtock shrouds, from the top's rim down to a band round the mast.
-    const rim: Vec3[] = [];
-    const tCount = m.topgallant === null ? 2 : 3;
-    for (let i = 0; i < tCount; i++) {
-      const z = lerp(-0.4, 0.6, i / Math.max(1, tCount - 1));
-      rim.push([s * (m.topHalf - 0.1), m.top + 0.15, z]);
-      rope(
-        ropes,
-        [
-          [s * (m.topHalf - 0.1), m.top - 0.1, z],
-          [s * (mastR(m, m.top - 2.2) + 0.02), m.top - 2.2, z * 0.3],
-        ],
-        SHROUD_R * 0.8,
-      );
+    for (const [rim, band] of futtockShrouds(m, s)) {
+      rope(ropes, [rim, band], SHROUD_R * 0.8);
     }
     // The topmast shrouds, from the topmast's head down to the top's rim.
-    const tHead = (m.crosstrees ?? m.topmastHead) - 0.3;
-    const tLines: [Vec3, Vec3][] = rim.map((p) => [[s * mastR(m, tHead), tHead, p[2] * 0.3], p]);
+    const tHead = topmastShroudHead(m);
+    const tLines = topmastShrouds(m, s);
     for (const [a, b] of tLines) {
       rope(ropes, [a, b], SHROUD_R * 0.85);
       wood.tube([add(b, [-0.04, -0.12, m.z]), add(b, [0.04, -0.12, m.z])], [DEADEYE_R * 0.75], 6);
@@ -2103,7 +2277,7 @@ function shrouds(
  * y1: a rope through each shroud's point at that height.
  */
 function ratlines(m: MeshBuilder, lines: [Vec3, Vec3][], y0: number, y1: number): void {
-  for (let y = y0; y <= y1; y += 0.42) {
+  for (let y = y0; y <= y1; y += RATLINE_EVERY) {
     const path = lines.map(([a, b]) => lerp3(a, b, (y - a[1]) / (b[1] - a[1])));
     rope(m, path, RATLINE_R);
   }
@@ -2151,12 +2325,14 @@ function stays(): MeshBuilder {
 /**
  * A plate on the centreline: columns, each [z, top, bottom, half-thickness
  * at the top, at the bottom], in order along it; its two sides, its bottom
- * and its ends, coloured by height.
+ * and its ends, coloured by height; and its top, where it stands clear of
+ * the hull.
  */
 function plate(
   m: MeshBuilder,
   cols: [number, number, number, number, number][],
   colour: (y: number) => Vec3,
+  capped = false,
 ): void {
   const rows = 3;
   for (const s of [1, -1]) {
@@ -2196,6 +2372,17 @@ function plate(
     }
     m.triFacing(a, b, c, [0, -1, 0]);
     m.triFacing(a, c, d, [0, -1, 0]);
+  }
+  for (let i = 0; capped && i + 1 < cols.length; i++) {
+    const [a, b, c, d] = [edge(i, -1, 0), edge(i + 1, -1, 0), edge(i + 1, 1, 0), edge(i, 1, 0)];
+    const along = (cols[i + 1]?.[0] ?? 0) - (cols[i]?.[0] ?? 0);
+    const rise = (cols[i + 1]?.[1] ?? 0) - (cols[i]?.[1] ?? 0);
+    const up = normalize([0, along * along, -rise * along]);
+    for (const k of [a, b, c, d]) {
+      m.normal(k, up);
+    }
+    m.triFacing(a, b, c, up);
+    m.triFacing(a, c, d, up);
   }
   for (const [i, dir] of [
     [0, Math.sign((cols[0]?.[0] ?? 0) - (cols[1]?.[0] ?? 0))],
@@ -2275,7 +2462,7 @@ function deadwood(): MeshBuilder {
       lerp(KEEL_FOOT_T, 0.2, i / n),
     ]);
   }
-  plate(m, aft, sheathed);
+  plate(m, aft, sheathed, true);
   const fore: [number, number, number, number, number][] = [];
   const reach = Math.max(1.6, 0.45 * (1 - U_FORE) * L);
   for (let i = 0; i <= n; i++) {
@@ -2329,7 +2516,7 @@ function rudder(): { copper: MeshBuilder; paint: MeshBuilder; iron: MeshBuilder 
   const water = Math.min(0, RUDDER_TOP);
   plate(copper, columns(RUDDER_FOOT, water), sheathed);
   if (RUDDER_TOP > water) {
-    plate(paint, columns(water, RUDDER_TOP), () => srgb(0.16, 0.14, 0.12));
+    plate(paint, columns(water, RUDDER_TOP), () => srgb(0.16, 0.14, 0.12), true);
   }
   // The stock, up to the tiller's head.
   paint.tube(
@@ -2592,6 +2779,9 @@ function sternlight(): { brass: MeshBuilder; glass: MeshBuilder; iron: MeshBuild
 // --- Fittings on deck ------------------------------------------------------------------
 
 /** The longboat on the skids in the waist, between the fore and main masts. */
+/** How far out from the centreline the longboat's skids reach, each side. */
+const SKID_HALF = 2.0;
+
 function longboat(): { paint: MeshBuilder; wood: MeshBuilder } {
   const paint = new MeshBuilder('paint');
   const wood = new MeshBuilder('varnish');
@@ -2641,12 +2831,49 @@ function longboat(): { paint: MeshBuilder; wood: MeshBuilder } {
       wood.triFacing(c[r] as number, d[r + 1] as number, c[r + 1] as number, scale(outward, -1));
     }
   }
+  const at = (m: MeshBuilder, k: number): Vec3 => [
+    m.positions[k * 3] ?? 0,
+    m.positions[k * 3 + 1] ?? 0,
+    m.positions[k * 3 + 2] ?? 0,
+  ];
+  // Its gunwales, from the shell's edge over to the inside's.
+  for (const r of [0, rows]) {
+    for (let i = 0; i < n; i++) {
+      const [a, b, c, d] = [
+        at(paint, (outer[i] as number[])[r] as number),
+        at(paint, (outer[i + 1] as number[])[r] as number),
+        at(wood, (inner[i + 1] as number[])[r] as number),
+        at(wood, (inner[i] as number[])[r] as number),
+      ].map((p) => wood.vertex(p, WOOD));
+      wood.triFacing(a as number, b as number, c as number, [0, 1, 0]);
+      wood.triFacing(a as number, c as number, d as number, [0, 1, 0]);
+    }
+  }
+  // Its ends: the transom and the stem's breadth, painted outside, wood inside.
+  for (const [i, dir] of [
+    [0, -1],
+    [n, 1],
+  ] as [number, number][]) {
+    const o = outer[i] as number[];
+    const w = inner[i] as number[];
+    const top = (p: number[], m: MeshBuilder): Vec3 => {
+      const [l, r] = [at(m, p[0] as number), at(m, p[rows] as number)];
+      return [(l[0] + r[0]) / 2, (l[1] + r[1]) / 2, l[2]];
+    };
+    const om = paint.vertex(top(o, paint), srgb(0.9, 0.88, 0.82));
+    const wm = wood.vertex(top(w, wood), WOOD);
+    for (let r = 0; r < rows; r++) {
+      paint.triFacing(om, o[r] as number, o[r + 1] as number, [0, 0, dir]);
+      wood.triFacing(wm, w[r] as number, w[r + 1] as number, [0, 0, -dir]);
+    }
+  }
   // The skids it rests on, across the waist on their posts.
   for (const dz of [-2.2, 2.2]) {
     const z = zc + dz;
     const uu = uAt(z);
     const w = deckHalf(uu, WAIST);
-    wood.box([-w + 0.3, y0 - 0.12, z - 0.1], [w - 0.3, y0 + 0.05, z + 0.1], shade(WOOD, 0.7));
+    // Clear of the ways along the waist's sides.
+    wood.box([-SKID_HALF, y0 - 0.12, z - 0.1], [SKID_HALF, y0 + 0.05, z + 0.1], shade(WOOD, 0.7));
     for (const s of [1, -1]) {
       const yd = deckSurface(s * 1.4, uu, WAIST, w);
       wood.box(
@@ -2658,6 +2885,14 @@ function longboat(): { paint: MeshBuilder; wood: MeshBuilder } {
   }
   return { paint, wood };
 }
+
+/** The hatches in the waist, the main and the fore: each its middle and half its breadth; its coaming's height over the deck, and its grating's bars on it. */
+const HATCHES: [number, number][] = [
+  [MAIN_Z - 3.0, 1.2],
+  [FORE_Z + 3.0, 0.9],
+];
+const HATCH_HEIGHT = 0.35;
+const GRATING = 0.02;
 
 /** The capstan, hatches, fife rails, catheads and anchors, and the bitts at the bowsprit's heel. */
 function fittings(): { wood: MeshBuilder; black: MeshBuilder; iron: MeshBuilder } {
@@ -2680,15 +2915,15 @@ function fittings(): { wood: MeshBuilder; black: MeshBuilder; iron: MeshBuilder 
     shade(WOOD, 0.9),
   );
   // Hatches with their gratings, in the waist.
-  for (const [z, half] of [
-    [MAIN_Z - 3.0, 1.2],
-    [FORE_Z + 3.0, 0.9],
-  ] as [number, number][]) {
+  for (const [z, half] of HATCHES) {
     const y = on(z, WAIST);
-    wood.box([-half, y - 0.02, z - half], [half, y + 0.35, z + half], shade(WOOD, 0.75));
+    wood.box([-half, y - 0.02, z - half], [half, y + HATCH_HEIGHT, z + half], shade(WOOD, 0.75));
     for (let i = -3; i <= 3; i++) {
       const x = (i * half) / 4;
-      black.box([x - 0.03, y + 0.35, z - half + 0.08], [x + 0.03, y + 0.37, z + half - 0.08]);
+      black.box(
+        [x - 0.03, y + HATCH_HEIGHT, z - half + 0.08],
+        [x + 0.03, y + HATCH_HEIGHT + GRATING, z + half - 0.08],
+      );
     }
   }
   // Fife rails round the fore and main masts.
@@ -3239,8 +3474,420 @@ function model(): NodeDef[] {
       name: 'board-root',
       translation: [0, keelY(uAt(-foils.boardPosition)), -foils.boardPosition],
     },
+    company(),
   );
   return nodes;
+}
+
+// --- The ship's company's places -------------------------------------------------
+
+/** Where the quarterdeck's rail is leant on, and where the main brace leads to it, on the starboard side. */
+const RAIL_Z = 7.6;
+const BRACE_Z = 11.0;
+/** The main brace's fall: from its lead this far forward along the deck and this far inboard, at the lead's height. */
+const BRACE_FALL: [number, number] = [2.6, 0.35];
+
+/** The cap rail's inner edge, on its top, at z on the starboard side. */
+function railTop(z: number): Vec3 {
+  const u = uAt(z);
+  const y = railAt(u);
+  return [round5(Math.max(0, breadth(u, y - 0.001) - BULWARK_T - 0.04)), round5(y), z];
+}
+
+const round3v = (p: Vec3): Vec3 => [round5(p[0]), round5(p[1]), round5(p[2])];
+
+/**
+ * Where the ship's company stands, sits, climbs, hauls and lies out, as the
+ * sailors' clips are made against: the starboard side's (the port's the
+ * mirror), in the ship's frame but for the yard's, which is in its node's.
+ * The quarterdeck's rail (the cap's inner edge on its top); the fore hatch's
+ * forward edge on its grating, on the centreline, and half its breadth; the
+ * quarterdeck's ladder at its break (its foot, its head, its rises, half its
+ * width); the main lower shrouds (each from under the top to its deadeye),
+ * the lowest and highest heights of their ratlines' range and how far apart
+ * they are; the main futtock shrouds (each from the top's rim down to its
+ * band) and topmast shrouds (each from the topmast's head down to the rim);
+ * the main top (its floor's middle, half its breadth, how far it reaches
+ * forward and aft); the main topsail yard's node, its radius and its
+ * footrope's points from the middle out; and the main brace's lead on the
+ * quarterdeck's rail and a point along its fall.
+ */
+function company(): NodeDef {
+  const ladder = ladderAt(U_QD, QUARTERDECK, -1, 1);
+  const channel = channelOf(MAIN, -1.0, 3.6);
+  const [from, to] = lowerRatlines(MAIN, channel);
+  const inShip = (p: Vec3): Vec3 => round3v([p[0], p[1], p[2] + MAIN.z]);
+  const width = sailWidth(MAIN_AREA);
+  const topsail = { y: TOPSAIL_YARD_Y + 0.15, r: 0.15, half: (TOPSAIL_HEAD_W * width) / 2 + 0.7 };
+  const [hatchZ, hatchHalf] = HATCHES[1] as [number, number];
+  const lead = railTop(BRACE_Z);
+  return {
+    name: 'company',
+    extras: {
+      rail: railTop(RAIL_Z),
+      hatch: {
+        edge: round3v([
+          0,
+          deckSurface(0, uAt(hatchZ), WAIST, 1) + HATCH_HEIGHT + GRATING,
+          hatchZ - hatchHalf,
+        ]),
+        half: hatchHalf,
+      },
+      ladder: {
+        foot: round3v(ladder.foot),
+        head: round3v(ladder.head),
+        steps: ladder.steps,
+        half: LADDER_HALF,
+      },
+      shrouds: lowerShrouds(MAIN, 5, channel, 1).map(([a, b]) => [round3v(a), round3v(b)]),
+      ratlines: { from: round5(from), to: round5(to), every: RATLINE_EVERY },
+      futtocks: futtockShrouds(MAIN, 1).map(([a, b]) => [inShip(a), inShip(b)]),
+      topmast: topmastShrouds(MAIN, 1).map(([a, b]) => [inShip(a), inShip(b)]),
+      top: {
+        floor: round3v([0, MAIN.top, MAIN.z]),
+        half: MAIN.topHalf,
+        fore: MAIN.topFore,
+        aft: MAIN.topAft,
+      },
+      yard: {
+        node: 'main-topsail-yard',
+        radius: topsail.r,
+        footrope: footrope(0, 0, topsail.half, 1).map(round3v),
+      },
+      brace: { lead, fall: round3v([lead[0] - BRACE_FALL[1], lead[1], lead[2] - BRACE_FALL[0]]) },
+      ways: ways(),
+      yards: yardPlaces(),
+      braces: braces(),
+      aloft: aloftPlaces(),
+    },
+  };
+}
+
+/** A way's stretch: walked along a deck, climbed up a ladder, or climbed aloft by the shrouds. */
+const WALKED = 0;
+const LADDER = 1;
+const ALOFT = 2;
+/** How far out from the centreline the ways along the quarterdeck's and the waist's sides go. */
+const WAY_QD = 2.3;
+/** Abaft the wheel, where she narrows, nearer the centreline. */
+const WAY_QD_AFT = 2.1;
+const WAY_WAIST = 2.9;
+/** Where the ways cross the quarterdeck, before and abaft the wheel, and the waist, abaft the main fife rail. */
+const WAY_BEFORE_WHEEL = 10.85;
+const WAY_ABAFT_WHEEL = 13.3;
+const WAY_WAIST_CROSS = 1.35;
+
+/**
+ * The ways her company walks, as points on her decks and the stretches
+ * between them: along each side of the quarterdeck from the head of its
+ * ladder aft, across it at the break and before and abaft the wheel; up and down the
+ * ladders at the breaks; along each side of the waist from the
+ * quarterdeck's ladder to the forecastle's, and across it abaft the main
+ * fife rail; forward on the forecastle each side of the bowsprit; and from
+ * the waist abreast of the main shrouds up to the main top. Each stretch
+ * keeps a body's breadth clear of the masts, rails, fife rails, capstan,
+ * hatches, the longboat's skids, the wheel and the binnacle, and of the
+ * stations' people. Every point is on the deck it is on (the top's floor
+ * for the top); a stretch is walked (0), a ladder (1) or the climb aloft (2).
+ */
+function ways(): { nodes: Vec3[]; edges: [number, number, number][] } {
+  const nodes: Vec3[] = [];
+  const edges: [number, number, number][] = [];
+  const node = (p: Vec3): number => {
+    const q = round3v(p);
+    const i = nodes.findIndex((n) => Math.hypot(n[0] - q[0], n[1] - q[1], n[2] - q[2]) < 1e-3);
+    if (i >= 0) {
+      return i;
+    }
+    nodes.push(q);
+    return nodes.length - 1;
+  };
+  const on = (x: number, z: number, level: Level): Vec3 => {
+    const u = uAt(z);
+    return [x, deckSurface(x, u, level, deckHalf(u, level)), z];
+  };
+  const line = (points: Vec3[], kind = WALKED): void => {
+    for (let i = 0; i + 1 < points.length; i++) {
+      edges.push([node(points[i] as Vec3), node(points[i + 1] as Vec3), kind]);
+    }
+  };
+  const Q = QUARTERDECK;
+  const W = WAIST;
+  const F = FORECASTLE;
+  for (const s of [1, -1]) {
+    const qd = ladderAt(U_QD, QUARTERDECK, -1, s);
+    const fc = ladderAt(U_FC, FORECASTLE, 1, s);
+    // The quarterdeck: from its ladder's head aft along her side; across her before and abaft the wheel.
+    line([
+      qd.head,
+      on(s * LADDER_X, QD_FORE_Z + 0.45, Q),
+      on(s * WAY_QD, QD_FORE_Z + 1.0, Q),
+      on(s * WAY_QD, 7.6, Q),
+      on(s * WAY_QD, 9.0, Q),
+      on(s * WAY_QD, WAY_BEFORE_WHEEL, Q),
+      on(s * WAY_QD_AFT, 12.4, Q),
+      on(s * WAY_QD_AFT, WAY_ABAFT_WHEEL, Q),
+    ]);
+    line([on(s * LADDER_X, QD_FORE_Z + 0.45, Q), on(0, QD_FORE_Z + 0.45, Q)]);
+    line([on(s * WAY_QD, WAY_BEFORE_WHEEL, Q), on(0, WAY_BEFORE_WHEEL, Q)]);
+    line([on(s * WAY_QD_AFT, WAY_ABAFT_WHEEL, Q), on(0, WAY_ABAFT_WHEEL, Q)]);
+    // The ladders.
+    line([qd.foot, qd.head], LADDER);
+    line([fc.foot, fc.head], LADDER);
+    // The waist: from the foot of the quarterdeck's ladder forward along her
+    // side, in from the bulwarks as she narrows, to the forecastle's.
+    const side = (z: number): number => Math.min(WAY_WAIST, deckHalf(uAt(z), W) - 1.35);
+    const waist: Vec3[] = [qd.foot, on(s * LADDER_X, qd.foot[2] - 0.45, W)];
+    for (const z of [3.0, WAY_WAIST_CROSS, 0.7, -1.0, -3.0, -5.2, -7.4, -8.6, -9.75, -10.6]) {
+      waist.push(on(s * side(z), z, W));
+    }
+    waist.push(on(s * 1.9, -11.9, W), fc.foot);
+    line(waist);
+    line([on(s * side(WAY_WAIST_CROSS), WAY_WAIST_CROSS, W), on(0, WAY_WAIST_CROSS, W)]);
+    // The forecastle, each side of the bowsprit.
+    line([fc.head, on(s * LADDER_X, FC_AFT_Z - 0.45, F), on(s * 1.2, -14.2, F)]);
+    // Aloft: from the waist abreast of the main shrouds to the main top, where its lookout stands.
+    line([on(s * side(0.7), 0.7, W), [s * 1.4, MAIN.top, MAIN.z]], ALOFT);
+  }
+  return { nodes, edges };
+}
+
+// --- Her braces and her yards, for her company's work -------------------------------
+
+/** A yard her company braces or lies out on: which mast's, its node and its own node (a topsail's), and where it is. */
+interface YardPlace {
+  name: string;
+  mast: 'fore' | 'main' | 'mizzen';
+  group: 'fore' | 'after';
+  /** The node of its mast's yards, and that node's place in the ship. */
+  node: string;
+  origin: Vec3;
+  /** Its own node, a topsail's, which the game lowers as the sail is reefed; null for one fixed in its mast's yards. */
+  own: string | null;
+  /** Its middle in its mast's yards' node's frame, at rest; half its length and its radius. */
+  at: Vec3;
+  half: number;
+  radius: number;
+  /** How far it comes down with its sail reefed, and at which reef its sail is taken in (1 the topgallants, 2 the topsails; 0 never). */
+  drop: number;
+  reef: number;
+}
+
+/**
+ * Her yards that are braced and reefed: the courses, topsails and
+ * topgallants of the fore and main, the crossjack and the mizzen topsail.
+ * Each with where its middle is in its mast's yards' node's frame (the
+ * node at the mast's axis at the courses' foot, turned by the braces), and
+ * how far it comes down reefed: a topsail's yard to its lower reef band.
+ */
+function yardPlaces(): YardPlace[] {
+  const out: YardPlace[] = [];
+  const names = ['course', 'topsail', 'topgallant'];
+  for (const [m, mast, area] of [
+    [FORE, 'fore', square.squareForeArea],
+    [MAIN, 'main', MAIN_AREA],
+  ] as [Mast, 'fore' | 'main', number][]) {
+    const w = sailWidth(area);
+    const reefs = reefBands(TOPSAIL_HEAD_W * w, w, TOPSAIL_DEPTH);
+    squareYardsOf(m, area).forEach((y, i) => {
+      out.push({
+        name: `${mast}-${names[i]}`,
+        mast,
+        group: mast === 'fore' ? 'fore' : 'after',
+        node: `${mast}-yards`,
+        origin: round3v([0, FOOT_Y, m.z]),
+        own: i === 1 ? `${mast}-topsail-yard` : null,
+        at: round3v([0, y.y - FOOT_Y, yardZ(m, y.y, y.r)]),
+        half: round5(y.half),
+        radius: y.r,
+        drop: i === 1 ? round5((reefs.at(-1) ?? 0) * TOPSAIL_DEPTH) : 0,
+        reef: i === 1 ? 2 : i === 2 ? 1 : 0,
+      });
+    });
+  }
+  const footW = MIZZEN_TOPSAIL_FOOT;
+  const reefs = reefBands(MIZZEN_TOPSAIL_HEAD_W * footW, footW, MIZZEN_TOPSAIL_DEPTH);
+  mizzenYardsOf().forEach((y, i) => {
+    out.push({
+      name: i === 0 ? 'crossjack' : 'mizzen-topsail',
+      mast: 'mizzen',
+      group: 'after',
+      node: 'mizzen-yards',
+      origin: round3v([0, FOOT_Y, MIZZEN.z]),
+      own: i === 1 ? 'mizzen-topsail-yard' : null,
+      at: round3v([0, y.y - FOOT_Y, yardZ(MIZZEN, y.y, y.r)]),
+      half: round5(y.half),
+      radius: y.r,
+      drop: i === 1 ? round5((reefs.at(-1) ?? 0) * MIZZEN_TOPSAIL_DEPTH) : 0,
+      reef: i === 1 ? 2 : 0,
+    });
+  });
+  return out;
+}
+
+/** How far inboard of the cap rail's inner edge a fall along her side is hauled, m; how far apart its haulers stand. */
+const FALL_IN = 0.45;
+const TALLY = 0.7;
+/** The first hauler's hands along a fall from its pin, m, as the hauling clip was staged (the main brace's, 1.6 m from its lead). */
+const FIRST_HAND = 1.6;
+
+/** The deck a point is over. */
+const levelOf = (z: number): Level =>
+  z > QD_FORE_Z ? QUARTERDECK : z < FC_AFT_Z ? FORECASTLE : WAIST;
+/** A deck's surface under (x, z). */
+const deckUnder = (x: number, z: number): number => {
+  const u = uAt(z);
+  const level = levelOf(z);
+  return deckSurface(x, u, level, deckHalf(u, level));
+};
+
+/**
+ * How high over her deck a hauler's hands hold a fall: as the hauling clip
+ * was staged, over the main brace's fall 1.6 m from its lead on the
+ * quarterdeck's rail, and 0.1 m over it.
+ */
+const HANDS_OVER = (() => {
+  const lead = railTop(BRACE_Z);
+  const along = normalize([-BRACE_FALL[1], 0, -BRACE_FALL[0]]);
+  const p = add(add(lead, scale(along, FIRST_HAND)), [0, 0.1, 0]);
+  return round5(p[1] - deckUnder(p[0], p[2]));
+})();
+
+/** A brace: its yard, its block, its lead (its pin on her rail), and where its haulers' hands are along its fall. */
+interface Brace {
+  yard: string;
+  group: 'fore' | 'after';
+  block: Vec3;
+  lead: Vec3;
+  hands: Vec3[];
+  /** How high over her deck the hands are. */
+  over: number;
+}
+
+/**
+ * The hands along a fall on the starboard side: from z0, every TALLY m
+ * forward (way −1) or aft (+1) while short of z1, FALL_IN inboard of her
+ * cap rail.
+ */
+function fallHands(z0: number, way: number, z1: number): Vec3[] {
+  const out: Vec3[] = [];
+  for (let z = z0; way < 0 ? z >= z1 : z <= z1; z += way * TALLY) {
+    const across = (railTop(z)[0] as number) - FALL_IN;
+    out.push(round3v([across, deckUnder(across, z) + HANDS_OVER, z]));
+  }
+  return out;
+}
+
+/**
+ * Her braces, the starboard side's (the port's the mirror): from each
+ * yardarm of the courses, topsails, topgallants and the crossjack (and the
+ * mizzen topsail), through a block on a stay, a mast or her quarter, to a
+ * pin on her rail, with where those hauling on its
+ * fall stand, their hands on it, facing its lead. The after braces lead
+ * aft: the main brace to a block on her quarter and a pin on the
+ * quarterdeck's rail, its fall forward along her rail; the main topsail's
+ * and topgallant's to the mizzen's top and topmast head and down to the
+ * quarterdeck's rail, belayed (all the rest tally on to the main brace);
+ * the crossjack's forward to the
+ * main's aftmost shroud and down to the waist's rail abaft the main
+ * shrouds, its fall forward along it; the mizzen topsail's to the main
+ * topmast's head and down to the quarterdeck's rail, belayed. The head
+ * braces lead aft to the main stay and the main top and down to the waist's
+ * rail by the main mast: the fore brace's fall forward along her rail, the
+ * fore topsail's aft; the fore topgallant's belayed. The falls keep clear
+ * of her ways along her sides by a body's breadth.
+ */
+function braces(): Brace[] {
+  const shroud = (lowerShrouds(MAIN, 5, channelOf(MAIN, -1.0, 3.6), 1).at(-1) ?? [
+    [0, 0, 0],
+    [0, 0, 0],
+  ]) as [Vec3, Vec3];
+  const stayTop: Vec3 = [0, MAIN.top - 0.4, MAIN.z - mastR(MAIN, MAIN.top - 0.4)];
+  const stayFoot: Vec3 = [0, mastFoot(FORE) + 0.6, FORE.z + mastR(FORE, mastFoot(FORE) + 0.6)];
+  const onStay = add(lerp3(stayTop, stayFoot, 0.3), [0.3, 0, 0]);
+  const quarter = railTop(14.6);
+  return [
+    {
+      yard: 'main-course',
+      group: 'after',
+      block: round3v([quarter[0] + 0.5, quarter[1] + 0.35, 14.6]),
+      lead: railTop(14.0),
+      hands: fallHands(14.0 - FIRST_HAND, -1, QD_FORE_Z + 1.0),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'main-topsail',
+      group: 'after',
+      block: round3v([MIZZEN.topHalf * 0.6, MIZZEN.top + 0.2, MIZZEN.z - MIZZEN.topFore + 0.15]),
+      lead: railTop(9.3),
+      hands: [],
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'main-topgallant',
+      group: 'after',
+      block: round3v([0.25, MIZZEN.topmastHead - 0.3, MIZZEN.z]),
+      lead: railTop(8.4),
+      hands: [],
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'crossjack',
+      group: 'after',
+      block: round3v(lerp3(shroud[1], shroud[0], 0.4)),
+      lead: railTop(4.4),
+      hands: fallHands(4.4 - FIRST_HAND, -1, -1.5),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'mizzen-topsail',
+      group: 'after',
+      block: round3v([0.3, MAIN.topmastHead - 0.5, MAIN.z + 0.3]),
+      lead: railTop(6.4),
+      hands: [],
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'fore-course',
+      group: 'fore',
+      block: round3v(onStay),
+      lead: railTop(-1.9),
+      hands: fallHands(-1.9 - FIRST_HAND, -1, -8.7),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'fore-topsail',
+      group: 'fore',
+      block: round3v([MAIN.topHalf - 0.3, MAIN.top + 0.1, MAIN.z - MAIN.topFore + 0.1]),
+      lead: railTop(-1.2),
+      hands: fallHands(-1.2 + FIRST_HAND, 1, 3.3),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'fore-topgallant',
+      group: 'fore',
+      block: round3v([0.3, MAIN.topmastHead - 0.3, MAIN.z - 0.3]),
+      lead: railTop(-0.5),
+      hands: [],
+      over: HANDS_OVER,
+    },
+  ];
+}
+
+/**
+ * Where her topmen go aloft by each mast, the starboard side's: the foot of
+ * its shrouds on the deck (on her way along her side, abreast the shrouds'
+ * middle), and from there the climb. The yards' footropes are at the same
+ * heights under every yard, from FOOTROPE.
+ */
+function aloftPlaces(): { mast: string; foot: Vec3 }[] {
+  const side = (z: number): number => Math.min(WAY_WAIST, deckHalf(uAt(z), WAIST) - 1.35);
+  const at = (x: number, z: number): Vec3 => round3v([x, deckUnder(x, z), z]);
+  return [
+    { mast: 'fore', foot: at(side(-9.75), -9.75) },
+    { mast: 'main', foot: at(side(0.7), 0.7) },
+    { mast: 'mizzen', foot: at(WAY_QD, 10.4) },
+  ];
 }
 
 for (const name of boat.lights) {

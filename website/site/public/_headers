@@ -1,0 +1,10 @@
+# The static files' security headers. The Worker's own answers carry the
+# same from worker/src/headers.ts: keep the two the same.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# The page's files named by their content's hash never change.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

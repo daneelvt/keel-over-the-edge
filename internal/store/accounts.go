@@ -114,6 +114,10 @@ type NewAccount struct {
 	// Born is the month of birth its player gave, year × 100 + month; 0
 	// for none.
 	Born int32
+	// From, if not nil, is the keyed hash of the address the account is
+	// made from, kept for a day toward that address's new sailors, with
+	// nothing to tie it to the account.
+	From []byte
 }
 
 var (
@@ -171,6 +175,11 @@ func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, err
 		}
 		for _, kind := range a.Shared {
 			if err := fillFleet(ctx, q, id, kind, 1); err != nil {
+				return err
+			}
+		}
+		if a.From != nil {
+			if err := q.AddNewSailorFrom(ctx, a.From); err != nil {
 				return err
 			}
 		}

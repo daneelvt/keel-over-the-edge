@@ -12,7 +12,7 @@
 
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { answerBorn, GAME, holdPasskeys, sail, sailor, stamp } from './helpers';
+import { answerBorn, everyBoat, GAME, holdPasskeys, sail, sailor, stamp } from './helpers';
 
 /** keel's internal listener, as tools/e2e serves it (or KEEL_INTERNAL): its developer commands. */
 const internal = process.env.KEEL_INTERNAL ?? 'http://127.0.0.1:19090';
@@ -57,8 +57,15 @@ test('shipmates: made after sailing together, messages between two boats, appear
   // The skipper at sea in a keelboat, a link made.
   const ann = await sailor(context, 'Skipper');
   await holdPasskeys(context, ann.passkey);
+  // A new sailor holds no certificate: the keelboat opened by the owner's box.
+  await everyBoat(context.request, ann.name);
   expect((await context.request.post('/api/me/rules', { data: {} })).status()).toBe(204);
-  const keelboat = data.boats.find((b) => b.capacity === 5)?.id;
+  // The keelboat: her crew on her rail, her trimmer sat to windward in her cockpit.
+  const keelboat = data.boats.find(
+    (b) =>
+      b.stations.some((s) => s.pose === 'rail') &&
+      b.stations.some((s) => s.pose === 'seated' && 'windward' in s && s.windward),
+  )?.id;
   const fleet = (await (await context.request.get('/api/fleet')).json()) as {
     boats: { id: string; kind: string }[];
   };

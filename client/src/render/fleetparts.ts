@@ -182,6 +182,8 @@ export interface BoatParts {
   /** The gooseneck, the rudder's stock and the sail's node, in the model's frame. */
   gooseneck: Vector3;
   stock: Vector3;
+  /** A boat of two hulls' rudders' stocks, out from the centreline either side; 0 for one rudder. */
+  rudderSpread: number;
   sailAt: Vector3;
   /** The seat's station along the boat, metres aft. */
   seatZ: number;
@@ -208,6 +210,8 @@ export interface BoatParts {
   /** How far each yards' node's lowered yard comes down at its reef (fore, main, mizzen), and at which level, metres. */
   yardDrops: { drop: number; level: number }[];
   wheelAt: Vector3 | null;
+  /** Two wheels': how far out each is; 0 for one on the centreline. */
+  wheelSpread: number;
   gallery: boolean;
 }
 
@@ -299,6 +303,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     objects: new Map(),
     gooseneck: new Vector3(),
     stock: new Vector3(),
+    rudderSpread: 0,
     sailAt: new Vector3(),
     seatZ: 0,
     gunwale: new Vector3(0.7, 0.3, 0),
@@ -311,6 +316,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     yardsAt: [...YARDS_ORDER, SPRITSAIL].map(() => new Vector3()),
     yardDrops: YARDS_ORDER.map(() => ({ drop: 0, level: 0 })),
     wheelAt: null,
+    wheelSpread: 0,
     gallery: false,
   };
   scene.traverse((o) => {
@@ -320,6 +326,9 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     }
     if (o.name === 'wheel') {
       parts.wheelAt = o.getWorldPosition(new Vector3());
+    }
+    if (o.name === 'wheel-starboard') {
+      parts.wheelSpread = o.getWorldPosition(new Vector3()).x - (parts.wheelAt?.x ?? 0);
     }
     if (o.name !== '' && !parts.nodes.has(o.name)) {
       parts.nodes.set(o.name, o.getWorldPosition(new Vector3()));
@@ -331,6 +340,9 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
         break;
       case 'rudder':
         o.getWorldPosition(parts.stock);
+        break;
+      case 'rudder-starboard':
+        parts.rudderSpread = o.getWorldPosition(new Vector3()).x;
         break;
       case 'sailor':
         parts.seatZ = o.position.z;
@@ -405,7 +417,12 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
       sail = { geometry: keep(o.geometry.clone(), ['position', 'normal', 'uv', 'uv1']), material };
       return;
     }
-    const joint = within(o, JOINTS);
+    let joint = within(o, JOINTS);
+    if (joint === 'tiller' && scene.getObjectByName('rudder-starboard') !== undefined) {
+      // A boat of two hulls' crossbar and extension: carried across by the
+      // rudders' arms, drawn still far off.
+      joint = 'hull';
+    }
     if ((joint === null && !everything) || within(o, UNDRAWN_NODES) !== null) {
       return;
     }
@@ -626,11 +643,17 @@ export function placeNormal(n: Node<'vec3'>, i: Instances): Node<'vec3'> {
   return rotY(rotX(rotZ(n, i.pose.w.negate()), i.lean.z), i.pose.z.negate());
 }
 
-/** A square rig's joints, for a kind's solids: its yards' and wheel's places, and its rudder's stop, degrees. */
+/**
+ * A kind's joints beyond its boom and rudder, for its solids: a square
+ * rig's yards' places, its wheel's or wheels' (each turning on its own
+ * hub, the spread out either side of the node's), and its rudder's stop,
+ * degrees.
+ */
 export interface RigJoints {
   yardsAt: readonly Vector3[];
   yardDrops: readonly { drop: number; level: number }[];
   wheelAt: Vector3 | null;
+  wheelSpread?: number;
   rudderAngle: number;
 }
 
@@ -658,7 +681,9 @@ export function solidNode(
     const p = positionGeometry;
     const n = normalGeometry;
     const pivotBoom = vec3(g.x, g.y, g.z);
-    const pivotRudder = vec3(k.x, k.y, k.z);
+    // A boat of two hulls' rudders each turn on their own hull's stock.
+    const spread = parts.rudderSpread;
+    const pivotRudder = spread > 0 ? vec3(p.x.sign().mul(spread), k.y, k.z) : vec3(k.x, k.y, k.z);
     const boomed = rotY(p.sub(pivotBoom), i.rig.x).add(pivotBoom);
     const ruddered = rotY(p.sub(pivotRudder), i.rig.y).add(pivotRudder);
     const isBoom = joint.greaterThan(JOINT.boom - 0.5).and(joint.lessThan(JOINT.boom + 0.5));
@@ -674,7 +699,8 @@ export function solidNode(
         .clamp(-1, 1)
         .mul(-WHEEL_TURNS * 2 * Math.PI);
       const w = rig.wheelAt ?? new Vector3();
-      const pivotWheel = vec3(w.x, w.y, w.z);
+      const ws = rig.wheelSpread ?? 0;
+      const pivotWheel = ws > 0 ? vec3(p.x.sign().mul(ws), w.y, w.z) : vec3(w.x, w.y, w.z);
       const is = (j: number) => joint.greaterThan(j - 0.5).and(joint.lessThan(j + 0.5));
       local = select(is(JOINT.wheel), rotZ(p.sub(pivotWheel), wheel).add(pivotWheel), local);
       turned = select(is(JOINT.wheel), rotZ(n, wheel), turned);

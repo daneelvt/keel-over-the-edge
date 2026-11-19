@@ -26,6 +26,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -38,6 +39,7 @@ type Store interface {
 	GiveBoat(ctx context.Context, owner, sailor store.AccountID, boat store.BoatID) error
 	SetBoatLook(ctx context.Context, owner store.AccountID, boat store.BoatID, l store.BoatLook) error
 	BoatNumberFree(ctx context.Context, kind string, number int, except store.BoatID) (bool, error)
+	SailRights(ctx context.Context, id store.AccountID) (store.SailRights, error)
 }
 
 var _ Store = (*store.Store)(nil)
@@ -49,7 +51,10 @@ type Config struct {
 	// World is the world sailed's bus; nil between worlds, when every
 	// sailor is ashore.
 	World func() *bus.Bus
-	Log   *slog.Logger
+	// Ladder is the certificates, which open the kinds of boat a sailor
+	// may take; nil opens every kind to everyone.
+	Ladder *certs.Ladder
+	Log    *slog.Logger
 }
 
 // Fleet answers for every account's fleet.
@@ -97,6 +102,9 @@ var (
 	ErrLook = errors.New("fleet: not a look of the catalog's")
 	// ErrBusy is the world not answering in time.
 	ErrBusy = errors.New("fleet: the world did not answer")
+	// ErrCertificate is a boat of a kind the sailor may not sail: the
+	// boat's Needs says which certificate opens it.
+	ErrCertificate = errors.New("fleet: the boat needs a certificate the sailor does not hold")
 )
 
 // Boat is a fleet's boat as a sailor is told it.
@@ -108,6 +116,9 @@ type Boat struct {
 	AtSea bool
 	// Yours is whether it is the asking sailor's.
 	Yours bool
+	// Needs is the certificate the asking sailor needs to take it, by
+	// name, "" for none: it may not take it, nor sail it to sea again.
+	Needs string
 }
 
 // Taken is whether another sailor has it in the water.
@@ -151,15 +162,18 @@ func (f *Fleet) afloat() map[store.AccountID]bool {
 	return out
 }
 
-// view is a fleet's boats as sailor sees them, at sea or not by afloat.
-func (f *Fleet) view(boats []store.Boat, sailor store.AccountID, afloat map[store.AccountID]bool) View {
+// view is a fleet's boats as sailor sees them, at sea or not by afloat,
+// each kind open to them or not by their rights.
+func (f *Fleet) view(boats []store.Boat, sailor store.AccountID, afloat map[store.AccountID]bool, rights *store.SailRights) View {
 	v := View{Yours: -1, AtSea: afloat[sailor]}
 	for kind := range f.cfg.Catalog.Boats {
+		needs := f.cfg.Ladder.Needs(rights, string(f.cfg.Catalog.Boats[kind].ID))
 		for _, b := range boats {
 			if k, ok := f.kinds[b.Kind]; !ok || k != kind {
 				continue
 			}
-			v.Boats = append(v.Boats, Boat{Boat: b, Kind: kind, AtSea: b.Held && afloat[b.Sailor], Yours: b.Held && b.Sailor == sailor})
+			v.Boats = append(v.Boats, Boat{Boat: b, Kind: kind, AtSea: b.Held && afloat[b.Sailor], Yours: b.Held && b.Sailor == sailor,
+				Needs: needs})
 		}
 	}
 	for i := range v.Boats {
@@ -180,7 +194,7 @@ func (f *Fleet) firstAvailable(v *View) int {
 	found := -1
 	for i := range v.Boats {
 		b := &v.Boats[i]
-		if b.Kind != f.sailors || b.Taken() {
+		if b.Kind != f.sailors || b.Taken() || b.Needs != "" {
 			continue
 		}
 		if !b.Held {
@@ -203,7 +217,35 @@ func (f *Fleet) read(ctx context.Context, sailor store.AccountID) (View, store.A
 	if err != nil {
 		return View{}, owner, err
 	}
-	return f.view(boats, sailor, f.afloat()), owner, nil
+	rights, err := f.rights(ctx, sailor)
+	if err != nil {
+		return View{}, owner, err
+	}
+	return f.view(boats, sailor, f.afloat(), &rights), owner, nil
+}
+
+// rights are what opens kinds of boat to a sailor, read now; none needed
+// without a ladder.
+func (f *Fleet) rights(ctx context.Context, sailor store.AccountID) (store.SailRights, error) {
+	if f.cfg.Ladder == nil || f.cfg.Ladder.Len() == 0 {
+		return store.SailRights{}, nil
+	}
+	return f.cfg.Store.SailRights(ctx, sailor)
+}
+
+// MaySail is the certificate a sailor needs to sail a kind of boat (its
+// place in the catalog), by name: "" if it may, a kind no certificate
+// opens, one its certificates open, one it keeps, or any if the owner
+// opened every boat to it. Read from the store each time.
+func (f *Fleet) MaySail(ctx context.Context, sailor store.AccountID, kind int) (string, error) {
+	if kind < 0 || kind >= len(f.cfg.Catalog.Boats) {
+		return "", nil
+	}
+	r, err := f.rights(ctx, sailor)
+	if err != nil {
+		return "", err
+	}
+	return f.cfg.Ladder.Needs(&r, string(f.cfg.Catalog.Boats[kind].ID)), nil
 }
 
 // Of is the fleet a sailor sails from, as they see it.
@@ -221,7 +263,9 @@ type Join struct {
 }
 
 // ForJoin is the boat a sailor takes to sea as they join: their own, or
-// the first available boat of the kind each sailor brings, which becomes theirs.
+// the first available boat of the kind each sailor brings, which becomes
+// theirs; their own is passed over if it is of a kind they may no longer
+// sail.
 // With no fleet to read, or no available boat, the kind each sailor brings, of
 // the first look, unnumbered: a sailor never stays ashore for want of one.
 func (f *Fleet) ForJoin(ctx context.Context, sailor store.AccountID) Join {
@@ -233,6 +277,9 @@ func (f *Fleet) ForJoin(ctx context.Context, sailor store.AccountID) Join {
 		}
 		return fallback
 	}
+	if v.Yours >= 0 && v.Boats[v.Yours].Needs != "" {
+		v.Yours = f.firstAvailable(&v)
+	}
 	if v.Yours < 0 {
 		return fallback
 	}
@@ -243,6 +290,35 @@ func (f *Fleet) ForJoin(ctx context.Context, sailor store.AccountID) Join {
 		}
 	}
 	return Join{Kind: uint16(b.Kind), Look: b.Code(), Name: b.Name}
+}
+
+// Racing is the sailor's boat of a kind (its place in the catalog) as
+// they race it, its boat look code and name: the one of that kind they
+// have, or else the first of their fleet's of that kind; the first look,
+// unnamed, with none. Nothing is written: a race lends the boat.
+func (f *Fleet) Racing(ctx context.Context, sailor store.AccountID, kind int) (uint32, string) {
+	v, _, err := f.read(ctx, sailor)
+	if err != nil {
+		return 0, ""
+	}
+	found := -1
+	for i := range v.Boats {
+		b := &v.Boats[i]
+		if b.Kind != kind || b.Taken() {
+			continue
+		}
+		if b.Yours || b.Held && b.Sailor == sailor {
+			found = i
+			break
+		}
+		if found < 0 {
+			found = i
+		}
+	}
+	if found < 0 {
+		return 0, ""
+	}
+	return v.Boats[found].Code(), v.Boats[found].Name
 }
 
 // find is the boat of v with an id, or nil.
@@ -257,7 +333,7 @@ func find(v *View, id store.BoatID) *Boat {
 
 // Take makes a boat the sailor's: ashore, the boat they take to sea next;
 // at sea in port, swapped for theirs where it lies. ErrNoBoat, ErrTaken,
-// ErrPort, ErrRoom or ErrBusy if not.
+// ErrCertificate, ErrPort, ErrRoom or ErrBusy if not.
 func (f *Fleet) Take(ctx context.Context, sailor store.AccountID, id store.BoatID) (View, error) {
 	v, owner, err := f.read(ctx, sailor)
 	if err != nil {
@@ -269,6 +345,8 @@ func (f *Fleet) Take(ctx context.Context, sailor store.AccountID, id store.BoatI
 		return v, ErrNoBoat
 	case b.Taken():
 		return v, ErrTaken
+	case b.Needs != "":
+		return v, ErrCertificate
 	case b.Yours:
 		return v, nil
 	}

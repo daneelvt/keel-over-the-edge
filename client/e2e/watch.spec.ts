@@ -3,7 +3,8 @@
 // Watching a boat, against keel and its database: a machine sailor made
 // and sailed through the MCP address with a connection token, watched from
 // its owner's start screen; the plate at the foot of the screen says whose
-// boat it is, with the cog, and nothing on the screen steers it; Back to
+// boat it is, with the cog, the running light is a jewel in the case's
+// edge, and nothing on the screen steers it; Back to
 // the boat brings the camera behind it at its resting distance; the Inputs
 // the page sends while it watches carry no controls (the worker's count);
 // and Sail gives the player a boat of their own at the start, through the
@@ -22,7 +23,13 @@
 // Set sail with why and ☆ Follow, they follow, and are told there once the
 // sailor lets others watch, and a reload watches. A fleet's link watches
 // its machine sailor without saying whose, This fleet in the list; Make a
-// new link stops the old one.
+// new link stops the old one. The website's links into the list: ?watch
+// opens it once the visitor has made a sailor, and ?watch=pick watches
+// one of those at sea at once.
+//
+// Then a hidden tab: the page put behind another for a while and brought
+// back, watching and then sailing, snaps to where the boat is now under
+// the cover, at its true pace, having held one snapshot while it was away.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -131,6 +138,11 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   await expect(bar.getByRole('img', { name: 'machine sailor' })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'Watch another' })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'Sail' })).toBeVisible();
+  // The own machine sailor's running light, set in the case's top edge:
+  // a jewel of 9 pixels, lit or hollow.
+  const lamp = await page.locator('.case .lamp').boundingBox();
+  expect(lamp?.width).toBe(9);
+  expect(lamp?.height).toBe(9);
   // The plate at the foot of the screen, where the controls are while sailing.
   const plate = await bar.boundingBox();
   const size = page.viewportSize();
@@ -481,6 +493,57 @@ test('a stranger opens a sailor’s link: refused while unticked, follows, is to
   }
 });
 
+test('the website’s links into the list: ?watch opens it once a sailor is made, ?watch=pick watches one at once', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  // Two machine sailors at sea, so that one can be picked.
+  const digits = stamp();
+  for (const n of [`Picked ${digits}`, `Passed ${digits}`]) {
+    const owner = await browser.newContext();
+    try {
+      await toSea(owner, await sailor(owner, 'Owner'), n);
+    } finally {
+      await owner.close();
+    }
+  }
+  // A visitor from the website, no account: told they will be watching,
+  // makes a sailor, and the list is open in place of their own panel.
+  const visitors = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  try {
+    await visitors.credentials.install();
+    const v = await visitors.newPage();
+    const errors: string[] = [];
+    v.on('pageerror', (e) => errors.push(e.message));
+    await v.goto(`${GAME}&watch`);
+    await expect(v.locator('[data-readout="make-to-watch"]')).toHaveText(
+      'Make a sailor, and you will be watching.',
+      { timeout: 90_000 },
+    );
+    await v.getByLabel('Your sailor’s name').fill(`Visitor ${stamp()}`);
+    await answerBorn(v);
+    await v.getByRole('button', { name: 'Set sail' }).click();
+    await v.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 60_000 });
+    await expect(v.getByRole('heading', { name: 'Watch a sailor' })).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(v.locator('.watch-row').first()).toBeVisible({ timeout: 30_000 });
+    // Seen: the link is gone from the address, so a reload just sails.
+    expect(new URL(v.url()).searchParams.has('watch')).toBe(false);
+
+    // Signed in, Pick one for me's link: straight to a watch.
+    await v.goto(`${GAME}&watch=pick`);
+    await v.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
+    await v.waitForFunction(() => (globalThis.keel.watch().watching?.sailor ?? '') !== '', null, {
+      timeout: 60_000,
+    });
+    expect(new URL(v.url()).searchParams.has('watch')).toBe(false);
+    expect(errors).toEqual([]);
+  } finally {
+    await visitors.close();
+  }
+});
+
 test('a fleet’s link watches its machine sailor, nothing saying whose, This fleet in the list; a new link stops the old', async ({
   browser,
   context,
@@ -535,4 +598,121 @@ test('a fleet’s link watches its machine sailor, nothing saying whose, This fl
   } finally {
     await viewers.close();
   }
+});
+
+/** A boat's length overall, m: the shortest boat's, the strictest. */
+const BOAT_LENGTH = Math.min(...data.boats.map((b) => b.lengthOverall));
+
+/**
+ * Hides the page for ms as a tab put behind another is hidden, shows it
+ * again, and follows its frames until 5 s after the cover lifts: whether
+ * the cover came down, the most records the page held while hidden, and
+ * for each frame after the lift, its time, the render tick, how far it
+ * lags the world clock, and how far the boat drawn is from the newest
+ * snapshot.
+ */
+async function hiddenFor(page: Page, ms: number) {
+  await page.evaluate(() => globalThis.keel.hide(true));
+  await page.waitForTimeout(ms);
+  const held = await page.evaluate(() => globalThis.keel.net().mostQueued);
+  const seen = await page.evaluate(
+    () =>
+      new Promise<{
+        covered: boolean;
+        frames: { t: number; tick: number; lag: number; off: number }[];
+      }>((resolve) => {
+        const k = globalThis.keel;
+        let covered = false;
+        let lifted = Number.NaN;
+        const frames: { t: number; tick: number; lag: number; off: number }[] = [];
+        const look = (t: number) => {
+          if (k.covered()) {
+            covered = true;
+          } else if (covered) {
+            if (Number.isNaN(lifted)) {
+              lifted = t;
+            }
+            const w = k.watch();
+            const n = k.net().newest;
+            frames.push({
+              t: t - lifted,
+              tick: w.ticks,
+              // World ticks less the render tick: steady at real time.
+              lag: (k.ending().now * 30) / 1000 - w.ticks,
+              off:
+                n === null
+                  ? Number.POSITIVE_INFINITY
+                  : Math.hypot(w.east - n.east, w.north - n.north),
+            });
+            if (t - lifted > 5000) {
+              resolve({ covered, frames });
+              return;
+            }
+          }
+          requestAnimationFrame(look);
+        };
+        requestAnimationFrame(look);
+        k.hide(false);
+      }),
+  );
+  return { held, ...seen };
+}
+
+/** What a page brought back after a while hidden should show: the cover over a snap, and the boat where it is now at its true pace. */
+function snapped(r: Awaited<ReturnType<typeof hiddenFor>>): void {
+  expect(r.held, 'records held while hidden').toBeLessThanOrEqual(1);
+  expect(r.covered, 'the cover came down').toBe(true);
+  const first = r.frames.filter((f) => f.t <= 1000);
+  expect(first.length).toBeGreaterThan(0);
+  expect(Math.max(...first.map((f) => f.off)), 'm off the newest snapshot').toBeLessThan(
+    BOAT_LENGTH,
+  );
+  // The render tick at real time from the lift: it keeps its lag behind
+  // the world clock, with no fast or slow run.
+  const a = r.frames[0];
+  const b = r.frames.at(-1);
+  if (a === undefined || b === undefined) {
+    throw new Error('no frames after the lift');
+  }
+  const rate = (b.tick - a.tick) / (((b.t - a.t) * 30) / 1000);
+  expect(rate, 'render ticks a real tick').toBeGreaterThan(0.97);
+  expect(rate, 'render ticks a real tick').toBeLessThan(1.03);
+  const lags = r.frames.map((f) => f.lag);
+  expect(Math.max(...lags) - Math.min(...lags), 'ticks the lag wanders').toBeLessThan(3);
+}
+
+test('a hidden tab: shown again, the boat where it is now at its true pace, under the cover, one snapshot held; watching, then sailing', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const made = await sailor(context, 'Away');
+  const name = `Away ${stamp()}`;
+  await toSea(context, made, name);
+  await holdPasskeys(context, made.passkey);
+  await page.goto(GAME);
+  const row = page.locator('.machine-list li', { hasText: name });
+  await expect(row).toContainText('at sea', { timeout: 30_000 });
+  await row.getByRole('button', { name: 'Watch', exact: true }).click();
+  await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 60_000 });
+  await page.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, name, {
+    timeout: 30_000,
+  });
+  await page.waitForFunction(() => !globalThis.keel.covered(), null, { timeout: 30_000 });
+  await page.waitForTimeout(2000);
+  const watched = await hiddenFor(page, 20_000);
+  snapped(watched);
+  expect(await page.evaluate(() => globalThis.keel.net().snapped)).toBe(1);
+
+  // Sailing the own boat, the same.
+  await page.locator('[data-readout="watching"]').getByRole('button', { name: 'Sail' }).click();
+  await page.waitForFunction(
+    () => !globalThis.keel.watch().spectating && globalThis.keel.net().status === 'sailing',
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForFunction(() => !globalThis.keel.covered(), null, { timeout: 15_000 });
+  await page.waitForTimeout(2000);
+  snapped(await hiddenFor(page, 10_000));
+  expect(await page.evaluate(() => globalThis.keel.net().snapped)).toBe(2);
 });

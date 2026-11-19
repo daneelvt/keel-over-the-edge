@@ -322,5 +322,13 @@ test.describe('pictures', () => {
       await k.show();
     }, LIP);
     await expect.soft(canvas).toHaveScreenshot('edge-gale.png');
+    // Closer, the water pouring white off the brink below the boat.
+    await page.evaluate(async () => {
+      const k = globalThis.keel;
+      k.camera({ azimuth: 0.6, elevation: 0.25, distance: 22 });
+      k.render();
+      await k.show();
+    });
+    await expect.soft(canvas).toHaveScreenshot('edge-gale-close.png');
   });
 });

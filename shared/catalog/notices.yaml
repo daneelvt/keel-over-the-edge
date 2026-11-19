@@ -14,6 +14,21 @@
 # charted place ("south-west of Gannet Holm"): the Met Office's grammar.
 # A sailor followed setting sail fills in {who}, and is told only once they
 # may be watched: a human who sails without allowing it raises nothing.
+# A harbour race about to start fills in {name}, the race's, and {boat},
+# its boats ("Jolly boats"); a race the player entered, {name}; both
+# {left}, the time to its start, at each time before it given. The
+# harbour board and the race's card say the same, so neither is lost. A
+# task of the player's next certificate done fills in {cert}, the
+# certificate's name, {task}, the task's, and {done} and {of}, the tasks
+# done of those it needs; a certificate earned, {cert} and {boats}, the
+# boats it opens as a sentence opens them ("The beach cat is"). Both are in
+# the log's Ribbons too; a course's task is said on the finish's card.
+# A course reached fills in {name}, what it was set for ("Gull Rock",
+# "your pin"); the compass's mark and window going say it too. A shipmate
+# sailing to the player fills in {who}, and is told once a voyage. A boat
+# sailed to, a shipmate's or the player's own machine sailor's, fills in
+# {who} once alongside; a course to one that ends fills in {why}, the
+# whole of what is said ("Ann has come ashore"), from the phone's words.
 # Whatever a notice tells is in the news, on the chart, in the countdown or
 # on the list of sailors to watch too, so one missed is never lost (WCAG 2.2, 2.2.1). The world's end is worked out on the phone from the end the
 # Welcome gives and the world clock: each of its notices is shown once a
@@ -78,13 +93,111 @@ notices:
       stays: 8
       text: "{who} has set sail"
       folded: "{count} sailors you follow have set sail"
+    - id: harbour-races
+      name: Harbour races
+      on: harbour-race
+      before: [10]
+      level: passive
+      switchable: true
+      stays: 10
+      text: "{name} off Port Royal in {left} · {boat}"
+      folded: "{name} off Port Royal in {left} · {boat}"
+    - id: races-entered
+      name: Your races
+      on: race-soon
+      before: [5, 1]
+      level: active
+      switchable: false
+      stays: 8
+      text: "{name} starts in {left}"
+      folded: "{name} starts in {left}"
+    - id: tasks-done
+      name: Toward your next certificate
+      on: task-done
+      level: passive
+      switchable: true
+      stays: 6
+      text: "Toward {cert}: {task} ✓ · {done} of {of}"
+      folded: "Toward {cert}: {count} tasks done · {done} of {of}"
+    - id: certificates-earned
+      name: Certificates earned
+      on: certificate-earned
+      level: active
+      switchable: false
+      stays: 30
+      text: "You're a {cert}! {boats} yours to take"
+      folded: "You're a {cert}! {boats} yours to take"
+    - id: courses-reached
+      name: Courses reached
+      on: course-reached
+      level: active
+      switchable: false
+      stays: 6
+      text: "You've reached {name}"
+      folded: "You've reached {name}"
+    - id: shipmates-coming
+      name: Shipmates sailing to you
+      on: shipmate-course
+      level: active
+      switchable: true
+      stays: 8
+      text: "{who} is sailing to you"
+      folded: "{count} shipmates are sailing to you"
+    - id: boats-alongside
+      name: Alongside a boat sailed to
+      on: course-alongside
+      level: active
+      switchable: false
+      stays: 6
+      text: "You're alongside {who}"
+      folded: "You're alongside {who}"
+    - id: boat-courses-ended
+      name: Courses to a boat ended
+      on: course-ended
+      level: active
+      switchable: false
+      stays: 8
+      text: "{why}"
+      folded: "{why}"
 
-# The news, a sheet in the manner of Lloyd's List's: its columns, a page
-# of page items, and a sailor's places charted within fold minutes of an
-# island's item, about that island, folded into it.
+# The news, a daily edition in the manner of the old shipping lists. What
+# could be news is written as a candidate story with its kind's score; each
+# day's edition (the day of the world's schedule) shows the best few, a
+# story's score easing with its age through the day, never two about one
+# sailor nor more than ofKind of one kind, and a sailor named in the recent
+# editions giving way to one who was not, so everyone has a turn. Beneath
+# them, a box of the reader's own: the day's stories about their shipmates,
+# the sailors they follow and themselves that did not make the front page.
+# Falls are counted in the day's figures only, never a story with a name,
+# and the weather is never news. Starting values, tuned in play.
 news:
-  fold: 10
-  page: 40
   columns:
     - { id: discoveries, title: Discoveries, of: charting }
     - { id: mariners, title: Notices to Mariners, of: world }
+  edition:
+    stories: 6
+    shipmates: 3
+    ofKind: 2
+    recent: 3
+    giveWay: 0.5
+    ease: 24
+    falls: 100
+    aboard: 4
+    together: 30
+    run: 1
+    milestones: { distance: 1000, worlds: 10, places: 100 }
+  stories:
+    - { id: great-find, of: great, score: 10 }
+    - { id: falls-record, of: record, score: 8 }
+    - { id: rare-meeting, of: life, score: 6 }
+    - { id: crew-in-company, of: crew, score: 5 }
+    - { id: new-hands-find, of: first, score: 5 }
+    - { id: longest-run, of: run, score: 4 }
+    - { id: milestone, of: milestone, score: 4 }
+    - { id: lesser-find, of: charting, score: 1 }
+    - { id: new-course, of: course, score: 5 }
+    - { id: race-won, of: race, score: 6 }
+    - { id: trial-gold, of: trial, score: 3 }
+    # By the certificate: Deckhand, Helm and Skipper low, Captain
+    # middling, Master high.
+    - { id: earned-certificate, of: certificate, score: 2, scores: [2, 2, 2, 5, 8] }

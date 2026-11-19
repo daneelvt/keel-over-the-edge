@@ -2,8 +2,9 @@
 
 // The chart's screens: the chart itself over the whole screen, where a
 // drag moves it, two fingers pinch and turn it, a double tap fits the whole
-// disk and a tap opens a place's box, or a weather system's with the
-// course to meet it; its list, everything charted nearest first, the
+// disk and a tap opens a place's box, a race course's start's, or a
+// weather system's with the course to meet it, and on open water drops a
+// pin; each box but the weather's can set the course; its list, everything charted nearest first, the
 // chart's readable twin; the news, a period sheet; the pocket chart in the
 // corner at sea, with its weather's pusher, whose decal is the sky at the
 // boat now; and the notice line.
@@ -11,14 +12,29 @@
 import './chart.css';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Raycaster, Vector2 } from 'three';
-import type { Chart, TappedWeather } from '../chart/chart';
+import type { Chart, ChartMode, Marked, TappedWeather } from '../chart/chart';
+import type { Course, CourseAim } from '../chart/course';
+import {
+  BEYOND_THE_EDGE,
+  CLEAR_COURSE,
+  MACHINE_AT_SEA,
+  PIN,
+  PIN_HERE,
+  SET_COURSE,
+  SHIPMATE_AT_SEA,
+  START_KIND,
+} from '../chart/coursewords';
 import type { Forecasting } from '../chart/forecasting';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
+import { type RaceDrawing, trackColour } from '../chart/racelayer';
 import {
+  bearingText,
   type ChartStore,
   chartList,
+  courseLines,
   dayText,
+  distanceText,
   edgeCaption,
   pocketCaption,
   whenText,
@@ -26,16 +42,23 @@ import {
 import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
 import type { BoatAt, ChartView } from '../chart/view';
 import { momentOf } from '../chart/weather';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, CourseOpen } from '../net/messages';
 import { Pusher, useUpright } from './case';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { clockAngles, worldTimeText } from './clock';
 import { ClockFace } from './clockdial';
-import { type Countdown, endText } from './countdown';
+import type { Countdown } from './countdown';
 import { WeatherDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
+import { useLog } from './loglazy';
+import { useModal } from './modal';
+import { OPENING, useNews } from './newslazy';
+import { checkUnread, type NewsSource, unread } from './newsread';
+import type { NewsStory } from './newswords';
 import type { Notices } from './notices';
-import { PlayerText } from './player';
+import { MachineMark, PlayerText } from './player';
+import { type Racing, raceDrawingOf } from './racestate';
+import { type ReplayHost, useReplayParts } from './replayhost';
 
 /** What the chart's screens need of the world beyond the chart. */
 export interface ChartSea {
@@ -51,22 +74,20 @@ export interface ChartSea {
   lip: number;
   /** The lights' characters' notations, by index. */
   characters: readonly string[];
-  /** The news, a page at a time, and its columns. */
+  /** The news, a day's edition. */
   news: NewsSource;
-  columns: readonly NewsColumn[];
   /** The forecast and what has been, or null without. */
   forecasting: Forecasting | null;
   /** The boat's speed over the ground now, m/s. */
   speed: () => number;
   /** Sets the autopilot to hold a heading, rad, as its panel does; null with no boat to steer. */
   steer: ((heading: number) => void) | null;
-}
-
-/** A column of the news: what its items tell of, what is charted or the world itself. */
-export interface NewsColumn {
-  id: string;
-  title: string;
-  of: string;
+  /** The race the boat sails in: the pocket chart frames its course, the chart opens on it. */
+  racing?: Racing | null;
+  /** Watches a race's boat tapped on the charts, by its number: false where none may be (the page races, or watches no race). */
+  watchRacer?: ((n: number) => boolean) | null;
+  /** A race replayed on the chart. */
+  replay?: ReplayHost | null;
 }
 
 /** "Charted by <name>, Tuesday", the name as the player wrote it. */
@@ -81,7 +102,7 @@ function Credit({ e, now }: { e: ChartEntry; now: number }) {
   return (
     <span class="chart-credit">
       Charted by <PlayerText text={e.by} />
-      {e.ai ? ' (AI)' : ''}, {dayText(e.at, now)}
+      {e.ai ? <MachineMark /> : null}, {dayText(e.at, now)}
     </span>
   );
 }
@@ -98,7 +119,7 @@ function classWords(c: string): string {
 }
 
 /** A charted thing's box: what it is, who charted it, and what was found with it. */
-function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () => void }) {
+export function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () => void }) {
   const store = sea.chart.store;
   const now = Date.now();
   const found = store.entries.filter((o) => o.island === e.number && e.subject === 'island');
@@ -133,6 +154,7 @@ function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () =
         <p class="chart-place-position">{formatPosition(e.east, e.north)}</p>
       )}
       <div class="chart-buttons">
+        <CourseKey sea={sea} c={{ kind: 'entry', subject: e.subject, number: e.number }} />
         <button type="button" onClick={() => sea.chart.show('list')}>
           Show in the list
         </button>
@@ -142,6 +164,197 @@ function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () =
       </div>
     </section>
   );
+}
+
+/**
+ * Set course, or for the course set, Clear course: the box's first key,
+ * in brass. Never on a boat watched: the course is the sailor's own.
+ */
+export function CourseKey({ sea, c }: { sea: ChartSea; c: Course }) {
+  const chart = sea.chart;
+  void chart.course.value;
+  if (chart.watching()) {
+    return null;
+  }
+  const set = chart.isCourse(c);
+  return (
+    <button
+      type="button"
+      class="chart-set-course"
+      data-course={set ? 'clear' : 'set'}
+      onClick={() => (set ? chart.clearCourse() : chart.setCourse(c))}
+    >
+      {set ? CLEAR_COURSE : SET_COURSE}
+    </button>
+  );
+}
+
+/**
+ * The box of a point marked on the paper: a race course's start, its name,
+ * kind and where it is from the boat; or a pin dropped on open water, its
+ * latitude and longitude. Each can be the course. A pin past the rim, in
+ * the falls, is no pin: its box says so. Close takes a pin away, unless it
+ * is the course. And the boat the course is set to, opened from its pin: a
+ * shipmate's or the player's own machine sailor's, its name, where it is
+ * from the boat, and Clear course.
+ */
+export function MarkedBox({ sea, m, close }: { sea: ChartSea; m: Marked; close: () => void }) {
+  if (m.kind === 'boat') {
+    const b = sea.boat();
+    const a = sea.chart.aim(b.east, b.north);
+    return (
+      <section
+        class="chart-panel chart-box chart-marked"
+        aria-label={m.name}
+        data-readout="boat-box"
+      >
+        <h2>
+          <PlayerText text={m.name} />
+        </h2>
+        <p class="chart-kind">{m.machine ? MACHINE_AT_SEA : SHIPMATE_AT_SEA}</p>
+        {a !== null ? (
+          <>
+            <p class="chart-place-position">{formatPosition(a.east, a.north)}</p>
+            <p class="chart-list-where">
+              {bearingText(a.bearing)} {distanceText(a.distance)}
+            </p>
+          </>
+        ) : null}
+        <div class="chart-buttons">
+          <CourseKey
+            sea={sea}
+            c={{ kind: 'boat', sailor: m.sailor, name: m.name, machine: m.machine }}
+          />
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </div>
+      </section>
+    );
+  }
+  if (m.kind === 'start') {
+    const k = m.course;
+    const b = sea.boat();
+    const line = courseLines([k], b.east, b.north, sea.chart.store.words.boats)[0];
+    const at = k.way[0] ?? [0, 0];
+    return (
+      <section class="chart-panel chart-box chart-marked" aria-label={k.name}>
+        <h2>{k.name}</h2>
+        <p class="chart-kind">
+          {START_KIND} · {line?.kind ?? ''}
+        </p>
+        <p class="chart-place-position">{formatPosition(at[0], at[1])}</p>
+        {line !== undefined ? <p class="chart-list-where">{line.where}</p> : null}
+        <div class="chart-buttons">
+          <CourseKey sea={sea} c={{ kind: 'start', course: k.number }} />
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </div>
+      </section>
+    );
+  }
+  const beyond = Math.hypot(m.east, m.north) > sea.lip;
+  const b = sea.boat();
+  return (
+    <section class="chart-panel chart-box chart-marked" aria-label={PIN} data-readout="pin-box">
+      {beyond ? (
+        <p>{BEYOND_THE_EDGE}</p>
+      ) : (
+        <>
+          <h2>{PIN}</h2>
+          <p class="chart-place-position">{formatPosition(m.east, m.north)}</p>
+          <p class="chart-list-where">
+            {bearingText(Math.atan2(m.east - b.east, m.north - b.north))}{' '}
+            {distanceText(Math.hypot(m.east - b.east, m.north - b.north))}
+          </p>
+        </>
+      )}
+      <div class="chart-buttons">
+        {beyond ? null : <CourseKey sea={sea} c={{ kind: 'pin', east: m.east, north: m.north }} />}
+        <button type="button" onClick={close}>
+          Close
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** What the course's own pin on the chart opens: the box of what it was set for. */
+export function openCourseBox(chart: Chart): void {
+  const c = chart.course.peek();
+  if (c === null) {
+    return;
+  }
+  chart.tapped.value = null;
+  switch (c.kind) {
+    case 'entry': {
+      const e = chart.store.get(c.subject, c.number) ?? null;
+      chart.marked.value = null;
+      chart.picked.value = e;
+      return;
+    }
+    case 'start': {
+      const k = chart.store.courses.find((o) => o.number === c.course);
+      chart.picked.value = null;
+      chart.marked.value = k === undefined ? null : { kind: 'start', course: k };
+      return;
+    }
+    case 'pin':
+      chart.picked.value = null;
+      chart.marked.value = { kind: 'pin', east: c.east, north: c.north };
+      return;
+    case 'boat':
+      chart.picked.value = null;
+      chart.marked.value = { kind: 'boat', sailor: c.sailor, name: c.name, machine: c.machine };
+      return;
+  }
+}
+
+/**
+ * What a tap on the paper away from any name opens: a race course's start
+ * within a hand's breadth, unless a charted thing is nearer on the screen;
+ * a weather system it falls in, unless a place is under the finger; and on
+ * open water, a pin, but not on a boat watched.
+ */
+export function tapOnPaper(
+  chart: Chart,
+  picked: ChartEntry | null,
+  start: CourseOpen | null,
+  weather: TappedWeather | null,
+  at: { east: number; north: number } | null,
+  near: (east: number, north: number) => number,
+): void {
+  let entry = picked;
+  let course = start;
+  if (entry !== null && course !== null) {
+    const s = course.way[0] ?? [0, 0];
+    if (near(s[0], s[1]) < near(entry.east, entry.north)) {
+      entry = null;
+    } else {
+      course = null;
+    }
+  }
+  // Within a system, a place wins only under the finger.
+  if (weather !== null) {
+    if (entry !== null && near(entry.east, entry.north) > FINGER) {
+      entry = null;
+    }
+    const s = course?.way[0];
+    if (s !== undefined && near(s[0], s[1]) > FINGER) {
+      course = null;
+    }
+  }
+  chart.picked.value = entry;
+  chart.tapped.value = entry === null && course === null ? weather : null;
+  chart.marked.value =
+    entry !== null
+      ? null
+      : course !== null
+        ? { kind: 'start', course }
+        : weather !== null || at === null || chart.watching()
+          ? null
+          : { kind: 'pin', east: at.east, north: at.north };
 }
 
 /** Where the boat is, as its latitude and longitude, and how far the edge. */
@@ -260,17 +473,28 @@ function useGestures(sea: ChartSea) {
           lastTap = e.timeStamp;
           const x = e.clientX - r.left;
           const y = e.clientY - r.top;
-          let picked = view.pick(x, y);
-          const weather = weatherTapped(sea, x, y, r);
-          // Within a system, a place wins only under the finger.
-          if (picked !== null && weather !== null) {
-            const p = view.screenOf(picked.east, picked.north);
-            if (p === null || Math.hypot(p.x - x, p.y - y) > FINGER) {
-              picked = null;
-            }
+          // A race's boat tapped is watched, the chart open on it.
+          const racer = chartRacer(sea, view, x, y);
+          if (
+            racer > 0 &&
+            (sea.replay?.model.peek()?.follow(racer) === true || sea.watchRacer?.(racer) === true)
+          ) {
+            pts.delete(e.pointerId);
+            down = null;
+            before = pair();
+            return;
           }
-          sea.chart.picked.value = picked;
-          sea.chart.tapped.value = picked === null ? weather : null;
+          tapOnPaper(
+            sea.chart,
+            view.pick(x, y),
+            view.pickStart(x, y),
+            weatherTapped(sea, x, y, r),
+            paperAt(view, x, y, r),
+            (east, north) => {
+              const p = view.screenOf(east, north);
+              return p === null ? Number.POSITIVE_INFINITY : Math.hypot(p.x - x, p.y - y);
+            },
+          );
         }
       }
       pts.delete(e.pointerId);
@@ -337,13 +561,16 @@ function weatherTapped(
     return null;
   }
   const at = paperAt(sea.chart.view, x, y, size);
-  const hit = at === null ? null : hitTest(scene, at, sea.lip);
+  if (at === null) {
+    return null;
+  }
+  const hit = hitTest(scene, at, sea.lip);
   if (hit === null) {
     return null;
   }
   return hit.kind === 'system'
-    ? { kind: 'system', slot: hit.system.slot, seed: hit.system.seed }
-    : { kind: 'front', sin: hit.front.sin, cos: hit.front.cos };
+    ? { kind: 'system', slot: hit.system.slot, seed: hit.system.seed, at }
+    : { kind: 'front', sin: hit.front.sin, cos: hit.front.cos, at };
 }
 
 /** The tapped thing as the chart's weather last drew it, or null if it is no longer drawn. */
@@ -444,6 +671,21 @@ function SystemBoxPanel({ sea, t, close }: { sea: ChartSea; t: TappedWeather; cl
             Steer {threeDigits(wholeDegrees(steer))}°
           </button>
         ) : null}
+        {t.at !== undefined && !sea.chart.watching() ? (
+          <button
+            type="button"
+            data-pin="here"
+            onClick={() => {
+              const at = t.at;
+              if (at !== undefined) {
+                sea.chart.tapped.value = null;
+                sea.chart.marked.value = { kind: 'pin', east: at.east, north: at.north };
+              }
+            }}
+          >
+            {PIN_HERE}
+          </button>
+        ) : null}
         <button type="button" onClick={close}>
           Close
         </button>
@@ -452,17 +694,44 @@ function SystemBoxPanel({ sea, t, close }: { sea: ChartSea; t: TappedWeather; cl
   );
 }
 
-/** The tabs between the chart, its list and the news. */
+/** How often the News tab's dot is looked to while the chart screen is open, ms. */
+const DOT_AGAIN = 120_000;
+
+/**
+ * The tabs between the chart, its list, the news and the log; the Log tab
+ * opens the reader's own, the News tab today's edition. The News tab has a
+ * dot while today's edition has a story not yet read: set over its corner,
+ * so the strip keeps its width.
+ */
 function Tabs({ sea }: { sea: ChartSea }) {
   const mode = sea.chart.mode.value;
-  const tab = (m: 'chart' | 'list' | 'news', label: string) => (
+  const dot = unread.value && mode !== 'news';
+  useEffect(() => {
+    const look = () => void checkUnread(() => sea.news(null));
+    look();
+    const t = setInterval(look, DOT_AGAIN);
+    return () => clearInterval(t);
+  }, [sea]);
+  const open = (m: ChartMode) => {
+    if (m === 'log') {
+      sea.chart.showLog({ kind: 'own' });
+    } else if (m === 'news') {
+      sea.chart.showNews(null);
+    } else {
+      sea.chart.show(m);
+    }
+  };
+  const tab = (m: ChartMode, label: string) => (
     <button
       type="button"
       class={mode === m ? 'chart-tab chosen' : 'chart-tab'}
       aria-pressed={mode === m}
-      onClick={() => sea.chart.show(m)}
+      onClick={() => open(m)}
     >
       {label}
+      {m === 'news' && dot ? (
+        <span class="chart-tab-dot" role="img" aria-label="new stories" title="new stories" />
+      ) : null}
     </button>
   );
   return (
@@ -470,19 +739,42 @@ function Tabs({ sea }: { sea: ChartSea }) {
       {tab('chart', 'Chart')}
       {tab('list', 'List')}
       {tab('news', 'News')}
+      {tab('log', 'Log')}
     </nav>
   );
 }
 
-/** Everything charted, by kind, nearest first: a tap opens the chart there. */
+/** The island courses open, then everything charted, by kind, nearest first: a tap opens the chart there. */
 export function ChartList({ sea }: { sea: ChartSea }) {
   const store = sea.chart.store;
   void store.version.value;
   const b = sea.boat();
   const now = Date.now();
+  const courses = courseLines(store.courses, b.east, b.north, store.words.boats);
   return (
     <section class="chart-panel chart-list" aria-label="Everything charted">
       <h2>Charted: {store.size}</h2>
+      {courses.length === 0 ? null : (
+        <div>
+          <h3>Courses</h3>
+          <ul>
+            {courses.map((l) => (
+              <li key={`course:${l.course.number}`}>
+                <button
+                  type="button"
+                  class="chart-list-course"
+                  onClick={() => sea.chart.showCourse(l.course)}
+                >
+                  <span class="chart-list-name">{l.course.name}</span>
+                  <span class="chart-list-kind">{l.kind}</span>
+                  <span class="chart-list-where">{l.where}</span>
+                  <span class="chart-credit">{l.boats}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {chartList(store.entries, b.east, b.north).map(({ title, lines }) =>
         lines.length === 0 ? null : (
           <div key={title}>
@@ -506,175 +798,40 @@ export function ChartList({ sea }: { sea: ChartSea }) {
   );
 }
 
-/** An item of the news: what is charted and by whom, or a notice of the world's own (its end). */
-export interface NewsItem {
-  id: string;
-  column: string;
-  at: number;
-  by: string;
-  ai: boolean;
-  subject: string;
-  number: number;
-  title: string;
-  what: string;
-  worth: number;
-  east: number;
-  north: number;
-  also: { subject: string; number: number; title: string }[];
-  /** An item about the world itself: the end it tells of, ms of UTC. */
-  endsAt?: number;
-}
-
-/** The news, a page at a time, older than before (an item's id), or the newest. */
-export type NewsSource = (
-  before: string | null,
-) => Promise<{ items: NewsItem[]; more: boolean } | null>;
-
-/** The news as the server serves it: GET /api/news. */
-export const serverNews: NewsSource = async (before) => {
-  try {
-    const res = await fetch(`/api/news${before === null ? '' : `?before=${before}`}`, {
-      credentials: 'same-origin',
-    });
-    if (!res.ok) {
-      return null;
-    }
-    return (await res.json()) as { items: NewsItem[]; more: boolean };
-  } catch {
-    return null;
-  }
-};
-
-/** The news made from the chart itself, offline: each island, port, light and wreck charted, newest first. */
+/** The news made from the chart itself, offline: each island, port, light and wreck charted, the newest first, as one day's stories. */
 export function chartNews(store: ChartStore, news: (e: ChartEntry) => boolean): NewsSource {
   return async () => {
-    const items: NewsItem[] = store.entries
+    const stories: NewsStory[] = store.entries
       .filter((e) => e.by !== '' && news(e))
       .map((e) => ({
         id: `${e.subject}:${e.number}`,
-        column: 'discoveries',
+        kind: 'charting',
         at: e.at,
-        by: e.by,
-        ai: e.ai,
+        head: store.title(e).toUpperCase(),
+        text: `${store.kindName(e)}, charted by {0}.`,
+        names: [{ kind: e.ai ? ('machine' as const) : ('human' as const), name: e.by }],
         subject: e.subject,
         number: e.number,
-        title: store.title(e),
-        what: store.kindName(e).toLowerCase(),
-        worth: e.worth,
-        east: e.east,
-        north: e.north,
-        also: [],
+        x: e.east,
+        y: e.north,
       }))
       .reverse();
-    return { items, more: false };
-  };
-}
-
-/** An item of the news about what is charted. */
-function ChartedItem({ sea, it, now }: { sea: ChartSea; it: NewsItem; now: number }) {
-  return (
-    <li>
-      <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
-        <span class="news-title">{it.title.toUpperCase()}</span>
-        {it.what !== '' ? `, ${it.what}` : ''}
-        {it.also.length > 0 ? `, with ${it.also.map((a) => a.title).join(' and ')}` : ''}. Charted
-        by <PlayerText text={it.by} />
-        {it.ai ? ' (AI)' : ''}, {dayText(it.at, now)}.
-      </button>
-    </li>
-  );
-}
-
-/**
- * An item of the Notices to Mariners: a notice of the world's own, its end,
- * in the reader's own time. The weather is never in the news: the chart,
- * the forecast and the gale warning's notice tell of it.
- */
-function WorldItem({ it, zone }: { it: NewsItem; zone: string }) {
-  return (
-    <li class="news-world">
-      <span class="news-title">{it.title.toUpperCase()}.</span> The falls take this world on{' '}
-      {endText(it.endsAt ?? 0, zone)}.
-    </li>
-  );
-}
-
-/** The news: a sheet of the period, its columns of discoveries and of notices to mariners, a tap showing where on the chart. */
-export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
-  const [items, setItems] = useState<NewsItem[]>([]);
-  const [more, setMore] = useState(false);
-  const [fresh, setFresh] = useState(0);
-  const [failed, setFailed] = useState(false);
-  const load = async (before: string | null) => {
-    const page = await sea.news(before);
-    if (page === null) {
-      setFailed(true);
-      return;
-    }
-    setFailed(false);
-    setItems((had) => (before === null ? page.items : [...had, ...page.items]));
-    setMore(page.more);
-    setFresh(0);
-  };
-  useEffect(() => {
-    void load(null);
-    // What is charted while it is open is noted, to be read on asking.
-    let on = true;
-    sea.chart.store.onCharted((es) => {
-      if (on) {
-        setFresh((n) => n + es.filter((e) => e.by !== '').length);
-      }
-    });
-    return () => {
-      on = false;
+    const figures = { boats: 0, machines: 0, run: 0, charted: stories.length, crews: 0, over: 0 };
+    return {
+      world: 0,
+      day: '',
+      number: 1,
+      zone: '',
+      set: false,
+      figures,
+      figuresText: '',
+      lead: [],
+      stories,
+      shipmates: [],
+      notices: [],
+      days: [],
     };
-  }, [sea]);
-  const now = Date.now();
-  const worldOf = new Set(sea.columns.filter((c) => c.of === 'world').map((c) => c.id));
-  const notices = items.filter((it) => worldOf.has(it.column));
-  const charted = items.filter((it) => !worldOf.has(it.column));
-  const zone = end?.end.value?.zone ?? '';
-  return (
-    <section class="chart-panel news-sheet" aria-label="The news">
-      <header class="news-masthead">
-        <h2>The Shipping Intelligence</h2>
-        <p>{sea.columns.map((c) => c.title).join(' · ')}</p>
-      </header>
-      {notices.length > 0 ? (
-        <section class="news-column" aria-label="Notices to Mariners">
-          <h3>{sea.columns.find((c) => c.of === 'world')?.title}</h3>
-          <ol class="news-items">
-            {notices.map((it) => (
-              <WorldItem key={it.id} it={it} zone={zone} />
-            ))}
-          </ol>
-        </section>
-      ) : null}
-      {fresh > 0 ? (
-        <button type="button" class="news-fresh" onClick={() => void load(null)}>
-          {fresh} new {fresh === 1 ? 'discovery' : 'discoveries'}: read
-        </button>
-      ) : null}
-      {failed ? <p class="news-failed">The news cannot be had just now.</p> : null}
-      {charted.length === 0 && !failed ? (
-        <p class="news-none">Nothing charted yet: the chart is blank.</p>
-      ) : null}
-      <ol class="news-items">
-        {charted.map((it) => (
-          <ChartedItem key={it.id} sea={sea} it={it} now={now} />
-        ))}
-      </ol>
-      {more ? (
-        <button
-          type="button"
-          class="news-more"
-          onClick={() => void load(items[items.length - 1]?.id ?? null)}
-        >
-          Earlier
-        </button>
-      ) : null}
-    </section>
-  );
+  };
 }
 
 /** The countdown at the chart's rim, over its list and the news: the day and hour it ends are the news's, and its title's. */
@@ -695,8 +852,8 @@ function RimCountdown({ end }: { end: Countdown | null }) {
 }
 
 /**
- * The strip's ship's clock: the world's time of the moment the chart
- * shows, now or the slider's, its hands sweeping on as Play plays and back
+ * The chart's ship's clock, in the strip or held upright under it: the
+ * world's time of the moment the chart shows, now or the slider's, its hands sweeping on as Play plays and back
  * with Now; its rim gold while it reads ahead, as the slider's knob is.
  */
 function StripClock({ sea }: { sea: ChartSea }) {
@@ -728,29 +885,86 @@ function StripClock({ sea }: { sea: ChartSea }) {
   );
 }
 
+/** The News tab: the day's edition, its sheet loaded when first opened. */
+function NewsTab({ sea }: { sea: ChartSea }) {
+  const m = useNews();
+  if (m === null) {
+    return (
+      <section class="chart-panel news-sheet" aria-label="The news">
+        <p>{OPENING}</p>
+      </section>
+    );
+  }
+  return <m.NewsTab sea={sea} />;
+}
+
+/** The Log tab: a sailor's log, loaded when first opened. */
+function LogTab({ sea, watch }: { sea: ChartSea; watch: ((name: string) => void) | null }) {
+  const m = useLog();
+  const who = sea.chart.logOf.value;
+  if (m === null) {
+    return (
+      <section class="chart-panel log-sheet" aria-label="The log">
+        <p>Opening the log…</p>
+      </section>
+    );
+  }
+  return (
+    <m.LogSheet
+      who={who}
+      setWho={(w) => {
+        sea.chart.logOf.value = w;
+      }}
+      watch={watch}
+    />
+  );
+}
+
 /**
- * The chart over the whole screen, its list, or the news; the notices
+ * The chart over the whole screen, its list, the news or the log; the notices
  * under its top, out of the way of its working foot.
  */
 export function ChartScreen({
   sea,
   end = null,
   notices = null,
+  watch = null,
 }: {
   sea: ChartSea;
   end?: Countdown | null;
   notices?: Notices | null;
+  /** Watches a sailor from their log, the chart closed; null where none may be watched from it. */
+  watch?: ((name: string) => void) | null;
 }) {
   const chart = sea.chart;
   const surface = useGestures(sea);
   const labels = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
+  // A window over the whole screen: Escape puts away a box open on it
+  // first, then closes it, the focus going back to the pocket chart.
+  const screen = useModal<HTMLDivElement>(
+    () => {
+      if (chart.picked.peek() !== null) {
+        chart.picked.value = null;
+      } else if (chart.tapped.peek() !== null) {
+        chart.tapped.value = null;
+      } else if (chart.marked.peek() !== null) {
+        chart.marked.value = null;
+      } else {
+        chart.show(null);
+      }
+    },
+    { back: '.pocket-chart' },
+  );
+  // The labels' layer is the chart's before its first frame: the chart is
+  // drawn as soon as it opens, and an effect run after the paint would let
+  // that frame, slow on a software GPU, lay its race and course labels
+  // nowhere.
+  useLayoutEffect(() => {
     chart.view.attachLabels(labels.current);
     return () => chart.view.attachLabels(null);
   }, [chart]);
   // How far down the top reaches, strip, countdown and notice: the boxes
   // and the key keep below it.
-  const screen = useRef<HTMLDivElement | null>(null);
   const top = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const s = screen.current;
@@ -768,17 +982,31 @@ export function ChartScreen({
     return () => sized.disconnect();
   }, []);
   const mode = chart.mode.value;
+  const upright = useUpright();
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
+  const marked = chart.marked.value;
+  // A race replayed: its head under the strip, its time at the foot.
+  const host = sea.replay ?? null;
+  const replaying = mode === 'chart' && host !== null && host.model.value !== null;
+  const rp = useReplayParts(replaying);
+  const replay = replaying && rp !== null && host !== null ? { rp, host } : null;
   return (
-    <div class="chart-screen" data-mode={mode} ref={screen}>
+    <div
+      class="chart-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-label="The chart"
+      data-mode={mode}
+      ref={screen}
+    >
       <div class="chart-surface" ref={surface} hidden={mode !== 'chart'} />
       <div class="chart-labels" ref={labels} hidden={mode !== 'chart'} />
       <header class="chart-top" ref={top}>
         <div class="chart-case chart-strip">
           <Tabs sea={sea} />
           <Position sea={sea} />
-          <StripClock sea={sea} />
+          {mode === 'chart' && !upright ? <StripClock sea={sea} /> : null}
           <button
             type="button"
             class="chart-button chart-back"
@@ -789,6 +1017,9 @@ export function ChartScreen({
             ✕
           </button>
         </div>
+        {/* Held upright the strip has no room for the clock: it stands under it. */}
+        {mode === 'chart' && upright && replay === null ? <StripClock sea={sea} /> : null}
+        {replay !== null ? <replay.rp.ReplayHead host={replay.host} /> : null}
         <RimCountdown end={end} />
         {notices !== null ? (
           <div class="chart-notices">
@@ -802,11 +1033,21 @@ export function ChartScreen({
       {mode === 'chart' && picked === null && tapped !== null ? (
         <SystemBoxPanel sea={sea} t={tapped} close={() => (chart.tapped.value = null)} />
       ) : null}
-      {mode === 'chart' && sea.forecasting !== null ? (
+      {mode === 'chart' && picked === null && tapped === null && marked !== null ? (
+        <MarkedBox sea={sea} m={marked} close={() => (chart.marked.value = null)} />
+      ) : null}
+      {mode === 'chart' && sea.forecasting !== null && !replaying ? (
         <TimeBar chart={chart} src={sea.forecasting} />
       ) : null}
+      {replay !== null ? (
+        <>
+          <replay.rp.ReplayBar host={replay.host} />
+          <replay.rp.ReplayWindows host={replay.host} chart={chart} />
+        </>
+      ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
-      {mode === 'news' ? <NewsSheet sea={sea} end={end} /> : null}
+      {mode === 'news' ? <NewsTab sea={sea} /> : null}
+      {mode === 'log' ? <LogTab sea={sea} watch={watch} /> : null}
     </div>
   );
 }
@@ -860,7 +1101,24 @@ export function PocketChart({
         <button
           type="button"
           class="pocket-chart"
-          onClick={() => sea.chart.show('chart')}
+          onClick={(e) => {
+            // A race's boat tapped is watched; anywhere else opens the chart.
+            const c = canvas.current;
+            if (c !== null && e.detail > 0) {
+              const r = c.getBoundingClientRect();
+              const n = pocketRacer(
+                sea,
+                ((e.clientX - r.left) * c.width) / r.width,
+                ((e.clientY - r.top) * c.height) / r.height,
+                c.width,
+                c.height,
+              );
+              if (n > 0 && sea.watchRacer?.(n) === true) {
+                return;
+              }
+            }
+            sea.chart.show('chart');
+          }}
           aria-label={caption.name}
         >
           <canvas ref={canvas} width={240} height={156} />
@@ -871,15 +1129,16 @@ export function PocketChart({
                 {z}
               </span>
             ))}
-            {caption.lines.map((l, i) => (
+            {caption.lines.map((l, i) => [
+              i > 0 ? ' ' : null,
               <span
                 key={i}
                 class={`pocket-line${i > 0 ? ` pocket-left${closing ? ' closing' : ''}` : ''}`}
                 data-readout={i > 0 ? 'falls' : undefined}
               >
                 {l}
-              </span>
-            ))}
+              </span>,
+            ])}
           </span>
         </button>
         {pusher ? (
@@ -906,10 +1165,72 @@ export function PocketChart({
   );
 }
 
+/** The pocket chart's frame on a race's course: its middle and how far it reaches, m. */
+export function raceFrame(d: RaceDrawing): { east: number; north: number; radius: number } {
+  const t = d.told;
+  let radius = Math.max(t.reach, 150);
+  for (const p of [...t.marks, ...t.way]) {
+    radius = Math.max(radius, Math.hypot(p.east - t.east, p.north - t.north) * 1.12);
+  }
+  return { east: t.east, north: t.north, radius };
+}
+
 /**
  * Draws the pocket chart: a disk seen tilted, its weather now if given,
- * its charted islands and lights, the mist band, the boat.
+ * its charted islands and lights, the mist band, the boat. In a race it
+ * is framed on the course: its way faint, its line, its marks numbered
+ * (the next ringed in gold), the boat's own track, the fleet as dots in
+ * their colours.
  */
+/** The race's boat whose dot on the full chart is nearest (x, y) CSS pixels, within a finger; 0 for none. */
+function chartRacer(sea: ChartSea, view: ChartView, x: number, y: number): number {
+  const race = view.raceDrawing();
+  if (race === null || (sea.watchRacer == null && sea.replay?.model.peek() == null)) {
+    return 0;
+  }
+  let best = 0;
+  // A finger's width either side: the dots are small and close.
+  let d = 2 * FINGER;
+  for (const b of race.boats) {
+    const p = view.screenOf(b.east, b.north);
+    if (p !== null) {
+      const dd = Math.hypot(p.x - x, p.y - y);
+      if (dd < d) {
+        d = dd;
+        best = b.number;
+      }
+    }
+  }
+  return best;
+}
+
+/** How near a tap on the pocket chart must be to a race's boat's dot to pick it, canvas pixels. */
+const POCKET_TAP = 14;
+
+/** The race's boat whose dot on the pocket chart, w by h canvas pixels, is nearest (px, py), within a tap; 0 for none. */
+export function pocketRacer(sea: ChartSea, px: number, py: number, w: number, h: number): number {
+  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
+  if (race === null) {
+    return 0;
+  }
+  const frame = raceFrame(race);
+  const k = (w * 0.48) / frame.radius;
+  const tilt = 0.62;
+  let best = 0;
+  let d = POCKET_TAP;
+  for (const b of race.boats) {
+    const dd = Math.hypot(
+      w / 2 + (b.east - frame.east) * k - px,
+      h / 2 - (b.north - frame.north) * k * tilt - py,
+    );
+    if (dd < d) {
+      d = dd;
+      best = b.number;
+    }
+  }
+  return best;
+}
+
 export function drawPocket(
   c: HTMLCanvasElement,
   sea: ChartSea,
@@ -924,36 +1245,40 @@ export function drawPocket(
   }
   const w = c.width;
   const h = c.height;
+  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
+  const frame = race === null ? { east: 0, north: 0, radius: sea.lip } : raceFrame(race);
   // The disk nearly the canvas's width, room left at the rim for the
   // boat's mark; its weather cut to the disk's shape.
-  const k = (w * 0.48) / sea.lip;
+  const k = (w * 0.48) / frame.radius;
   const tilt = 0.62;
-  const x = (east: number) => w / 2 + east * k;
-  const y = (north: number) => h / 2 - north * k * tilt;
+  const x = (east: number) => w / 2 + (east - frame.east) * k;
+  const y = (north: number) => h / 2 - (north - frame.north) * k * tilt;
+  const rim = frame.radius * k;
   ctx.clearRect(0, 0, w, h);
   ctx.save();
   ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, sea.lip * k, sea.lip * k * tilt, 0, 0, 2 * Math.PI);
+  ctx.ellipse(w / 2, h / 2, rim, rim * tilt, 0, 0, 2 * Math.PI);
   ctx.fillStyle = 'rgba(236, 224, 194, 0.92)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(59, 46, 34, 0.9)';
   ctx.lineWidth = 2;
   ctx.stroke();
-  // The mist band.
-  ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, sea.lip * k * 0.93, sea.lip * k * tilt * 0.93, 0, 0, 2 * Math.PI);
-  ctx.setLineDash([3, 3]);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.setLineDash([]);
-  if (weather !== null) {
-    // The weather within the rim: a storm on it is cut by the world's edge.
-    ctx.save();
+  if (race === null) {
+    // The mist band.
     ctx.beginPath();
-    ctx.ellipse(w / 2, h / 2, sea.lip * k - 1, sea.lip * k * tilt - 1, 0, 0, 2 * Math.PI);
-    ctx.clip();
+    ctx.ellipse(w / 2, h / 2, rim * 0.93, rim * tilt * 0.93, 0, 0, 2 * Math.PI);
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // Everything within the rim.
+  ctx.beginPath();
+  ctx.ellipse(w / 2, h / 2, rim - 1, rim * tilt - 1, 0, 0, 2 * Math.PI);
+  ctx.clip();
+  if (weather !== null) {
+    // A storm on the rim is cut by the world's edge.
     drawPocketWeather(ctx, weather, x, y, k, tilt);
-    ctx.restore();
   }
   for (const e of sea.chart.store.entries) {
     if (e.subject === 'island' && e.bounds !== null) {
@@ -964,6 +1289,9 @@ export function drawPocket(
       ctx.fillStyle = '#a8236e';
       ctx.fillRect(x(e.east) - 1.5, y(e.north) - 1.5, 3, 3);
     }
+  }
+  if (race !== null) {
+    drawPocketRace(ctx, race, x, y);
   }
   // The boat, and its heading.
   const bx = x(b.east);
@@ -978,7 +1306,175 @@ export function drawPocket(
   ctx.beginPath();
   ctx.arc(bx, by, 4, 0, 2 * Math.PI);
   ctx.fill();
+  const aim = sea.chart.aim(b.east, b.north);
+  const course = aim === null ? null : pocketCourse(aim, frame, k, tilt, w, h);
+  if (course?.kind === 'dot') {
+    drawPocketDot(ctx, course.x, course.y);
+  }
   ctx.restore();
+  // Outside a race's frame, a tick on its rim the way it lies.
+  if (course?.kind === 'tick') {
+    ctx.beginPath();
+    ctx.moveTo(course.x, course.y);
+    ctx.lineTo(course.x + course.dx * POCKET_TICK, course.y + course.dy * POCKET_TICK);
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = POCKET_GOLD;
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+}
+
+/** The course's gold on the pocket chart, the boat's own. */
+const POCKET_GOLD = '#c8952c';
+/** The course's dot and ring, and the tick on a race's frame, canvas pixels. */
+const POCKET_DOT = 4;
+const POCKET_RING = 7;
+const POCKET_TICK = 13;
+
+/**
+ * Where the course goes on the pocket chart, w by h canvas pixels framed
+ * on frame at k pixels a metre, seen tilted: a dot within the frame; out
+ * of a race's frame, a tick on its rim, its start and the way out along it.
+ */
+export function pocketCourse(
+  aim: Pick<CourseAim, 'east' | 'north'>,
+  frame: { east: number; north: number; radius: number },
+  k: number,
+  tilt: number,
+  w: number,
+  h: number,
+):
+  | { kind: 'dot'; x: number; y: number }
+  | { kind: 'tick'; x: number; y: number; dx: number; dy: number } {
+  const de = aim.east - frame.east;
+  const dn = aim.north - frame.north;
+  if (Math.hypot(de, dn) <= frame.radius) {
+    return { kind: 'dot', x: w / 2 + de * k, y: h / 2 - dn * k * tilt };
+  }
+  const a = Math.atan2(de, dn);
+  const rim = frame.radius * k;
+  // Out from the middle along the ellipse's own normal at that point.
+  const nx = Math.sin(a) * tilt;
+  const ny = -Math.cos(a);
+  const n = Math.hypot(nx, ny);
+  return {
+    kind: 'tick',
+    x: w / 2 + Math.sin(a) * rim,
+    y: h / 2 - Math.cos(a) * rim * tilt,
+    dx: nx / n,
+    dy: ny / n,
+  };
+}
+
+/** The course's dot with its ring, over everything else on the pocket chart. */
+function drawPocketDot(ctx: CanvasRenderingContext2D, px: number, py: number): void {
+  ctx.beginPath();
+  ctx.arc(px, py, POCKET_RING, 0, 2 * Math.PI);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = POCKET_GOLD;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(px, py, POCKET_DOT, 0, 2 * Math.PI);
+  ctx.fillStyle = POCKET_GOLD;
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(59, 46, 34, 0.9)';
+  ctx.stroke();
+}
+
+/** A race on the pocket chart: its way, its lines, its marks numbered, the boat's track and the fleet. */
+function drawPocketRace(
+  ctx: CanvasRenderingContext2D,
+  d: RaceDrawing,
+  x: (east: number) => number,
+  y: (north: number) => number,
+): void {
+  const t = d.told;
+  const ink = 'rgba(59, 46, 34, 0.9)';
+  if (t.way.length > 1) {
+    ctx.beginPath();
+    for (const [i, p] of t.way.entries()) {
+      if (i === 0) {
+        ctx.moveTo(x(p.east), y(p.north));
+      } else {
+        ctx.lineTo(x(p.east), y(p.north));
+      }
+    }
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(59, 46, 34, 0.4)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  for (const line of [
+    t.pin !== null && t.committee !== null ? [t.pin, t.committee] : null,
+    t.finish,
+  ]) {
+    if (line == null) {
+      continue;
+    }
+    const [a, b] = line as [{ east: number; north: number }, { east: number; north: number }];
+    ctx.beginPath();
+    ctx.moveTo(x(a.east), y(a.north));
+    ctx.lineTo(x(b.east), y(b.north));
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+  }
+  // The boat's own track.
+  const own = d.tracks.get(d.watched) ?? [];
+  if (own.length >= 4) {
+    ctx.beginPath();
+    for (let i = 0; i + 1 < own.length; i += 2) {
+      const px = x(own[i] ?? 0);
+      const py = y(own[i + 1] ?? 0);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(176, 65, 45, 0.85)';
+    ctx.stroke();
+  }
+  const next = t.legs[d.next]?.mark ?? 0;
+  ctx.font = '600 15px "Alegreya Sans", system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  for (const m of t.marks) {
+    const mx = x(m.east);
+    const my = y(m.north);
+    if (m.number === next && next > 0) {
+      ctx.beginPath();
+      ctx.arc(mx, my, 9, 0, 2 * Math.PI);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#c8952c';
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(mx, my, 4.5, 0, 2 * Math.PI);
+    ctx.fillStyle = '#e0782c';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+    ctx.fillStyle = '#3b2e22';
+    ctx.fillText(String(m.number), mx + 8, my - 7);
+  }
+  // The fleet, each a dot in its colour; the boat's own is its arrow.
+  for (const b of d.boats) {
+    if (b.number === d.watched) {
+      continue;
+    }
+    ctx.beginPath();
+    ctx.arc(x(b.east), y(b.north), 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = trackColour(b.number);
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+  }
 }
 
 /** The notice shown, with its way to dismiss it; the line is in the page from the start, empty. */
@@ -991,8 +1487,23 @@ export function NoticeLine({ notices }: { notices: Notices }) {
   return (
     <div class="notice-line" role="status" data-readout="notice">
       {n === null ? null : (
-        <p class={`panel notice notice-${n.kind.level}`}>
+        <p
+          class={`panel notice notice-${n.kind.level}${n.action === undefined ? '' : ' with-act'}`}
+        >
           <span>{n.text}</span>
+          {n.action !== undefined ? (
+            <button
+              type="button"
+              class="notice-act"
+              onClick={() => {
+                const a = n.action;
+                notices.dismiss(performance.now());
+                a?.act();
+              }}
+            >
+              {n.action.label}
+            </button>
+          ) : null}
           <button
             type="button"
             class="notice-dismiss"

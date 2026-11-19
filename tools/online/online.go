@@ -95,9 +95,8 @@ func (c *checker) do(ctx context.Context, method, path string, header http.Heade
 	return res, body, err
 }
 
-// hstsDay is the least max-age HSTS may have: a day, while the way in
-// settles; six months after.
-const hstsDay = 86400
+// hstsMonths is the least max-age HSTS may have: six months (180 days).
+const hstsMonths = 15552000
 
 var maxAge = regexp.MustCompile(`(?i)max-age=(\d+)`)
 
@@ -119,11 +118,31 @@ func (c *checker) pageServed(ctx context.Context) error {
 	if m == nil {
 		return fmt.Errorf("no HSTS: Strict-Transport-Security is %q", hsts)
 	}
-	if age, _ := strconv.Atoi(m[1]); age < hstsDay || !strings.Contains(strings.ToLower(hsts), "includesubdomains") || strings.Contains(strings.ToLower(hsts), "preload") {
-		return fmt.Errorf("Strict-Transport-Security is %q: want a max-age of a day or more, includeSubDomains, no preload", hsts)
+	if age, _ := strconv.Atoi(m[1]); age < hstsMonths || !strings.Contains(strings.ToLower(hsts), "includesubdomains") || strings.Contains(strings.ToLower(hsts), "preload") {
+		return fmt.Errorf("Strict-Transport-Security is %q: want a max-age of six months or more, includeSubDomains, no preload", hsts)
+	}
+	if err := pagePolicySent(res.Header); err != nil {
+		return err
 	}
 	if s := res.Header.Get("Cf-Cache-Status"); strings.EqualFold(s, "HIT") {
 		return errors.New("the page came from Cloudflare's cache")
+	}
+	return nil
+}
+
+// pagePolicySent checks the page came with its policy, enforced or as a
+// report only (KEEL_PAGE_POLICY), Trusted Types in it, and may not be
+// framed.
+func pagePolicySent(h http.Header) error {
+	policy := h.Get("Content-Security-Policy")
+	if policy == "" {
+		policy = h.Get("Content-Security-Policy-Report-Only")
+	}
+	if !strings.Contains(policy, "require-trusted-types-for 'script'") || !strings.Contains(policy, "frame-ancestors 'none'") {
+		return fmt.Errorf("the page's policy is %q: want one with Trusted Types and no framing", policy)
+	}
+	if h.Get("X-Frame-Options") != "DENY" {
+		return fmt.Errorf("X-Frame-Options is %q, want DENY", h.Get("X-Frame-Options"))
 	}
 	return nil
 }

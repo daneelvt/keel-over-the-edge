@@ -4,7 +4,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -12,10 +14,12 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/news"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
@@ -93,7 +97,10 @@ func TestChartNames(t *testing.T) {
 // TestChartOnline: a server sailing seed 1. Ann and Bob are sent the chart
 // of what is known as they are welcomed; Ann's boat put off an island
 // charts it, and both are sent it, credited to her; Carol, welcomed after,
-// is sent it with the rest. The database holds the credit.
+// is sent it with the rest. The database holds the credit. The island is
+// the last place an island course names: charting it opens the course,
+// sent to all three with the chart, and its opening is a story of the
+// news naming Ann.
 func TestChartOnline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("makes a whole world")
@@ -107,18 +114,26 @@ func TestChartOnline(t *testing.T) {
 		t.Fatal(err)
 	}
 	cw := chart.Build(world, cat)
-	// An island with nothing about it charted: off its east coast.
-	target := -1
-	for i, s := range cw.Subjects {
-		if s.Kind == sight.Island && s.Highest > 10 && s.Zone == "middle" {
-			target = i
+	// An island with nothing about it charted, the last place a course
+	// names: off its east coast.
+	target, course := -1, -1
+	for k, need := range cw.CourseSubjects {
+		var left []int32
+		for _, n := range need {
+			if !slices.Contains(cw.Known, n) {
+				left = append(left, n)
+			}
+		}
+		if len(left) == 1 && cw.Subjects[left[0]].Kind == sight.Island && cw.Subjects[left[0]].Highest > 10 {
+			target, course = int(left[0]), k
 			break
 		}
 	}
 	if target < 0 {
-		t.Fatal("no island of the middle waters")
+		t.Fatal("no island the last place a course names")
 	}
 	is := cw.Subjects[target]
+	opened := cw.Courses[course]
 	synctest.Test(t, func(t *testing.T) {
 		d := &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}
 		ann, _ := d.sessions.Add("Ann", "human")
@@ -156,6 +171,40 @@ func TestChartOnline(t *testing.T) {
 		c := heard(cin)
 		time.Sleep(2 * time.Second)
 		synctest.Wait()
+		// The island is a story of the day's news, read behind a
+		// session, its place given to open its box.
+		if code, _, _ := get(t, s.client, playURL+"/api/news"); code != http.StatusUnauthorized {
+			t.Errorf("the news without a session: %d", code)
+		}
+		req, _ := http.NewRequest(http.MethodGet, playURL+"/api/news", nil)
+		req.Header.Set("Cookie", auth.CookieName+"="+ann)
+		res, err = s.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var e news.Edition
+		err = json.NewDecoder(res.Body).Decode(&e)
+		res.Body.Close()
+		if err != nil || res.StatusCode != 200 || res.Header.Get("Cache-Control") != "private, max-age=5" {
+			t.Fatalf("the news: %d %v", res.StatusCode, err)
+		}
+		// The island's story is Ann's own, beside the front page: the
+		// course it opened, scoring higher, is the story about her there.
+		if !slices.ContainsFunc(append(slices.Clone(e.Stories), e.Shipmates...), func(st news.Story) bool {
+			return st.Head == strings.ToUpper(is.Name) && st.Subject == "island" && st.Number == is.Number && len(st.Names) == 1 && st.X != nil
+		}) || e.Number != 1 || e.Set || len(e.Lead) == 0 || e.Lead[0].Kind != store.StoryArrival {
+			t.Errorf("the island not in the day's news: %+v", e)
+		}
+		if !slices.ContainsFunc(e.Stories, func(st news.Story) bool {
+			return st.Kind == store.StoryCourse && st.Head == strings.ToUpper(opened.Name) && st.Subject == store.SubjectCourse && len(st.Names) == 1
+		}) {
+			t.Errorf("the course not in the day's news: %+v", e.Stories)
+		}
+		if !slices.ContainsFunc(d.stories(), func(st store.Story) bool {
+			return st.Story == store.StoryArrival && st.Facts.Islands > 0 && st.Facts.Islands < st.Facts.Of
+		}) {
+			t.Errorf("no arrival of the world: %+v", d.stories())
+		}
 		s.stop(t)
 		for who, g := range map[string]*charts{"Ann": a, "Bob": b, "Carol": c} {
 			e := g.entry(is.Name)
@@ -170,6 +219,17 @@ func TestChartOnline(t *testing.T) {
 		if c.charted > 0 {
 			t.Errorf("Carol was sent %d chartings after her chart", c.charted)
 		}
+		for who, g := range map[string]*charts{"Ann": a, "Bob": b, "Carol": c} {
+			if !slices.ContainsFunc(g.courseNames(), func(n string) bool { return n == opened.Name }) {
+				t.Errorf("%s was not sent the course %s; was sent %v", who, opened.Name, g.courseNames())
+			}
+		}
+		if !slices.ContainsFunc(d.stories(), func(st store.Story) bool {
+			return st.Story == store.StoryCourse && st.Subject == store.SubjectCourse && st.Number == opened.Number && st.Title == opened.Name &&
+				st.Account != (store.AccountID{})
+		}) {
+			t.Errorf("no story of %s opened by Ann's charting: %+v", opened.Name, d.stories())
+		}
 		rows, _ := d.Chartings(t.Context(), [16]byte{})
 		if !slices.ContainsFunc(rows, func(r store.Charting) bool { return r.Number == is.Number && r.Subject == "island" && r.Credited }) {
 			t.Errorf("the database holds no credit for %s: %+v", is.Name, rows)
@@ -181,7 +241,8 @@ func TestChartOnline(t *testing.T) {
 type charts struct {
 	mu      sync.Mutex
 	entries []*pb.ChartEntry
-	charted int // Charted messages
+	courses []*pb.Course
+	charted int // Charted messages with entries
 }
 
 func (g *charts) add(m *pb.ServerMessage) {
@@ -192,11 +253,25 @@ func (g *charts) add(m *pb.ServerMessage) {
 	defer g.mu.Unlock()
 	if c := m.GetChart(); c != nil {
 		g.entries = append(g.entries, c.Entries...)
+		g.courses = append(g.courses, c.Courses...)
 	}
 	if c := m.GetCharted(); c != nil {
 		g.entries = append(g.entries, c.Entries...)
-		g.charted++
+		g.courses = append(g.courses, c.Courses...)
+		if len(c.Entries) > 0 {
+			g.charted++
+		}
 	}
+}
+
+func (g *charts) courseNames() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var out []string
+	for _, c := range g.courses {
+		out = append(out, c.Name)
+	}
+	return out
 }
 
 func (g *charts) names() []string {

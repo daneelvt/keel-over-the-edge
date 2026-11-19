@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// The tailnet's access policy: who may reach production's machine, and how.
+// The tailnet's access policy: who may reach production's machine, and how;
+// and the monitoring pages the machine routes to the tailnet.
 // The tailnet workflow writes this file to Tailscale after the owner
 // approves the run (go run ./tools/tailnet -apply); a change made in
 // Tailscale's admin page is replaced by it, and the run shows what was
@@ -17,12 +18,30 @@
 		"tag:ci-prod":   ["autogroup:admin"],
 	},
 
+	// The routes the machine may advertise, approved as it advertises them
+	// (the access role sets them): the fixed addresses of three monitoring
+	// pages in the cluster, Grafana, VictoriaMetrics' and VictoriaLogs',
+	// each a /32. tools/internal/manifests' Forwards say which.
+	"autoApprovers": {
+		"routes": {
+			"10.43.0.50/32": ["tag:keel-prod"],
+			"10.43.0.51/32": ["tag:keel-prod"],
+			"10.43.0.52/32": ["tag:keel-prod"],
+		},
+	},
+
 	// What may connect to what, at the network layer. SSH is the only way
-	// in: the Kubernetes API and everything else stay on the machine's
-	// loopback, reached over an SSH session when needed.
+	// in to the machine: the Kubernetes API and everything else stay on its
+	// loopback, reached over an SSH session when needed. The owner's devices
+	// also reach the three monitoring pages through the routes, each on its
+	// one port, with no tunnel (from a phone, say); the pages keep their own
+	// logins, and the database and keel's internal listener have no route.
 	"grants": [
 		{"src": ["tag:ci-prod"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
 		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
+		{"src": ["autogroup:admin"], "dst": ["10.43.0.51"], "ip": ["tcp:80"]},
+		{"src": ["autogroup:admin"], "dst": ["10.43.0.52"], "ip": ["tcp:8428"]},
+		{"src": ["autogroup:admin"], "dst": ["10.43.0.50"], "ip": ["tcp:9428"]},
 	],
 
 	// Tailscale SSH. The machine workflow logs in as root to run Ansible,
@@ -47,12 +66,15 @@
 
 	// Tailscale runs these on every change and refuses a policy that fails
 	// them: a workflow's node reaches SSH on the machine, and nothing else
-	// there.
+	// there, nor any of the cluster's fixed addresses.
 	"tests": [
 		{
 			"src":    "tag:ci-prod",
 			"accept": ["tag:keel-prod:22"],
-			"deny":   ["tag:keel-prod:80", "tag:keel-prod:443", "tag:keel-prod:6443", "tag:keel-prod:10250"],
+			"deny": [
+				"tag:keel-prod:80", "tag:keel-prod:443", "tag:keel-prod:6443", "tag:keel-prod:10250",
+				"10.43.0.50:9428", "10.43.0.51:80", "10.43.0.52:8428", "10.43.0.53:5432", "10.43.0.54:9090",
+			],
 		},
 	],
 	"sshTests": [

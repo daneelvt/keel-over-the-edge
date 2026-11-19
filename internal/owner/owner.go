@@ -59,6 +59,10 @@ type Accounts interface {
 	// SetPriority marks an account, human or AI, as a priority account or
 	// not, or returns store.ErrNotFound for no such account.
 	SetPriority(ctx context.Context, id store.AccountID, on bool) error
+	// SetEveryBoat opens every kind of boat to an account's sailor, human
+	// or AI, whatever its certificates, or closes them again; or returns
+	// store.ErrNotFound for no such account.
+	SetEveryBoat(ctx context.Context, id store.AccountID, on bool) error
 	// AccountCounts counts the human accounts: all, made in the last week,
 	// seen in the last day.
 	AccountCounts(ctx context.Context) (store.AccountCounts, error)
@@ -197,6 +201,12 @@ type Config struct {
 	// tab's search, cards and actions, and the record every control
 	// writes.
 	Hand *accounts.Accounts
+	// Logs, if not nil, are the sailors' logs, every one of which the
+	// owner reads: on an account's card, in the search's rows and whole.
+	Logs Logs
+	// News, if not nil, is the world's news, which the owner reads with
+	// every name shown and strikes stories from.
+	News News
 	// Door, if not nil, is the machine sailors' door, whose cache of
 	// tokens' accounts forgets an account whose priority changes.
 	Door Door
@@ -229,6 +239,14 @@ type Config struct {
 	ChatSettings ChatSettings
 	ChatChanged  func()
 	Reports      Reports
+	// NewSailors, if not nil, keeps the settings for new sailors: how
+	// many one address may make in a day, and the human check's switch.
+	NewSailors NewSailorSettings
+	// Racing, if not nil, keeps the racing limits and the harbour
+	// timetable; RaceBoats are the catalog's boats' ids, the harbour
+	// rotation's choices.
+	Racing    RacingSettings
+	RaceBoats []string
 
 	// PlaceKinds and Characters are the catalog's kinds of place and
 	// lights' characters, by their indices, as the page shows them.
@@ -309,7 +327,7 @@ var Paths = []string{
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/busy.json", "/owner/api/gales.json", "/owner/api/place.json",
-	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority",
+	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority", "/owner/api/every-boat",
 	"/owner/api/accounts/search", "/owner/api/account.json", "/owner/api/accounts/stop", "/owner/api/accounts/start",
 	"/owner/api/accounts/revoke", "/owner/api/accounts/delete", "/owner/api/actions.json",
 }
@@ -397,16 +415,22 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/place.json", o.placeWeather)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/priority", o.priority)
+	mux.HandleFunc("POST /owner/api/every-boat", o.everyBoat)
 	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
 	mux.HandleFunc("GET /owner/api/settings.json", o.settings)
 	mux.HandleFunc("POST /owner/api/settings", o.setSettings)
+	mux.HandleFunc("GET /owner/api/races", o.races)
+	mux.HandleFunc("POST /owner/api/races", o.setRaces)
 	mux.HandleFunc("GET /owner/api/reports.json", o.reports)
 	mux.HandleFunc("GET /owner/api/report.json", o.report)
 	mux.HandleFunc("POST /owner/api/reports/act", o.actOnReport)
 	mux.HandleFunc("POST /owner/api/accounts/search", o.searchAccounts)
 	mux.HandleFunc("GET /owner/api/account.json", o.accountCard)
+	mux.HandleFunc("GET /owner/api/log.json", o.log)
 	mux.HandleFunc("GET /owner/api/actions.json", o.actions)
+	mux.HandleFunc("GET /owner/api/news.json", o.newsDay)
+	mux.HandleFunc("POST /owner/api/news/strike", o.strike)
 	mux.HandleFunc("POST /owner/api/accounts/stop", o.act(store.ActionStop, (*accounts.Accounts).Stop))
 	mux.HandleFunc("POST /owner/api/accounts/start", o.act(store.ActionStart, (*accounts.Accounts).Start))
 	mux.HandleFunc("POST /owner/api/accounts/revoke", o.act(store.ActionRevoke, (*accounts.Accounts).Revoke))

@@ -94,6 +94,18 @@ spec:
             summary: "keel's CPU limit is holding it back."
           annotations:
             description: "It is throttled in {{ $value | humanizePercentage }} of its CPU periods. The Game dashboard shows whether the tick suffers."
+        - alert: ClientErrors
+          # The players' pages' own reports of errors they met: more than
+          # one a minute for a quarter of an hour is a fault in a build,
+          # not a phone's bad moment.
+          expr: sum(rate(keel_client_errors_total[5m])) * 60 > 1
+          for: 15m
+          labels:
+            severity: warning
+            component: game
+            summary: "Players' pages report more than one error a minute."
+          annotations:
+            description: "The pages report {{ $value | humanize }} errors a minute. The Game dashboard shows them by build, and keel's log has each (\"a page's error\"), with its message and its stack."
     - name: world
       rules:
         - alert: WorldNextNotReady
@@ -116,6 +128,28 @@ spec:
             summary: "One of keel's jobs keeps failing."
           annotations:
             description: "The job {{ $labels.name }} has failed for half an hour without a run that succeeded. Its runs, and why each failed, are on the world page."
+    # New sailors: how many are made, and whether the human check that
+    # every new sailor passes can be asked. Warnings to the owner's page:
+    # a crowd from one post is welcome, a farm of accounts is not, and
+    # only a look tells them apart. 60 an hour is a starting value.
+    - name: sailors
+      rules:
+        - alert: NewSailorsSurge
+          expr: sum(increase(keel_accounts_created_total[1h])) > 60
+          labels:
+            severity: warning
+            component: game
+            summary: "Many more new sailors than usual are being made."
+          annotations:
+            description: "{{ $value | humanize }} sailors were made in the last hour. The Game dashboard shows them beside the human checks and the sailors refused by address: a crowd from one post passes its checks; many refused, or checks refused, is someone farming accounts. The world page sets the new sailors allowed from one address."
+        - alert: HumanCheckUnavailable
+          expr: sum(increase(keel_human_checks_total{result="unavailable"}[10m])) > 3
+          labels:
+            severity: warning
+            component: game
+            summary: "The human check cannot be asked: no new sailor can be made."
+          annotations:
+            description: "{{ $value | humanize }} new sailors in the last 10 minutes were turned away because Cloudflare's check did not answer. keel's log says why. If it lasts, switch the human check off on the world page, and on again once Cloudflare answers."
     # Reports of what players said or did. A report that a child may be
     # at risk pages the owner while it waits; the queue waiting a day
     # warns. Their component is their own: GameDown holds them back
@@ -138,6 +172,35 @@ spec:
             summary: "A report has waited a day for the owner."
           annotations:
             description: "The oldest open report has waited {{ $value | humanizeDuration }}. The owner's page, Reports tab, lists them, a child's safety first."
+    # The contributor agreement keeper. While it is down or refused, pull
+    # requests to the game's repository wait for their check, and nothing
+    # else breaks: warnings, in a component of their own, which GameDown
+    # holds back nowhere.
+    - name: agreement
+      rules:
+        - alert: AgreementKeeperDown
+          expr: (sum(kube_deployment_status_replicas_ready{namespace="keel", deployment="keel-agreement"}) or vector(0)) < 1
+          for: 15m
+          labels:
+            severity: warning
+            component: agreement
+            summary: "No agreement keeper is ready: pull requests wait for their check."
+          annotations:
+            description: "Contributors cannot sign, and GitHub's deliveries are refused. Look at keel-agreement's pod and its logs, and at the database. GitHub sends no delivery again by itself: once the keeper is back, redeliver the failed ones from the App's Advanced page."
+        - alert: AgreementChecksFailing
+          # Deliveries refused for their signature, and checks that could
+          # not reach GitHub, over the last hour. A counter appears with its
+          # first count: one not yet counted is none.
+          expr: |
+            (sum(increase(keel_agreement_webhooks_total{result="bad_signature"}[1h])) or vector(0))
+              + (sum(increase(keel_agreement_checks_total{result="error"}[1h])) or vector(0))
+              > 3
+          labels:
+            severity: warning
+            component: agreement
+            summary: "Pull requests' agreement checks are failing."
+          annotations:
+            description: "{{ $value }} deliveries refused for their signature, or checks ended in an error, in the last hour. The webhook secret in Infisical may differ from the App's, or GitHub's API refuses the App (its private key, or its installation). The keeper's logs say which; the App's Advanced page lists GitHub's deliveries, and refused ones that are not there were someone else's."
     - name: database
       rules:
         - alert: DatabaseDown

@@ -56,6 +56,8 @@ export interface Trapeze {
   rings: [Vector3, Vector3];
   /** The starboard rack's outer edge on its top at the helm's station: a clip on the wire is placed from it (the port one's its mirror). */
   rackEdge: Vector3;
+  /** A crew's own wires' rings at rest (starboard, port), on a boat with them (a beach cat's two a side); null for none. */
+  crewRings: [Vector3, Vector3] | null;
   /** The physics' furthest reach out to windward (m): out fully on the wire. */
   reach: number;
 }
@@ -70,11 +72,15 @@ function vec(a: unknown): Vector3 | null {
 
 /** A trapeze's points from its node's data, or null if the node says it is none. */
 export function trapezeData(data: unknown): Omit<Trapeze, 'reach'> | null {
-  const d = data as { hounds?: unknown; rings?: unknown; rackEdge?: unknown } | undefined;
+  const d = data as
+    | { hounds?: unknown; rings?: unknown; rackEdge?: unknown; crewRings?: unknown }
+    | undefined;
   const hounds = vec(d?.hounds);
   const rackEdge = vec(d?.rackEdge);
   const rings = Array.isArray(d?.rings) ? (d.rings as unknown[]).map(vec) : [];
   const [starboard, port] = rings;
+  const crew = Array.isArray(d?.crewRings) ? (d.crewRings as unknown[]).map(vec) : [];
+  const [cs, cp] = crew;
   if (
     hounds === null ||
     rackEdge === null ||
@@ -86,7 +92,12 @@ export function trapezeData(data: unknown): Omit<Trapeze, 'reach'> | null {
   ) {
     return null;
   }
-  return { hounds, rings: [starboard, port], rackEdge };
+  return {
+    hounds,
+    rings: [starboard, port],
+    rackEdge,
+    crewRings: cs != null && cp != null ? [cs, cp] : null,
+  };
 }
 
 /**

@@ -4,10 +4,11 @@
 // sailor's files load with their skin, skeleton, atlas and mask; every
 // material in the room is the factory's, with the bend; and the figures are
 // drawn posed by the GPU where the skeleton on the CPU says, standing on the
-// quay, seated in a dinghy and on a keelboat's rail, and crouched on her
-// deck. The silhouettes are drawn black, so a pixel
-// says whether a sailor is there: a figure drawn unposed would leave the
-// places its pose takes it to empty, and cover the places it left.
+// quay, seated in a dinghy and on a keelboat's rail, crouched on her
+// deck, aboard the tall ship, the beach cat, the cruising yacht and the
+// cruising catamaran. The silhouettes are drawn black, so a pixel says
+// whether a sailor is there: a figure drawn unposed would leave the places
+// its pose takes it to empty, and cover the places it left.
 //
 // The clips are held at a time (t), so every picture is the same.
 
@@ -230,6 +231,95 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
     ).toBe(true);
     for (const [name, at] of Object.entries(await bones(page, parts))) {
       expect(darkest(railed, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
+  }
+});
+
+test('the Rover aboard the tall ship in both versions: leaning on her rail, sat on her hatch, hauling, in her top and on her yard', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=leaning&look=rover');
+  const parts = ['head', 'pelvis', 'hand_l', 'hand_r'];
+  for (const clip of ['leaning', 'hatch-sit', 'walk', 'haul-port', 'aloft', 'yard']) {
+    const aboard = await show(page, { clip, t: 1 });
+    expect(
+      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+      clip,
+    ).toBe(true);
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
+  }
+});
+
+test('the Rover aboard the beach cat in both versions: at her helm, on her wire, crawling over her net and righting her', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=cat-helm&look=rover');
+  const parts = ['head', 'pelvis'];
+  for (const clip of ['cat-helm', 'hull-wire-port', 'net-crawl-left', 'cat-righting']) {
+    const aboard = await show(page, { clip, t: 1 });
+    expect(
+      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+      clip,
+    ).toBe(true);
+    expect(await page.evaluate(() => globalThis.dressing.problems()), clip).toEqual([]);
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
+  }
+});
+
+test('the Rover aboard the cruising yacht in both versions: sat by her wheel, braced on her bench, out on her rail and crossing her coachroof', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=yacht-wheel-seated&look=rover');
+  // Seen from before her, the wheel, the table and the coaming hide the
+  // hips: the heads are seen.
+  const parts = ['head'];
+  for (const clip of [
+    'yacht-wheel-seated',
+    'bench-braced-port',
+    'yacht-rail-out',
+    'roof-crouch-walk',
+  ]) {
+    const aboard = await show(page, { clip, t: 1 });
+    expect(
+      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+      clip,
+    ).toBe(true);
+    expect(await page.evaluate(() => globalThis.dressing.problems()), clip).toEqual([]);
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
+  }
+});
+
+test('the Rover aboard the cruising catamaran in both versions: sat behind her wheel, braced at her table, on her aft bench and up her helm’s ladder', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=bridge-wheel-seated&look=rover&near=1');
+  // Each on a catamaran of her own, a catamaran's length apart: the camera
+  // close on one at a time, from above with her roof left out; the heads
+  // are seen.
+  const parts = ['head'];
+  for (const who of [0, 1]) {
+    for (const clip of ['bridge-wheel-seated', 'table-braced-port', 'beam-sit', 'stairs-up']) {
+      const aboard = await show(page, { clip, t: 1, who });
+      expect(
+        (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+        clip,
+      ).toBe(true);
+      expect(await page.evaluate(() => globalThis.dressing.problems()), clip).toEqual([]);
+      for (const [name, at] of Object.entries(await bones(page, parts))) {
+        if (name.startsWith(`${who}:`)) {
+          expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+        }
+      }
     }
   }
 });

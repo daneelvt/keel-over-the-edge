@@ -14,13 +14,15 @@ import (
 
 // WatchTarget is a sailor someone asks to watch: its account, its kind,
 // its owner (a machine sailor's human, zero for a human's own sailor), its
-// name, and whether it, or its owner, is stopped.
+// name, whether it, or its owner, is stopped, and its month of birth as
+// kept (0 for not known).
 type WatchTarget struct {
 	ID      AccountID
 	Kind    Kind
 	Owner   AccountID
 	Name    string
 	Stopped bool
+	Born    int32
 }
 
 // WatchTarget is the sailor whose name has key, moderation.Key's; ErrNotFound
@@ -33,7 +35,20 @@ func (s *Store) WatchTarget(ctx context.Context, key string) (WatchTarget, error
 	if err != nil {
 		return WatchTarget{}, err
 	}
-	return WatchTarget{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Stopped: r.Stopped}, nil
+	return WatchTarget{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Stopped: r.Stopped, Born: r.Born}, nil
+}
+
+// WatchTargetByID is the sailor of an account, as WatchTarget has it;
+// ErrNotFound if there is none.
+func (s *Store) WatchTargetByID(ctx context.Context, id AccountID) (WatchTarget, error) {
+	r, err := s.q.WatchTargetByID(ctx, uuidOf(id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return WatchTarget{}, ErrNotFound
+	}
+	if err != nil {
+		return WatchTarget{}, err
+	}
+	return WatchTarget{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Stopped: r.Stopped, Born: r.Born}, nil
 }
 
 // Sailor is an account's sailor as a list of boats shows it: its name, its
@@ -125,7 +140,7 @@ func (s *Store) LinkTarget(ctx context.Context, code string) (WatchTarget, error
 	if err != nil {
 		return WatchTarget{}, err
 	}
-	return WatchTarget{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Stopped: r.Stopped}, nil
+	return WatchTarget{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Stopped: r.Stopped, Born: r.Born}, nil
 }
 
 // FleetLinkOwner is the human account whose fleet's link has code;

@@ -13,8 +13,12 @@ export interface HullSolid {
   stations: number[][];
   exponent: number;
   cockpit: { fore: number; aft: number; halfWidth: number; floor: number };
-  /** The daggerboard: its root under the hull, its span down, its chord and thickness. */
-  board: { y: number; z: number; span: number; chord: number; thickness: number };
+  /**
+   * The daggerboard: its root under the hull, its span down, its chord and
+   * thickness; and how far out from the centreline it is, 0 but for a boat
+   * of two hulls, whose keels are under each hull, either side.
+   */
+  board: { x: number; y: number; z: number; span: number; chord: number; thickness: number };
 }
 
 /** The solid from the model's data, or null if it has none. */
@@ -38,6 +42,7 @@ export function hullSolid(
     exponent: s.exponent,
     cockpit: s.cockpit,
     board: {
+      x: Math.abs(boardRoot.x),
       y: boardRoot.y,
       z: boardRoot.z,
       span: board.span,
@@ -86,7 +91,7 @@ function halfWidth(solid: HullSolid, z: number, y: number): number {
 export function inside(solid: HullSolid, x: number, y: number, z: number): boolean {
   const b = solid.board;
   if (
-    Math.abs(x) < b.thickness / 2 &&
+    Math.abs(Math.abs(x) - b.x) < b.thickness / 2 &&
     y < b.y &&
     y > b.y - b.span &&
     Math.abs(z - b.z) < b.chord / 2

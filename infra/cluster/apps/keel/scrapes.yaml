@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # What the scraper reads in the game's namespace: keel's metrics, every
-# 15 s, on the listener that serves them alone; and the database's, on
+# 15 s, on the listener that serves them alone; the contributor agreement
+# keeper's, every 30 s, as few and slow as they are; and the database's, on
 # CloudNativePG's exporter in each instance (its own pod monitor is
 # deprecated: written here instead). Each port is let in to the scraper by
 # network-policies.yaml.
@@ -15,6 +16,18 @@ spec:
   podMetricsEndpoints:
     - port: metrics
       interval: 15s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: keel-agreement
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keel-agreement
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMPodScrape

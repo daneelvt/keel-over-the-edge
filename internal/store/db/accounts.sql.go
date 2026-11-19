@@ -129,7 +129,7 @@ func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (A
 
 const accountCard = `-- name: AccountCard :one
 SELECT a.id, a.kind, a.owner_id, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
-  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap, a.every_boat,
   coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at, coalesce(a.stop_reason, '')::text AS stop_reason,
   coalesce(a.recovery_made_at, 'epoch')::timestamptz AS recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery,
   coalesce(osl.name, '')::text AS owner_name, coalesce(o.tools, false)::boolean AS owner_tools,
@@ -158,6 +158,7 @@ type AccountCardRow struct {
 	Tools          bool
 	Priority       bool
 	MachineCap     int16
+	EveryBoat      bool
 	StoppedAt      time.Time
 	StopReason     string
 	RecoveryMadeAt time.Time
@@ -188,6 +189,7 @@ func (q *Queries) AccountCard(ctx context.Context, id pgtype.UUID) (AccountCardR
 		&i.Tools,
 		&i.Priority,
 		&i.MachineCap,
+		&i.EveryBoat,
 		&i.StoppedAt,
 		&i.StopReason,
 		&i.RecoveryMadeAt,
@@ -440,11 +442,21 @@ func (q *Queries) DeleteAccount(ctx context.Context, id pgtype.UUID) (int64, err
 }
 
 const forgetCredits = `-- name: ForgetCredits :exec
-WITH c AS (UPDATE charting SET sailor = NULL WHERE charting.account_id = $1)
+WITH c AS (UPDATE charting SET sailor = NULL WHERE charting.account_id = $1),
+v AS (
+  UPDATE log_voyage SET
+    skipper_id = CASE WHEN log_voyage.skipper_id = $1 THEN NULL ELSE log_voyage.skipper_id END,
+    skipper_name = CASE WHEN log_voyage.skipper_id = $1 THEN NULL ELSE log_voyage.skipper_name END,
+    crew = (SELECT coalesce(jsonb_agg(CASE WHEN m->>'id' = $1::text THEN m - 'id' - 'name' ELSE m END ORDER BY o), '[]'::jsonb)
+            FROM jsonb_array_elements(log_voyage.crew) WITH ORDINALITY AS t(m, o))
+  WHERE log_voyage.skipper_id = $1 OR log_voyage.crew @> jsonb_build_array(jsonb_build_object('id', $1::text))
+),
+e AS (UPDATE log_entry SET other_id = NULL, other_name = NULL WHERE log_entry.other_id = $1)
 UPDATE news_item SET sailor = NULL WHERE news_item.account_id = $1
 `
 
-// A deleted account's credits keep their places, under no name.
+// A deleted account's credits keep their places, under no name; and in
+// others' logs it is a former sailor, its name and its account forgotten.
 func (q *Queries) ForgetCredits(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, forgetCredits, id)
 	return err

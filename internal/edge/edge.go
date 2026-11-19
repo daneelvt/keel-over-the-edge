@@ -264,6 +264,20 @@ type Config struct {
 	// the controls offered it; without them no machine sailor is sent
 	// aboard.
 	Machines Machines
+	// RaceNames, if not nil, names a race's boats as each reader may be
+	// told them; without it their names are not told.
+	RaceNames RaceNamer
+	// WatchByID, if not nil, finds a sailor to watch by their account, as
+	// Watch does by name: a race's boat is watched by it. RaceOf, if not
+	// nil, finds the world's race of a link's code, its ID: store.ErrNotFound
+	// for none.
+	WatchByID func(ctx context.Context, a bus.Account) (watch.Target, error)
+	RaceOf    func(ctx context.Context, code string) ([16]byte, error)
+	// Prizes, if not nil, is a sailor's prizes in the world, a prize code
+	// (BoatPrize's): every boat they sail flies them, and they wear the
+	// cockade while it has a pennant. It never waits: a sailor not known
+	// yet has none until they are. Without it no boat flies any.
+	Prizes func(bus.Account) uint32
 }
 
 // Edge serves the game connection.
@@ -290,6 +304,9 @@ type Edge struct {
 	voyages  voyages
 	decks    decks
 	watchers boatWatchers
+	crowd    crowds
+	sailedTo sailedTo
+	lifts    lifts
 
 	mu      sync.Mutex
 	closing bool
@@ -349,6 +366,7 @@ func New(cfg Config) *Edge {
 // sim.Recorder. It wakes the encoders and never blocks.
 func (e *Edge) Record(f *bus.Frame) {
 	e.latest.Store(f.Tick)
+	e.certified(f)
 	for _, enc := range e.encs {
 		enc.wake()
 	}
@@ -470,12 +488,102 @@ type toldName struct {
 }
 
 // toldCrew is what a client was last told of the crew of a view slot's
-// boat: the boat, its deck's count of changes aboard, and its skipper's
-// look.
+// boat: the boat, its deck's count of changes aboard, its skipper's look,
+// and what those aboard wear (wornOf).
 type toldCrew struct {
 	boat uint64
 	deck uint32
 	look uint32
+	worn worn
+}
+
+// toldDeck is what a client aboard or watching a boat was last told of
+// its crew: the boat, its deck's count of changes aboard, and what those
+// aboard wear (wornOf).
+type toldDeck struct {
+	boat uint64
+	deck uint32
+	worn worn
+}
+
+// worn is what those aboard a boat wear of their prizes, four bits a
+// person, the skipper first, then its crew in order: the cockade (1 bit)
+// and the pendant (3 bits, BoatPrize's). It holds the skipper and as many
+// crew as a boat takes.
+type worn [(bus.MaxCrew + 16) / 16]uint64
+
+// put has person i wear a prize code's cockade and pendant.
+func (w *worn) put(i int, prizes uint32) {
+	n := uint64(prizes>>pendantShift&7) << 1
+	if prizes&pennantsMask != 0 {
+		n |= 1
+	}
+	w[i/16] |= n << (i % 16 * 4)
+}
+
+// cockade says whether person i wears the cockade.
+func (w *worn) cockade(i int) bool { return w[i/16]>>(i%16*4)&1 != 0 }
+
+// pendant is the pendant person i wears, 0 for none.
+func (w *worn) pendant(i int) uint32 { return uint32(w[i/16] >> (i%16*4 + 1) & 7) }
+
+// toldPrize is a boat's prizes as a client was last told them: its prize
+// code and its race number.
+type toldPrize struct {
+	prizes uint32
+	number uint32
+}
+
+// pennantsMask is a prize code's count of winner's pennants (BoatPrize):
+// a sailor whose boat flies any wears the cockade. pendantShift is where
+// its pendant is, 3 bits.
+const (
+	pennantsMask = 7
+	pendantShift = 23
+)
+
+// prizesOf is a sailor's prize code: none without Prizes.
+func (e *Edge) prizesOf(a bus.Account) uint32 {
+	if e.cfg.Prizes == nil {
+		return 0
+	}
+	return e.cfg.Prizes(a)
+}
+
+// wornOf is what those aboard the boat in slot s of f wear, f's crew of
+// it f.Crew[lo:hi]: person 0 its skipper, person i+1 f.Crew[lo+i].
+func (e *Edge) wornOf(f *bus.Frame, s int32, lo, hi int) worn {
+	var w worn
+	if e.cfg.Prizes == nil {
+		return w
+	}
+	w.put(0, e.cfg.Prizes(f.Owner[s]))
+	for i, a := range f.Crew[lo:hi] {
+		if i < bus.MaxCrew {
+			w.put(i+1, e.cfg.Prizes(a.Account))
+		}
+	}
+	return w
+}
+
+// raceNumber is the race number of the boat in slot s of f while it
+// races, from its placing on the line until its race is over; 0 for none.
+func raceNumber(f *bus.Frame, s int32) uint32 {
+	for i := range f.Racers {
+		r := &f.Racers[i]
+		if r.Slot != s || r.Boat != f.Boat[s] {
+			continue
+		}
+		if r.State != bus.RacerPlaced && r.State != bus.RacerRacing && r.State != bus.RacerFinished {
+			continue
+		}
+		for k := range f.Races {
+			if f.Races[k].Key == r.Race && f.Races[k].Phase < bus.RaceEnded {
+				return uint32(max(r.Number, 0))
+			}
+		}
+	}
+	return 0
 }
 
 // stopped reports whether an account is stopped by the game's operator.

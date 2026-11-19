@@ -384,38 +384,62 @@ Check:
 ## 11. Cloudflare: Zero Trust and the API token
 
 1. **Zero Trust** (from the account's home): if the account has no team
-   yet, choose a team name and the **Free** plan. Record in the pull
-   request whether Cloudflare asked for a payment method. If it asks and
-   you will not give one, stop: tunnels belong to Zero Trust.
+   yet, choose the **Free** plan. Record in the pull request whether
+   Cloudflare asked for a payment method. If it asks and you will not give
+   one, stop: tunnels belong to Zero Trust. Cloudflare gives the team a
+   random name (`tight-smoke-7182`); rename it at once under **Settings →
+   Team name and domain** (`keelovertheedge`), before anything is applied:
+   the team's domain is in every token Access signs, and a later rename
+   takes an apply and a restart of keel. A tunnel works without the team,
+   but Access does not: without it, `plan` stops at
+   `cloudflare_zero_trust_organization` with "Access is not enabled".
 2. **Manage Account → Account API Tokens → Create Token → Custom token**
    (a token the account owns, not your profile):
    - **Name**: `accounts`
-   - **Permissions**:
+   - **Permissions**, by the names the token's editor shows (its summary
+     says Write for Edit):
 
-     | Scope | Permission | Access |
-     |---|---|---|
-     | Account | Cloudflare One Connector: cloudflared | Edit |
-     | Account | Notifications | Edit |
-     | Zone | DNS | Edit |
-     | Zone | Zone | Read |
-     | Zone | Zone Settings | Edit |
-     | Zone | Zone WAF Rules | Edit |
-     | Zone | Bot Management | Edit |
-     | Zone | Cache Settings | Edit |
+     | Scope | Permission | Access | For |
+     |---|---|---|---|
+     | Account | Cloudflare One Connector: cloudflared | Edit | the tunnel |
+     | Account | Notifications | Edit | the e-mails |
+     | Zone | Zone | Read | finding the zone |
+     | Zone | DNS | Edit | the records |
+     | Zone | Zone Settings | Edit | the zone's settings |
+     | Zone | Zone WAF | Edit | the firewall and rate rules |
+     | Zone | Bot Management | Edit | the bot settings |
+     | Zone | Cache Settings | Edit | the cache rules |
+     | Zone | Config Settings | Edit | the configuration rules |
+     | Zone | Response Compression | Edit | the compression rule |
+     | Account | Access: Apps | Edit | the website (section 16) |
+     | Account | Access: Policies | Edit | the website |
+     | Account | Access: Service Tokens | Edit | the website |
+     | Account | Access: Organizations, Identity Providers, and Groups | Read | the website |
+     | Account | Workers Scripts | Edit | the website |
+     | Account | Workers KV Storage | Edit | the website |
+     | Zone | Workers Routes | Edit | the website |
+     | Zone | Dynamic URL Redirects | Edit | the website |
+     | Account | Turnstile Sites | Edit | new sailors' human check |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
-     zone, `keelovertheedge.com`.
+     zone, `keelovertheedge.com`. The token's editor puts each permission
+     in the policy of its scope: one for the account, one for the zone.
    - **Client IP Address Filtering**: none. **TTL**: none (replaced by
      hand, below).
 
    "Cloudflare One Connector: cloudflared" is what Cloudflare now calls
    Cloudflare Tunnel's permission, the narrowest the provider accepts for a
    tunnel and its token; not "Argo Tunnel (Legacy)", nor "Cloudflare One
-   Connectors", which covers WARP's connectors too.
+   Connectors", which covers WARP's connectors too. "Dynamic URL
+   Redirects" covers the Single Redirects (`http_request_dynamic_redirect`).
+   The organisation is only read (`access.tf`): not its Write.
 
-   This is where the list starts: the first `plan` and `apply` show what is
-   missing (an error naming the endpoint refused) or unused, and this table
-   is corrected to the final list.
+   A token made before a permission was added is **edited** to add it
+   (Account API Tokens → `accounts` → Edit): its value stays the same. A
+   missing one shows as a 403 in `plan` (an error naming the endpoint
+   refused) or, for a resource made the first time, only in `apply`
+   ("request is not authorized"); add it, then run `plan` and `apply`
+   again, since an apply runs its own run's plan.
 3. Cloudflare shows the token once. In `keel-accounts`, Production,
    `accounts`, **Add Secret** `CLOUDFLARE_API_TOKEN`.
 4. On the zone's **Overview**, copy the **Account ID** and **Zone ID** as
@@ -452,9 +476,10 @@ Check:
    DNSSEC** shows the DS record (key tag, algorithm 13, digest type 2,
    digest). At Name.com, on the domain: **DNSSEC Management → Add DNSSEC
    Record**, with those four values.
-7. A day later, with nothing gone wrong: in `infra/tofu/zone.tf`, raise
-   `hsts_max_age` from `86400` to `15552000` (six months), by a pull
-   request, and run `accounts` with `apply`.
+7. HSTS: `infra/tofu/zone.tf` sets `hsts_max_age` to `15552000` (six
+   months). On a new zone, set it to `86400` (a day) for the first apply,
+   and raise it back by a pull request a day later, with nothing gone
+   wrong, then run `accounts` with `apply`.
 
 Check:
 
@@ -648,6 +673,297 @@ A key believed stolen: delete it first, then make the new one. The
 database keeps the WAL it cannot archive and sends it once the new key
 arrives; within the lock's 14 days nothing in the bucket was lost, and
 `b2 ls --versions` shows what the thief hid or added.
+
+## 15. GitHub: the contributor agreement's App
+
+Pull requests from outside are taken under a contributor agreement. Its
+keeper, `keel agreement`, runs beside the game (`keel-agreement` in
+`keel`) and is the server of a GitHub App: GitHub tells it of each pull
+request, and it sets the commit status `pr-agreement` and leaves one
+comment. Contributors sign on its page, `/agreement` on the players'
+host, after signing in with GitHub. The App is registered by hand, on
+your own account; until it is, the keeper runs "not set up": its page
+says signing is not open yet, and it refuses GitHub's deliveries.
+
+### 15.1 Before the keeper is merged
+
+1. Run **`accounts`** with `plan`, then with `apply`, as in section 12. It
+   makes the password of the keeper's database role, `agreement`, in
+   `keel-cluster`, `/keel/DB_AGREEMENT_PASSWORD`, and the empty folder
+   `/keel-agreement/` the App's values go in.
+2. Only then merge and promote the pull request that brings the keeper:
+   CloudNativePG makes the role from that password, and the keeper
+   connects with it. Without it, the keeper waits for its Secret and the
+   role is not made.
+
+Check:
+
+- [ ] `kubectl -n keel get externalsecret keel-db-agreement keel-agreement`:
+      both `SecretSynced` (`keel-agreement` holds nothing yet: a value
+      Infisical lacks is left out, not an error).
+- [ ] `kubectl -n keel get cluster keel-db -o
+      jsonpath='{.status.managedRolesStatus.byStatus}'` lists `agreement`
+      as `reconciled`. If CloudNativePG looked for the role's Secret before
+      it synced, it lists it `pending-reconciliation` ("secret not found")
+      and does not look again by itself: `kubectl -n keel annotate cluster
+      keel-db keel/roles-retry=$(date +%s) --overwrite` makes it (the
+      database does not restart).
+- [ ] `kubectl -n keel get deploy keel-agreement` is ready, and
+      `https://play.keelovertheedge.com/agreement` answers. If it is not
+      ready and its log says it may not read its tables, the role was made
+      after keel's migration ran, which grants them: the next promote
+      grants them, or at once, with no restart: `kubectl -n keel exec
+      keel-db-1 -c postgres -- psql -d keel -c "GRANT SELECT, INSERT,
+      UPDATE ON agreement_signature TO agreement; GRANT SELECT, INSERT,
+      UPDATE, DELETE ON agreement_pull TO agreement;"` (on the primary,
+      if it is not `keel-db-1`).
+
+### 15.2 The App
+
+On github.com, signed in as yourself: **Settings → Developer settings →
+GitHub Apps → New GitHub App**. First make the webhook's secret, and keep
+it in the password manager until 15.3:
+
+```sh
+openssl rand -hex 32
+```
+
+| Field | Value |
+|---|---|
+| GitHub App name | `Keel Over the Edge CLA` (GitHub allows 34 characters) |
+| Homepage URL | `https://play.keelovertheedge.com/agreement` |
+| Callback URL | `https://play.keelovertheedge.com/agreement/callback` (one, no other) |
+| Expire user authorization tokens | on |
+| Request user authorization (OAuth) during installation | off |
+| Enable Device Flow | off |
+| Setup URL, Redirect on update | empty, off |
+| Webhook: Active | on |
+| Webhook URL | `https://play.keelovertheedge.com/agreement/webhook` |
+| Webhook secret | the value just made |
+| SSL verification | enabled |
+| Repository permissions | **Commit statuses**: Read and write; **Pull requests**: Read and write; **Metadata**: Read-only (GitHub's own, always); every other: No access |
+| Organization permissions | none |
+| Account permissions | none: signing in tells the keeper who someone is without any |
+| Subscribe to events | **Pull request** alone |
+| Where can this GitHub App be installed? | **Any account**: GitHub lets only a private App's owner sign in through it. Others may install it too, and the keeper passes their installations over |
+
+**Create GitHub App**. On its **General** page:
+
+1. Note the **App ID** and the **Client ID**. Neither is secret.
+2. **Client secrets → Generate a new client secret**. It is shown once.
+3. **Private keys → Generate a private key**. Your browser downloads a
+   `.pem` file.
+
+### 15.3 Its values
+
+In Infisical, `keel-cluster`, **Production**, the folder `keel-agreement`,
+add four secrets (the names are exact, the keys of the Secret the keeper
+reads):
+
+| Name | Value |
+|---|---|
+| `GITHUB_APP_PRIVATE_KEY` | the `.pem` file's whole text, its `BEGIN` and `END` lines included |
+| `GITHUB_APP_WEBHOOK_SECRET` | the webhook's secret, from 15.2 |
+| `GITHUB_APP_CLIENT_SECRET` | the client secret |
+| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read; `contact@keelovertheedge.com` once its mailbox receives mail (section 17), and until then one elsewhere, as the game's domain receives none |
+
+Then delete the `.pem` file and the webhook's secret from the password
+manager: Infisical holds them alone, and a new key or secret can always
+be made (below).
+
+By a pull request, write the App ID and the Client ID into the
+`keel-agreement` ConfigMap of `infra/cluster/clusters/prod/apps/kustomization.yaml`
+(`KEEL_AGREEMENT_APP_ID`, `KEEL_AGREEMENT_CLIENT_ID`). Before promoting
+it, bring the values to the cluster at once: `kubectl -n keel annotate
+externalsecret keel-agreement force-sync=$(date +%s) --overwrite`. The
+promote restarts the keeper, which reads them when it starts. (A value
+changed later needs the same, and `kubectl -n keel rollout restart
+deploy/keel-agreement`.)
+
+Check:
+
+- [ ] `kubectl -n keel get secret keel-agreement -o jsonpath='{.data}' | jq keys`
+      lists the four names.
+- [ ] The App's **Advanced** page: the ping GitHub sent when the App was
+      made may have failed (the keeper was not set up); **Redeliver** it:
+      it is answered.
+
+### 15.4 The trial, then the game's repository
+
+The App goes first on a throwaway repository, where nothing is at stake.
+
+1. Make a public repository `keel-agreement-trial` on your account, with a
+   README.
+2. On the App's page: **Install App** → your account → **Only select
+   repositories** → `keel-agreement-trial`.
+3. As a second GitHub account that has not signed, fork it and open a pull
+   request. Within a minute, `pr-agreement` waits on it, and the App's one
+   comment links to the signing page.
+4. As that account, sign on the page. The pull request's status turns
+   green with nothing run again and nothing pushed.
+5. Push a commit to it with a `Co-authored-by:` trailer naming a human's
+   GitHub account that has not signed. The status waits again, and the
+   comment names that author.
+6. Push one with an AI's trailer instead (`Co-authored-by: Claude
+   <noreply@anthropic.com>`): it does not hold the status back.
+7. As a third account, with a pull request open, answer **I am under 18**
+   on the page: it shows the guardian's way instead of signing. Record
+   that signature by hand, as a guardian's would be:
+
+   ```sh
+   kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements add <login> \
+     -name "<their full name>" -guardian "<the guardian's name>" \
+     -guardian-email <the guardian's e-mail> -note "trial" -yes
+   ```
+
+   That account's pull request passes.
+8. `kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements
+   export` lists the signatures, the trial's among them. Void those made
+   for the trial alone (`… agreements void`), unless they should stand.
+9. Delete `keel-agreement-trial` (its **Settings → Delete this
+   repository**); its installation goes with it.
+10. **Install App** again, now on `keel-over-the-edge` alone.
+
+Check:
+
+- [ ] The App's **Install App** page shows one installation, on your
+      account, for `keel-over-the-edge` alone.
+- [ ] The App's permissions are exactly those of 15.2, and it is
+      subscribed to **Pull request** alone.
+- [ ] The next pull request to the game's repository has `pr-agreement`.
+
+### 15.5 The door opened
+
+Only after 15.4, with the App on this repository:
+
+1. In the pull request that opens the door, write the App's ID as
+   `pr-agreement`'s `integration_id` in `.github/settings/rulesets/main.json`.
+   It must be the ID of 15.3's ConfigMap: `go test ./tools/github` fails
+   until the two agree, and while either is missing.
+2. Make the label: `gh label create agreement-checked --repo
+   daneelvt/keel-over-the-edge --color c5def5 --description "The owner
+   checked authors the contributor agreement's check cannot match"`.
+3. Merge it, then `go run ./tools/github -apply`. It writes the rulesets
+   first, so `main` requires `pr-agreement` from the App alone, and only
+   then lets anyone open a pull request.
+
+Check:
+
+- [ ] `go run ./tools/github -check` reports no difference.
+- [ ] A pull request of yours has `pr-agreement` passed, with no comment.
+- [ ] As the second account, a new pull request to the game's repository
+      waits for its workflows' approval, gets the App's comment, and passes
+      `pr-agreement` once that account has signed (it signed in the trial).
+- [ ] docs/repository-settings.md's "Pull requests from outside", checked.
+
+### Rotating the App's private key and webhook secret
+
+- **The private key**: GitHub keeps several at once. **Generate a private
+  key**; paste the new `.pem` over `GITHUB_APP_PRIVATE_KEY`; `kubectl -n
+  keel annotate externalsecret keel-agreement force-sync=$(date +%s)
+  --overwrite`, then `kubectl -n keel rollout restart
+  deploy/keel-agreement`. Once a pull request's check has worked (a
+  redelivery from the **Advanced** page will do), delete the old key on
+  the App's page. A key believed stolen: delete it first; checks fail
+  until the new one is in.
+- **The webhook's secret**: GitHub has one at a time, so deliveries are
+  refused for the minute between. Make a new one (`openssl rand -hex
+  32`); paste it over `GITHUB_APP_WEBHOOK_SECRET` and force the sync as
+  above; set it on the App's **General** page; restart the keeper at once.
+  Then, on the **Advanced** page, **Redeliver** what failed in between.
+- **The client secret**: GitHub keeps two at once. Generate a new one,
+  paste it over `GITHUB_APP_CLIENT_SECRET`, force the sync, restart the
+  keeper, sign in on the page once, then delete the old one.
+
+## 16. Cloudflare: the website's Access and its token
+
+The game's status, `GET /api/status` on `play.`, is the website's alone:
+an Access application in front of that one path lets through the
+website's Worker's service token and nothing else, and keel checks the
+token Access signs every request with (`infra/tofu/access.tf`,
+docs/development.md, "`/api/status`"). OpenTofu makes the application, its
+policy and the token; it reads the team's domain and the application's
+audience tag from Cloudflare and writes both to `keel-cluster`'s
+`/keel-access/`, which the cluster reads into keel's settings
+(`KEEL_ACCESS_TEAM`, `KEEL_ACCESS_AUD`). Nothing is copied by hand but
+what follows.
+
+1. The `accounts` token has the website's permissions (section 11).
+2. The account has a Zero Trust team with its own name (section 11,
+   step 1): an account that only had the tunnel may have none, and Access
+   is off until it does. **Zero Trust → Settings → Team name and domain**:
+   note the team domain (`<team>.cloudflareaccess.com`) in the pull
+   request that first applies `access.tf`. OpenTofu reads it itself; the
+   note is for checking. Production's is
+   `keelovertheedge.cloudflareaccess.com`.
+3. The account is on **Workers Paid** (Workers & Pages → Plans): the
+   share picture takes about half a second of CPU to draw, past the free
+   plan's 10 ms.
+4. Run **`accounts`** with `plan`, then `apply`. Its summary makes the
+   application, the policy, the token, the KV namespace, the redirects,
+   `www.`'s record, the token's expiry e-mail and `/keel-access/`'s two
+   values.
+   The same apply job then deploys the website (`website/`): the Worker,
+   its static files, its cron, the apex as its custom domain (which makes
+   the apex's DNS record), the KV namespace's id and the service token's
+   ID and secret as the Worker's secrets, all from OpenTofu's outputs. Its
+   summary ends with a **Website** section saying so.
+5. keel reads its settings when it starts: once `/keel-access/` holds both
+   (at once: `kubectl -n keel annotate externalsecret keel-access
+   force-sync=$(date +%s) --overwrite`), restart it
+   (`kubectl -n keel rollout restart deployment/keel`) in a quiet hour.
+   Until then it serves no status at all, which is safe: the website rests.
+
+Check:
+
+- [ ] `curl -sI https://play.keelovertheedge.com/api/status` answers 401
+      or 403 from Cloudflare, with no `cf-cache-status: HIT`.
+- [ ] keel's log at start has no "the website's status is not served".
+- [ ] A request through Access with the token but a forged
+      `Cf-Access-Jwt-Assertion` is refused by keel, 403 `access`: from the
+      machine, `curl -s -H 'Cf-Access-Jwt-Assertion: x' http://<keel's pod
+      IP>:8080/api/status`.
+- [ ] `https://keelovertheedge.com/live` answers the game's numbers with
+      `"resting": false` once keel serves its status (before that, `{"resting":
+      true}`), and `/map.svg` the world's chart.
+- [ ] Workers & Pages → `keel-website` → Settings lists the custom domain
+      `keelovertheedge.com`, the cron `*/10 * * * *`, the KV binding
+      `WEBSITE` and the secrets `ACCESS_CLIENT_ID` and
+      `ACCESS_CLIENT_SECRET`, and no `workers.dev` route.
+
+### Renewing the website's token, every year
+
+The service token lasts a year. Cloudflare e-mails the owner a week before
+it ends ("Access service token expiring"); put the date in your calendar
+too, a fortnight before. To renew it: in `infra/tofu/access.tf`, raise
+`website_token_term` by one, by a pull request, and run `accounts` with
+`apply`. The token is replaced, a new one for a year from then, and the
+same run's deploy hands the Worker its new ID and secret. Between the two
+the map rests on its last good copy.
+
+To rotate only its secret (one that may have leaked): raise
+`website_token_generation` and set `website_token_old_until` an hour
+after you will apply; the old secret is let through until then.
+
+## 17. The contact mailbox: contact@keelovertheedge.com
+
+The website's footer, the game's privacy page (`client/privacy.html`) and
+its safety page (`client/safety.html`) give `contact@keelovertheedge.com`
+for questions, privacy requests and anyone outside the game. Today the
+domain receives no mail at all: `infra/tofu/dns.tf` has a null MX, an SPF
+record that allows no sender and DMARC `p=reject`, so mail to that address
+bounces until this is done.
+
+1. Choose a mail service for the domain and make the mailbox (or an alias
+   forwarded to one you read) for `contact@keelovertheedge.com`.
+2. By a pull request, replace `null_mx` in `infra/tofu/dns.tf` with the
+   service's MX records, add its SPF include (or keep `-all` if it only
+   receives) and its DKIM records, and keep DMARC at `p=reject` once its
+   DKIM passes. Run `accounts` with `plan`, then `apply`.
+3. Send a message to the address from another account, and answer it, to
+   check both ways.
+4. If the agreement page's `CONTACT_EMAIL` (section 15.3) points
+   elsewhere, it may now point here.
 
 ## If something fails
 

@@ -113,10 +113,14 @@ const looks = catalog.sailors.flatMap((s) =>
 let found: Promise<{ solid: NonNullable<ReturnType<typeof hullSolid>>; edge: Vector3 }> | null =
   null;
 
-/** The boat whose model has a rail (the keelboat): her hull's solid, and her rail's edge. */
+/**
+ * The boat whose model has a rail and whose people sit on it with the rail's
+ * own clips, naming no clips of their own (the keelboat; a cruising yacht's
+ * sit on her rail with hers): her hull's solid, and her rail's edge.
+ */
 function theKeelboat() {
   found ??= (async () => {
-    for (const kind of catalog.boats) {
+    for (const kind of catalog.boats.filter((k) => (k.art.sailorClips ?? []).length === 0)) {
       const boat = (await load(kind.art.model)).scene;
       boat.updateMatrixWorld(true);
       const parts = new Map<string, Object3D>();

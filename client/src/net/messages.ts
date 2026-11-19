@@ -121,6 +121,180 @@ export interface BumpTold {
   article: string;
 }
 
+/** A point of a race's course, m east and north of the world's centre. */
+export interface RacePoint {
+  east: number;
+  north: number;
+}
+
+/** A boat in a race as told: its race number, its skipper's name as the reader may see it ("" for one not named: their boat's name and number), its boat's name, whether a machine sailor's, whether the reader's own. */
+export interface RaceEntrantIn {
+  number: number;
+  name: string;
+  boat: string;
+  machine: boolean;
+  me: boolean;
+}
+
+/**
+ * A race under way as the server tells it: its number in the world, its
+ * link's code and its name ("" until read); its boats' kind, an index into
+ * the catalog's boats; whether a time trial's run; its warning and start,
+ * world ticks (a trial's start 0 until its boat crosses); the start line's
+ * ends, the pin's then the committee boat's, and the finish line's; the
+ * marks laid, each left to a side (1 starboard, −1 port, 0 a gate's); the
+ * way sailed, start to finish; its legs, the points of the way a boat
+ * makes for in turn, each a mark's number (0 a line); where it lies and
+ * how far it reaches, m; its laps and its expected time, s; its boats; or,
+ * gone, its course taken up.
+ */
+export interface RaceToldIn {
+  race: number;
+  code: string;
+  name: string;
+  boat: number;
+  trial: boolean;
+  run: number;
+  warning: number;
+  start: number;
+  pin: RacePoint | null;
+  committee: RacePoint | null;
+  finish: [RacePoint, RacePoint] | null;
+  marks: { east: number; north: number; number: number; side: number }[];
+  way: RacePoint[];
+  legs: { mark: number; east: number; north: number }[];
+  east: number;
+  north: number;
+  reach: number;
+  laps: number;
+  expected: number;
+  entrants: RaceEntrantIn[];
+  gone: boolean;
+}
+
+/** A signal from a race's committee boat: what it signals, whether its gun fires, and a finish's boat and place. */
+export interface RaceSignalIn {
+  race: number;
+  signal: 'warning' | 'preparatory' | 'start' | 'recall' | 'finish' | 'other';
+  gun: boolean;
+  number: number;
+  place: number;
+}
+
+/** How a boat stands in its race. */
+export type RacerStateIn =
+  | 'dns'
+  | 'placed'
+  | 'racing'
+  | 'finished'
+  | 'retired'
+  | 'placedAtEnd'
+  | 'other';
+
+/** A boat in a race's picture: its number; where, m, and its heading, degrees; its place (0 none); its gap to the first, s; seconds added; its state; the leg it makes for; its way to go, m; its cheers. */
+export interface RacerAtIn {
+  number: number;
+  east: number;
+  north: number;
+  heading: number;
+  place: number;
+  gap: number;
+  added: number;
+  state: RacerStateIn;
+  leg: number;
+  toGo: number;
+  cheers: number;
+}
+
+/** A race as it stands, every two seconds: the world's tick it was taken at, and every boat; eye, the number of the boat the page sails or watches (0 none). */
+export interface RacePictureIn {
+  race: number;
+  tick: number;
+  racers: RacerAtIn[];
+  eye: number;
+}
+
+/** The crowd's cheers for a boat in a race, gathered every two seconds: how many since the last, how many cheered it within ten seconds, and whether the page's own cheer is among them. */
+export interface RaceCheeredIn {
+  race: number;
+  number: number;
+  count: number;
+  crowd: number;
+  mine: boolean;
+}
+
+/** How a certificate's task counted: a task of the log, a course by hand, or a course's longer venture on the autopilot. */
+export type CertWayIn = 'log' | 'hand' | 'pilot';
+
+/**
+ * What the sailor's certificates came to, as the race or the log that
+ * counted is written: a task of its next certificate done (task, its place
+ * among the certificate's tasks; −1 for none), a course's venture a run
+ * nearer (runs of runsOf, the task not yet done; runsOf 0 otherwise), or
+ * the certificate earned, by hand or not. certificate is its place in the
+ * catalog's list; done of of the tasks done of those it needs.
+ */
+export interface CertifiedIn {
+  certificate: number;
+  task: number;
+  done: number;
+  of: number;
+  way: CertWayIn;
+  runs: number;
+  runsOf: number;
+  earned: boolean;
+  byHand: boolean;
+}
+
+/** A race's boat to watch: its race by number (0 for none) or its link's code, and its race number (0: the boat the game chooses). */
+export interface RaceWatchAsk {
+  race: number;
+  code: string;
+  number: number;
+}
+
+/** What a race's committee saw: a bump (number at fault, other bumped, by article, added seconds), a boat over early, a mark missed, a boat asked if it races still, a boat retired, a mark rounded (in place). */
+export interface RaceCallIn {
+  race: number;
+  kind: 'bump' | 'overEarly' | 'missedMark' | 'drifting' | 'retired' | 'rounded' | 'other';
+  number: number;
+  other: number;
+  article: string;
+  mark: number;
+  added: number;
+  place: number;
+}
+
+/** A boat home: its place as it stands, its time from the start, ms, and the seconds added. */
+export interface RaceFinishIn {
+  race: number;
+  number: number;
+  place: number;
+  elapsedMs: number;
+  added: number;
+}
+
+/** What a boat came to: its place (0 none), how it ended (finished, placed, dns, ret), its time, ms (0 not home), seconds added, marks rounded, way still to go, m, a trial's medal and its awards. */
+export interface RaceResultIn {
+  number: number;
+  place: number;
+  how: string;
+  elapsedMs: number;
+  added: number;
+  marks: number;
+  toGo: number;
+  medal: string;
+  awards: string[];
+}
+
+/** A race's results as it ends, and whether its prizes were given. */
+export interface RaceResultsIn {
+  race: number;
+  code: string;
+  prizes: boolean;
+  results: RaceResultIn[];
+}
+
 /**
  * Chunks of the land the server handed: each one's number on the world's
  * grid and its address, a path on the play origin to fetch it from, nearest
@@ -243,6 +417,27 @@ export interface ChartEntry {
   withNumber: number;
 }
 
+/** A kind of island course: round an island, a tour of islands, port to port, round a lighthouse. */
+export type CourseKind = 'round' | 'tour' | 'passage' | 'light';
+
+/**
+ * An island course open for racing, as the server tells of it once every
+ * place it names is charted: its number among the world's, its kind and
+ * name; its way, the shortest a boat sails, from the start to the finish,
+ * points in metres east and north; its length, m; what it rounds or
+ * passes, in order, each to its side; and the boats it suits, each by its
+ * kind (the catalog's index) with its expected time in the typical wind, s.
+ */
+export interface CourseOpen {
+  number: number;
+  kind: CourseKind;
+  name: string;
+  way: [number, number][];
+  length: number;
+  rounds: { subject: ChartSubject; number: number; starboard: boolean }[];
+  boats: { kind: number; seconds: number }[];
+}
+
 /** Whose boat a connection watches, as its Welcome says. */
 /** The AI of an own machine sailor watched: at the helm, or gone quiet. */
 export type LampState = 'helm' | 'quiet';
@@ -279,6 +474,10 @@ export interface PersonTold {
   muted: boolean;
   blocked: boolean;
   shipmate: boolean;
+  /** They wear the winner's cockade, for a race won in the world. */
+  cockade?: boolean;
+  /** The pendant they wear at the neck: 0 none, else their highest certificate's place in the catalog's list and one. */
+  pendant?: number;
 }
 
 /**
@@ -295,8 +494,20 @@ export interface CrewTold {
 /** Who is aboard a boat in view, by its view slot: each person's seat, look and machine mark, and the holder's seat; never a name. */
 export interface ViewCrewTold {
   slot: number;
-  people: { seat: number; look: number; machine: boolean }[];
+  people: { seat: number; look: number; machine: boolean; cockade?: boolean; pendant?: number }[];
   holder: number;
+}
+
+/**
+ * A boat's prizes, by its view slot as of the next snapshot, or the own
+ * boat's (the boat sailed or watched): its prize code (render/prizes.ts)
+ * and its race number while it races, 0 for none.
+ */
+export interface BoatPrizeTold {
+  slot: number;
+  own: boolean;
+  prizes: number;
+  number: number;
 }
 
 /** A knock waiting for the skipper's answer, or, gone, no longer waiting. */
@@ -416,6 +627,24 @@ export type ReportReasonTold =
   | 'cheating'
   | 'other';
 
+/**
+ * Where the boat of the sailor a course is set to is, every two seconds
+ * while it holds: the sailor's account as asked, their name, and the
+ * boat's place, m east and north.
+ */
+export interface ShipmateAtIn {
+  sailor: string;
+  name: string;
+  east: number;
+  north: number;
+}
+
+/**
+ * Why a course to a sailor's boat ended: come ashore, still in the game;
+ * no longer at sea; or refused, which never says why.
+ */
+export type CourseEndWhy = 'ashore' | 'gone' | 'refused';
+
 /** Why the connection left the boat it was aboard. */
 export type AshoreWhyTold = 'chose' | 'put' | 'left' | 'other';
 
@@ -443,10 +672,19 @@ export type ToWorker =
     }
   /** The page's frame time's 95th percentile, ms, for the server's metrics. */
   | { type: 'frame'; ms: number }
+  /** The bytes the page fetched over HTTP since it last said, for the next Ping. */
+  | { type: 'fetched'; bytes: number }
   /** How much the page draws: its tier (1 low … 3 high) and its pixel ratio, for the server's metrics. */
   | { type: 'quality'; tier: number; scale: number }
   /** Stop waiting: the network is back, or the page is shown again. */
   | { type: 'wake' }
+  /**
+   * The page hidden, or shown again. While it is hidden the worker keeps
+   * only the newest snapshot, and hands it over once it is shown; with
+   * settle, the page starts again from it, and the clock is set at once to
+   * its estimate.
+   */
+  | { type: 'hidden'; on: boolean; settle?: boolean }
   /** The player chose to take the boat back from another device. */
   | { type: 'takeover' }
   /**
@@ -459,6 +697,10 @@ export type ToWorker =
    * connection, and by every Hello from then on.
    */
   | { type: 'watch'; sailor: string }
+  /** Watch a race's boat, as watch does a sailor's. */
+  | { type: 'watchRace'; ask: RaceWatchAsk }
+  /** Cheer the boat watched in a race. */
+  | { type: 'cheer' }
   /** A boat again, as a new connection gets one: the Hellos from then on ask for it too. */
   | { type: 'sail' }
   /** Stop watching, without sailing: the connection is idle. */
@@ -467,6 +709,11 @@ export type ToWorker =
   | { type: 'knock'; token: string; machine: string; shipmate?: string }
   /** The skipper's answer to a knock. */
   | { type: 'answer'; knock: number; let: boolean }
+  /**
+   * Ask where a sailor's boat is, for a course to it: a shipmate, or one of
+   * the player's own machine sailors, by account; "" stops it.
+   */
+  | { type: 'courseTo'; sailor: string }
   /** Offer the controls to the person in that seat. */
   | { type: 'hand'; to: number }
   /** Take the controls offered; the skipper's, take them back at once. */
@@ -475,6 +722,10 @@ export type ToWorker =
   | { type: 'giveBack' }
   /** Go ashore (who 0), or, the skipper's, put the person in seat who ashore. */
   | { type: 'ashore'; who: number }
+  /** Retires the boat from the race it sails in. */
+  | { type: 'raceRetire' }
+  /** Lifts the own boat home to the start off Port Royal; lifted answers it. */
+  | { type: 'home' }
   /** Close the boat to knocks for this voyage, or open it again. */
   | { type: 'closeKnocks'; closed: boolean }
   /** Come aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
@@ -591,6 +842,18 @@ export type FromWorker =
   | { type: 'reported'; ok: boolean }
   /** The account's shipmates changed: the list is to be read again. Never what changed. */
   | { type: 'shipmates' }
+  /** Where the boat the course is set to is. */
+  | { type: 'shipmateAt'; at: ShipmateAtIn }
+  /** A course to a sailor's boat ended, or was refused. */
+  | { type: 'courseEnded'; sailor: string; why: CourseEndWhy }
+  /**
+   * The boat sailed or aboard was lifted home at tick, its first snapshot
+   * there that tick's or a later one's; or, tick 0, it was not: soon, it
+   * was lifted within the last minute.
+   */
+  | { type: 'lifted'; tick: number; soon: boolean }
+  /** A shipmate set a course to the player's boat: their name. */
+  | { type: 'shipmateCourse'; name: string }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
   | { type: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */
@@ -599,6 +862,8 @@ export type FromWorker =
   | { type: 'boatLook'; look: number; name: string }
   /** The names of boats in view, by view slot, as of the next snapshot: player text, "" for none. */
   | { type: 'boatNames'; names: { slot: number; name: string }[] }
+  /** What boats in view, and the own boat, fly for their skippers' races in the world. */
+  | { type: 'boatPrizes'; prizes: BoatPrizeTold[] }
   /** Who is aboard boats in view, by view slot, as of the next snapshot: no people for nobody but the skipper. */
   | { type: 'crews'; crews: ViewCrewTold[] }
   /** The server is about to restart, in about inMs: the bell. */
@@ -621,6 +886,18 @@ export type FromWorker =
   | { type: 'caps'; caps: CapSeen[]; drop: number[] }
   /** The boat, or one near it, touched another. */
   | { type: 'bump'; bump: BumpTold }
+  /** A race told, or taken up; a signal from its committee boat. */
+  | { type: 'raceTold'; told: RaceToldIn }
+  | { type: 'raceSignal'; signal: RaceSignalIn }
+  /** A race's picture, a call, a boat home, its results. */
+  | { type: 'racePicture'; picture: RacePictureIn }
+  | { type: 'raceCall'; call: RaceCallIn }
+  | { type: 'raceFinish'; finish: RaceFinishIn }
+  | { type: 'raceResults'; results: RaceResultsIn }
+  /** The crowd's cheers for a boat of the race. */
+  | { type: 'raceCheered'; cheered: RaceCheeredIn }
+  /** What the sailor's certificates came to. */
+  | { type: 'certified'; certified: CertifiedIn }
   /** Chunks of the land the boat could see: their addresses to fetch. */
   | { type: 'chunks'; chunks: ChunksHanded }
   /** The places in chunks just handed. */
@@ -629,8 +906,8 @@ export type FromWorker =
   | { type: 'lights'; lights: LightSeen[]; drop: number[] }
   /** The sea's life come within reach or changed, and encounters to drop, by id. */
   | { type: 'life'; life: LifeSeen[]; drop: string[] }
-  /** The world's chart: whole after a Welcome, or what was charted since. */
-  | { type: 'chart'; entries: ChartEntry[]; whole: boolean }
+  /** The world's chart: whole after a Welcome, or what was charted since; and the courses open. */
+  | { type: 'chart'; entries: ChartEntry[]; courses: CourseOpen[]; whole: boolean }
   /** The forecast as it is issued, with what has been after a Welcome. */
   | { type: 'forecast'; forecast: ForecastTold; past: PastTold | null }
   | { type: 'clock'; clock: ClockState }
@@ -646,4 +923,6 @@ export interface Traffic {
   resyncs: number;
   /** Inputs sent that carried the controls, not only an acknowledgement. */
   controls: number;
+  /** Snapshot records the worker has made, as NetWorker.made. */
+  made?: number;
 }

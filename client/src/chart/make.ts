@@ -7,44 +7,26 @@
 // lookout as the boat sails.
 
 import { catalog } from '../catalog';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, CourseOpen } from '../net/messages';
 import { type Physics, VISIBILITY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { SeaScene } from '../render/scene';
 import { hourAt, skyPeriods } from '../sky/skytime';
-import { type ChartSea, chartNews, type NewsSource } from '../ui/chart';
+import { type ChartSea, chartNews, openCourseBox } from '../ui/chart';
+import type { NewsSource } from '../ui/newsread';
 import { type NoticeKind, Notices } from '../ui/notices';
+import { nextMarkOf, Racing, raceDrawingOf } from '../ui/racestate';
+import { ReplayHost } from '../ui/replayhost';
 import { Chart } from './chart';
+import { sameCourse } from './course';
 import type { Forecasting } from './forecasting';
+import { FEATURE_MARKS, PLACE_MARKS } from './marks';
 import { Models } from './model';
 import { type Air, chartedWith, look, type SightExport } from './sight';
 import { ChartStore } from './store';
 import { type ChartLook, ChartView, type WindSampler } from './view';
 import { ChartWeather } from './weatherlayer';
 
-/** The marks of the kinds of place on the chart, by their sites. */
-const PLACE_MARKS: Record<string, string> = {
-  harbour: '■',
-  village: '•',
-  anchorage: '⚓',
-  reef: '✳',
-  bar: '∴',
-  wreck: '⋕',
-};
-
-/** The marks of the kinds of feature, by the chart's symbol for each. */
-const FEATURE_MARKS: Record<string, string> = {
-  cave: '◖',
-  arch: '⌒',
-  blowhole: '⊙',
-  fall: '≋',
-  spring: '◦',
-  crater: '◎',
-  smoke: '♨',
-  ruin: '⌂',
-  birds: '⋎',
-};
-
-/** The chart's look, from the catalog. */
+/** The chart's look, from the catalog; the website's map reads the same (website/worker/src/map/look.ts). */
 export function chartLook(): ChartLook {
   const w = catalog.world;
   const l = w.chart.look;
@@ -123,6 +105,10 @@ export interface ChartParts {
   notices: Notices;
   /** The chart's weather, null without a forecast. */
   weather: ChartWeather | null;
+  /** The race the boat sails in, as the chart and the race line show it. */
+  racing: Racing;
+  /** A race replayed on the chart. */
+  replay: ReplayHost;
 }
 
 /**
@@ -134,6 +120,8 @@ export function makeChart(
   models: Models,
   news: NewsSource | null,
   forecasting: Forecasting | null = null,
+  racing: Racing = new Racing(),
+  replay: ReplayHost = new ReplayHost(),
 ): ChartParts {
   const w = catalog.world;
   const store = new ChartStore({
@@ -145,6 +133,7 @@ export function makeChart(
     scale: catalog.sky.scale,
     lip: w.disk.radius,
     great: w.chart.worth.great,
+    boats: catalog.boats.map((b) => b.name),
   });
   const boat = () => ({
     east: world.pose.east,
@@ -159,12 +148,20 @@ export function makeChart(
   if (forecasting !== null) {
     weather = new ChartWeather(forecasting, choice, w.chart.look.weather.canvas);
   }
-  const view = new ChartView(store, models, chartLook(), boat, windOf(world, weather));
+  const view = new ChartView(store, models, chartLook(), boat, windOf(world, weather), racing);
   const notices = new Notices(
     catalog.notices.kinds as unknown as NoticeKind[],
     catalog.notices.queue,
   );
   const chart = new Chart(store, view, notices);
+  // A replay open draws its race at its slider's moment in the race's
+  // place; closing the chart closes it.
+  view.raceDrawing = () => replay.model.peek()?.drawing() ?? raceDrawingOf(racing);
+  chart.open.subscribe((open) => {
+    if (!open) {
+      replay.close();
+    }
+  });
   if (weather !== null) {
     view.attachWeather(weather);
     view.streaksOn = () => chart.layers.value.streaks;
@@ -173,6 +170,26 @@ export function makeChart(
     }
   }
   world.cover = view;
+  // In a race, the compass gives way to the race line.
+  chart.racing = () => racing.told.peek() !== null;
+  // The course on the chart: its pin and pencil line, and a pin dropped,
+  // its box open; a tap on the course's pin opens its box.
+  view.courseDrawing = () => {
+    const b = boat();
+    const a = chart.aim(b.east, b.north);
+    const m = chart.marked.peek();
+    const pin =
+      m?.kind === 'pin' &&
+      Math.hypot(m.east, m.north) <= w.disk.radius &&
+      !sameCourse(chart.course.peek(), m)
+        ? { east: m.east, north: m.north }
+        : null;
+    return { course: a === null ? null : { east: a.east, north: a.north, name: a.name }, pin };
+  };
+  view.course.onTap = () => openCourseBox(chart);
+  // In a race, the next mark's number over its spar in the sea; otherwise
+  // the course's name and distance over its point, within sight.
+  world.markTagOf = () => nextMarkOf(racing) ?? chart.seaTag(world.pose.east, world.pose.north);
   const motion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   if (motion !== undefined) {
     view.reducedMotion = motion.matches;
@@ -193,7 +210,6 @@ export function makeChart(
     scale: catalog.sky.scale,
     lip: w.disk.radius,
     characters: w.lights.characters.map((c) => c.notation),
-    columns: catalog.news.columns.map((c) => ({ id: c.id, title: c.title, of: c.of })),
     news:
       news ??
       chartNews(
@@ -203,8 +219,10 @@ export function makeChart(
     forecasting,
     speed: () => 0,
     steer: null,
+    racing,
+    replay,
   };
-  return { chart, sea, notices, weather };
+  return { chart, sea, notices, weather, racing, replay };
 }
 
 /** The sandbox's chart file. */
@@ -213,6 +231,13 @@ interface SandboxFile {
   models: string[];
   known: number[];
   sight: SightExport;
+  /** The world's island courses, each with the entries, by index, that open it once charted. */
+  courses?: (CourseOpen & { needs: number[] })[];
+}
+
+/** The sandbox's courses that every entry each needs, charted, opens. */
+function openCourses(file: SandboxFile, charted: (i: number) => boolean): CourseOpen[] {
+  return (file.courses ?? []).filter((c) => c.needs.every(charted)).map(({ needs: _, ...c }) => c);
 }
 
 /** Fetches the sandbox's chart for a seed: null without one. */
@@ -263,6 +288,7 @@ export function chartSandbox(
     store.receive(
       file.entries.map((e) => at(e, '')),
       true,
+      openCourses(file, () => true),
     );
     return () => {};
   }
@@ -274,6 +300,7 @@ export function chartSandbox(
       .filter((e) => e !== undefined)
       .map((e) => at(e, '')),
     true,
+    openCourses(file, (i) => charted.has(i)),
   );
   const lights = catalog.world.lights;
   const night = Math.log(lights.threshold);
@@ -314,7 +341,11 @@ export function chartSandbox(
       }
     }
     if (out.length > 0) {
-      store.receive(out, false);
+      store.receive(
+        out,
+        false,
+        openCourses(file, (i) => charted.has(i)),
+      );
     }
   }, 500);
   return () => clearInterval(t);

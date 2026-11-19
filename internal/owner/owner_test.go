@@ -36,6 +36,7 @@ import (
 type fakeAccounts struct {
 	mu    sync.Mutex
 	by    map[store.AccountID]store.Account
+	every map[store.AccountID]bool
 	reads int
 }
 
@@ -73,6 +74,19 @@ func (f *fakeAccounts) SetPriority(_ context.Context, id store.AccountID, on boo
 	}
 	a.Priority = on
 	f.by[id] = a
+	return nil
+}
+
+func (f *fakeAccounts) SetEveryBoat(_ context.Context, id store.AccountID, on bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.by[id]; !ok {
+		return store.ErrNotFound
+	}
+	if f.every == nil {
+		f.every = map[store.AccountID]bool{}
+	}
+	f.every[id] = on
 	return nil
 }
 

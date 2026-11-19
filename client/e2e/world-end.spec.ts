@@ -65,9 +65,11 @@ test('@long a world ends on stage, and a new one begins with a blank chart', {
   await expect
     .poll(
       async () => {
-        const res = await request.get('http://localhost:5181/api/news');
-        const page = (await res.json()) as { items: { subject: string; endsAt?: number }[] };
-        return page.items.filter((it) => it.subject === 'world').map((it) => it.endsAt);
+        // The news is read only by a sailor signed in.
+        expect((await request.get('http://localhost:5181/api/news')).status()).toBe(401);
+        const res = await ann.c.request.get('/api/news');
+        const edition = (await res.json()) as { notices: { endsAt: number }[] };
+        return edition.notices.map((n) => n.endsAt);
       },
       { timeout: 30_000 },
     )

@@ -95,7 +95,7 @@ func (a *aoi) find(f *bus.Frame, own int32, x, y float64, base, next *connView, 
 			next.view.Boats[vs] = baseView.Boats[vs]
 			continue
 		}
-		protocol.Quantise(&f.State[s], f.Kind[s], f.Sail[s], !near, &next.view.Boats[vs])
+		protocol.Quantise(&f.State[s], f.Kind[s], f.Sail[s], f.Trim[s], !near, &next.view.Boats[vs])
 		if f.Voyage[s].Falling() {
 			next.view.Boats[vs].Flags |= protocol.Falling
 		}

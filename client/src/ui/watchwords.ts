@@ -12,6 +12,8 @@ import { ordinal } from './queue';
 export const WATCH = 'Watch';
 export const WATCHING = 'Watching';
 export const WATCH_ANOTHER = 'Watch another';
+/** The key to the day's news, before the sea. */
+export const NEWS = 'News';
 export const WATCH_ANOTHER_SAILOR = 'Watch another sailor';
 export const WATCH_A_SAILOR = 'Watch a sailor';
 export const STOP_WATCHING = 'Stop watching';
@@ -34,8 +36,20 @@ export const LEAVE_DETAIL = 'Your boat leaves the water now. Sailing again start
 export const LEAVE = 'Leave the water';
 export const STAY = 'Stay';
 
-/** The start screen's warning to a player whose boat is still at sea. */
-export const STILL_AT_SEA = 'Your boat is still in the water: watching takes it out';
+/** The start screen's note to a player whose boat is still at sea: in its grace, or sailing on another screen. */
+export const STILL_AT_SEA = 'Your boat is still in the water, where you left it.';
+
+/** The question before the start screen takes a boat still at sea out of the water, and its answers. */
+export const TAKE_OUT_QUESTION = 'Take your boat out of the water?';
+export const TAKE_OUT_DETAIL = 'It ends that voyage.';
+export const TAKE_IT_OUT = 'Take it out';
+export const KEEP_IT = 'Keep it';
+
+/** The start screen's link under Set sail that takes a boat still at sea out and sets sail at the start. */
+export const START_AGAIN = 'Start again at Port Royal';
+
+/** The start screen's line when the boat could not be taken out. */
+export const NOT_TAKEN_OUT = 'Your boat could not be taken out just now. Try again.';
 
 /** Who may watch the account's boat, as GET /api/me names it: no one, or anyone for the voyage. */
 export type Spectators = 'no' | 'voyage';
@@ -56,17 +70,24 @@ export type WatchEndWhy =
   | 'quick'
   | 'busy'
   | 'aboard'
+  | 'no-race'
   | 'other';
 
 /** The words of a watch ended or refused, the sailor named as the server names them. */
 export function endedText(why: WatchEndWhy, sailor: string): string {
+  // A race's boat whose sailor is not named to the reader.
+  const who = sailor === '' ? 'That boat' : sailor;
   switch (why) {
-    case 'left':
-      return `${sailor} has left the water.`;
+    case 'no-race':
+      return 'That race is not on the water now.';
     case 'off':
-      return `${sailor} no longer allows spectators.`;
+      return sailor === ''
+        ? 'That boat is out of the race.'
+        : `${sailor} no longer allows spectators.`;
+    case 'left':
+      return `${who} has left the water.`;
     case 'not-at-sea':
-      return `${sailor} is not at sea.`;
+      return `${who} is not at sea.`;
     case 'no-sailor':
       return `There is no sailor called ${sailor}.`;
     case 'own':
@@ -78,7 +99,7 @@ export function endedText(why: WatchEndWhy, sailor: string): string {
     case 'aboard':
       return 'Go ashore first to watch another boat.';
     default:
-      return `${sailor} cannot be watched now.`;
+      return `${who} cannot be watched now.`;
   }
 }
 
@@ -129,6 +150,28 @@ export function linkFromQuery(query: URLSearchParams): WatchLink | null {
   return CODE.test(f) ? { kind: 'fleet', code: f } : null;
 }
 
+/**
+ * The query of the links into the list of sailors to watch, as the website
+ * gives them: ?watch opens the list, ?watch=pick picks one at once, as Pick
+ * one for me does. Neither names a sailor.
+ */
+export const LIST_PARAM = 'watch';
+const PICK = 'pick';
+
+/** What a link into the list asks: the list, or one picked from it. */
+export type ListLink = 'list' | 'pick';
+
+/** The address that opens the list of sailors to watch, or picks one from it, on this origin. */
+export function listLink(origin: string, ask: ListLink): string {
+  return ask === 'pick' ? `${origin}/?${LIST_PARAM}=${PICK}` : `${origin}/?${LIST_PARAM}`;
+}
+
+/** The link into the list a page was opened at, from its query; null for none, or for anything but the two. */
+export function listFromQuery(query: URLSearchParams): ListLink | null {
+  const v = query.get(LIST_PARAM);
+  return v === '' ? 'list' : v === PICK ? 'pick' : null;
+}
+
 /** The share of the player's own link, of a machine sailor's, and of their fleet's. */
 export const SHARE_ME = 'Share a link to watch me';
 export const SHARE_SAILOR = 'Share a link to watch';
@@ -175,6 +218,9 @@ export function fleetShareText(url: string): string {
 
 /** On the start screen, to a visitor who came by a link to watch. */
 export const MAKE_TO_WATCH = 'Make a sailor, and you will be watching.';
+
+/** The same, to a browser that has had a sailor, shown signing in first. */
+export const SIGN_IN_TO_WATCH = 'Sign in, and you will be watching.';
 
 /** On the player's own panel, once a sailor followed from a refused link may be watched. */
 export function nowWatchableText(name: string): string {

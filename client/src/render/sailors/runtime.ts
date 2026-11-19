@@ -22,13 +22,42 @@
 // seated. The clips on the wire are placed from the rack's edge, never
 // moved to another seat; the hook of the harness rides on the hips.
 //
+// A beach cat (a kind whose art names her people's clips, cat.ts) has her
+// sailor sit on her windward hull by its inner edge, sit out from its outer
+// edge, and go out on the wire from it, as the physics puts the sailor
+// further out; cross her net facing forward at a crouch, on hands and knees
+// under the boom, when the side changes (after the crew, if the crew is in
+// the way: wayHeld); stand on her lower hull to right her; and, thrown off
+// over her bows as she pitchpoles, land in the water ahead of her front
+// beam before swimming to her side.
+//
 // A boat steered by a wheel (its model's `wheel` node) has its sailor
-// standing at it instead, at the model's `sailor` node, facing forward,
+// standing at it instead, at the model's `sailor` node, facing forward (of
+// two wheels, aft of the windward one, walking across to the other as the
+// wind changes side, hands off the spokes on the way),
 // playing the wheel's clip: looking ahead, aloft at the sails and to
 // windward, its windward side by the apparent wind; now and then its look's
 // habit at the wheel. The hands are kept on the spokes as the wheel turns
 // with the rudder, each following its spoke so far and then taking the next,
 // hand over hand. Such a sailor never hikes, crosses or falls in.
+//
+// A cruising yacht (a kind whose art names her people's clips, yacht.ts)
+// has her helm on her own clips, at the windward wheel: sat on the side
+// deck outboard of it in a light wind, a hand on the rim, and standing
+// aft of it in a breeze. Going from one to the other the legs come in
+// along the deck aft of the wheel and the body goes down into the cockpit
+// (or up out of it), the feet carried. Its windward side is away from the
+// boom, as her crew's (by the wind while the boom lies amidships); when it
+// changes the helm stands, lets go and walks across between the wheels at
+// a crouch, facing the way, to stand at the other.
+//
+// A cruising catamaran (a kind whose art names her people's clips,
+// bridgedeck.ts) has her helm on her own clips at her one wheel, off her
+// centreline: sat on the settle behind it in a light wind, the hands on
+// the thighs, and standing at it in a breeze, the hands on the rim, by her
+// apparent wind alone (she barely heels); stepping back and sitting down,
+// or getting up and stepping forward, the feet carried. The helm never
+// crosses; the look to windward is the wind's side, as at any wheel.
 //
 // Everything here is in the boat model's frame (x to starboard, y up, z
 // aft), unheeled; the boat's heel turns the model. A boat other than the
@@ -36,8 +65,29 @@
 // Allocation-free once made.
 
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
+
+export type { CatBoat } from './cat';
+
 import { CLIMBING, IN_WATER, ON_BOARD } from '../sailor';
-import { Clip, Pose } from './clips';
+import { BRIDGE_CLIPS, type BridgePlaces, bridgePlace } from './bridgedeck';
+import {
+  type Aboard,
+  CAT_CLIPS,
+  type CatBoat,
+  catAnchor,
+  catFloor,
+  catPlace,
+  catPoint,
+  catSide,
+  crawlFor,
+  inCatFile,
+  liftOver,
+  NetCross,
+  netWay,
+  standPlace,
+} from './cat';
+import { Clip, feetTogether, Pose } from './clips';
+import { carried } from './crewbody';
 import { REACH, twoBone } from './ik';
 import { Layers, random, type SailorLayers } from './layers';
 import { MachineLayers } from './machinelayers';
@@ -54,6 +104,14 @@ import {
   wirePlace,
   wireSide,
 } from './trapeze';
+import {
+  STANCE_SHORT,
+  YACHT_CLIPS,
+  YACHT_CROSS_SPEED,
+  YACHT_WALK_AHEAD,
+  type YachtPlaces,
+  yachtPlace,
+} from './yacht';
 
 /** The clips a sailor sails with, by name; the -port ones are the starboard ones' mirror. */
 export const CLIPS = {
@@ -99,6 +157,12 @@ export interface WheelHelm {
   /** The rim's radius, metres, and how many spokes. */
   radius: number;
   spokes: number;
+  /**
+   * Two wheels, either side: how far out each is, metres (0 for one on the
+   * centreline). The hub and the stand are then between them, and the
+   * helmsman stands aft of whichever the sailor's offset is at.
+   */
+  spread?: number;
   /** Its turn now, radians: positive, the top to starboard (wheelTurn's). Set before each moment. */
   turn: number;
 }
@@ -113,8 +177,35 @@ const REGRIP_LIFT = 0.06;
 /** A hand of the clip this near its grip (m) holds the spoke; let go fully this far beyond. */
 const HOLD_NEAR = 0.04;
 const HOLD_FAR = 0.12;
+/** The radius of the wheel the wheel's clips were made at: a smaller wheel's hands are brought in to its rim. */
+const CLIP_WHEEL_RADIUS = 0.75;
+/** At two wheels, the helmsman stands aft of the windward one, walking across to the other at this speed, m/s, as the wind changes side. */
+const WHEEL_WALK = 1;
+/** At two wheels, the hands hold the nearer one's spokes when the helmsman is this near its stance (m), and let go this far from it. */
+const AT_WHEEL_NEAR = 0.08;
+const AT_WHEEL_FAR = 0.3;
 /** Seconds the wheel's windward side takes to change. */
 const WINDWARD_CHANGE = 1.5;
+/**
+ * Aboard a cruising yacht, the helm sits by the wheel in an apparent wind
+ * under SIT_WIND (m/s) heeled under SIT_HEEL, and stands in one past
+ * STAND_WIND or heeled past STAND_HEEL (radians); going from one to the
+ * other takes SEAT_TIME, s: the legs, then the body.
+ */
+export const SIT_WIND = 4.5;
+export const STAND_WIND = 6;
+export const SIT_HEEL = (8 * Math.PI) / 180;
+export const STAND_HEEL = (12 * Math.PI) / 180;
+export const SEAT_TIME = 1.6;
+/** Aboard a cruising yacht, how far past the centreline the boom lies before the helm's wheel is the one away from it, radians: nearer, by the wind. */
+const BOOM_SIDE = (5 * Math.PI) / 180;
+/** Aboard a cruising yacht, how far forward of the stance the feet are drawn in along the side deck, aft of the wheel, m. */
+const LEGS_IN = 0.25;
+/** Aboard a cruising yacht, seconds to get up from the wheel into the crouch's walk between the wheels, and to stand at the other. */
+export const WALK_RISE = 0.5;
+export const WALK_STAND = 0.5;
+/** Aboard a cruising yacht, how high the helm's body is carried going down into the cockpit from sat by the wheel, or up out of it, m. */
+const SEAT_ARC = 0.15;
 const PORT = '-port';
 /** The helm and the hiking depths, blended by how far out the sailor is. */
 const SEATED: readonly string[] = [CLIPS.helm, ...CLIPS.hiking];
@@ -127,6 +218,34 @@ const WIRED: readonly string[] = [
 ];
 /** The first of WIRED on the wire. */
 const FIRST_ON_WIRE = 2;
+/** On a beach cat: sat on her hull, sitting out from it; then part out and out fully on the wire. */
+const CAT_SEATED: readonly string[] = [CAT_CLIPS.helm, CAT_CLIPS.hike];
+const CAT_WIRED: readonly string[] = [
+  CAT_CLIPS.helm,
+  CAT_CLIPS.hike,
+  CAT_CLIPS.wireLow,
+  CAT_CLIPS.wire,
+];
+/** On a beach cat, how far past the centreline the boom comes over the hull sat on before the sailor crosses, radians. */
+export const BOOM_OVER = (5 * Math.PI) / 180;
+/** Of a change of mode's blend, how much passes before a crossing of the net moves on. */
+const NET_RISE = 0.6;
+/** How high over the net the feet are carried, onto it or off it, m. */
+const NET_STEP = 0.12;
+/** How far a change of mode's path bows up for a crossing of the net, m: the hips brought in over the hull's edge. */
+const NET_ARC_UP = 0.03;
+/**
+ * Thrown off over her bows: the boat pitched this far bow down off the
+ * waves (radians), or heeled no further than this (no capsize throws a
+ * sailor so near upright), as the sailor fell in.
+ */
+export const THROWN_TRIM = 0.2;
+export const THROWN_HEEL = 0.9;
+/** Thrown off: landed this far ahead of the front beam, and this far out from the centreline, m; there this long, then swimming to her side over SWIM_ROUND, seconds. */
+export const THROWN_AHEAD = 0.9;
+export const THROWN_OUT = 0.35;
+export const THROWN_FOR = 3;
+export const SWIM_ROUND = 2.5;
 /** Further out on the wire than this, the cloth hangs free of the seat. */
 export const OFF_SEAT = 0.5;
 /** How far out and up of both ends a change of mode's path bows. */
@@ -174,6 +293,12 @@ export interface SailorBoat {
   wheel?: WheelHelm | null;
   /** The trapeze, on a boat with one: the sailor goes out on its wire beyond the rail, if it has the clips on the wire. */
   trapeze?: Trapeze | null;
+  /** A beach cat's, whose people's clips are placed from her model: her sailor sits on her hull and crosses her net, if it has the clips. */
+  cat?: CatBoat | null;
+  /** A cruising yacht's places, whose people's clips are placed from her model: her helm at her wheel on her own clips, if it has them. */
+  yacht?: YachtPlaces | null;
+  /** A cruising catamaran's places, whose people's clips are placed from her model: her helm at her wheel on her own clips, if it has them. */
+  bridge?: BridgePlaces | null;
 }
 
 /** The physics' moment for the sailor. */
@@ -182,6 +307,8 @@ export interface SailorMoment {
   time: number;
   /** The physics' sailor offset (m, + starboard), mode and timer. */
   offset: number;
+  /** How far aft of their place the sailor stands (m), on a boat whose rig pitches her; 0 if not said. */
+  aft?: number;
   mode: number;
   timer: number;
   heel: number;
@@ -194,6 +321,12 @@ export interface SailorMoment {
   rollRate: number;
   /** Under reduced motion: breathing only, no habit. */
   still: boolean;
+  /** The boom's angle, radians, + starboard: on a beach cat, under it her net is crossed on hands and knees. 0 if not said. */
+  boom?: number;
+  /** A boat whose rig pitches her: her trim, radians, bow up; far bow down as the sailor falls in, thrown off over the bows. 0 if not said. */
+  trim?: number;
+  /** On a beach cat, whether someone crossing her net is in the sailor's way: the sailor waits to cross till they are clear. */
+  wayHeld?: boolean;
 }
 
 /** Which hand holds what, and where (the model's frame). */
@@ -282,6 +415,8 @@ export class SailorRuntime {
   readonly #pose: Pose;
   readonly #scratch: Pose;
   readonly #from: Pose;
+  /** Aboard a cruising catamaran, her helm sat, blended with standing. */
+  readonly #satPose: Pose;
   readonly #habitPose: Pose;
   readonly #layers: SailorLayers;
   readonly #springs: Springs;
@@ -326,6 +461,42 @@ export class SailorRuntime {
   #hookRest: Vector3 | null = null;
   /** How far the sailor hiked at the last moment (depth). */
   #depth = 0;
+  /** On a beach cat: whether the sailor sits on her hull (her clips are here), crosses her net (those too), and the crossing now. */
+  readonly #catted: boolean;
+  readonly #netted: boolean;
+  #net: NetCross | null = null;
+  /** How long a crossing of the net waits for the blend off the hull, seconds; whether a change's path bows up only (onto and off the net). */
+  #netWait = 0;
+  #flat = false;
+  /** Seconds since thrown off over her bows into the water; −1 if not. */
+  #thrown = -1;
+  readonly #righting = new Matrix4();
+  /** The legs' thigh, calf and foot bones; and each foot's place at either end of a carry. */
+  readonly #legs: [number, number, number][];
+  readonly #feetA: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+  readonly #feetB: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+  /** Between the crouch and the crawl, how far (0 to 1), the feet to be carried so; −1 if not. */
+  #crawlCarry = -1;
+  readonly #ends = new Place();
+  /** On a beach cat, what the joints keep over: her net and decks. */
+  readonly #floor: ((x: number, z: number) => number | null) | null;
+  readonly #ahead = new Place();
+  readonly #beside = new Place();
+  /** Aboard a cruising yacht: whether her helm is on her own clips; the radius of the wheel the wheel's clip was made at. */
+  readonly #yachted: boolean;
+  /** Aboard a cruising catamaran: whether her helm is on her own clips. */
+  readonly #bridged: boolean;
+  readonly #clipRadius: number;
+  /** Aboard a cruising yacht: how far sat by the wheel (0 standing, 1 sat), and whether the wind has the helm sit. */
+  #seat = 0;
+  #sits = false;
+  /** Aboard a cruising yacht: walking between the wheels from the side walked from, seconds into it; −1 at a wheel. */
+  #walkFrom = 1;
+  #walkT = -1;
+  /** Aboard a cruising yacht, getting up from the wheel or sitting down: where each foot is carried to, in the model's frame; null when not. */
+  #feetTo: [Vector3, Vector3] | null = null;
+  readonly #feetC: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+  readonly #seatPlace = new Place();
 
   constructor(
     readonly rig: Rig,
@@ -338,36 +509,54 @@ export class SailorRuntime {
   ) {
     const by = boat.restage;
     const trapeze = boat.trapeze;
+    const cat = boat.cat ?? null;
     this.#clips =
-      (by === undefined || by === null) && !trapeze
+      (by === undefined || by === null) && !trapeze && cat === null
         ? clips
         : new Map(
             [...clips].map(([name, c]) => [
               name,
-              // On the wire, placed from the rack's edge on its side.
-              onWire(name)
-                ? trapeze && c.place !== null
-                  ? new Clip(
-                      c.name,
-                      c.duration,
-                      c.tracks,
-                      wirePlace(c.place, trapeze.rackEdge, wireSide(name)),
-                    )
-                  : c
-                : AT_WHEEL.includes(name) || by === undefined || by === null
-                  ? c
-                  : restageClip(c, rig, by),
+              // Aboard a beach cat, placed from her model's places on the
+              // clip's side (righting her, from where she lies).
+              cat !== null && inCatFile(name)
+                ? catClip(c, cat.aboard)
+                : // On the wire, placed from the rack's edge on its side.
+                  onWire(name)
+                  ? trapeze && c.place !== null
+                    ? new Clip(
+                        c.name,
+                        c.duration,
+                        c.tracks,
+                        wirePlace(c.place, trapeze.rackEdge, wireSide(name)),
+                      )
+                    : c
+                  : AT_WHEEL.includes(name) || by === undefined || by === null
+                    ? c
+                    : restageClip(c, rig, by),
             ]),
           );
+    const sided = (n: string): boolean =>
+      !!this.#clips.get(n)?.place && !!this.#clips.get(n + PORT)?.place;
+    this.#catted = cat !== null && CAT_SEATED.every(sided);
     this.#wired =
       !!trapeze &&
-      [TRAPEZE_CLIPS.low, TRAPEZE_CLIPS.out].every(
-        (n) => this.#clips.get(n)?.place && this.#clips.get(n + PORT)?.place,
+      (this.#catted
+        ? [CAT_CLIPS.wireLow, CAT_CLIPS.wire].every(sided)
+        : [TRAPEZE_CLIPS.low, TRAPEZE_CLIPS.out].every(sided));
+    this.#floor = cat === null ? null : catFloor(cat);
+    this.#legs = ['l', 'r']
+      .map((sd) => [`thigh_${sd}`, `calf_${sd}`, `foot_${sd}`].map((b) => rig.bone(b)))
+      .filter((l) => l.every((b) => b >= 0)) as [number, number, number][];
+    this.#netted =
+      this.#catted &&
+      [...CAT_CLIPS.crouch.slice(1, 3), ...CAT_CLIPS.crawl].every(
+        (n) => !!this.#clips.get(n)?.place,
       );
     const n = rig.names.length;
     this.#pose = new Pose(n).rest(rig);
     this.#scratch = new Pose(n).rest(rig);
     this.#from = new Pose(n).rest(rig);
+    this.#satPose = new Pose(n).rest(rig);
     this.#habitPose = new Pose(n).rest(rig);
     // A machine has its own life: no breath, snapped glances, its lamps.
     this.#layers = machine ? new MachineLayers(rig, seed) : new Layers(rig, seed);
@@ -380,9 +569,38 @@ export class SailorRuntime {
         (b) => [b, rig.bone(b)],
       ),
     );
+    this.#yachted =
+      !!boat.wheel &&
+      boat.yacht != null &&
+      [YACHT_CLIPS.wheel, YACHT_CLIPS.seated].every(sided) &&
+      !!this.#clips.get(YACHT_CLIPS.cockpit)?.place;
+    this.#bridged =
+      !!boat.wheel && boat.bridge != null && [BRIDGE_CLIPS.wheel, BRIDGE_CLIPS.seated].every(sided);
+    this.#clipRadius =
+      (this.#yachted || this.#bridged) && boat.wheel ? boat.wheel.radius : CLIP_WHEEL_RADIUS;
     if (boat.wheel) {
       this.#gripsAtRest(boat.wheel);
     }
+  }
+
+  /** Aboard a cruising yacht, whether her helm is on her own clips. */
+  get yachted(): boolean {
+    return this.#yachted;
+  }
+
+  /** Aboard a cruising catamaran, whether her helm is on her own clips. */
+  get bridged(): boolean {
+    return this.#bridged;
+  }
+
+  /** Aboard a cruising yacht or catamaran, how far her helm is sat by the wheel: 0 standing, 1 sat. */
+  get seat(): number {
+    return this.#seat;
+  }
+
+  /** Aboard a cruising yacht, whether her helm is walking between her wheels. */
+  get walking(): boolean {
+    return this.#walkT >= 0;
   }
 
   /**
@@ -392,7 +610,10 @@ export class SailorRuntime {
    */
   #gripsAtRest(wheel: WheelHelm): void {
     const n = wheel.spokes;
-    const c = this.#clip(CLIPS.wheel, 1);
+    const c = this.#clip(
+      this.#yachted ? YACHT_CLIPS.wheel : this.#bridged ? BRIDGE_CLIPS.wheel : CLIPS.wheel,
+      1,
+    );
     const rig = this.rig;
     const pose = this.#scratch;
     pose.rest(rig);
@@ -465,18 +686,40 @@ export class SailorRuntime {
 
   /** Whether the sailor is crossing the boat. */
   get crossing(): boolean {
-    return this.#cross !== null;
+    return this.#cross !== null || this.#net !== null;
   }
 
   /** The side deck the sailor is crossing from, or sits on: + starboard, − port. */
   get crossFrom(): number {
-    return this.#cross === null ? this.#side : this.#crossFrom;
+    return this.#net !== null
+      ? this.#net.from
+      : this.#cross === null
+        ? this.#side
+        : this.#crossFrom;
   }
 
   /** How far through crossing the boat the sailor is, 0 to 1; 1 when not crossing. */
   get crossed(): number {
+    if (this.#net !== null) {
+      return this.#net.done;
+    }
     const c = this.#cross;
     return c === null ? 1 : Math.min(1, this.#crossT / Math.max(c.duration, 1e-3));
+  }
+
+  /** On a beach cat, where the sailor crossing her net is across it (x, + starboard); null if not crossing it. */
+  get netAt(): number | null {
+    return this.#net?.x ?? null;
+  }
+
+  /** Whether the sailor is on a beach cat's own clips: sat on her hull, crossing her net. */
+  get catted(): boolean {
+    return this.#catted;
+  }
+
+  /** Whether, in the water, the sailor was thrown off over her bows. */
+  get thrown(): boolean {
+    return this.#thrown >= 0;
   }
 
   /**
@@ -486,8 +729,12 @@ export class SailorRuntime {
   reset(): void {
     this.#mode = -1;
     this.#cross = null;
+    this.#net = null;
+    this.#thrown = -1;
     this.#habit = null;
     this.#change = 1;
+    this.#across = Number.NaN;
+    this.#walkT = -1;
     this.#springs.reset();
   }
 
@@ -500,8 +747,12 @@ export class SailorRuntime {
       // The first moment: the sailor is already on its side deck.
       this.#side = Math.sign(s.offset);
     }
+    if (this.#mode < 0 && this.#netted && s.boom !== undefined && Math.abs(s.boom) > BOOM_OVER) {
+      // On a beach cat's hull, to windward of the boom.
+      this.#side = -Math.sign(s.boom);
+    }
     if (mode !== this.#mode) {
-      this.#begin(mode);
+      this.#begin(mode, s);
     }
     this.#effort = Math.max(
       0,
@@ -524,9 +775,20 @@ export class SailorRuntime {
     } else if (mode === IN_WATER) {
       this.#sample(CLIPS.water, 1, s.time + this.#helmOffset, true, pose);
       this.#waterPlace(s, place);
+      if (this.#thrown >= 0) {
+        this.#thrownPlace(s, dt, place);
+      }
     } else if (mode === ON_BOARD) {
-      this.#sample(CLIPS.board, 1, s.time + this.#helmOffset, true, pose);
-      this.#boardPlace(s, place);
+      const stand = this.boat.cat?.stand ?? null;
+      const c = this.#catted && stand !== null ? this.#clip(CAT_CLIPS.righting, 1) : null;
+      if (c !== null && c.place !== null && stand !== null) {
+        // On her lower hull, upright in the world as she lies on her side.
+        this.#sample(CAT_CLIPS.righting, 1, s.time + this.#helmOffset, true, pose);
+        place.set(standPlace(c.place, stand, s.heel >= 0 ? 1 : -1, this.#righting));
+      } else {
+        this.#sample(CLIPS.board, 1, s.time + this.#helmOffset, true, pose);
+        this.#boardPlace(s, place);
+      }
     } else if (mode === CLIMBING) {
       const c = this.#clip(CLIPS.climb, this.#side);
       if (c !== null) {
@@ -537,6 +799,10 @@ export class SailorRuntime {
       }
     } else {
       seated = this.#sailing(s, dt, pose, place);
+      if (seated && this.#net === null && s.aft !== undefined && s.aft !== 0) {
+        // Stepped aft along the hull to hold the bows up.
+        place.at.z += s.aft;
+      }
     }
 
     // A change of mode, blended along a path clear of the hull.
@@ -548,8 +814,22 @@ export class SailorRuntime {
       this.#rebasePose(this.#from, this.#fromPlace, place);
       this.#fromPlace.copy(place);
     }
+    // Going down onto hands and knees on the net or up off them: carried.
+    let carry = this.#crawlCarry;
+    this.#crawlCarry = -1;
     if (this.#change < 1) {
       this.#change = Math.min(1, this.#change + dt / CHANGE);
+      if (this.#flat) {
+        // Onto a beach cat's net or off it: each foot carried from where
+        // the old pose had it to where the new one has it, over her hull's
+        // edge, as the crew's are.
+        this.#feetOf(this.#from, this.#fromPlace, this.#feetA);
+        this.#feetOf(pose, place, this.#feetB);
+        carry = this.#change;
+      }
+      if (this.#change >= 1) {
+        this.#flat = false;
+      }
       const f = smooth(this.#change);
       // The body takes its new shape early in the move, the limbs gathered
       // before the hips go over the side.
@@ -562,6 +842,12 @@ export class SailorRuntime {
     this.#placeNow.matrix(this.root);
     pose.to(this.rig);
     this.rig.fk();
+    if (carry >= 0 && carry < 1) {
+      this.#carryFeet(carry);
+    }
+    if (this.#feetTo !== null) {
+      this.#feetStep(this.#feetTo);
+    }
 
     // The layers.
     this.#heelAxis.set(0, 0, 1).applyQuaternion(q.copy(this.#placeNow.turn).invert());
@@ -571,9 +857,13 @@ export class SailorRuntime {
       effort: this.#effort,
       heelAxis: this.#heelAxis,
       heel: s.heel,
-      upright: (seated && this.#cross === null) || wheel ? 0.5 : 0,
+      upright: (seated && !this.crossing) || wheel ? 0.5 : 0,
       still: s.still,
     });
+    // Aboard a beach cat, sailing: over her net and decks, never through them.
+    if (this.#floor !== null && this.#catted && mode === 0) {
+      liftOver(this.rig, this.root, this.#floor);
+    }
 
     // The hands.
     if (wheel) {
@@ -603,13 +893,23 @@ export class SailorRuntime {
   }
 
   /** Starts a new mode: the old pose and place kept to blend from. */
-  #begin(mode: number): void {
+  #begin(mode: number, s: SailorMoment): void {
     const first = this.#mode < 0;
     this.#from.copy(this.#pose);
     this.#fromPlace.copy(this.#placeNow);
+    // Thrown off over a beach cat's bows: through the air, ahead of her.
+    this.#thrown =
+      mode === IN_WATER &&
+      !first &&
+      this.#catted &&
+      ((s.trim ?? 0) < -THROWN_TRIM || Math.abs(s.heel) < THROWN_HEEL)
+        ? 0
+        : -1;
     // Falling in is sudden: no frame between the seat and the water, where
     // the legs would come up through the deck.
-    this.#change = first || mode === IN_WATER ? 1 : 0;
+    this.#change = first || (mode === IN_WATER && this.#thrown < 0) ? 1 : 0;
+    this.#flat = false;
+    this.#net = null;
     if (mode === CLIMBING || (mode === 0 && this.#mode === IN_WATER)) {
       // Climbing in on the side the board was on, the high one.
       this.#side = this.#high;
@@ -650,8 +950,25 @@ export class SailorRuntime {
 
   /** At the helm or hiking, crossing, or the habit: true when seated on a side deck. */
   #sailing(s: SailorMoment, dt: number, pose: Pose, place: Place): boolean {
-    const want = Math.abs(s.offset) > 0.05 ? Math.sign(s.offset) : this.#side;
-    if (this.#cross === null && want !== this.#side && this.#change >= 1) {
+    // To the side the physics puts the sailor; on a beach cat, to windward
+    // of the boom, once it has come over past BOOM_OVER: across as it
+    // comes, before it lies over the hull sat on.
+    const want =
+      this.#netted && s.boom !== undefined
+        ? this.#side * s.boom > BOOM_OVER
+          ? -this.#side
+          : this.#side
+        : Math.abs(s.offset) > 0.05
+          ? Math.sign(s.offset)
+          : this.#side;
+    if (this.#netted) {
+      if (this.#net === null && want !== this.#side && this.#change >= 1 && s.wayHeld !== true) {
+        this.#beginNet(s);
+      }
+      if (this.#net !== null) {
+        return this.#acrossNet(s, dt, pose, place);
+      }
+    } else if (this.#cross === null && want !== this.#side && this.#change >= 1) {
       this.#cross = this.#clip(CLIPS.cross, this.#side);
       this.#crossT = 0;
       this.#crossFrom = this.#side;
@@ -692,7 +1009,7 @@ export class SailorRuntime {
     pose.clear();
     let total = 0;
     let hanging = 0;
-    const names = wired ? WIRED : SEATED;
+    const names = this.#catted ? (wired ? CAT_WIRED : CAT_SEATED) : wired ? WIRED : SEATED;
     p.set(0, 0, 0);
     q.set(0, 0, 0, 0);
     for (let k = 0; k < names.length; k++) {
@@ -703,7 +1020,7 @@ export class SailorRuntime {
       }
       scratch.rest(this.rig);
       c.sample(t % c.duration, scratch);
-      if (k === 0 && this.#habit === null) {
+      if (k === 0 && this.#habit === null && !this.#catted) {
         this.#maybeHabit(s, dt, h);
       }
       if (k === 0 && this.#habit !== null) {
@@ -733,6 +1050,136 @@ export class SailorRuntime {
     return true;
   }
 
+  /** Where a pose at a place has its feet, in the model's frame, into out. The rig is left posed so. */
+  #feetOf(pose: Pose, place: Place, out: [Vector3, Vector3]): void {
+    pose.to(this.rig);
+    this.rig.fk();
+    place.matrix(m4);
+    for (let k = 0; k < 2; k++) {
+      const foot = this.#legs[k]?.[2] ?? -1;
+      if (foot >= 0) {
+        this.rig.position(foot, out[k] as Vector3).applyMatrix4(m4);
+      }
+    }
+  }
+
+  /** The feet carried f of the way from #feetA to #feetB, up over the net's height and down, the legs bent to them. */
+  #carryFeet(f: number): void {
+    const cat = this.boat.cat;
+    if (cat == null) {
+      return;
+    }
+    const top = cat.aboard.net.y + NET_STEP;
+    inv.copy(this.root).invert();
+    for (let k = 0; k < 2; k++) {
+      const leg = this.#legs[k];
+      if (leg === undefined) {
+        continue;
+      }
+      carried(this.#feetA[k] as Vector3, this.#feetB[k] as Vector3, f, p, top).applyMatrix4(inv);
+      twoBone(this.rig, leg[0], leg[1], leg[2], p);
+    }
+  }
+
+  /** Begins crossing a beach cat's net, from the side sat on: blended off the hull first. */
+  #beginNet(s: SailorMoment): void {
+    const cat = this.boat.cat as CatBoat;
+    const way = netWay(cat.aboard);
+    this.#net = new NetCross(
+      this.#side,
+      way.x,
+      crawlFor(cat.boom, s.boom ?? 0, this.#side * way.x, way.z),
+    );
+    this.#habit = null;
+    this.#from.copy(this.#pose);
+    this.#fromPlace.copy(this.#placeNow);
+    this.#change = 0;
+    this.#flat = true;
+    this.#netWait = NET_RISE * CHANGE;
+  }
+
+  /**
+   * Across a beach cat's net, facing forward: at a crouch, on hands and
+   * knees under the boom, the two blended as far as the boom asks; at the
+   * other side, sat down on the hull there (blended on as a change).
+   */
+  #acrossNet(s: SailorMoment, dt: number, pose: Pose, place: Place): boolean {
+    const n = this.#net as NetCross;
+    const cat = this.boat.cat as CatBoat;
+    const way = netWay(cat.aboard);
+    let there = false;
+    if (this.#netWait > 0) {
+      this.#netWait -= dt;
+    } else {
+      there = n.step(dt, crawlFor(cat.boom, s.boom ?? 0, n.x, way.z));
+    }
+    const crouch = this.#clip(n.crouch);
+    const crawl = this.#clip(n.crawlClip);
+    const f = smooth(n.crawl);
+    const scratch = this.#scratch;
+    const dz = way.z - (cat.aboard.net.fore + cat.aboard.net.aft) / 2;
+    // Each clip's place on the net's middle, moved across to where they are.
+    (crouch?.place ?? m.identity()).decompose(v, q, w);
+    (crawl?.place ?? m2.identity()).decompose(u, q2, w);
+    v.x += n.x;
+    v.z += dz;
+    u.x += n.x;
+    u.z += dz;
+    scratch.rest(this.rig);
+    crawl?.sample(n.crawlT % crawl.duration, scratch);
+    pose.rest(this.rig);
+    crouch?.sample(n.crouchT % crouch.duration, pose);
+    if (f > 0 && f < 1) {
+      // Each foot where either has it, to be carried between.
+      this.#ends.at.copy(v);
+      this.#ends.turn.copy(q);
+      this.#feetOf(pose, this.#ends, this.#feetA);
+      this.#ends.at.copy(u);
+      this.#ends.turn.copy(q2);
+      this.#feetOf(scratch, this.#ends, this.#feetB);
+      this.#crawlCarry = f;
+    }
+    pose.mix(scratch, f);
+    place.at.lerpVectors(v, u, f);
+    place.turn.copy(q).slerp(q2, f);
+    if (there) {
+      // Across: sat down on the hull on the other side, blended from here.
+      this.#side = -n.from;
+      this.#net = null;
+      this.#from.copy(pose);
+      this.#fromPlace.copy(place);
+      this.#change = 0;
+      this.#flat = true;
+      this.#springs.reset();
+    }
+    return true;
+  }
+
+  /**
+   * Thrown off over her bows: landed in the water ahead of her front beam,
+   * facing her; after THROWN_FOR, swimming round to her side, to where the
+   * water's place is (place, as #waterPlace gave it).
+   */
+  #thrownPlace(s: SailorMoment, dt: number, place: Place): void {
+    const cat = this.boat.cat;
+    if (cat === undefined || cat === null) {
+      return;
+    }
+    this.#thrown += dt;
+    this.#beside.copy(place);
+    this.#level(
+      this.#side * THROWN_OUT,
+      -s.heave,
+      cat.aboard.net.fore - THROWN_AHEAD,
+      0,
+      s,
+      this.#ahead,
+    );
+    const f = smooth((this.#thrown - THROWN_FOR) / SWIM_ROUND);
+    place.at.lerpVectors(this.#ahead.at, this.#beside.at, f);
+    place.turn.copy(this.#ahead.turn).slerp(this.#beside.turn, f);
+  }
+
   /**
    * At the wheel: its clip looking to windward (the two sides' blended
    * while the wind changes side), now and then the habit over it; placed
@@ -743,6 +1190,19 @@ export class SailorRuntime {
     // held through a calm or a wind from dead ahead or astern.
     const want =
       Math.abs(Math.sin(s.windAngle)) > 0.1 ? Math.sign(Math.sin(s.windAngle)) : this.#windward;
+    this.#feetTo = null;
+    if (this.#yachted) {
+      // Aboard a cruising yacht, to windward of the boom, as her crew: by
+      // the wind only while it lies near the centreline.
+      const boom = s.boom ?? 0;
+      const side = Math.abs(boom) > BOOM_SIDE ? -Math.sign(boom) : want;
+      this.#atYachtWheel(s, dt, wheel, side, pose, place);
+      return;
+    }
+    if (this.#bridged) {
+      this.#atBridgeWheel(s, dt, wheel, want, pose, place);
+      return;
+    }
     if (want !== this.#windward && this.#windwardChange >= 1) {
       this.#windward = want;
       this.#windwardChange = 0;
@@ -762,7 +1222,304 @@ export class SailorRuntime {
       this.#habitStep(dt, pose);
     }
     const c = this.#clip(CLIPS.wheel, 1);
-    place.set(m.multiplyMatrices(wheel.stand, c?.place ?? m2.identity()));
+    place.set(m.multiplyMatrices(this.#standAt(wheel, dt), c?.place ?? m2.identity()));
+  }
+
+  /**
+   * Aboard a cruising yacht, at her windward wheel on her own clips: sat
+   * by it or standing aft of it as the wind has them, blended as the legs
+   * come in and the body goes down into the cockpit (the feet carried);
+   * when the wind changes side, standing, then walking across between the
+   * wheels at a crouch to stand at the other.
+   */
+  #atYachtWheel(
+    s: SailorMoment,
+    dt: number,
+    wheel: WheelHelm,
+    want: number,
+    pose: Pose,
+    place: Place,
+  ): void {
+    const yacht = this.boat.yacht as YachtPlaces;
+    const spread = wheel.spread ?? 0;
+    const heel = Math.abs(s.heel);
+    this.#sits = this.#sits
+      ? s.windSpeed < STAND_WIND && heel < STAND_HEEL
+      : s.windSpeed < SIT_WIND && heel < SIT_HEEL;
+    if (Number.isNaN(this.#across)) {
+      // Met first: at the wheel the wind says, as the wind has them.
+      this.#windward = want;
+      this.#across = want * spread;
+      this.#seat = this.#sits ? 1 : 0;
+    }
+    const t = s.time + this.#helmOffset;
+    if (this.#walkT < 0) {
+      const away = want !== this.#windward;
+      const target = away || !this.#sits ? 0 : 1;
+      const step = dt / SEAT_TIME;
+      this.#seat += Math.max(-step, Math.min(step, target - this.#seat));
+      if (away && this.#seat <= 0) {
+        // Stood: across to the other wheel.
+        this.#walkFrom = this.#windward;
+        this.#walkT = 0;
+        this.#habit = null;
+      }
+    }
+    if (this.#walkT >= 0) {
+      this.#walkBetween(dt, wheel, t, pose, place);
+      return;
+    }
+    const side = this.#windward;
+    this.#across = side * spread;
+    this.#standFor(wheel);
+    // Standing aft of the wheel, and now and then the habit over it.
+    this.#sample(YACHT_CLIPS.wheel, side, t, true, pose);
+    const stand = this.#clip(YACHT_CLIPS.wheel, side);
+    place.set(yachtPlace(stand?.place ?? m2.identity(), yacht.stance, side, false, m));
+    if (this.#seat <= 0) {
+      if (this.#habit === null) {
+        this.#maybeHabit(s, dt, 0, YACHT_CLIPS.habit, 1);
+      }
+      if (this.#habit !== null) {
+        this.#habitStep(dt, pose);
+      }
+      return;
+    }
+    this.#habit = null;
+    const sat = this.#clip(YACHT_CLIPS.seated, side);
+    const seatPlace = this.#seatPlace.set(
+      yachtPlace(sat?.place ?? m2.identity(), yacht.stance, side, false, m),
+    );
+    if (this.#seat >= 1) {
+      this.#sample(YACHT_CLIPS.seated, side, t, true, pose);
+      place.copy(seatPlace);
+      return;
+    }
+    // Between: the body down into the cockpit or up out of it over the
+    // first half (from standing), the legs along the deck over the second;
+    // each foot carried from where standing has it to beside the hips on
+    // the deck aft of the wheel, and on to where sat has it.
+    const scratch = this.#scratch;
+    scratch.rest(this.rig);
+    sat?.sample(t % sat.duration, scratch);
+    const body = smooth(Math.min(1, this.#seat * 2));
+    const legs = smooth(Math.max(0, this.#seat * 2 - 1));
+    this.#feetOf(pose, place, this.#feetA);
+    this.#feetOf(scratch, seatPlace, this.#feetB);
+    pose.mix(scratch, body);
+    place.at.lerp(seatPlace.at, body);
+    place.at.y += SEAT_ARC * Math.sin(Math.PI * body);
+    place.turn.slerp(seatPlace.turn, body);
+    const feet = this.#feetC;
+    for (let k = 0; k < 2; k++) {
+      const a = this.#feetA[k] as Vector3;
+      const b = this.#feetB[k] as Vector3;
+      // Drawn in: as sat, but aft of the wheel, beside the hips.
+      v.set(b.x, b.y, yacht.stance.z - LEGS_IN);
+      const f = feet[k] as Vector3;
+      if (this.#seat < 0.5) {
+        carried(a, v, body, f, b.y);
+      } else {
+        f.lerpVectors(v, b, legs);
+      }
+    }
+    this.#feetTo = feet;
+  }
+
+  /**
+   * Aboard a cruising yacht, walking between her wheels: up from the wheel
+   * into the crouch's walk, across on the stance's line facing the way,
+   * the feet still on the sole, and up to stand at the other wheel.
+   */
+  #walkBetween(dt: number, wheel: WheelHelm, t: number, pose: Pose, place: Place): void {
+    const yacht = this.boat.yacht as YachtPlaces;
+    const spread = wheel.spread ?? 0;
+    const from = this.#walkFrom;
+    const c = this.#clip(YACHT_CLIPS.cockpit) as Clip;
+    const speed = YACHT_CROSS_SPEED[YACHT_CLIPS.cockpit] ?? 0.7;
+    // Short of the other wheel's stance: the crouch's head is well ahead of its hips.
+    const length = 2 * spread - STANCE_SHORT;
+    const walk = length / speed;
+    this.#walkT += dt;
+    const wt = this.#walkT;
+    const along = Math.max(0, Math.min(length, (wt - WALK_RISE) * speed));
+    // The walk, along the stance's line, facing the way.
+    const scratch = this.#scratch;
+    scratch.rest(this.rig);
+    c.sample((feetTogether(c, this.rig) + along / speed) % c.duration, scratch);
+    const x = from * (spread - along);
+    this.#across = x;
+    this.#standFor(wheel);
+    // Set ahead of its hips: the hips on the stance's line.
+    const at = this.#walkAt.set(
+      x - from * YACHT_WALK_AHEAD,
+      yacht.stance.y + (c.place?.elements[13] ?? 0),
+      yacht.stance.z,
+    );
+    const turn = this.#walkTurn.setFromAxisAngle(Y, -from * (Math.PI / 2));
+    if (wt < WALK_RISE || wt > WALK_RISE + walk) {
+      // From standing at the wheel, or to standing at the other.
+      const side = wt < WALK_RISE ? from : -from;
+      const f = wt < WALK_RISE ? 1 - wt / WALK_RISE : (wt - WALK_RISE - walk) / WALK_STAND;
+      this.#sample(YACHT_CLIPS.wheel, side, t, true, pose);
+      const stand = this.#clip(YACHT_CLIPS.wheel, side);
+      place.set(yachtPlace(stand?.place ?? m2.identity(), yacht.stance, side, false, m));
+      const g = smooth(Math.min(1, f));
+      scratch.mix(pose, g);
+      pose.copy(scratch);
+      place.at.lerpVectors(at, place.at, g);
+      this.#placeTurn.copy(place.turn);
+      place.turn.copy(turn).slerp(this.#placeTurn, g);
+      if (wt >= WALK_RISE + walk + WALK_STAND) {
+        // There: standing at the other wheel.
+        this.#windward = -from;
+        this.#across = -from * spread;
+        this.#walkT = -1;
+      }
+      return;
+    }
+    pose.copy(scratch);
+    place.at.copy(at);
+    place.turn.copy(turn);
+  }
+
+  /**
+   * Aboard a cruising catamaran, at her wheel on her own clips: looking to
+   * windward (the two sides blended while the wind changes side), sat on
+   * the settle behind the stance or standing at the wheel as the apparent
+   * wind has her, blended as the helm steps back and sits down (or gets up
+   * and steps forward), the feet carried; and now and then the habit,
+   * standing.
+   */
+  #atBridgeWheel(
+    s: SailorMoment,
+    dt: number,
+    wheel: WheelHelm,
+    want: number,
+    pose: Pose,
+    place: Place,
+  ): void {
+    const bridge = this.boat.bridge as BridgePlaces;
+    this.#sits = this.#sits ? s.windSpeed < STAND_WIND : s.windSpeed < SIT_WIND;
+    if (Number.isNaN(this.#across)) {
+      // Met first: as the wind has the helm.
+      this.#windward = want;
+      this.#windwardChange = 1;
+      this.#seat = this.#sits ? 1 : 0;
+    }
+    this.#across = 0;
+    if (want !== this.#windward && this.#windwardChange >= 1) {
+      this.#windward = want;
+      this.#windwardChange = 0;
+    }
+    this.#windwardChange = Math.min(1, this.#windwardChange + dt / WINDWARD_CHANGE);
+    const step = dt / SEAT_TIME;
+    this.#seat += Math.max(-step, Math.min(step, (this.#sits ? 1 : 0) - this.#seat));
+    this.#standFor(wheel);
+    const t = s.time + this.#helmOffset;
+    const side = this.#windward;
+    // Standing at the wheel, looking to windward.
+    this.#sideways(BRIDGE_CLIPS.wheel, side, t, pose);
+    const stand = this.#clip(BRIDGE_CLIPS.wheel, side);
+    place.set(bridgePlace(stand?.place ?? m2.identity(), bridge.stance, m));
+    if (this.#seat <= 0) {
+      if (this.#habit === null) {
+        this.#maybeHabit(s, dt, 0, BRIDGE_CLIPS.habit, 1);
+      }
+      if (this.#habit !== null) {
+        this.#habitStep(dt, pose);
+      }
+      return;
+    }
+    this.#habit = null;
+    const sat = this.#clip(BRIDGE_CLIPS.seated, side);
+    const seatPlace = this.#seatPlace.set(
+      bridgePlace(sat?.place ?? m2.identity(), bridge.stance, m),
+    );
+    if (this.#seat >= 1) {
+      this.#sideways(BRIDGE_CLIPS.seated, side, t, pose);
+      place.copy(seatPlace);
+      return;
+    }
+    // Between: stepping back to the settle and sitting down on it (or up
+    // and forward), the feet carried from where standing has them to where
+    // sat has them.
+    const scratch = this.#satPose;
+    this.#sideways(BRIDGE_CLIPS.seated, side, t, scratch);
+    const f = smooth(this.#seat);
+    this.#feetOf(pose, place, this.#feetA);
+    this.#feetOf(scratch, seatPlace, this.#feetB);
+    pose.mix(scratch, f);
+    place.at.lerp(seatPlace.at, f);
+    place.turn.slerp(seatPlace.turn, f);
+    const feet = this.#feetC;
+    for (let k = 0; k < 2; k++) {
+      carried(
+        this.#feetA[k] as Vector3,
+        this.#feetB[k] as Vector3,
+        f,
+        feet[k] as Vector3,
+        Number.NEGATIVE_INFINITY,
+      );
+    }
+    this.#feetTo = feet;
+  }
+
+  /** A clip at the wheel looking to windward on side, the other side's blended in while the wind changes side, into out. */
+  #sideways(name: string, side: number, t: number, out: Pose): void {
+    this.#sample(name, side, t, true, out);
+    if (this.#windwardChange < 1) {
+      const other = this.#scratch;
+      this.#sample(name, -side, t, true, other);
+      other.mix(out, smooth(this.#windwardChange));
+      out.copy(other);
+    }
+  }
+
+  readonly #placeTurn = new Quaternion();
+  readonly #walkAt = new Vector3();
+  readonly #walkTurn = new Quaternion();
+
+  /** The helmsman's frame and the wheel the hands are on, for where they stand across now (#across). */
+  #standFor(wheel: WheelHelm): void {
+    const spread = wheel.spread ?? 0;
+    this.#stand.copy(wheel.stand);
+    this.#stand.elements[12] = (this.#stand.elements[12] ?? 0) + this.#across;
+    this.#hubAt.copy(wheel.hub);
+    this.#hubAt.x += this.#across >= 0 ? spread : -spread;
+  }
+
+  /** Each leg bent to put its foot where it is carried to (the model's frame). */
+  #feetStep(to: [Vector3, Vector3]): void {
+    inv.copy(this.root).invert();
+    for (let k = 0; k < 2; k++) {
+      const leg = this.#legs[k];
+      if (leg === undefined) {
+        continue;
+      }
+      p.copy(to[k] as Vector3).applyMatrix4(inv);
+      twoBone(this.rig, leg[0], leg[1], leg[2], p);
+    }
+  }
+
+  /** Where the helmsman stands: the stand; of two wheels, aft of the windward one, walked across to the other. */
+  readonly #stand = new Matrix4();
+  readonly #hubAt = new Vector3();
+  #across = Number.NaN;
+  #standAt(wheel: WheelHelm, dt: number): Matrix4 {
+    const spread = wheel.spread ?? 0;
+    const want = spread * this.#windward;
+    if (Number.isNaN(this.#across)) {
+      this.#across = want;
+    }
+    const step = WHEEL_WALK * dt;
+    this.#across += Math.max(-step, Math.min(step, want - this.#across));
+    this.#stand.copy(wheel.stand);
+    this.#stand.elements[12] = (this.#stand.elements[12] ?? 0) + this.#across;
+    // The wheel the hands are on: the one the helmsman is nearer.
+    this.#hubAt.copy(wheel.hub);
+    this.#hubAt.x += this.#across >= 0 ? spread : -spread;
+    return this.#stand;
   }
 
   /**
@@ -787,20 +1544,28 @@ export class SailorRuntime {
       }
       // The clip's hand, in the model's frame, against the wheel's hub.
       rig.position(hand, v).applyMatrix4(this.root);
-      w.copy(h.home).applyMatrix4(wheel.stand);
-      const hold = 1 - smooth((v.distanceTo(w) - HOLD_NEAR) / (HOLD_FAR - HOLD_NEAR));
-      u.subVectors(v, wheel.hub);
-      // Its place against its grip at rest: across the spoke and off the wheel.
-      const r = Math.hypot(u.x, u.y);
+      w.copy(h.home).applyMatrix4(this.#stand);
+      const spread = wheel.spread ?? 0;
+      // At two wheels, off the one it is at the helmsman lets go.
+      const off = spread > 0 ? Math.abs(Math.abs(this.#across) - spread) : 0;
+      // Sat by a cruising yacht's wheel, a hand on its rim as the clip has it.
+      const near =
+        (1 - smooth((off - AT_WHEEL_NEAR) / (AT_WHEEL_FAR - AT_WHEEL_NEAR))) *
+        (this.#walkT >= 0 ? 0 : 1 - this.#seat);
+      const hold = near * (1 - smooth((v.distanceTo(w) - HOLD_NEAR) / (HOLD_FAR - HOLD_NEAR)));
+      u.subVectors(v, this.#hubAt);
+      // Its place against its grip at rest: across the spoke and off the
+      // wheel, brought in to a smaller wheel's rim.
+      const r = Math.hypot(u.x, u.y) * (wheel.radius / this.#clipRadius);
       const drift = Math.atan2(u.x, u.y) - h.angle;
       // The spoke it holds: changed for the next when the wheel has carried
       // it too far, the other hand holding meanwhile.
       const other = this.#wheelHands[1 - k];
-      const at = wheel.turn + h.spoke * step;
-      const off = wrap(at - h.angle);
+      const now = wheel.turn + h.spoke * step;
+      const away = wrap(now - h.angle);
       if (
         h.next < 0 &&
-        (Math.abs(off) > SPOKE_MOST || (Math.abs(off) > SPOKE_LEAD && (other?.next ?? -1) < 0))
+        (Math.abs(away) > SPOKE_MOST || (Math.abs(away) > SPOKE_LEAD && (other?.next ?? -1) < 0))
       ) {
         const n = wheel.spokes;
         h.next = (((Math.round((h.angle - wheel.turn) / step) % n) + n) % n) as number;
@@ -809,12 +1574,12 @@ export class SailorRuntime {
           h.next = -1;
         }
       }
-      let angle = at;
+      let angle = now;
       let lift = 0;
       if (h.next >= 0) {
         h.change = Math.min(1, h.change + dt / REGRIP);
         const to = wheel.turn + h.next * step;
-        angle = at + wrap(to - at) * smooth(h.change);
+        angle = now + wrap(to - now) * smooth(h.change);
         lift = REGRIP_LIFT * Math.sin(Math.PI * h.change);
         if (h.change >= 1) {
           h.spoke = h.next;
@@ -825,7 +1590,8 @@ export class SailorRuntime {
         continue;
       }
       const a = angle + drift;
-      p.set(wheel.hub.x + r * Math.sin(a), wheel.hub.y + r * Math.cos(a), wheel.hub.z + u.z + lift);
+      const hub = this.#hubAt;
+      p.set(hub.x + r * Math.sin(a), hub.y + r * Math.cos(a), hub.z + u.z + lift);
       twoBone(rig, upper, lower, hand, p.applyMatrix4(inv), hold);
       rig.position(hand, hands.wheelAt[k] as Vector3).applyMatrix4(this.root);
       if (hold >= 1 && h.next < 0) {
@@ -878,7 +1644,8 @@ export class SailorRuntime {
   /**
    * Standing on the daggerboard as on a floor, facing up it to the hull:
    * upright in the world when she lies on her side, leaning back away
-   * from her as she comes up.
+   * from her as she comes up. A boat of two hulls' is the lower hull's
+   * keel.
    */
   #boardPlace(s: SailorMoment, place: Place): void {
     const board = this.boat.solid.board;
@@ -886,7 +1653,8 @@ export class SailorRuntime {
     this.#levelTurn(s, q);
     u.set(0, 1, 0).applyQuaternion(q.invert());
     const face = u.x >= 0 ? 1 : -1;
-    place.at.set(face * (board.thickness / 2), board.y - BOARD_ALONG, board.z);
+    const low = s.heel >= 0 ? 1 : -1;
+    place.at.set(low * board.x + face * (board.thickness / 2), board.y - BOARD_ALONG, board.z);
     // The figure's left, up and forward: up off the face, forward up the board.
     v.set(face, 0, 0);
     w.set(0, 1, 0);
@@ -934,9 +1702,11 @@ export class SailorRuntime {
     // both; as much as the ends are apart (a place to itself is no move).
     const side = Math.sign(v.x + w.x) || 1;
     const bow = Math.min(1, v.distanceTo(w) / ARC_SPAN);
+    // Onto a beach cat's net or off it: up over the hull's edge, not out.
+    const flat = this.#flat;
     u.set(
-      side * Math.max(side * v.x, side * w.x) + side * ARC_OUT * bow,
-      Math.max(v.y, w.y) + ARC_UP * bow,
+      flat ? (v.x + w.x) / 2 : side * Math.max(side * v.x, side * w.x) + side * ARC_OUT * bow,
+      Math.max(v.y, w.y) + (flat ? NET_ARC_UP : ARC_UP) * bow,
       (v.z + w.z) / 2,
     );
     const g = 1 - f;
@@ -959,12 +1729,8 @@ export class SailorRuntime {
    */
   #tillerHand(seated: boolean): void {
     const hands = this.hands;
-    const crossing = this.#cross !== null;
-    const side = crossing
-      ? this.#crossT / (this.#cross as Clip).duration < 0.75
-        ? this.#crossFrom
-        : -this.#crossFrom
-      : this.#side;
+    const crossing = this.#cross !== null || this.#net !== null;
+    const side = crossing ? (this.crossed < 0.75 ? this.crossFrom : -this.crossFrom) : this.#side;
     hands.tiller = seated && this.#mode === 0;
     if (!hands.tiller) {
       return;
@@ -1024,7 +1790,7 @@ export class SailorRuntime {
   /** The forward hand, where the mainsheet comes to it. */
   #forwardHand(seated: boolean): void {
     const hands = this.hands;
-    const side = this.#cross !== null ? this.#crossFrom : this.#side;
+    const side = this.crossing ? this.crossFrom : this.#side;
     hands.sheet = seated && this.#mode === 0 && this.#habit === null;
     const hand = side > 0 ? this.#bones.hand_r : this.#bones.hand_l;
     if (hand === undefined || hand < 0) {
@@ -1045,7 +1811,7 @@ export class SailorRuntime {
     wd.accel.set(0, 0, 0);
     wd.seatY = this.boat.seatY;
     // Out on the wire the cloth hangs free of the seat.
-    wd.seated = seated && this.#mode === 0 && this.#cross === null && this.hands.wire < OFF_SEAT;
+    wd.seated = seated && this.#mode === 0 && !this.crossing && this.hands.wire < OFF_SEAT;
     wd.side = this.#side;
     wd.seatIn = this.boat.seatIn;
     wd.seatOut = this.boat.seatOut;
@@ -1068,4 +1834,18 @@ function wrap(a: number): number {
 function smooth(x: number): number {
   const t = Math.max(0, Math.min(1, x));
   return t * t * t * (t * (6 * t - 15) + 10);
+}
+
+/**
+ * A clip of a beach cat's people's file placed in her model: from its place
+ * on her starboard side (its mirror, a -port clip's), or, righting her, as
+ * it is (placed from where she lies, as she lies).
+ */
+function catClip(c: Clip, aboard: Aboard): Clip {
+  const anchor = catAnchor(c.name);
+  const at = anchor === null ? null : catPoint(aboard, anchor);
+  if (c.place === null || at === null) {
+    return c;
+  }
+  return new Clip(c.name, c.duration, c.tracks, catPlace(c.place, at, catSide(c.name)));
 }

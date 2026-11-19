@@ -5,6 +5,8 @@ import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { MACHINE, lookWords as wordsOf } from '../catalog/looks';
+import { CLEAR_COURSE, SAIL_TO } from '../chart/coursewords';
+import { setSailToHost } from '../ui/sailto';
 import { STILL_AT_SEA, WATCH, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
 import { NOT_WATCHED, voyage, watchRefused } from './letwatch';
 import {
@@ -361,6 +363,7 @@ describe('the start screen with machine sailors', () => {
     expect(buttons(ai)).toEqual([
       { text: WATCH, gold: false },
       { text: 'How to connect', gold: false },
+      { text: 'Its log', gold: false },
       { text: 'Make another machine sailor', gold: false },
     ]);
   });
@@ -386,6 +389,84 @@ describe('the start screen with machine sailors', () => {
     expect(ticked({ ...ann, spectators: 'voyage' })).toBe(false);
     expect(ticked({ ...ann, atSea: true, spectators: 'no' })).toBe(false);
     expect(ticked({ ...ann, atSea: true, spectators: 'voyage' })).toBe(true);
+  });
+});
+
+describe('Sail to, at sea', () => {
+  const look = { version: 'v', finish: 'f', colour: 'c', words: 'Machine', srgb: '#b5532a' };
+  const mary: MachineItem = {
+    id: 'm1',
+    name: 'Iron Mary',
+    look,
+    atSea: true,
+    apps: [],
+    token: null,
+  };
+  const ashore: MachineItem = { ...mary, id: 'm2', name: 'Copper Kate', atSea: false };
+  const page: MachinesPage = {
+    mcp: 'https://keel.example/mcp',
+    cap: 3,
+    machines: [mary, ashore],
+    fleet: {},
+    looks: machineLooks,
+    confirmedUntil: 0,
+  };
+  const keys = (sailed: () => void) =>
+    findAll(
+      expand(
+        MachineList({
+          page,
+          heading: 'Machine sailors',
+          open: '',
+          toggle: () => {},
+          make: () => {},
+          sailed,
+        }),
+      ),
+      'li',
+    ).map((li) => ({
+      name: (li.props as { 'data-machine'?: string })['data-machine'],
+      keys: findAll(li, 'button').map((b) => textOf(b.props.children)),
+      button: findAll(li, 'button')[0],
+    }));
+
+  const press = (b: Node | undefined) =>
+    (b?.props as { onClick?: () => void } | undefined)?.onClick?.();
+
+  test('for each one in the water, while the host offers it; for the one sailed to, Clear course', () => {
+    setSailToHost(null);
+    expect(keys(() => {}).flatMap((r) => r.keys)).not.toContain(SAIL_TO);
+    let course = '';
+    let able = false;
+    const asked: string[] = [];
+    setSailToHost({
+      able: () => able,
+      is: (s) => s === course,
+      sail: (s, name, machine) => {
+        asked.push(`${s} ${name} ${machine}`);
+        course = s;
+      },
+      clear: () => {
+        course = '';
+      },
+    });
+    // Watching another's boat, or on the start screen: not offered.
+    expect(keys(() => {}).flatMap((r) => r.keys)).not.toContain(SAIL_TO);
+    able = true;
+    let closed = 0;
+    const rows = keys(() => closed++);
+    expect(rows.map((r) => [r.name, r.keys[0]])).toEqual([
+      ['Iron Mary', SAIL_TO],
+      ['Copper Kate', 'How to connect'],
+    ]);
+    press(rows[0]?.button);
+    expect(asked).toEqual(['m1 Iron Mary true']);
+    expect(closed).toBe(1);
+    const after = keys(() => {});
+    expect(after[0]?.keys[0]).toBe(CLEAR_COURSE);
+    press(after[0]?.button);
+    expect(course).toBe('');
+    setSailToHost(null);
   });
 });
 

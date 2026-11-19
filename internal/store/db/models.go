@@ -35,6 +35,8 @@ type Account struct {
 	AppearOffline  bool
 	WatchCode      string
 	FleetCode      pgtype.Text
+	LogShown       pgtype.Text
+	EveryBoat      bool
 }
 
 type AccountAction struct {
@@ -48,6 +50,30 @@ type AccountAction struct {
 	Source    string
 	FromAddr  string
 	ReportID  pgtype.UUID
+}
+
+type AgreementPull struct {
+	Repo     string
+	Number   int32
+	GithubID int64
+	HeadSha  string
+	Since    time.Time
+}
+
+type AgreementSignature struct {
+	ID            pgtype.UUID
+	GithubID      int64
+	Login         string
+	Name          string
+	Version       int32
+	TextSha256    string
+	SignedAt      time.Time
+	How           string
+	Guardian      string
+	GuardianEmail string
+	Note          string
+	VoidedAt      pgtype.Timestamptz
+	VoidReason    string
 }
 
 type AiGrant struct {
@@ -82,6 +108,22 @@ type Boat struct {
 	Cloth     int16
 	Number    int32
 	Name      pgtype.Text
+}
+
+type BoatKept struct {
+	AccountID pgtype.UUID
+	BoatKind  string
+}
+
+type Certificate struct {
+	ID          pgtype.UUID
+	AccountID   pgtype.UUID
+	Certificate string
+	ByHand      bool
+	EarnedAt    time.Time
+	World       int32
+	Tasks       []byte
+	Source      string
 }
 
 type Charting struct {
@@ -137,6 +179,12 @@ type Follow struct {
 	At         time.Time
 }
 
+type HarbourDay struct {
+	WorldID pgtype.UUID
+	Day     pgtype.Date
+	Hour    int16
+}
+
 type JobRun struct {
 	ID         pgtype.UUID
 	Job        string
@@ -162,10 +210,76 @@ type Light struct {
 	Daymark   int16
 }
 
+type LogEntry struct {
+	ID           pgtype.UUID
+	AccountID    pgtype.UUID
+	Source       string
+	World        int32
+	At           time.Time
+	Kind         string
+	Title        string
+	What         string
+	Worth        float32
+	Grp          pgtype.Text
+	Find         pgtype.Text
+	X            pgtype.Float4
+	Y            pgtype.Float4
+	Place        pgtype.Text
+	OtherID      pgtype.UUID
+	OtherName    pgtype.Text
+	OtherMachine bool
+	OtherBoat    pgtype.Text
+	Article      pgtype.Text
+	Fault        pgtype.Text
+	Alone        bool
+}
+
+type LogFind struct {
+	AccountID  pgtype.UUID
+	Grp        string
+	Find       string
+	Count      int32
+	FirstWorld int32
+	FirstAt    time.Time
+	FirstPlace pgtype.Text
+	LastWorld  int32
+}
+
+type LogVoyage struct {
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	Source         string
+	World          int32
+	Aboard         bool
+	Boat           int64
+	BoatKind       string
+	BoatName       pgtype.Text
+	BeganAt        time.Time
+	EndedAt        time.Time
+	How            string
+	Run            pgtype.Float4
+	Place          pgtype.Text
+	Least          pgtype.Float4
+	BumpsAt        int16
+	BumpsNot       int16
+	Met            int16
+	GalePlace      pgtype.Text
+	FogPlace       pgtype.Text
+	SkipperID      pgtype.UUID
+	SkipperName    pgtype.Text
+	SkipperMachine bool
+	Crew           []byte
+}
+
 type Mute struct {
 	AccountID pgtype.UUID
 	OtherID   pgtype.UUID
 	MadeAt    time.Time
+}
+
+type NewSailorFrom struct {
+	Key    []byte
+	MadeAt time.Time
 }
 
 type NewsItem struct {
@@ -186,6 +300,15 @@ type NewsItem struct {
 	Also         []byte
 	WrittenAt    time.Time
 	EndsAt       pgtype.Timestamptz
+	Story        pgtype.Text
+	Score        int16
+	Day          pgtype.Date
+	Rank         pgtype.Int2
+	Struck       bool
+	Named        []pgtype.UUID
+	Amount       pgtype.Float8
+	Facts        []byte
+	Source       pgtype.Text
 }
 
 type NoticeReport struct {
@@ -277,6 +400,108 @@ type Place struct {
 	Details []byte
 }
 
+type Race struct {
+	WorldID    pgtype.UUID
+	ID         pgtype.UUID
+	Code       string
+	OwnerID    pgtype.UUID
+	Kind       string
+	CourseKind string
+	Course     int32
+	Shape      pgtype.Text
+	Long       bool
+	Boat       string
+	Who        string
+	Name       string
+	StartsAt   time.Time
+	Moved      bool
+	State      string
+	Harbour    pgtype.Int2
+	AgainOf    pgtype.UUID
+	MadeAt     time.Time
+	EndedAt    pgtype.Timestamptz
+}
+
+type RaceEntry struct {
+	WorldID     pgtype.UUID
+	RaceID      pgtype.UUID
+	AccountID   pgtype.UUID
+	Run         int16
+	Number      int16
+	Machine     bool
+	WithCrew    bool
+	EnteredAt   time.Time
+	WithdrawnAt pgtype.Timestamptz
+	Removed     bool
+	StartedAt   pgtype.Timestamptz
+}
+
+type RaceRecord struct {
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	Source         string
+	World          int32
+	At             time.Time
+	Code           string
+	RaceName       string
+	Kind           string
+	CourseName     string
+	Boat           string
+	BoatName       pgtype.Text
+	Fleet          int16
+	Harbour        bool
+	Newcomers      bool
+	Role           string
+	Place          pgtype.Int2
+	How            pgtype.Text
+	Medal          pgtype.Text
+	Awards         []string
+	SkipperID      pgtype.UUID
+	SkipperName    pgtype.Text
+	SkipperMachine bool
+	Hung           bool
+	Number         pgtype.Int2
+	Elapsed        pgtype.Float4
+	Added          float32
+	Piloted        bool
+	Alone          bool
+	Course         pgtype.Text
+}
+
+type RaceResult struct {
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Run       int16
+	Place     pgtype.Int2
+	Elapsed   pgtype.Float4
+	Added     float32
+	Marks     int16
+	ToGo      pgtype.Float4
+	How       string
+	Medal     pgtype.Text
+	Awards    []string
+	Crew      []byte
+}
+
+type RaceRun struct {
+	WorldID pgtype.UUID
+	RaceID  pgtype.UUID
+	Run     int16
+	Warning int64
+	Start   int64
+	Ended   int64
+	Course  []byte
+}
+
+type RaceTrack struct {
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Run       int16
+	Samples   []byte
+}
+
 type Report struct {
 	ID            pgtype.UUID
 	MadeAt        time.Time
@@ -359,15 +584,26 @@ type Session struct {
 }
 
 type Setting struct {
-	One              bool
-	GrantLifetime    pgtype.Interval
-	LinkLifetime     pgtype.Interval
-	Links            bool
-	Boarding         bool
-	Chat             bool
-	ShipmateMessages bool
-	ChatCountries    []string
-	SpectatorChat    bool
+	One                  bool
+	GrantLifetime        pgtype.Interval
+	LinkLifetime         pgtype.Interval
+	Links                bool
+	Boarding             bool
+	Chat                 bool
+	ShipmateMessages     bool
+	ChatCountries        []string
+	SpectatorChat        bool
+	LogFrom              time.Time
+	RaceAhead            int16
+	RaceDaily            int16
+	RaceMade             int16
+	RaceOwned            int16
+	RaceCutoff           pgtype.Interval
+	HarbourEvery         int16
+	HarbourBoats         []string
+	GreenhornUs          int16
+	NewSailorsPerAddress int16
+	HumanCheck           bool
 }
 
 type Shipmate struct {

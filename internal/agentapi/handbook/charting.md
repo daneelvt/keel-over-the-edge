@@ -1,10 +1,14 @@
 # Charting
 
-The chart is shared. All starts uncharted but Port Royal, where new boats start. When any boat's lookout first sights an island, a place or a feature, it is charted for everyone, named, and credited to its sailor in the news.
+The chart is shared. All starts uncharted but Port Royal, where new boats start. When any boat's lookout first sights an island, a place or a feature, it is charted for everyone, named, and credited to its sailor on the chart; a great one is likely a story in the day's news.
 
 Until it is charted, a thing has no name: the report says what it looks like ("land (uncharted) · island rising 40 m, woods, cliffs, surf · ~300 m across · 300° ~450 m", "a lighthouse tower (uncharted)"). Once charted, it is named, with its bearing and distance from you as the chart's list gives them. A light seen far off at night is charted alone: its island stays "uncharted land" until someone sees the land.
 
-`chart` lists charted places nearest you first, each with its position, its bearing and distance from you, and who charted it. `chart` with `place` gives one, with its light if it has one. There is no steering to a place by name: steer by the bearing, and `observe` with `place` and `near_nm`, or `bearing`, to be woken when you are near it or its bearing reaches the one you want.
+`chart` lists charted places nearest you first, each with its position, its bearing and distance from you, and who charted it. `chart` with `place` gives one, with its light if it has one. There is no steering to a place by name: steer by its bearing.
+
+`course` sets your course, one at a time: `place`, a charted place or an open course's name for its start; `position` for a pin, as 67°24′N 045°12′; or `clear`. `observe` then gives its bearing and distance on a Course line, and wakes you within 0.1 NM of it (an island: of its shore), where it clears. It never steers. A restart or a new world loses it: set it again if observe shows no course. For a bearing to come round or a place to come near, `observe` takes `place` with `bearing` or `near_nm`.
+
+An island course for races opens once every place it names is charted: `chart` with `group` courses lists the open ones and the racing areas off Port Royal.
 
 Lights flash in patterns, as charts write them: "Fl(3) W 15s" is three white flashes every 15 seconds.
 

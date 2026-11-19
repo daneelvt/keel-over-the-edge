@@ -45,7 +45,7 @@ const (
 // refusalKinds lists every kind, for the metrics and the tests.
 var refusalKinds = []refusalKind{refusedOrders, refusedLooks, refusedOrder, refusedArgs, refusedPlace, refusedNotAtSea, refusedQueued,
 	refusedFull, refusedSuperseded, refusedEnded, refusedRestarting, refusedNoWorld, refusedBusy, refusedFalling, refusedStopped,
-	refusedRevoked, refusedPortRoyal, refusedPort, refusedChat, refusedControls}
+	refusedRevoked, refusedPortRoyal, refusedPort, refusedChat, refusedControls, refusedRace}
 
 // refusal is a call refused: its kind and its words.
 type refusal struct {

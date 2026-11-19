@@ -225,22 +225,34 @@ func (r *Runner) run(ctx context.Context, j Job, c store.JobClaim) {
 
 // Daily is a job's Due for once a day at the time of day given in UTC.
 func Daily(hour, minute int) func(now time.Time) (time.Time, bool) {
-	return func(now time.Time) (time.Time, bool) {
-		now = now.UTC()
-		y, m, d := now.Date()
-		t := time.Date(y, m, d, hour, minute, 0, 0, time.UTC)
-		if t.After(now) {
-			t = t.AddDate(0, 0, -1)
-		}
-		return t, true
-	}
+	return DailyIn(time.UTC, hour, minute)
 }
 
 // DailyNext is Daily's Next.
 func DailyNext(hour, minute int) func(now time.Time) time.Time {
-	due := Daily(hour, minute)
+	return DailyNextIn(time.UTC, hour, minute)
+}
+
+// DailyIn is a job's Due for once a day at the time of day given in a
+// zone, its clock's, whatever its offset from UTC that day.
+func DailyIn(zone *time.Location, hour, minute int) func(now time.Time) (time.Time, bool) {
+	return func(now time.Time) (time.Time, bool) {
+		now = now.In(zone)
+		y, m, d := now.Date()
+		t := time.Date(y, m, d, hour, minute, 0, 0, zone)
+		if t.After(now) {
+			t = time.Date(y, m, d-1, hour, minute, 0, 0, zone)
+		}
+		return t.UTC(), true
+	}
+}
+
+// DailyNextIn is DailyIn's Next.
+func DailyNextIn(zone *time.Location, hour, minute int) func(now time.Time) time.Time {
+	due := DailyIn(zone, hour, minute)
 	return func(now time.Time) time.Time {
 		t, _ := due(now)
-		return t.AddDate(0, 0, 1)
+		t = t.In(zone)
+		return time.Date(t.Year(), t.Month(), t.Day()+1, hour, minute, 0, 0, zone).UTC()
 	}
 }

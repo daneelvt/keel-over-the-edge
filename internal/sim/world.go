@@ -29,6 +29,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
@@ -92,6 +94,10 @@ type Config struct {
 	// skipper included, by its index; a kind with none carries its skipper
 	// alone.
 	Capacities []int
+	// Races are what the world's races are run on: its racing areas, its
+	// island courses and its kinds of boat as races know them; nil is a
+	// world with no races.
+	Races *committee.Stage
 }
 
 // Terrain is a world's land: the ground boats run aground on, the land's
@@ -132,7 +138,7 @@ const (
 	PhasePhysics               // step every boat, in the shadow of the boats near it
 	PhaseGrid                  // sort the boats into the grid's cells
 	PhaseContacts              // pairs, contacts and bumps, under the Articles
-	PhaseRules                 // the edge: boats over the lip, and their approaches to it; what the lookouts sight; and the sea's life
+	PhaseRules                 // the edge: boats over the lip, and their approaches to it; the races; what the lookouts sight; and the sea's life
 	PhasePublish               // publish the frame, hand it to the recorder
 	Phases                     // the number of phases
 )
@@ -231,10 +237,22 @@ type World struct {
 	// The chart: what is charted, and what the lookouts see by.
 	chart chartState
 
+	// The voyages' log: the sky its nights are reckoned by, nil for none,
+	// and the world's epoch, µs of UTC; and, for tests, the visibility at
+	// a point, nil for the weather's.
+	logSky     *sky.Prepared
+	logEpoch   float64
+	visibility func(x, y float64) float64
+
 	// life is the sea's life, nil for none, and lifeWeather what it reads
 	// the weather by.
 	life        *life.World
 	lifeWeather lifeWeather
+
+	// stage is what races are run on, nil for none; racePlaced the boats
+	// the committee placed this tick, whose pairs begin afresh.
+	stage      *committee.Stage
+	racePlaced []int32
 
 	// endAt is the world's last tick, once an End has set it; 0 until then.
 	// It is in no snapshot: a process that restores the world is told its
@@ -283,6 +301,7 @@ func New(cfg Config) (*World, error) {
 		timeline:   cfg.Weather,
 		ctx:        context.Background(),
 		enc:        cfg.Encounters,
+		stage:      cfg.Races,
 	}
 	if w.enc != nil {
 		for i := range w.kinds {
@@ -316,6 +335,9 @@ func New(cfg Config) (*World, error) {
 		w.restarted = make([]int32, 0, cfg.Capacity)
 	}
 	w.initChart(cfg.Sight, len(cfg.Kinds))
+	if s := cfg.Sight; s != nil && s.Sky != nil {
+		w.logSky, w.logEpoch = s.Sky, float64(s.Epoch)
+	}
 	if cfg.Life != nil {
 		w.life = life.NewWorld(cfg.Life, cfg.Capacity)
 		bows := make([]float64, len(cfg.Kinds))

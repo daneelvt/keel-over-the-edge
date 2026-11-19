@@ -37,6 +37,7 @@ import {
 import type { Node, UniformNode } from 'three/webgpu';
 import { SEA } from '../predict/layout.gen';
 import { DOME_RADIUS, domeCentre } from '../render/materials';
+import { eachRender } from '../render/uploads';
 import type { SeaBand } from './phases';
 
 export interface BandUniforms {
@@ -62,19 +63,19 @@ export interface BandUniforms {
  * foam is each area's foam, in the areas' order.
  */
 export function bandUniforms(band: SeaBand, foam: Vector4[]): BandUniforms {
-  const groups = uniform(0);
-  const size = uniform(SEA.window as number);
-  const blended = uniform(0);
+  const groups = eachRender(uniform(0));
+  const size = eachRender(uniform(SEA.window as number));
+  const blended = eachRender(uniform(0));
   return {
     band,
-    phases: uniformArray(band.phases, 'vec4'),
-    hs: uniformArray(band.hs, 'float'),
-    period: uniformArray(band.period, 'float'),
-    foam: uniformArray(foam, 'vec4'),
+    phases: eachRender(uniformArray(band.phases, 'vec4')),
+    hs: eachRender(uniformArray(band.hs, 'float')),
+    period: eachRender(uniformArray(band.period, 'float')),
+    foam: eachRender(uniformArray(foam, 'vec4')),
     groups,
     size,
     blended,
-    areaOrigin: uniform(band.areaOrigin) as unknown as Node<'vec2'>,
+    areaOrigin: eachRender(uniform(band.areaOrigin)) as unknown as Node<'vec2'>,
     sync: () => {
       groups.value = band.groups;
       size.value = band.size;

@@ -30,6 +30,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 import { chromiumArgs, chromiumEnv, softwareGPUOf } from './e2e/gpu';
+import { builtFiles } from './playwright.built.config';
 
 const port = 5181;
 // A second Vite, whose game traffic goes through tools/e2e's lag proxy.
@@ -53,17 +54,21 @@ const linux = process.platform === 'linux';
 // keel's world is a minute old: it is the page project's first file.
 export const pageFiles = [
   'connect',
+  'a11y',
   'aboard',
+  'audio',
   'boats',
   'discover',
   'lag',
   'life',
+  'lifecycle',
   'looks',
   'machines',
   'oauth-approve',
   'over',
   'owner',
   'passkeys',
+  'races',
   'roam',
   'shipmates',
   'start',
@@ -87,25 +92,37 @@ export const shardFiles: Record<string, string[][]> = {
   // look: out of the last shard, which ran to its 20 minutes.
   webgl2: [
     ['ending', 'features', 'forecast', 'freecam', 'look', 'machine-mark', 'layout'],
-    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind', 'sailors'],
+    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind', 'sailors', 'uploads'],
   ],
-  // About 7 minutes each on SwiftShader, 34.5 in all.
+  // About 7 minutes each on SwiftShader, 34.5 in all (November 2026; a slow
+  // runner takes half as long again).
   webgpu: [
-    ['freecam', 'lights', 'machine-mark', 'sea'],
-    ['forecast', 'wind'],
-    ['edge', 'features', 'sail', 'sky'],
-    ['fog', 'look', 'pilot', 'weather'],
-    // The sailors' files grow with every look, and the layout's measures
-    // every screen: out of the last shard, which ran past its 20 minutes.
-    ['layout', 'sailors'],
+    // The fleet's file grows with every kind: out of the last shard,
+    // which ran past its 20 minutes with the catamaran.
+    ['freecam', 'lights', 'machine-mark', 'sea', 'fleet'],
+    // The people aboard, about 12 minutes in all on a slow runner, in two
+    // files on two runners: out of the last shard, which ran past its 20
+    // minutes with the catamaran's twelve.
+    ['forecast', 'wind', 'land', 'seabirds', 'crew-cruisers'],
+    ['edge', 'features', 'sail', 'sky', 'uploads'],
+    ['fog', 'look', 'pilot', 'weather', 'crew'],
+    // The sailors' file grows with every look: alone, as the layout's
+    // with it came near its 20 minutes on a slow runner; the layout's runs
+    // in the last shard.
+    ['sailors'],
   ],
 };
 
-/** The files a scene project's shard runs, as the project's testMatch or testIgnore. */
+/**
+ * The files a scene project's shard runs, as the project's testMatch or
+ * testIgnore: neither the page's nor the built page's
+ * (playwright.built.config.ts).
+ */
 function shardOf(project: string): { testMatch?: string[]; testIgnore: string[] } {
   const shards = Number(process.env.SHARDS ?? '1');
+  const others = [...pageFiles, ...builtFiles];
   if (shards <= 1 || process.env.PROJECT !== project) {
-    return { testIgnore: pageFiles };
+    return { testIgnore: others };
   }
   const groups = (shardFiles[project] ?? []).map((g) => g.map((n) => `${n}.spec.ts`));
   const shard = Number(process.env.SHARD);
@@ -115,8 +132,8 @@ function shardOf(project: string): { testMatch?: string[]; testIgnore: string[] 
     );
   }
   return shard < shards
-    ? { testMatch: groups[shard - 1] ?? [], testIgnore: pageFiles }
-    : { testIgnore: [...groups.flat(), ...pageFiles] };
+    ? { testMatch: groups[shard - 1] ?? [], testIgnore: others }
+    : { testIgnore: [...groups.flat(), ...others] };
 }
 /** Chromium's launch, on the software GPU e2e/gpu.ts gives the project on Linux. */
 function launch(project: string): { args: string[]; env: Record<string, string> } {
@@ -242,6 +259,8 @@ export default defineConfig({
         KEEL_AGENTS_ADDR: keelAgents,
         KEEL_DEV_CERT: `${tls}/cert.pem`,
         KEEL_DEV_KEY: `${tls}/key.pem`,
+        // WebKit on Linux stalls on a page of this many modules over HTTP/2.
+        KEEL_DEV_HTTP1: '1',
       },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

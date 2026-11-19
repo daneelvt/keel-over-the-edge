@@ -24,8 +24,10 @@
 //   5 hair colour, 1 if the row is drawn as a rigid figure (2 out on a
 //     trapeze's wire to starboard, 3 to port)
 //   6 the sway: the apparent wind's push in the model's frame (x, z,
-//     metres at full sway), the seat's side (±1 seated, 0 not), 1 if the
-//     row is drawn skinned
+//     metres at full sway), the seat's side (±1 seated, 0 not), and if the
+//     row is drawn skinned 1, and 1 more wearing the winner's cockade, and
+//     twice the pendant worn (0 none, else the certificate's place and one);
+//     0 if not
 //   7 seat: the rigid figure's place in the model (x, y, z) and facing
 //   8 on: three texels a bone, the rows of its matrix.
 //
@@ -58,14 +60,17 @@ import {
   dot,
   Fn,
   float,
+  floor,
   If,
   int,
   ivec2,
   max,
+  mod,
   normalGeometry,
   normalize,
   normalLocal,
   positionGeometry,
+  select,
   sin,
   texture,
   varying,
@@ -76,10 +81,13 @@ import type { Node } from 'three/webgpu';
 import type { DrawnBoat } from '../../game/fleet';
 import { figureNode, type Instances, placeNormal, placePoint } from '../fleetparts';
 import { SAILING } from '../sailor';
-import type { FleetLook } from './fleetlooks';
+import type { BridgePlaces } from './bridgedeck';
+import type { FleetLook, FleetLooks } from './fleetlooks';
+import { pendantVertex } from './pendant';
 import { type Hike, STRAPPED } from './restage';
 import { Rig } from './rig';
 import {
+  type CatBoat,
   OFF_SEAT,
   type SailorBoat,
   type SailorMoment,
@@ -88,7 +96,9 @@ import {
   wheelTurn,
 } from './runtime';
 import type { HullSolid } from './solid';
+import { stillNow } from './still';
 import type { Trapeze } from './trapeze';
+import type { YachtPlaces } from './yacht';
 
 /** How often a near sailor's runtime runs, a second. */
 export const NEAR_RATE = 20;
@@ -124,6 +134,12 @@ export interface NearBoat {
   rudderMax?: number;
   /** The trapeze, on a boat with one (trapeze.ts's trapezeOf): its sailors go out on the wire. */
   trapeze?: Trapeze | null;
+  /** A beach cat's (onboat.ts's catOf): her sailors sit on her hull and cross her net on her own clips. */
+  cat?: CatBoat | null;
+  /** A cruising yacht's places (yacht.ts's yachtOf): her helm at her wheel on her own clips. */
+  yacht?: YachtPlaces | null;
+  /** A cruising catamaran's places (bridgedeck.ts's bridgeOf): her helm at her wheel on her own clips. */
+  bridge?: BridgePlaces | null;
 }
 
 /** A near boat's sailor: its runtime, and its bones' matrices as last run. */
@@ -169,6 +185,9 @@ class Sailor {
       // Each its own, turned by its own boat's rudder.
       wheel: near.wheel ? { ...near.wheel, turn: 0 } : null,
       trapeze: near.trapeze ?? null,
+      cat: near.cat ?? null,
+      yacht: near.yacht ?? null,
+      bridge: near.bridge ?? null,
     };
     this.runtime = new SailorRuntime(rig, clips, this.boat, seed, look.machine, false);
     if (near.trapeze) {
@@ -221,7 +240,10 @@ export class SailorRows {
 
 export class NearSailors extends SailorRows {
   readonly #slots: (Sailor | null)[] = new Array<Sailor | null>(SLOTS).fill(null);
-  readonly #still: boolean;
+  /** Under reduced motion, read every frame: a change while playing is followed. */
+  get #still(): boolean {
+    return stillNow();
+  }
   /** The world's time, seconds, at the last frame. */
   #time = 0;
   /** How many times a sailor has run, counted until read. */
@@ -233,9 +255,11 @@ export class NearSailors extends SailorRows {
     readonly boat: NearBoat,
   ) {
     super(ROW_HEAD + 3 * bones, rows, 'fleet near sailors skinned');
-    this.#still =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
+
+  /** The wind's direction (radians from north) and speed (m/s): each boat's apparent wind from it and the boat's own way. */
+  windFrom = 0;
+  windSpeed = 0;
 
   /** A new frame at the world's time; dt the time since the last, seconds. */
   frame(time: number): void {
@@ -257,6 +281,18 @@ export class NearSailors extends SailorRows {
     }
     if (this.boat.trapeze && look.trapezeState !== 'ready' && look.trapezeState !== 'failed') {
       // On a trapeze: rigid until its clips on the wire have loaded (or failed to: then on the rail).
+      return false;
+    }
+    if (this.boat.cat && look.catState !== 'ready' && look.catState !== 'failed') {
+      // Aboard a beach cat: rigid until her people's clips have loaded (or failed to).
+      return false;
+    }
+    if (this.boat.yacht && look.cruiserState !== 'ready' && look.cruiserState !== 'failed') {
+      // Aboard a cruising yacht: rigid until her people's clips have loaded (or failed to).
+      return false;
+    }
+    if (this.boat.bridge && look.bridgeState !== 'ready' && look.bridgeState !== 'failed') {
+      // Aboard a cruising catamaran: rigid until her people's clips have loaded (or failed to).
       return false;
     }
     let s = this.#slots[b.slot] ?? null;
@@ -286,14 +322,22 @@ export class NearSailors extends SailorRows {
     this.runs++;
     const mo = s.moment;
     mo.dt = dt;
+    mo.still = stillNow();
     mo.time = this.#time;
     mo.offset = b.sailor;
+    mo.aft = b.aft;
     mo.mode = b.mode;
     // The fleet does not hear how far on a climb is: as if just begun.
     mo.timer = s.boat.climbTime;
     mo.heel = b.heel;
     mo.pitch = b.pitch;
     mo.heave = b.heave;
+    mo.boom = b.boom;
+    mo.trim = b.trim;
+    mo.wayHeld = b.helmHeld;
+    // The apparent wind, from the wind and the boat's way: at a wheel, the
+    // side the helm stands to.
+    apparentOf(this.windFrom, this.windSpeed, b, mo);
     mo.rollRate = dt > 0 ? (b.heel - s.heel) / dt : 0;
     s.heel = b.heel;
     // The extension's hinge, where the rudder swings it about the stock.
@@ -347,6 +391,12 @@ export class NearSailors extends SailorRows {
     return s.runtime.side;
   }
 
+  /** On a beach cat, where a slot's sailor crossing her net is across it (as last run); null if not crossing it. */
+  netAt(slot: number): number | null {
+    const s = slot >= 0 && slot < SLOTS ? this.#slots[slot] : null;
+    return s?.runtime.netAt ?? null;
+  }
+
   /**
    * Where a slot's sailor's hook is (the model's frame, as last run), into
    * out, and on which side, if it hangs from a trapeze's wire; else 0.
@@ -376,6 +426,8 @@ export interface FleetSailorNodes {
   machine: Node<'float'>;
   layer: Node<'float'>;
   opacity: Node<'float'>;
+  /** The near figures': whether the row's sailor wears the winner's cockade, in the vertex stage. */
+  cockade?: Node<'bool'>;
 }
 
 /**
@@ -428,7 +480,40 @@ export function nearSailorNodes(
     });
     return out;
   })() as unknown as Node<'vec3'>;
-  return { vertex, ...colours(i) };
+  const cockade = mod(sway.w.sub(1), 2).greaterThan(0.5) as unknown as Node<'bool'>;
+  return { vertex, ...colours(i), cockade };
+}
+
+/**
+ * The pendant its skipper wears on a near boat's skinned figure (pendant.ts),
+ * from the row's sway texel, on its look's place (by the row's layer), by
+ * the pendant bone (bone) in the row, placed as the figure is.
+ */
+export function nearPendantNode(
+  rows: Texture,
+  row: Node<'int'>,
+  cog: number,
+  looks: Pick<FleetLooks, 'pendants' | 'pendantBone'>,
+): Node<'vec3'> {
+  const t = texture(rows);
+  const i = rowInstances(t, row);
+  const sway = t.load(ivec2(6, row)) as unknown as Node<'vec4'>;
+  const layer = int(i.main.w.add(0.5));
+  const bone = vec4(looks.pendantBone, 0, 0, 0) as unknown as Node<'vec4'>;
+  return pendantVertex({
+    worn: select(
+      sway.w.greaterThan(0.5),
+      floor(sway.w.sub(1).div(2)),
+      float(0),
+    ) as unknown as Node<'float'>,
+    at: (looks.pendants.at.element(layer) as unknown as Node<'vec4'>)
+      .xyz as unknown as Node<'vec3'>,
+    facing: (looks.pendants.facing.element(layer) as unknown as Node<'vec4'>)
+      .xyz as unknown as Node<'vec3'>,
+    skin: (p, n) => skinRow(t, row, bone, vec4(1, 0, 0, 0) as unknown as Node<'vec4'>, p, n),
+    place: (p) => placePoint(p, i, cog),
+    turn: (n) => placeNormal(n, i),
+  });
 }
 
 /**
@@ -513,6 +598,29 @@ export function rigidSailorNodes(rows: Texture, row: Node<'int'>, cog: number): 
     .and(i.hair.w.greaterThan(0.5))
     .and(abs(tag.y.sub(i.hair.w.sub(1))).lessThan(0.5));
   return { vertex: figureNode(i, cog).mul(float(here)) as unknown as Node<'vec3'>, ...colours(i) };
+}
+
+/**
+ * A boat's apparent wind from the wind (from, radians from north; speed,
+ * m/s) and its way, into out: its speed, and its angle from the bow
+ * (radians, + from starboard), as the physics gives the boat in view's.
+ */
+export function apparentOf(
+  windFrom: number,
+  windSpeed: number,
+  b: DrawnBoat,
+  out: { windSpeed: number; windAngle: number },
+): void {
+  // Where it blows to, east and north, less the boat's way; into the model's frame.
+  const we = -windSpeed * Math.sin(windFrom) - b.speed * Math.sin(b.heading);
+  const wn = -windSpeed * Math.cos(windFrom) - b.speed * Math.cos(b.heading);
+  const c = Math.cos(b.heading);
+  const s = Math.sin(b.heading);
+  const x = we * c - wn * s;
+  const z = -(we * s + wn * c);
+  out.windSpeed = Math.hypot(x, z);
+  // It comes from the other way: from ahead is −z.
+  out.windAngle = Math.atan2(-x, z);
 }
 
 /** The apparent wind's push on a sailor's cloth, in the boat model's frame, into out (x, z). */

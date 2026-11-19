@@ -255,7 +255,19 @@ func (t *Tree) RenderDeploy(d Deploy) (resmap.ResMap, error) {
 		}
 		components = append(components, RebuildComponent)
 	}
-	patches := []map[string]any{{"patch": string(patch)}}
+	// The contributor agreement keeper runs the same image, imported too.
+	keeper, err := yaml.Marshal(map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"name": "keel-agreement", "namespace": Namespace},
+		"spec": map[string]any{"template": map[string]any{"spec": map[string]any{
+			"containers": []map[string]any{{"name": "agreement", "imagePullPolicy": "Never"}},
+		}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	patches := []map[string]any{{"patch": string(patch)}, {"patch": string(keeper)}}
 	if d.NoBackups {
 		for _, gone := range [][4]string{
 			{"barmancloud.cnpg.io/v1", "ObjectStore", ObjectStore, Namespace},
@@ -1314,8 +1326,16 @@ func namespacesFenced(objs []Object, _ Target) error {
 const internet = "0.0.0.0/0"
 
 // ipBlocks: no NetworkPolicy names an address range but the whole
-// internet, less exceptions.
+// internet, less exceptions; or, letting in a forward routed to the
+// tailnet, the tailnet's range, in that forward's namespace, on named
+// ports alone.
 func ipBlocks(objs []Object, _ Target) error {
+	routed := map[string]bool{}
+	for _, f := range Forwards {
+		if f.Tailnet {
+			routed[f.Namespace] = true
+		}
+	}
 	var errs []error
 	for _, o := range objs {
 		if o.Kind() != "NetworkPolicy" {
@@ -1324,8 +1344,12 @@ func ipBlocks(objs []Object, _ Target) error {
 		for _, dir := range [][2]string{{"ingress", "from"}, {"egress", "to"}} {
 			for _, r := range List(o, "spec", dir[0]) {
 				for _, peer := range List(r, dir[1]) {
-					if b := Get(peer, "ipBlock"); b != nil && Str(b, "cidr") != internet {
-						errs = append(errs, fmt.Errorf("%s names the range %s: only %s, with exceptions, is allowed", o.ID(), Str(b, "cidr"), internet))
+					b := Get(peer, "ipBlock")
+					switch cidr := Str(b, "cidr"); {
+					case b == nil || cidr == internet:
+					case cidr == TailnetRange && dir[0] == "ingress" && routed[Str(o, "metadata", "namespace")] && len(List(r, "ports")) > 0 && Get(b, "except") == nil:
+					default:
+						errs = append(errs, fmt.Errorf("%s names the range %s: only %s, with exceptions, is allowed, or %s in to a forward routed to the tailnet, on its port", o.ID(), cidr, internet, TailnetRange))
 					}
 				}
 			}

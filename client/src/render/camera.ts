@@ -91,13 +91,12 @@ export const YAW_OMEGA = 4;
 /**
  * A bump shakes the camera: metres of shake per m/s of closing speed, at
  * most SHAKE_MOST, wobbling at SHAKE_RATE and gone after SHAKE_TIME; under
- * reduced motion, SHAKE_REDUCED of it.
+ * reduced motion, none: the knock is heard, and the line says what it was.
  */
 export const SHAKE_PER_SPEED = 0.05;
 export const SHAKE_MOST = 0.25;
 export const SHAKE_RATE = 11; // Hz
 export const SHAKE_TIME = 0.4; // s
-export const SHAKE_REDUCED = 1 / 3;
 export const YAW_OMEGA_REDUCED = 12;
 /** Untouched this long, in milliseconds, the camera eases back to its resting view. */
 export const EASE_BACK_AFTER = 5000;
@@ -132,6 +131,7 @@ const RISE_STEPS = 6;
 /** A boat's size, as the camera frames it: its length over all, and its sails' heights, metres. */
 export interface FramedBoat {
   lengthOverall: number;
+  beam: number;
   physics: {
     rig: { boomHeight: number; luff: number };
     headsails?: { headsailArea: number; headsailTackHeight: number; headsailLuff: number };
@@ -161,15 +161,24 @@ export function mastOf(b: FramedBoat): number {
 }
 
 /**
+ * How long a boat is framed as: her length, or twice her beam for one
+ * wider than half her length (a cruising catamaran), whose breadth seen
+ * from astern the chase view must take in as a monohull's sail.
+ */
+export function framedLength(b: FramedBoat): number {
+  return Math.max(b.lengthOverall, 2 * b.beam);
+}
+
+/**
  * How much farther the camera stands from a boat than from the one its
- * views are framed for: by the boat's length or its masthead's height,
- * whichever is the more, the chase view never past MAX_CHASE.
+ * views are framed for: by the boat's framed length or its masthead's
+ * height, whichever is the more, the chase view never past MAX_CHASE.
  */
 export function sizeOf(boat: FramedBoat, framed: FramedBoat): number {
   if (boat === framed) {
     return 1;
   }
-  const size = Math.max(boat.lengthOverall / framed.lengthOverall, mastOf(boat) / mastOf(framed));
+  const size = Math.max(framedLength(boat) / framedLength(framed), mastOf(boat) / mastOf(framed));
   return Math.min(size, MAX_CHASE / CHASE.distance);
 }
 
@@ -607,10 +616,10 @@ export class ChaseCamera {
     this.roll += (toRoll - this.roll) * k;
   }
 
-  /** Shakes the camera for a bump the hulls closed at closing m/s, at now (ms). */
+  /** Shakes the camera for a bump the hulls closed at closing m/s, at now (ms); not at all under reduced motion. */
   shake(closing: number, now: number): void {
     const size = Math.min(SHAKE_MOST, SHAKE_PER_SPEED * Math.max(0, closing));
-    this.shakeSize = this.reducedMotion ? size * SHAKE_REDUCED : size;
+    this.shakeSize = this.reducedMotion ? 0 : size;
     this.#shakeAt = now;
   }
 

@@ -12,6 +12,7 @@
 // made.
 
 import { Matrix4, Quaternion, Vector3 } from 'three';
+import { liftOver } from './cat';
 import { type Clip, Pose } from './clips';
 import type { DeckLook } from './fleetlooks';
 import { twoBone } from './ik';
@@ -104,6 +105,14 @@ export interface Blend {
   carry: boolean;
   /** At least how high carried feet go, stepping over something, m in the boat's model; −∞ for no more than a step. */
   top: number;
+  /**
+   * Of the blend, how much the carried feet take to come across: 1, all of
+   * it; less, the legs come in first (off a rail under its lifelines, the
+   * knees low while the feet are out). Not said, 1.
+   */
+  legs?: number;
+  /** The hands carried too, from one end's to the other's, up over this height (m in the boat's model: a lifeline the forearms lie over); −∞ or not said, not. */
+  hands?: number;
 }
 
 /** A blend with nothing set: the first pose alone. */
@@ -116,6 +125,8 @@ export function blend(): Blend {
     narrowB: 0,
     carry: false,
     top: Number.NEGATIVE_INFINITY,
+    legs: 1,
+    hands: Number.NEGATIVE_INFINITY,
   };
 }
 
@@ -127,7 +138,7 @@ const STEP_UP = 0.08;
  * higher end in the first third, across in the second, set down in the
  * last; so it goes round an edge between, not through it.
  */
-function carried(a: Vector3, b: Vector3, f: number, out: Vector3, over: number): Vector3 {
+export function carried(a: Vector3, b: Vector3, f: number, out: Vector3, over: number): Vector3 {
   const top = Math.max(a.y + STEP_UP, b.y + STEP_UP, over);
   const up = smooth3(3 * f);
   const across = smooth3(3 * f - 1);
@@ -155,6 +166,8 @@ const DUCK: readonly [string, number][] = [
   ['spine_03', 0.2],
   ['neck_01', 0.1],
 ];
+/** A leg's reach in the plumb's solve, of its length: past the soft limit's ease, so a pose the leg had is solved exactly. */
+const PLUMB_REACH = 1.09;
 /** How far a full duck lowers someone walking, m: the knees bent more. */
 export const DUCK_DROP = 0.08;
 /** How much of a step's lift a full duck takes away from someone walking under a boom. */
@@ -170,6 +183,19 @@ export interface Life {
   upright: number;
   /** Under reduced motion: breathing only. */
   still: boolean;
+  /**
+   * Up, in the boat model's frame, for a figure kept plumb as she heels and
+   * pitches: the figure turned about the point between its feet to stand
+   * along it, the feet kept where they were; null or not given, it goes
+   * with the boat.
+   */
+  plumb?: Vector3 | null;
+  /**
+   * What the joints keep over under (x, z) in the boat's model (a beach
+   * cat's net and decks: cat.ts's catFloor), the figure lifted as far as
+   * that asks; null or not given, nothing.
+   */
+  floor?: ((x: number, z: number) => number | null) | null;
 }
 
 export class CrewBody {
@@ -180,6 +206,9 @@ export class CrewBody {
   readonly head = new Vector3();
   readonly headUp = new Vector3();
   readonly neck = new Vector3();
+  /** The hips' joint, in the boat's model, as last posed: where a crew's trapeze wire hooks on. */
+  readonly hips = new Vector3();
+  readonly #hipsBone: number;
   /** The place last posed at: from the figure's space to the model's. */
   readonly root = new Matrix4();
   readonly #inverse: Float32Array;
@@ -220,9 +249,11 @@ export class CrewBody {
       const arm = [`upperarm_${sd}`, `lowerarm_${sd}`, `hand_${sd}`].map((b) => this.rig.bone(b));
       if (arm.every((b) => b >= 0)) {
         this.#limbs.push([arm[0] as number, arm[1] as number, arm[2] as number, false]);
+        this.#arms.push([arm[0] as number, arm[1] as number, arm[2] as number]);
       }
     }
     this.#neckBone = this.rig.bone('neck_01');
+    this.#hipsBone = this.rig.bone('pelvis');
   }
 
   /**
@@ -246,9 +277,9 @@ export class CrewBody {
         b.clip.sample(loopTime(b.t, b.clip.duration), pb);
       }
       if (carry) {
-        // Where each end has its feet, in the boat's model.
-        this.#feetOf(pa, a, blend.narrowA, this.#feetA);
-        this.#feetOf(pb, b, blend.narrowB, this.#feetB);
+        // Where each end has its feet, in the boat's model (and its hands, carried too).
+        this.#feetOf(pa, a, blend.narrowA, this.#feetA, this.#handsA);
+        this.#feetOf(pb, b, blend.narrowB, this.#feetB, this.#handsB);
       }
       pa.mix(pb, g);
     }
@@ -291,14 +322,34 @@ export class CrewBody {
       });
     }
     if (carry) {
-      // The feet carried from one end's to the other's: up, across, down.
+      // The feet carried from one end's to the other's: up, across, down;
+      // the legs first, if asked.
       inv.copy(this.root).invert();
+      const gl = Math.min(1, g / Math.max(1e-3, blend.legs ?? 1));
       this.#legs.forEach(([thigh, calf, foot], k) => {
-        carried(this.#feetA[k] as Vector3, this.#feetB[k] as Vector3, g, w, blend.top).applyMatrix4(
-          inv,
-        );
+        carried(
+          this.#feetA[k] as Vector3,
+          this.#feetB[k] as Vector3,
+          gl,
+          w,
+          blend.top,
+        ).applyMatrix4(inv);
         twoBone(rig, thigh, calf, foot, w);
       });
+      const hands = blend.hands ?? Number.NEGATIVE_INFINITY;
+      if (hands > Number.NEGATIVE_INFINITY) {
+        // The hands up over what the forearms lay on, and across.
+        this.#arms.forEach(([upper, lower, hand], k) => {
+          carried(this.#handsA[k] as Vector3, this.#handsB[k] as Vector3, g, w, hands).applyMatrix4(
+            inv,
+          );
+          twoBone(rig, upper, lower, hand, w);
+        });
+      }
+    }
+    const up = life.plumb ?? null;
+    if (up !== null && !carry && this.#legs.length === 2 && up.y < 1 - 1e-9) {
+      this.#plumb(up);
     }
     if (this.#headBone >= 0) {
       rig.position(this.#headBone, this.headUp).applyMatrix4(this.root);
@@ -323,11 +374,70 @@ export class CrewBody {
       upright: life.upright,
       still: life.still,
     });
+    const floor = life.floor ?? null;
+    if (floor !== null) {
+      liftOver(rig, this.root, floor);
+    }
     this.#write();
   }
 
-  /** Where a pose, at a stance, brought in by narrow, has its feet: into out, in the boat's model. */
-  #feetOf(pose: Pose, at: Stance, narrow: number, out: Vector3[]): void {
+  /**
+   * The figure turned about the point between its feet to stand along up
+   * (in the boat's model), the feet put back where they were by the legs.
+   */
+  #plumb(up: Vector3): void {
+    const rig = this.rig;
+    // Each foot where it is, and how far its hip is from it.
+    const reach = this.#reach;
+    this.#legs.forEach(([thigh, , foot], k) => {
+      rig.position(foot, this.#feetA[k] as Vector3).applyMatrix4(this.root);
+      reach[k] = rig
+        .position(thigh, v)
+        .applyMatrix4(this.root)
+        .distanceTo(this.#feetA[k] as Vector3);
+    });
+    const [f0, f1] = this.#feetA as [Vector3, Vector3];
+    v.set((f0.x + f1.x) / 2, Math.min(f0.y, f1.y), (f0.z + f1.z) / 2);
+    q.setFromUnitVectors(Y, up);
+    m.makeTranslation(v.x, v.y, v.z)
+      .multiply(m2.makeRotationFromQuaternion(q))
+      .multiply(m3.makeTranslation(-v.x, -v.y, -v.z));
+    this.root.premultiply(m);
+    // Lowered as far as a hip has come further from its foot than it was:
+    // the knees a little more bent, both feet where they were.
+    let drop = 0;
+    this.#legs.forEach(([thigh], k) => {
+      rig.position(thigh, v).applyMatrix4(this.root);
+      drop = Math.max(drop, v.distanceTo(this.#feetA[k] as Vector3) - (reach[k] as number));
+    });
+    if (drop > 0) {
+      m.makeTranslation(-up.x * drop, -up.y * drop, -up.z * drop);
+      this.root.premultiply(m);
+    }
+    inv.copy(this.root).invert();
+    // Solved exactly, never eased short: each leg reaches no further than it did.
+    this.#legs.forEach(([thigh, calf, foot], k) => {
+      twoBone(
+        rig,
+        thigh,
+        calf,
+        foot,
+        w.copy(this.#feetA[k] as Vector3).applyMatrix4(inv),
+        1,
+        PLUMB_REACH,
+      );
+    });
+  }
+
+  readonly #reach = [0, 0];
+
+  /** Not drawn: every bone folded to a point (gone on a ladder or aloft). */
+  hide(): void {
+    this.bones.fill(0);
+  }
+
+  /** Where a pose, at a stance, brought in by narrow, has its feet (and its hands): into out, in the boat's model. */
+  #feetOf(pose: Pose, at: Stance, narrow: number, out: Vector3[], hands: Vector3[]): void {
     const rig = this.rig;
     pose.to(rig);
     rig.fk();
@@ -338,7 +448,15 @@ export class CrewBody {
     this.#legs.forEach(([, , foot], k) => {
       rig.position(foot, out[k] as Vector3).applyMatrix4(m3);
     });
+    this.#arms.forEach(([, , hand], k) => {
+      rig.position(hand, hands[k] as Vector3).applyMatrix4(m3);
+    });
   }
+
+  /** Each arm's upper, lower and hand bones; and where each end of a blend has the hands. */
+  readonly #arms: [number, number, number][] = [];
+  readonly #handsA = [new Vector3(), new Vector3()];
+  readonly #handsB = [new Vector3(), new Vector3()];
 
   /**
    * The knees and hands brought in toward the middle (each limb turned in
@@ -397,6 +515,9 @@ export class CrewBody {
     }
     if (this.#neckBone >= 0) {
       rig.position(this.#neckBone, this.neck).applyMatrix4(this.root);
+    }
+    if (this.#hipsBone >= 0) {
+      rig.position(this.#hipsBone, this.hips).applyMatrix4(this.root);
     }
   }
 }

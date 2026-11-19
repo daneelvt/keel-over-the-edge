@@ -46,6 +46,8 @@ jobs:
               - 'go.sum'
               - 'cmd/**'
               - 'internal/**'
+              - 'legal/**'
+              - 'CONTRIBUTING.md'
               - 'tools/**'
               - 'shared/**'
             client:
@@ -73,6 +75,7 @@ jobs:
               - 'go.sum'
               - 'cmd/**'
               - 'internal/**'
+              - 'legal/**'
               - 'shared/**'
               - 'client/**'
               - 'art/**'
@@ -203,7 +206,7 @@ jobs:
       - name: Build the world page (into dist/owner)
         working-directory: client
         run: npx --no-install vite build -c vite.owner.config.ts
-      - name: The size of the first download, against the 4 MB critical set
+      - name: The sizes of the parts loaded apart (the approval page, the log, the news), against their budgets
         working-directory: client
         run: node build/size.ts
 

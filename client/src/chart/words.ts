@@ -266,6 +266,82 @@ export function barometerWords(now: number, before: number, quarter: number): st
   return `${Math.floor(now + 0.5)} hPa, ${tendencyWords(t.words, t.turned)}`;
 }
 
+/** Every tendency the barometer can say, in words. */
+export const TENDENCY_WORDS: readonly string[] = [
+  ...new Set(
+    [-4, -3, -2, -1, 0, 1, 2, 3, 4].flatMap((w) => [
+      tendencyWords(w, false),
+      tendencyWords(w, true),
+    ]),
+  ),
+];
+
+/** What the barometer says: its figure, hPa, its tendency, −4 to 4, and whether it turned. */
+export interface BarometerSaid {
+  figure: number;
+  words: number;
+  turned: boolean;
+}
+
+/** How far past a tendency's cut the change must go before the barometer says another, hPa. */
+const PAST_CUT = 0.1;
+/** How far past the half the pressure must go before the figure moves, hPa. */
+const PAST_HALF = 0.2;
+/** The last minutes' change against the tendency that turns it, and under which the turn clears, hPa. */
+const TURN_ON = 0.1;
+const TURN_OFF = 0.03;
+/** The tendencies' cuts, hPa a quarter of an hour, as tendencyOf has them. */
+const CUTS = [0.1, 1.5, 3.5, 6] as const;
+
+/** Whether a change over the quarter is within a tendency's band, widened by margin either side. */
+function inBand(words: number, d: number, margin: number): boolean {
+  const a = Math.abs(words);
+  const hi = (CUTS[a] ?? Number.POSITIVE_INFINITY) + margin;
+  if (a === 0) {
+    return Math.abs(d) < hi;
+  }
+  const v = Math.sign(words) * d;
+  return v >= (CUTS[a - 1] ?? 0) - margin && v <= hi;
+}
+
+/**
+ * What the barometer says over its readings now, 5 and 15 minutes before,
+ * held to what it said (was) until the pressure has really moved: a
+ * tendency is left only once the change is PAST_CUT beyond its cut, a
+ * turn comes on at TURN_ON against the tendency and clears under
+ * TURN_OFF, and the figure moves only once the pressure is PAST_HALF
+ * beyond the half. With nothing said before, as barometerWords has it.
+ */
+export function steadyBarometer(
+  now: number,
+  before: number,
+  quarter: number,
+  was: BarometerSaid | null,
+): BarometerSaid {
+  const fresh = tendencyOf(now, before, quarter);
+  if (was === null) {
+    return { figure: Math.floor(now + 0.5), ...fresh };
+  }
+  const half = 0.5 + PAST_HALF;
+  const figure =
+    now >= was.figure - half && now <= was.figure + half ? was.figure : Math.floor(now + 0.5);
+  const words = inBand(was.words, now - quarter, PAST_CUT) ? was.words : fresh.words;
+  // The last minutes' change the other way from the tendency.
+  const against = words < 0 ? now - before : before - now;
+  const kept = was.turned && Math.sign(was.words) === Math.sign(words);
+  const turned = words !== 0 && against > (kept ? TURN_OFF : TURN_ON);
+  return { figure, words, turned };
+}
+
+/** What the barometer says, in words: "1009 hPa, falling quickly". */
+export function saidWords(s: BarometerSaid): string {
+  return `${s.figure} hPa, ${tendencyWords(s.words, s.turned)}`;
+}
+
+/** The shortest and the longest the barometer says, for the slot its words are laid in. */
+export const BAROMETER_SHORTEST = '950 hPa, rising';
+export const BAROMETER_LONGEST = '1040 hPa, falling very rapidly';
+
 const POINTS16 = [
   'N',
   'NNE',

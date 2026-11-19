@@ -100,3 +100,33 @@ resource "infisical_secret" "grafana_admin_password" {
   value_wo         = ephemeral.random_password.grafana_admin.result
   value_wo_version = 1
 }
+
+# The contributor agreement keeper's database role, agreement: its
+# password made the same way, ephemeral, written once under /keel, where
+# CloudNativePG sets the role's password from it and the keeper reads it.
+
+ephemeral "random_password" "agreement_role" {
+  length  = 48
+  special = false
+}
+
+resource "infisical_secret" "agreement_role_password" {
+  workspace_id     = var.cluster_project_id
+  env_slug         = local.cluster_environment
+  folder_path      = infisical_secret_folder.keel.path
+  name             = "DB_AGREEMENT_PASSWORD"
+  value_wo         = ephemeral.random_password.agreement_role.result
+  value_wo_version = 1
+}
+
+# The keeper's GitHub App: its private key, its webhook's secret, its
+# client secret and the address its page shows, which GitHub made or the
+# owner chose, and which the owner puts here by hand once the App is
+# registered (infra/MANUAL-STEPS.md). The folder alone is made here, empty;
+# OpenTofu never holds or reads what is put in it.
+resource "infisical_secret_folder" "keel_agreement" {
+  project_id       = var.cluster_project_id
+  environment_slug = local.cluster_environment
+  folder_path      = "/"
+  name             = "keel-agreement"
+}

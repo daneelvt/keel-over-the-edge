@@ -517,3 +517,64 @@ func TestSpectatorsChoice(t *testing.T) {
 		t.Fatalf("no: %v %s", err, w.s.Spectators(ann))
 	}
 }
+
+// TestLiveliest: the website's boats are those anyone may watch, a
+// machine sailor's and a human's who allows spectators for the voyage,
+// never a human's who does not, an unseen boat or one with no sailor; in
+// the liveliest order, at most as many as asked, each where it is.
+func TestLiveliest(t *testing.T) {
+	w := newWorld(t)
+	owner := w.account(1, "Owner", store.AccountID{})
+	allowing := w.account(2, "Ann Allows", store.AccountID{})
+	private := w.account(3, "Pat Private", store.AccountID{})
+	var machines []store.AccountID
+	for i := range 14 {
+		m := w.account(byte(10+i), fmt.Sprintf("Machine %02d", i), owner)
+		machines = append(machines, m)
+		w.facts(m, Facts{Sky: "fair", Edge: 9, State: StateSailing})
+	}
+	hidden := w.account(40, "Hidden Hal", owner)
+	stranger := store.AccountID{41} // in the water with no sailor known
+	w.edge.voyage[bus.Account(allowing)] = true
+	w.facts(machines[13], Facts{Sky: "storm", Edge: 0.4, Approaching: true, State: StateCapsized})
+	w.facts(allowing, Facts{Sky: "squall", Edge: 9, State: StateSailing})
+	ids := append([]store.AccountID{owner, allowing, private, hidden, stranger}, machines...)
+	f := bus.NewFrame(256)
+	for i, id := range ids {
+		sl := int32(i)
+		f.Live = append(f.Live, sl)
+		f.Owner[sl] = bus.Account(id)
+		f.Boat[sl] = uint64(i + 1)
+		f.Machine[sl] = id != owner && id != allowing && id != private && id != stranger
+		f.Unseen[sl] = id == hidden
+		f.State[sl].X, f.State[sl].Y, f.State[sl].Heading = float64(100*i)+0.4, -float64(50*i), 1
+	}
+	w.frames.Publish(f)
+
+	all, err := w.s.Liveliest(context.Background(), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 15 {
+		t.Fatalf("%d boats, want the 14 machine sailors and Ann's", len(all))
+	}
+	// Machine 13 has the most reasons, then Ann's squall; Ann sails the
+	// human's boat, the second in the frame.
+	if !all[0].Machine || all[0].East != 100*float64(len(ids)-1)+0.4 {
+		t.Errorf("the liveliest: %+v", all[0])
+	}
+	if all[1].Machine || all[1].East != 100.4 || all[1].North != -50 || all[1].Heading != 1 || all[1].Kind != "jolly" {
+		t.Errorf("Ann's boat second: %+v", all[1])
+	}
+	for _, s := range all {
+		for i, id := range ids {
+			if (id == owner || id == private || id == hidden || id == stranger) && s.East == float64(100*i)+0.4 {
+				t.Errorf("a boat no one may watch: %+v", s)
+			}
+		}
+	}
+	twelve, err := w.s.Liveliest(context.Background(), 12)
+	if err != nil || len(twelve) != 12 || twelve[0] != all[0] || twelve[11] != all[11] {
+		t.Errorf("at most twelve: %d, %v", len(twelve), err)
+	}
+}

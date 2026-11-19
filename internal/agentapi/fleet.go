@@ -56,6 +56,8 @@ func boatState(b *fleet.Boat, atSea bool) string {
 		return "at sea, sailed by machine sailor «" + b.SailorName + "»"
 	case b.Taken():
 		return "at sea, sailed by «" + b.SailorName + "»"
+	case b.Needs != "":
+		return "needs " + b.Needs
 	}
 	return "available"
 }
@@ -75,6 +77,12 @@ func (c *Core) fleetList(s *Sea, v *fleet.View) string {
 		}
 	}
 	b.WriteString("\nTake an available boat with action take and boat (its kind, name or number); paint, number and name yours with action look. " + fleetWhere)
+	for i := range v.Boats {
+		if v.Boats[i].Needs != "" {
+			b.WriteString(" A boat that needs a certificate opens once you earn it: handbook certificates tells how.")
+			break
+		}
+	}
 	return b.String()
 }
 
@@ -118,6 +126,9 @@ func fleetRefusal(err error, what string) *refusal {
 		return refuse(refusedPort, wordsPort)
 	case errors.Is(err, fleet.ErrTaken):
 		return refuse(refusedArgs, "That boat is at sea with another of your owner's sailors: take an available one.")
+	case errors.Is(err, fleet.ErrCertificate):
+		return refuse(refusedArgs, "That boat needs a certificate you do not hold yet. news with log shows what is left toward your next certificate, "+
+			"and handbook certificates tells how they are earned. You may crew aboard another's boat of any kind, and hold her helm.")
 	case errors.Is(err, fleet.ErrRoom):
 		return refuse(refusedArgs, "No room here for "+what+": too near land, shoal water or another boat. Try the open water of the harbour.")
 	case errors.Is(err, fleet.ErrNumber):
@@ -149,7 +160,13 @@ func (c *Core) takeBoat(ctx context.Context, h *helm, s *Sea, which string) (str
 	var lines []string
 	if !b.Yours {
 		if _, err := s.Fleet.Take(ctx, h.account, b.ID); err != nil {
-			return "", nil, fleetRefusal(err, "a "+strings.ToLower(s.boat(uint16(b.Kind)).Name))
+			what := "a " + strings.ToLower(s.boat(uint16(b.Kind)).Name)
+			if b.Needs != "" {
+				what = fmt.Sprintf("The %s needs %s:", strings.ToLower(s.boat(uint16(b.Kind)).Name), b.Needs)
+				return "", nil, refuse(refusedArgs, what+" a certificate you do not hold yet. news with log shows what is left toward it, "+
+					"and handbook certificates tells how it is earned. You may crew aboard another's boat of any kind, and hold her helm.")
+			}
+			return "", nil, fleetRefusal(err, what)
 		}
 		if v.AtSea {
 			lines = append(lines, "Swapped where you lay: you are at rest in "+c.boatNamed(s, &b)+", your sheet eased.")
@@ -174,7 +191,7 @@ func (c *Core) toSea(ctx context.Context, h *helm, s *Sea, lines []string, alrea
 	if jr.queued {
 		return strings.Join(append(lines, queuedWords(jr.position)), "\n"), nil, nil
 	}
-	lines = append(lines, c.noticesOf(s, jr)...)
+	lines = append(lines, c.noticesOf(ctx, s, h.account, jr)...)
 	if !jr.joined {
 		if len(already) == 0 {
 			already = []string{"Already at sea."}

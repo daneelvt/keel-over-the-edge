@@ -28,6 +28,8 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { AccountPanel, MachinesPanel } from '../account/account';
 import type { FullScreen } from '../boot/fullscreen';
+import { updated } from '../boot/updated';
+import { keysGo } from '../input/focused';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
@@ -41,14 +43,19 @@ import type { ShipsClock } from './clock';
 import { Helm, Reef, type ReefActions, Sheet } from './controls';
 import type { Countdown } from './countdown';
 import { type DeckView, deckPlate, deckShown, useDeck } from './decklazy';
+import { HomeQuestion, type HomeView } from './home';
 import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
 import { Pilot } from './pilot';
+import { type RaceSource, raceShown, useRaceLine } from './racelinelazy';
+import { type RacesView, racesShown, useRaces } from './raceslazy';
+import { cheeringText } from './racewatchwords';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
 import { type StatementsView, statementsShown, useStatements } from './statementlazy';
-import { useWatch, type WatchView } from './watchlazy';
+import { UpdateLine } from './updateline';
+import { sailsOwn, useWatch, type WatchView } from './watchlazy';
 import { watchersText } from './watchwords';
 
 function BumpLine({ model }: { model: HudModel }) {
@@ -69,9 +76,11 @@ function SailorLine({ model }: { model: HudModel }) {
   );
 }
 
-/** How many watch the own boat, under the sailor's line, while any do. */
-function WatchersLine({ watch }: { watch: WatchView }) {
-  const text = watchersText(watch.watchers.value);
+/** How many watch the own boat, under the sailor's line, while any do; in a race, how many cheer it for a few seconds. */
+function WatchersLine({ watch, racing }: { watch: WatchView; racing: RaceSource | null }) {
+  const cheering = racing?.watch?.cheering.value ?? null;
+  const watching = watchersText(watch.watchers.value);
+  const text = cheering === null ? watching : cheeringText(watching, cheering.crowd);
   return text === '' ? null : (
     <p class="panel watchers-line" data-readout="watchers">
       {text}
@@ -134,6 +143,48 @@ function LazyStatements({ view, part }: { view: StatementsView; part: 'line' | '
     return null;
   }
   return part === 'line' ? <m.StatementLine view={view} /> : <m.StatementWindow view={view} />;
+}
+
+/** Races ashore's windows: Make a race, a race's card, the share of one made; loaded when one opens. */
+function LazyRaces({ races }: { races: RacesView }) {
+  const shown = racesShown(races);
+  const m = useRaces(shown);
+  return m === null || !shown ? null : <m.RacesWindows view={races} />;
+}
+
+/**
+ * The race the boat sails in or the boat watched races in: the racer's
+ * line over the case, the race bar at the foot, the crier's line under the
+ * case, or the windows over the rest; loaded when first needed.
+ */
+function LazyRaceLine({
+  src,
+  part,
+}: {
+  src: RaceSource;
+  part: 'line' | 'windows' | 'bar' | 'crier';
+}) {
+  const shown = raceShown(src);
+  const m = useRaceLine(shown);
+  if (m === null || !shown) {
+    return null;
+  }
+  switch (part) {
+    case 'line':
+      return <m.RaceLine src={src} />;
+    case 'bar':
+      return <m.RaceBar src={src} />;
+    case 'crier':
+      return <m.CrierLine src={src} />;
+    default:
+      return (
+        <>
+          <m.RaceWindows src={src} />
+          <m.Standings src={src} />
+          <m.BarMore src={src} />
+        </>
+      );
+  }
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -235,16 +286,18 @@ export interface ScreenProps {
   camera?: CameraKeys | null;
   /** The clear view; null without the key. */
   clear?: ClearView | null;
+  /** Races ashore: Make a race in the menu, the cards; null in the offline sandbox. */
+  races?: RacesView | null;
+  /** The race the boat sails in: its line, its windows; null without. */
+  racing?: RaceSource | null;
+  /** The way home: Back to Port Royal in the menu, and its question; null in the offline sandbox. */
+  home?: HomeView | null;
 }
 
-/** Whether a key press is the player's, not typing in a field. */
+/** Whether a key press is not the game's: typing in a field, or on a key, list or window of its own. */
 function typing(e: KeyboardEvent): boolean {
-  const t = e.target;
-  return (
-    t instanceof HTMLInputElement ||
-    t instanceof HTMLSelectElement ||
-    t instanceof HTMLTextAreaElement
-  );
+  const go = keysGo(e.target);
+  return go === 'typing' || go === 'aside';
 }
 
 /** The free camera as the screen sees it. */
@@ -303,7 +356,15 @@ function Screen(props: ScreenProps) {
   const steer = watch === null || !watch.spectating.value;
   if (charted && sea !== null) {
     // The chart covers the screen; the boat sails on under it.
-    return <ChartScreen sea={sea} end={end} notices={notices} />;
+    // A sailor's log offers Watch where watching takes no boat out of the water.
+    const fromLog =
+      watch === null || sailsOwn(watch)
+        ? null
+        : (name: string) => {
+            sea.chart.show(null);
+            watch.watch(name);
+          };
+    return <ChartScreen sea={sea} end={end} notices={notices} watch={fromLog} />;
   }
   if (flying && fly !== null) {
     // The free camera's picture is clean; a tap shows the way back a moment.
@@ -320,10 +381,23 @@ function Screen(props: ScreenProps) {
   }
   // Cleared, every part stays laid out but unseen, so the two keys left
   // stand where they stood; the overlays' labels go with the overlays.
+  // In a race its line heads the top: held upright the pocket chart's
+  // column stands under it too.
+  const racing = props.racing ?? null;
+  // A boat of a race watched: the race bar in the watch plate's place.
+  const barred =
+    racing !== null &&
+    watch !== null &&
+    watch.spectating.value &&
+    racing.racing.told.value !== null &&
+    racing.racing.eye.value > 0 &&
+    racing.racing.number() === 0;
+  const raced = racing !== null && racing.racing.told.value !== null && !barred;
   return (
-    <div class={`hud-screen${cleared ? ' clear' : ''}`}>
+    <div class={`hud-screen${cleared ? ' clear' : ''}${raced ? ' racing' : ''}`}>
       {cleared ? null : <div class="overlay-labels" ref={props.labels} aria-hidden="true" />}
       <div class="hud-top">
+        {racing !== null ? <LazyRaceLine src={racing} part="line" /> : null}
         <Case
           model={model}
           settings={settings}
@@ -335,8 +409,9 @@ function Screen(props: ScreenProps) {
           clear={cleared}
         />
         <SailorLine model={model} />
-        {watch !== null && steer ? <WatchersLine watch={watch} /> : null}
+        {watch !== null && steer ? <WatchersLine watch={watch} racing={racing} /> : null}
         <BumpLine model={model} />
+        {cleared ? null : <UpdateLine />}
         {notices !== null && !cleared ? <NoticeLine notices={notices} /> : null}
         {deck !== null ? <LazyDeck deck={deck} part="top" sailor={props.sailor} /> : null}
         {deck !== null ? <LazyDeck deck={deck} part="chat" sailor={props.sailor} /> : null}
@@ -346,9 +421,10 @@ function Screen(props: ScreenProps) {
         ) : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
       </div>
-      {notices !== null && cleared ? (
+      {cleared && (notices !== null || updated.value) ? (
         <div class="clear-notices">
-          <NoticeLine notices={notices} />
+          <UpdateLine />
+          {notices !== null ? <NoticeLine notices={notices} /> : null}
         </div>
       ) : null}
       <div class="hud-right">
@@ -406,7 +482,11 @@ function Screen(props: ScreenProps) {
               ? null
               : (mode) => {
                   setMenu(false);
-                  sea.chart.show(mode);
+                  if (mode === 'news') {
+                    sea.chart.showNews(null);
+                  } else {
+                    sea.chart.show(mode);
+                  }
                 }
           }
           fly={
@@ -420,9 +500,14 @@ function Screen(props: ScreenProps) {
           watch={watch}
           deck={deck}
           fullScreen={full}
+          races={props.races ?? null}
+          home={props.home ?? null}
         />
       ) : null}
-      {watch !== null && !decked ? <LazyWatch watch={watch} part="plate" /> : null}
+      {props.home?.asking.value === true ? <HomeQuestion home={props.home} /> : null}
+      {barred && racing !== null ? <LazyRaceLine src={racing} part="bar" /> : null}
+      {barred && racing !== null && !cleared ? <LazyRaceLine src={racing} part="crier" /> : null}
+      {watch !== null && !decked && !barred ? <LazyWatch watch={watch} part="plate" /> : null}
       {watch !== null ? <LazyWatch watch={watch} part="list" /> : null}
       {deck !== null ? <LazyDeck deck={deck} part="foot" sailor={props.sailor} /> : null}
       <SeaControls
@@ -438,6 +523,8 @@ function Screen(props: ScreenProps) {
       {props.statements?.open.value != null ? (
         <LazyStatements view={props.statements} part="window" />
       ) : null}
+      {props.races != null ? <LazyRaces races={props.races} /> : null}
+      {racing !== null ? <LazyRaceLine src={racing} part="windows" /> : null}
     </div>
   );
 }

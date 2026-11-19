@@ -1,0 +1,441 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The beach cat's people: the clips a sailor sits on her windward hull in,
+# sits out from it, lies out on the wire from, and rights her with, standing
+# on her lower hull as she lies on her side; and those they cross her net
+# in, at a crouch or on hands and knees (written to <version>.cat.glb, which
+# only a boat whose kind names it loads).
+#
+# Each is placed from her place it is made at (stage.Cat, from her model's
+# `aboard` node), on the starboard side; its -port the mirror on the port
+# side. Sat on her starboard hull the sailor faces port, as on a dinghy's
+# side deck: the left hand and foot aft, the right forward.
+poses:
+  # The helm, sat on the windward hull's deck by its inner edge, the legs
+  # across the net and the feet under the hiking strap, the knees up; the
+  # aft hand at the hip on the tiller extension, the forward one before the
+  # waist on the mainsheet; looking forward along the boat. The coat's
+  # skirts as seated: the front over the thighs, the sides spread on the
+  # deck fore and aft of the hips, the back laid on the deck behind.
+  cat-seated:
+    place: cat-seat
+    turn:
+      - [thigh_l, x, -76]
+      - [thigh_r, x, -76]
+      - [thigh_l, z, 6]
+      - [thigh_r, z, -6]
+      - [calf_l, x, 74]
+      - [calf_r, x, 74]
+      - [spine_01, x, 6]
+      - [spine_02, x, 4]
+      - [neck_01, z, -10]
+      - [head, z, -18]
+      - [head, x, -6]
+      - [skirt_front_l_01, x, -78]
+      - [skirt_front_r_01, x, -78]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.18, 0.1], pole: [0.5, 0.4, -0.3] }
+      hand_r: { at: bone, bone: spine_02, offset: [-0.12, -0.3, 0.08], pole: [-0.5, 0.4, -0.3] }
+      foot_l: { at: cat-strap, offset: [-0.1, 0.03, 0.11], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: cat-strap, offset: [0.1, 0.03, 0.11], pole: [-0.1, -0.5, 0.6] }
+
+  # Looking up at the main's luff, and back over the shoulder to windward.
+  cat-seated-luff:
+    from: cat-seated
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -8]
+      - [head, z, -16]
+      - [head, x, -8]
+
+  cat-seated-windward:
+    from: cat-seated
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 12]
+      - [head, z, 30]
+      - [head, x, 4]
+
+  # Sitting out: the hips on the hull's outer edge, the thighs across its
+  # deck, the feet under the strap on the net, the body leaning out over
+  # the water; the hands as at the helm; the head kept up, looking forward.
+  cat-hiked:
+    place: cat-out
+    turn:
+      - [thigh_l, x, -84]
+      - [thigh_r, x, -84]
+      - [calf_l, x, 40]
+      - [calf_r, x, 40]
+      - [spine_01, x, -16]
+      - [spine_02, x, -14]
+      - [spine_03, x, -10]
+      - [neck_01, x, 16]
+      - [neck_01, z, -6]
+      - [head, x, 10]
+      - [head, z, -16]
+      - [skirt_front_l_01, x, -82]
+      - [skirt_front_r_01, x, -82]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 76]
+      - [skirt_back_r_01, x, 76]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.17, -0.2, 0.12], pole: [0.5, 0.4, -0.3] }
+      hand_r: { at: bone, bone: spine_02, offset: [-0.12, -0.3, 0.08], pole: [-0.5, 0.4, -0.3] }
+      foot_l: { at: cat-strap, offset: [-0.08, 0.0, 0.11], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: cat-strap, offset: [0.08, 0.0, 0.11], pole: [-0.1, -0.5, 0.6] }
+
+  cat-hiked-luff:
+    from: cat-hiked
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -8]
+      - [head, z, -16]
+      - [head, x, -6]
+
+  cat-hiked-windward:
+    from: cat-hiked
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 10]
+      - [head, z, 24]
+
+  # The crew, sat on the windward hull's deck by its inner edge forward of
+  # the helm, by the shrouds: the legs across the net, the feet under the
+  # strap; the forward hand before the chest on the jib sheet, the other
+  # resting on its knee; looking forward at the jib.
+  hull-seated:
+    from: cat-seated
+    place: crew-seat
+    ik:
+      hand_l: { at: bone, bone: thigh_l, offset: [0.12, -0.06, -0.36], pole: [0.7, 0.2, -0.2] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.16, -0.32, -0.06], pole: [-0.5, 0.3, -0.4] }
+      foot_l: { at: crew-strap, offset: [-0.1, 0.03, 0.11], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: crew-strap, offset: [0.1, 0.03, 0.11], pole: [-0.1, -0.5, 0.6] }
+
+  # Looking up at the jib's luff, and out over the sea to windward.
+  hull-luff:
+    from: hull-seated
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -10]
+      - [head, z, -20]
+      - [head, x, -10]
+
+  hull-sea:
+    from: hull-seated
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 12]
+      - [head, z, 26]
+      - [head, x, 4]
+
+  # The crew on the wire beside the helm: standing on the hull's outer edge
+  # at the crew's station facing inboard, lying back out over the water
+  # nearly flat, the legs straight, the forward foot ahead of the aft one;
+  # the forward hand before the chest on the jib sheet, the other on the
+  # trapeze's handle above the hook; the head lifted to look forward.
+  hull-wire-out:
+    place: crew-wire
+    lie: 72
+    turn:
+      - [spine_02, z, -5]
+      - [spine_03, z, -7]
+      - [neck_01, x, 20]
+      - [head, x, 14]
+      - [neck_01, z, -14]
+      - [head, z, -26]
+    ik:
+      hand_l: { at: bone, bone: spine_03, offset: [0.12, -0.3, 0.0], pole: [0.7, 0.2, -0.2] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.12, -0.24, -0.08], pole: [-0.7, 0.2, -0.3] }
+      foot_l: { at: crew-outer, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: crew-outer, offset: [0.17, -0.05, 0.07] }
+
+  hull-wire-luff:
+    from: hull-wire-out
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 14]
+      - [head, z, 30]
+      - [head, x, -18]
+
+  hull-wire-ahead:
+    from: hull-wire-out
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -10]
+      - [head, z, -20]
+      - [head, x, 6]
+
+  # Righting her: standing on her lower hull as she lies on her side,
+  # facing her, the feet apart along the hull, hauling hand over hand on
+  # the righting line that comes down to the hands from over her upper hull,
+  # leaning back out over the water on it: the haul on the tall ship's
+  # brace, set on the hull and leaning further back. Each hand brought along
+  # the line from its shoulder toward where it leaves the upper hull to its
+  # share of the arm, the reaching one's the further.
+  righting-left-over:
+    from: haul-left-over
+    place: cat-stand
+    turn:
+      - [pelvis, x, -42]
+      - [neck_01, x, -10]
+    ik:
+      hand_l: { at: cat-line, offset: [0.0, 0.0, -0.3], reach: 0.76, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: cat-line, offset: [0.0, 0.0, -0.6], reach: 0.66, pole: [-0.5, 0.4, -0.5] }
+      foot_l: { at: cat-stand, offset: [-0.12, 0.0, 0.1] }
+      foot_r: { at: cat-stand, offset: [0.12, 0.0, 0.1] }
+
+  righting-left-heave:
+    from: haul-left-heave
+    place: cat-stand
+    turn:
+      - [pelvis, x, -46]
+      - [neck_01, x, -10]
+    ik:
+      hand_l: { at: cat-line, offset: [0.0, 0.0, -0.3], reach: 0.7, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: cat-line, offset: [0.0, 0.0, -0.6], reach: 0.58, pole: [-0.5, 0.4, -0.5] }
+      foot_l: { at: cat-stand, offset: [-0.12, 0.0, 0.1] }
+      foot_r: { at: cat-stand, offset: [0.12, 0.0, 0.1] }
+
+  righting-right-over:
+    from: haul-right-over
+    place: cat-stand
+    turn:
+      - [pelvis, x, -42]
+      - [neck_01, x, -10]
+    ik:
+      hand_l: { at: cat-line, offset: [0.0, 0.0, -0.6], reach: 0.66, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: cat-line, offset: [0.0, 0.0, -0.3], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
+      foot_l: { at: cat-stand, offset: [-0.12, 0.0, 0.1] }
+      foot_r: { at: cat-stand, offset: [0.12, 0.0, 0.1] }
+
+  righting-right-heave:
+    from: haul-right-heave
+    place: cat-stand
+    turn:
+      - [pelvis, x, -46]
+      - [neck_01, x, -10]
+    ik:
+      hand_l: { at: cat-line, offset: [0.0, 0.0, -0.6], reach: 0.58, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: cat-line, offset: [0.0, 0.0, -0.3], reach: 0.7, pole: [-0.5, 0.4, -0.5] }
+      foot_l: { at: cat-stand, offset: [-0.12, 0.0, 0.1] }
+      foot_r: { at: cat-stand, offset: [0.12, 0.0, 0.1] }
+
+  # The helm on the wire from the hull's outer edge, the skiff's two (out
+  # fully, lying back nearly flat; part out, crouched on the edge) set on
+  # her hull: the man's heel crouched on the skiff's rack's edge comes
+  # through her hull's rounder edge, so the crouch stands 15 mm higher.
+  cat-wire-out:
+    from: trapeze-out
+    place: cat-wire
+    ik:
+      foot_l: { at: cat-outer, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: cat-outer, offset: [0.17, -0.05, 0.07] }
+  cat-wire-luff:
+    from: trapeze-luff
+    place: cat-wire
+    ik:
+      foot_l: { at: cat-outer, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: cat-outer, offset: [0.17, -0.05, 0.07] }
+  cat-wire-ahead:
+    from: trapeze-ahead
+    place: cat-wire
+    ik:
+      foot_l: { at: cat-outer, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: cat-outer, offset: [0.17, -0.05, 0.07] }
+  cat-wire-crouch:
+    from: trapeze-crouch
+    place: cat-wire
+    shift: [0.0, 0.0, 0.015]
+  cat-wire-crouch-luff:
+    from: trapeze-crouch-luff
+    place: cat-wire
+    shift: [0.0, 0.0, 0.015]
+  cat-wire-crouch-ahead:
+    from: trapeze-crouch-ahead
+    place: cat-wire
+    shift: [0.0, 0.0, 0.015]
+
+clips:
+  # The helm on the hull: looking forward, at the luff, forward and to
+  # windward. Its -port is on the port hull.
+  cat-helm:
+    loop: true
+    idle: true
+    sides: true
+    # Sat low on the hull, the feet up on the net: the hips flexed near the
+    # end of their range.
+    strain: [thigh]
+    group: cat
+    keys:
+      - { pose: cat-seated, hold: 1.4, ramp: 1.5, lead: head }
+      - { pose: cat-seated-luff, hold: 1.6, ramp: 1.1, lead: head, anticipate: 0.05 }
+      - { pose: cat-seated, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: cat-seated-windward, hold: 1.2, ramp: 1.3, lead: head, anticipate: 0.05 }
+
+  # Sitting out from the hull, the thighs and knees strained as hiking.
+  cat-hike:
+    loop: true
+    idle: true
+    sides: true
+    strain: [thigh, calf]
+    group: cat
+    keys:
+      - { pose: cat-hiked, hold: 1.4, ramp: 1.5, lead: head }
+      - { pose: cat-hiked-luff, hold: 1.4, ramp: 1.2, lead: head, anticipate: 0.05 }
+      - { pose: cat-hiked, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: cat-hiked-windward, hold: 1.2, ramp: 1.3, lead: head, anticipate: 0.05 }
+
+  # The crew on the hull, and on the wire.
+  hull:
+    loop: true
+    idle: true
+    sides: true
+    # The arm resting on the raised knee folds near the end of its range.
+    strain: [thigh, lowerarm]
+    group: cat
+    keys:
+      - { pose: hull-seated, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: hull-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: hull-seated, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: hull-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  hull-wire:
+    loop: true
+    idle: true
+    sides: true
+    group: cat
+    keys:
+      - { pose: hull-wire-out, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: hull-wire-luff, hold: 1.4, ramp: 1.6, lead: head, anticipate: 0.05 }
+      - { pose: hull-wire-out, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: hull-wire-ahead, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  # Righting her, hand over hand: the haul's beat.
+  cat-righting:
+    loop: true
+    strain: [lowerarm]
+    group: cat
+    keys:
+      - { pose: righting-left-over, hold: 0.35, ramp: 0.9, arc: [0.06, 0.08] }
+      - { pose: righting-left-heave, hold: 0.3, ramp: 0.8 }
+      - { pose: righting-right-over, hold: 0.25, ramp: 0.8, arc: [0.06, 0.08] }
+      - { pose: righting-right-heave, hold: 0.3, ramp: 0.8 }
+
+  # The helm on the wire, fully out and part out. Their -port are for the
+  # port hull's wire.
+  cat-trapeze:
+    loop: true
+    idle: true
+    sides: true
+    group: cat
+    keys:
+      - { pose: cat-wire-out, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: cat-wire-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: cat-wire-out, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: cat-wire-ahead, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+  cat-trapeze-low:
+    loop: true
+    idle: true
+    sides: true
+    hang: { back: 1.0 }
+    group: cat
+    keys:
+      - { pose: cat-wire-crouch, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: cat-wire-crouch-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: cat-wire-crouch, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: cat-wire-crouch-ahead, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+# Crossing her net facing forward, from Quaternius' library (CC0),
+# retargeted, each set on the net where it is laced (the soles on it, and
+# each foot held there by IK while it bears) and placed from its middle: at a crouch, going down into it, stepping sideways
+# to the left and to the right (a foot that bears moving the other way at
+# the walk's speed), and up out of it, the back bent as far as keeps the
+# head's joint under 0.7 m over the net; or on hands and knees under the
+# boom, crawling sideways to either side (the hands and knees held on the
+# net while they bear, as the feet; the back's arch shared along it, the
+# forearms' turn within their range, the palms flat where the wrists
+# allow), played slower than the library's to ease its hitches.
+# The knees and ankles are taken near the ends of their ranges, as in any
+# deep crouch.
+retarget:
+  net-crouch-enter:
+    file: vendor/quaternius/Crouch_Enter.glb
+    seconds: 1.0
+    deck: true
+    head: 0.7
+    strain: [thigh, calf, foot, ball]
+    stage: cat-net
+    group: cat
+  net-crouch-left:
+    file: vendor/quaternius/Crouch_Left_Loop.glb
+    loop: true
+    deck: true
+    way: left
+    speed: 0.5
+    head: 0.7
+    strain: [thigh, calf, foot, ball]
+    stage: cat-net
+    group: cat
+  net-crouch-right:
+    file: vendor/quaternius/Crouch_Right_Loop.glb
+    loop: true
+    deck: true
+    way: right
+    speed: 0.5
+    head: 0.7
+    strain: [thigh, calf, foot, ball]
+    stage: cat-net
+    group: cat
+  net-crouch-exit:
+    file: vendor/quaternius/Crouch_Exit.glb
+    seconds: 1.0
+    deck: true
+    head: 0.7
+    strain: [thigh, calf, foot, ball]
+    stage: cat-net
+    group: cat
+  net-crawl-left:
+    file: vendor/quaternius/Crawl_Left_Loop.glb
+    loop: true
+    deck: true
+    crawl: true
+    way: left
+    seconds: 2.6
+    speed: 0.14
+    smooth: 5.0
+    strain: [thigh, calf, foot, ball, neck_01, head, upperarm, hand]
+    stage: cat-net
+    group: cat
+  net-crawl-right:
+    file: vendor/quaternius/Crawl_Right_Loop.glb
+    loop: true
+    deck: true
+    crawl: true
+    way: right
+    seconds: 2.6
+    speed: 0.14
+    smooth: 5.0
+    strain: [thigh, calf, foot, ball, neck_01, head, upperarm, hand]
+    stage: cat-net
+    group: cat
+  # The Chartmaker's: the hands nearer the body, clear of the man's hat's
+  # brim.
+  chartmaker-net-crawl-left:
+    file: vendor/quaternius/Crawl_Left_Loop.glb
+    loop: true
+    deck: true
+    crawl: true
+    way: left
+    seconds: 2.6
+    speed: 0.14
+    smooth: 5.0
+    pull: 0.06
+    strain: [thigh, calf, foot, ball, neck_01, head, upperarm, hand]
+    stage: cat-net
+    group: cat

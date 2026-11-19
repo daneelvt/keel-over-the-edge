@@ -8,8 +8,8 @@
 // topgallants furled, and a skiff as the own skiff, her gennaker set, part
 // way up and in, her sailor out past her rack; the fleet's 64 boats keep to
 // their draw calls and triangles, and a mixed 64 of Jolly boats, keelboats,
-// tall ships and skiffs, some with their gennakers set and their sailors
-// out on the wire, to theirs, their sailors, near and far, of every look,
+// tall ships, skiffs, beach cats, yachts and catamarans, some with their
+// gennakers set and their sailors out on the wire, to theirs, their sailors, near and far, of every look,
 // on the wire or not, to at most 6; every fleet
 // material is the factory's, with the bend; faded boats dither and none
 // sorts; and a picture of a fleet at fixed poses, near and far models,
@@ -21,6 +21,12 @@ import { openScene, picture, pictureDifference } from './helpers';
 const DEG = Math.PI / 180;
 /** The catalog's skiff's place among its boats: the kind with a gennaker. */
 const SKIFF = 3;
+/** The beach cat's kind: the catalog's fifth boat. */
+const CAT = 4;
+/** The yacht's kind: the catalog's sixth boat, of two wheels and two rudders. */
+const YACHT = 5;
+/** The catamaran's kind: the catalog's seventh boat, of two hulls joined by a bridgedeck, her one wheel off the centreline. */
+const CATAMARAN = 6;
 /** How far apart the own boat's picture and a fleet boat's at one pose may be, 0 to 255 a channel. */
 const LIKE = 0.25;
 
@@ -203,7 +209,7 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
-test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw calls and 320,000 triangles', async ({
+test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats, yachts and catamarans, keep to 57 draw calls and 320,000 triangles', async ({
   page,
 }) => {
   await openScene(page);
@@ -213,14 +219,20 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw
     const boats = [];
     for (let i = 0; i < 64; i++) {
       // The start line again: of every sixteen, three keelboats, a tall
-      // ship and four skiffs, the keelboats' jibs drawing and every other
-      // one reefed, the ships braced up, one with her topgallants in, every
-      // other skiff with her gennaker set and one with it half way up, every
-      // skiff's sailor out on the wire, the first of each near.
+      // ship, four skiffs, two beach cats, a yacht and a catamaran, the
+      // keelboats' jibs drawing and every other one reefed, the ships
+      // braced up, one with her topgallants in, every other skiff with her
+      // gennaker set and one with it half way up, every skiff's and beach
+      // cat's sailor out on the wire, the cats heeled with a hull flying,
+      // the yachts heeled with their wheels and rudders over, the
+      // catamarans barely heeled with theirs over, the first of each near.
       const ship = i % 16 === 3;
       const keel = !ship && i % 4 === 3;
       const skiff = i % 4 === 1;
-      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : 0;
+      const cat = i % 8 === 6;
+      const yacht = i % 16 === 8;
+      const catamaran = i % 16 === 0;
+      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : cat ? 4 : yacht ? 5 : catamaran ? 6 : 0;
       boats.push({
         kind,
         east: b.x - 70 + (i % 8) * 20,
@@ -233,13 +245,15 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw
         reef: (keel && i % 8 === 3) || (ship && i === 19) ? 1 : 0,
         yardsTurn: ship ? -0.9 : 0,
         foreYardsTurn: ship ? -0.9 : 0,
-        sailor: skiff ? -1.8 : 0,
+        sailor: skiff ? -1.8 : cat ? -2.16 : yacht ? -1 : 0,
+        heel: cat ? 0.15 : yacht ? 0.25 : catamaran ? 0.04 : 0,
+        rudder: yacht || catamaran ? 0.2 : 0,
         sail: 15 | (1 << 4) | (1 << 6),
       });
     }
     k.setFleet(boats);
     k.render();
-    // The keelboats', the ships' and the skiffs' kinds load as their first boats come into view.
+    // The keelboats', the ships', the skiffs', the cats', the yachts' and the catamarans' kinds load as their first boats come into view.
     await k.fleetLoaded();
     k.render();
     const set = k.fleetBudget();
@@ -252,18 +266,42 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw
   expect(budget.near + budget.far).toBe(64);
   expect(budget.near).toBeLessThanOrEqual(12);
   // Each kind's draws a level, a skiff's gennaker one more where one is
-  // set, and the skiffs' trapeze wires one.
-  expect(budget.drawCalls).toBeLessThanOrEqual(37);
+  // set, and the trapeze wires one.
+  expect(budget.drawCalls).toBeLessThanOrEqual(57);
   expect(budget.triangles).toBeLessThanOrEqual(320_000);
   expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
 
-test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, the jib, the yards, the reefs and the gennaker', async ({
+/**
+ * Each kind on a page of its own, its poses taken own and fleet alike: one
+ * page for all four ran to the edge of a test's time on a slow runner.
+ */
+async function kindAlike(page: Page, kind: number, poses: Pose[]): Promise<void> {
+  await openScene(page, 'boat=keelboat');
+  if (kind !== 1) {
+    await page.evaluate(async (k) => {
+      await globalThis.keel.useBoat(k);
+      // A tall ship's foam and wake are the sea's, drawn by each boat's speed
+      // and its history, the own boat's and the fleet's apart: the hull's the
+      // same. Her braces are drawn only on the ship in view.
+      if (k === 2) globalThis.keel.setParts({ foam: false, wakes: false, braces: false });
+    }, kind);
+  }
+  const diffs: Record<string, number> = {};
+  for (const pose of poses) {
+    const { own, fleet } = await both(page, pose, kind);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
+  for (const [name, d] of Object.entries(diffs)) {
+    expect(d, name).toBeLessThan(LIKE);
+  }
+}
+
+test('a keelboat of the fleet looks as the own one does, the jib and the reefs', async ({
   page,
 }) => {
-  await openScene(page, 'boat=keelboat');
-  const diffs: Record<string, number> = {};
-  for (const pose of [
+  await kindAlike(page, 1, [
     {
       name: 'a keelboat close-hauled',
       state: { ...rest, heading: 1.5708, heel: 15 * DEG, boom: 0.15, jib: 0.2, sailor: -0.9 },
@@ -272,23 +310,18 @@ test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, 
       name: 'a keelboat reefed, reaching',
       state: { ...rest, heading: 1.5708, heel: 10 * DEG, boom: 0.7, jib: 0.35, reef: 1 },
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, 1);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  // The same page, its own boat a tall ship: the wind on her port beam, her
-  // yards braced up and drawing; then running square before it, her
-  // topgallants furled. Seen from her quarter, near enough that the fleet
-  // draws her full model, as the chase camera's distance would not.
-  await page.evaluate(async () => {
-    const k = globalThis.keel;
-    await k.useBoat(2);
-    // Her foam and wake are the sea's, drawn by each boat's speed and its
-    // history, the own boat's and the fleet's apart: the hull's the same.
-    k.setParts({ foam: false, wakes: false });
-  });
+  ]);
+});
+
+test('a tall ship of the fleet looks as the own one does, the yards and the reefs', async ({
+  page,
+}) => {
+  // The wind on her port beam, her yards braced up and drawing; then running
+  // square before it, her topgallants furled. Seen from her quarter, near
+  // enough that the fleet draws her full model, as the chase camera's
+  // distance would not.
   const near = { azimuth: 0.5, elevation: 0.25, distance: 6 };
-  for (const pose of [
+  await kindAlike(page, 2, [
     {
       name: 'a tall ship braced up',
       state: { ...rest, heading: 1.5708, heel: 4 * DEG, boom: 0.4, yards: 0.6, foreYards: 0.6 },
@@ -299,20 +332,19 @@ test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, 
       state: { ...rest, heading: Math.PI, boom: 1.0, yards: 1.5, foreYards: 1.5, reef: 1 },
       view: near,
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, 2);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  // A skiff, the wind from the north: on a broad reach with her gennaker
-  // set, half way up and in its bag; close-hauled, her sailor out on the
-  // trapeze past her rack, drawn hiked at its edge. Seen from her lee bow,
-  // near enough that the fleet draws her full model.
-  await page.evaluate(async (kind) => {
-    await globalThis.keel.useBoat(kind);
-  }, SKIFF);
+  ]);
+});
+
+test('a skiff of the fleet looks as the own one does, the gennaker and the trapeze', async ({
+  page,
+}) => {
+  // The wind from the north: on a broad reach with her gennaker set, half way
+  // up and in its bag; close-hauled, her sailor out on the trapeze past her
+  // rack, drawn hiked at its edge. Seen from her lee bow, near enough that
+  // the fleet draws her full model.
   const reach = { ...rest, heading: 2.2, heel: 5 * DEG, boom: 0.9, jib: 0.3, sailor: -0.6 };
   const lee = { azimuth: -2.2, elevation: 0.2, distance: 9 };
-  for (const pose of [
+  await kindAlike(page, SKIFF, [
     {
       name: 'a skiff with her gennaker set',
       state: { ...reach, kite: 0.9, hoist: 1, hoistTarget: 1 },
@@ -333,14 +365,74 @@ test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, 
       state: { ...rest, heading: 0.8, heel: 8 * DEG, boom: 0.12, jib: 0.15, sailor: -1.7 },
       view: { azimuth: 0.6, elevation: 0.2, distance: 8 },
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, SKIFF);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
-  for (const [name, d] of Object.entries(diffs)) {
-    expect(d, name).toBeLessThan(LIKE);
-  }
+  ]);
+});
+
+test('a beach cat of the fleet looks as the own one does, a hull flying and the rudders', async ({
+  page,
+}) => {
+  // Close-hauled with her windward hull flying and her sailor on the wire;
+  // reaching with her rudders put over, each on its own stock.
+  await kindAlike(page, CAT, [
+    {
+      name: 'a beach cat flying a hull',
+      state: { ...rest, heading: 0.8, heel: 9 * DEG, boom: 0.1, jib: 0.15, sailor: -2.1 },
+      view: { azimuth: 0.6, elevation: 0.2, distance: 9 },
+    },
+    {
+      name: 'a beach cat reaching, her rudders over',
+      state: {
+        ...rest,
+        heading: 1.8,
+        heel: 3 * DEG,
+        boom: 0.6,
+        jib: 0.3,
+        rudder: 0.3,
+        sailor: -1.0,
+      },
+      view: { azimuth: 2.6, elevation: 0.25, distance: 8 },
+    },
+  ]);
+});
+
+test('a yacht of the fleet looks as the own one does, her two wheels and two rudders turned', async ({
+  page,
+}) => {
+  // Close-hauled, heeled, her helm at the windward wheel; reaching with her
+  // rudders and both her wheels put over, each on its own stock and hub.
+  // Seen from her quarter, near enough for the full model.
+  await kindAlike(page, YACHT, [
+    {
+      name: 'a yacht close-hauled',
+      state: { ...rest, heading: 0.8, heel: 12 * DEG, boom: 0.06, jib: 0.18, sailor: -1 },
+      view: { azimuth: 0.5, elevation: 0.3, distance: 10 },
+    },
+    {
+      name: 'a yacht reaching, her wheels and rudders over',
+      state: { ...rest, heading: 1.8, heel: 6 * DEG, boom: 0.6, jib: 0.3, rudder: 0.3, sailor: -1 },
+      view: { azimuth: 0.4, elevation: 0.35, distance: 9 },
+    },
+  ]);
+});
+
+test('a catamaran of the fleet looks as the own one does, her wheel and rudders turned', async ({
+  page,
+}) => {
+  // Close-hauled, barely heeled, her helm at her wheel to port; reaching
+  // with her rudders and her wheel put over. Seen from her port quarter,
+  // near enough for the full model.
+  await kindAlike(page, CATAMARAN, [
+    {
+      name: 'a catamaran close-hauled',
+      state: { ...rest, heading: 0.9, heel: 2 * DEG, boom: 0.08, jib: 0.18 },
+      view: { azimuth: 0.6, elevation: 0.3, distance: 8 },
+    },
+    {
+      name: 'a catamaran reaching, her wheel and rudders over',
+      state: { ...rest, heading: 1.8, heel: 1 * DEG, boom: 0.6, jib: 0.3, rudder: 0.3 },
+      view: { azimuth: 0.5, elevation: 0.35, distance: 8 },
+    },
+  ]);
 });
 
 test('every sailor, near and far, person or machine, in at most 6 draws', async ({ page }) => {

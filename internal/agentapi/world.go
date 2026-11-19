@@ -4,8 +4,6 @@ package agentapi
 
 import (
 	"cmp"
-	"context"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"slices"
@@ -79,10 +77,13 @@ func chartList(s *Sea, a *chartArgs, x, y float64, atSea bool) (string, *refusal
 	if a.Limit > 0 {
 		limit = min(a.Limit, 30)
 	}
+	if a.Group == groupCourses {
+		return s.courseList(x, y, atSea, limit), nil
+	}
 	want := map[string]uint8{"islands": sight.Island, "places": sight.Place, "features": sight.Feature}
 	kind, filtered := want[a.Group]
 	if a.Group != "" && a.Group != "all" && !filtered {
-		return "", refuse(refusedArgs, "group is all, islands, places or features.")
+		return "", refuse(refusedArgs, "group is all, islands, places, features or courses.")
 	}
 	list := make([]chart.ListEntry, len(entries))
 	for i, e := range entries {
@@ -127,7 +128,10 @@ func chartList(s *Sea, a *chartArgs, x, y float64, atSea bool) (string, *refusal
 	if shown == 0 {
 		b.WriteString(" nothing charted yet: what your lookout sights is charted, and named, for everyone.\n")
 	}
-	b.WriteString("Race locations: none: races come with a later update. Pencil notes: not yet.")
+	if !filtered {
+		b.WriteString(s.courseList(x, y, atSea, limit))
+	}
+	b.WriteString("Pencil notes: not yet.")
 	return b.String(), nil
 }
 
@@ -675,77 +679,8 @@ func (s *Sea) placeOf(p forecast.Place) (string, float64, float64, bool) {
 	return titleOf(sub), sub.X, sub.Y, true
 }
 
-// newsArgs are news's.
-type newsArgs struct {
-	Before string `json:"before,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
-}
-
-// newsWords answer news: a page of the news sheet, newest first, each
-// sailor's name marked as player-written and as a human's or a machine's.
-func newsWords(ctx context.Context, s *Sea, a *newsArgs) (string, *refusal) {
-	if s.News == nil {
-		return "No news sheet is printed in this world.", nil
-	}
-	var before *[16]byte
-	if a.Before != "" {
-		var id [16]byte
-		if b, err := hex.DecodeString(a.Before); err != nil || len(b) != 16 {
-			return "", refuse(refusedArgs, "before is an item's id, as the last page gave it.")
-		} else {
-			copy(id[:], b)
-		}
-		before = &id
-	}
-	limit := 10
-	if a.Limit > 0 {
-		limit = min(a.Limit, 20)
-	}
-	items, err := s.News(ctx, before, limit)
-	if err != nil {
-		return "", refuse(refusedBusy, wordsBusy)
-	}
-	if len(items) == 0 {
-		return "The news sheet has nothing yet.", nil
-	}
-	var b strings.Builder
-	b.WriteString("The news, newest first:\n")
-	for _, it := range items {
-		col := s.Columns[it.Column]
-		if col == "" {
-			col = it.Column
-		}
-		by := ""
-		switch {
-		case it.Sailor != "":
-			kind := "human"
-			if it.AccountKind == string(store.AI) {
-				kind = "machine"
-			}
-			by = " · by " + playerText(it.Sailor) + " (" + kind + ")"
-		case it.Subject == store.SubjectWorld:
-		case it.AccountKind != "":
-			by = " · by " + chart.FormerSailor
-		}
-		fmt.Fprintf(&b, " %s · %s: %s, %s%s", it.At.UTC().Format("Monday 15:04 UTC"), col, it.Title, it.What, by)
-		if len(it.Also) > 0 {
-			var also []string
-			for _, f := range it.Also {
-				also = append(also, f.Title)
-			}
-			b.WriteString(" · also " + strings.Join(also, ", "))
-		}
-		b.WriteByte('\n')
-	}
-	if len(items) == limit {
-		fmt.Fprintf(&b, "More: call news with before %s.", hex.EncodeToString(items[len(items)-1].ID[:]))
-	}
-	return strings.TrimRight(b.String(), "\n"), nil
-}
-
 // The tools still to come, each saying what it will do.
 var notYet = map[string]string{
-	toolRace:   "Not yet: races come with a later update. Then race lists the races, enters one, votes to start it, or retires.",
 	toolPencil: "Not yet: pencil notes come with a later update. Then pencil writes a private note on your chart, or rubs one out.",
 	toolBottle: "Not yet: messages in bottles come with a later update. Then bottle drops a message over the side for someone to find.",
 }

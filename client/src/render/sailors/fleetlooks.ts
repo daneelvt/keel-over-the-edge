@@ -45,20 +45,37 @@ import {
   type Texture,
   Uint32BufferAttribute,
   Vector3,
+  Vector4,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { WebGPURenderer } from 'three/webgpu';
+import { int, select, uniform, uniformArray, varying, vec3 } from 'three/tsl';
+import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { SailorArt } from '../../catalog';
+import { catalog } from '../../catalog';
 import { seatFigure } from '../fleetparts';
+import { bridgeClips } from './bridgedeck';
+import { catClips } from './cat';
 import { Clip, Pose } from './clips';
+import { cockadeCoords } from './cockade';
 import { LayeredTexture } from './layers2d';
-import { gltfLoader, placesOf } from './model';
+import { cockadeOf, gltfLoader, placesOf } from './model';
+
+/** The looks whose cockades and pendants the fleet keeps places for, by layer; and the cockade's radius, m. */
+const COCKADE_LOOKS = 32;
+const COCKADE_RADIUS = catalog.world.committee.prizes.cockade.across / 2;
+/** A place far off any cockade's disc, in its radii. */
+const OFF_DISC = 99;
+
+import { eachRender } from '../uploads';
 import { boneNames } from './onboat';
+import { PENDANT_BONE } from './pendant';
 import { RAIL_CLIPS, railClips } from './rail';
 import { Rig } from './rig';
+import { aloftClips, shipClips } from './ship';
 import { CHAINS } from './springs';
 import { harnessFile, TRAPEZE_CLIPS, trapezeClips } from './trapeze';
 import { wheelClips } from './wheel';
+import { yachtClips } from './yacht';
 
 /** Where the fleet's figures are seated: the boat model's seat (fleetparts.ts's seatFigure). */
 export interface FleetSeat {
@@ -95,6 +112,20 @@ export class FleetLook {
   railState: LookState = 'none';
   /** Whether someone wearing it is at a station on a rail: its clips are wanted, near or far. */
   railed = false;
+  /** Its clips about a ship's decks, and her work and aloft (ship.ts), added to its clips when someone wearing it is aboard a ship; whether wanted. */
+  shipState: LookState = 'none';
+  aloftState: LookState = 'none';
+  shipped = false;
+  aloft = false;
+  /** Its clips aboard a beach cat (cat.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
+  catState: LookState = 'none';
+  catted = false;
+  /** Its clips aboard a cruising yacht (yacht.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
+  cruiserState: LookState = 'none';
+  yachted = false;
+  /** Its clips aboard a cruising catamaran (bridgedeck.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
+  bridgeState: LookState = 'none';
+  bridged = false;
   /** Whether a boat with it has come near: its clips are wanted. */
   near = false;
   deck: DeckLook | null = null;
@@ -139,6 +170,40 @@ export class FleetLooks {
   onLoad: (look: FleetLook) => void = () => {};
   /** Whether a boat in the fleet is steered by a wheel: its looks' clips at a wheel are loaded too. */
   wheel = false;
+  /** Where each look wears the winner's cockade on its figure as bound, by its layer: its middle and the way it faces. */
+  readonly cockades = {
+    at: eachRender(uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4()))),
+    facing: eachRender(
+      uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+    ),
+  };
+
+  /** Where each look's certificate's pendant hangs on its figure as bound, by its layer: its bail and the way its face looks. */
+  readonly pendants = {
+    at: eachRender(uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4()))),
+    facing: eachRender(
+      uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+    ),
+  };
+  /** The pendant's bone's place in the skeleton's order (the first loaded look's): the rows' bones are in that order. */
+  readonly pendantBone = uniform(0);
+
+  /**
+   * A vertex's place on its look's cockade's disc (cockade.ts), a varying,
+   * from its place as bound and its look's layer; far off the disc where
+   * its figure wears none (worn, in the vertex stage), so that the cockade
+   * costs the fragments one varying.
+   */
+  cockadeCoords(bound: Node<'vec3'>, layer: Node<'float'>, worn: Node<'bool'>): Node<'vec3'> {
+    const i = int(layer.add(0.5));
+    const c = cockadeCoords(
+      bound,
+      (this.cockades.at.element(i) as unknown as Node<'vec4'>).xyz as unknown as Node<'vec3'>,
+      (this.cockades.facing.element(i) as unknown as Node<'vec4'>).xyz as unknown as Node<'vec3'>,
+      COCKADE_RADIUS,
+    );
+    return varying(select(worn, c, vec3(0, 0, OFF_DISC))) as unknown as Node<'vec3'>;
+  }
 
   constructor(
     readonly renderer: WebGPURenderer,
@@ -163,10 +228,25 @@ export class FleetLooks {
    * it (wired); and those on a rail and the crouch, if someone wearing it is
    * at a station on one (railed).
    */
-  want(look: FleetLook, near: boolean, wired = false, railed = false): void {
+  want(
+    look: FleetLook,
+    near: boolean,
+    wired = false,
+    railed = false,
+    shipped = false,
+    aloft = false,
+    catted = false,
+    yachted = false,
+    bridged = false,
+  ): void {
     look.near ||= near;
+    look.catted ||= catted;
+    look.yachted ||= yachted;
+    look.bridged ||= bridged;
     look.wired ||= wired;
     look.railed ||= railed;
+    look.shipped ||= shipped || aloft;
+    look.aloft ||= aloft;
     if (look.state === 'none') {
       look.state = 'loading';
       this.#load(look).then(
@@ -183,7 +263,7 @@ export class FleetLooks {
       );
     }
     if (
-      (look.near || look.wired || look.railed) &&
+      (look.near || look.wired || look.railed || look.shipped) &&
       look.state === 'ready' &&
       look.clipsState === 'none' &&
       look.deck !== null
@@ -266,6 +346,28 @@ export class FleetLooks {
         },
       );
     }
+    for (const [wanted, state, file] of [
+      [look.shipped, 'shipState', shipClips],
+      [look.aloft, 'aloftState', aloftClips],
+      [look.catted && look.near, 'catState', catClips],
+      [look.yachted && look.near, 'cruiserState', yachtClips],
+      [look.bridged && look.near, 'bridgeState', bridgeClips],
+    ] as const) {
+      if (wanted && look.clipsState === 'ready' && look[state] === 'none' && look.deck !== null) {
+        look[state] = 'loading';
+        const path = file(look.art.clips);
+        this.#loadClips(look, look.deck.rig, path).then(
+          () => {
+            look[state] = 'ready';
+            this.onLoad(look);
+          },
+          (e: unknown) => {
+            look[state] = 'failed';
+            console.error(`the fleet's sailor's clips ${path} did not load`, e);
+          },
+        );
+      }
+    }
   }
 
   /** Loads a look in full, at once: for a look the first frame needs. */
@@ -280,7 +382,12 @@ export class FleetLooks {
         look.clipsState === 'loading' ||
         look.wheelState === 'loading' ||
         look.trapezeState === 'loading' ||
-        look.railState === 'loading'
+        look.railState === 'loading' ||
+        look.shipState === 'loading' ||
+        look.aloftState === 'loading' ||
+        look.catState === 'loading' ||
+        look.cruiserState === 'loading' ||
+        look.bridgeState === 'loading'
       ) {
         await new Promise((r) => setTimeout(r, 10));
         this.want(look, true);
@@ -330,6 +437,23 @@ export class FleetLooks {
       (m.material as MeshStandardMaterial).map?.dispose();
       (m.material as MeshStandardMaterial).aoMap?.dispose();
       (m.material as MeshStandardMaterial).dispose();
+    }
+    // Where it wears the winner's cockade, by its layer.
+    const c = cockadeOf(look.art);
+    (this.cockades.at.array[layer] as Vector4 | undefined)?.set(c.at.x, c.at.y, c.at.z, 0);
+    (this.cockades.facing.array[layer] as Vector4 | undefined)?.set(
+      c.facing.x,
+      c.facing.y,
+      c.facing.z,
+      0,
+    );
+    // Where its pendant hangs, by its layer.
+    const [px, py, pz] = look.art.pendant.at as [number, number, number];
+    const [fx, fy, fz] = look.art.pendant.facing as [number, number, number];
+    (this.pendants.at.array[layer] as Vector4 | undefined)?.set(px, py, pz, 0);
+    (this.pendants.facing.array[layer] as Vector4 | undefined)?.set(fx, fy, fz, 0);
+    if (rig.names.length === this.bones) {
+      this.pendantBone.value = Math.max(0, rig.bone(PENDANT_BONE));
     }
     look.layer = layer;
     this.#pools();

@@ -18,7 +18,9 @@
 // from there; a link that opens no watch lands on the player's own panel,
 // saying why. A page opened at a link to come aboard (?s=<token>) offers,
 // once signed in, to knock on the skipper's boat rather than plain Set
-// sail. Each change of boat goes through the
+// sail. A page opened at a race's link (?r=<code>) shows its card once
+// signed in, or once a new visitor has made their sailor, before their
+// own Set sail. Each change of boat goes through the
 // cover again: down over the screen, the world changed under it, and up
 // once the new boat's world is ready.
 //
@@ -50,10 +52,13 @@
 //   ?w=<code>         watches the sailor of that link rather than sail, once signed in
 //   ?f=<code>         watches the liveliest of that fleet's machine sailors at sea
 //   ?s=<token>        asks to come aboard the skipper's boat of that link
+//   ?r=<code>         opens that race's card, once signed in, before the sea
+//   ?races            the sandbox with races ashore, its routes the tests' own
 //
 // F flies the free camera off the boat and back, Escape brings it back: in
 // the sandbox for anyone, online for an account with the owner's flag.
 
+import './policy';
 import './game.css';
 import { effect, signal } from '@preact/signals';
 import { sailFromQuery } from '../account/comeaboardwords';
@@ -65,6 +70,7 @@ import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../accoun
 import { SETTING_SAIL } from '../account/yoursailor';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { codeOf, lookFrom } from '../catalog/looks';
+import type { Chart } from '../chart/chart';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
 import {
@@ -88,6 +94,7 @@ import {
   placesSeen,
   type WorldFile,
 } from '../land/world';
+import { watchFetched } from '../net/fetched';
 import { Online } from '../net/online';
 import { reloadForVersion } from '../net/reload';
 import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
@@ -133,102 +140,53 @@ import { startWakeScene, wakeSceneFromQuery, wakeSceneHost } from '../sandbox/wa
 import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
-import { serverNews } from '../ui/chart';
-import { ClearView, type Needed, needed } from '../ui/clearview';
+import { certifiedTold } from '../ui/certwords';
+import { ClearView, type Needed, needed, overboard } from '../ui/clearview';
 import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { deckOf } from '../ui/decklazy';
 import { mountScreen, type ScreenProps } from '../ui/hud';
-import { AGROUND } from '../ui/model';
+import { setLogHost, setRaceHost } from '../ui/loglazy';
+import { openNews, setNewsHost } from '../ui/newslazy';
+import { serverNews } from '../ui/newsread';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
+import { RACE_PARAM, raceFromQuery, readCard, readReplay } from '../ui/raceapi';
+import { loadRaces, pollRaces, type RacesView, racesOf } from '../ui/raceslazy';
+import { Racing } from '../ui/racestate';
+import { RaceWatch } from '../ui/racewatch';
+import { loadReplay } from '../ui/replayhost';
+import { setSailToHost } from '../ui/sailto';
 import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
-import { FLEET_PARAM, linkFromQuery, SAILOR_PARAM } from '../ui/watchwords';
-import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover';
+import {
+  FLEET_PARAM,
+  LIST_PARAM,
+  linkFromQuery,
+  listFromQuery,
+  SAILOR_PARAM,
+} from '../ui/watchwords';
+import { BUILD } from './build';
+import { takeCover } from './cover';
 import { browserEnv, fullScreen } from './fullscreen';
-import { Gate, type Revealed, WAITING_WORDS, type Waiting } from './gate';
+import { Gate, type Revealed } from './gate';
 import { harbourWater, watchHarbour } from './harbour';
 import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
+import { homeScreen } from './homescreen';
 import { lookStage } from './lookstage';
+import { reportViolations } from './policy';
+import { raceSea } from './racesea';
+import { pageStart, Reports, reportErrors, type Stages } from './report';
+import { startWorker, takeOverFirst } from './sw';
+import { DESCENT, frames, reveal, UnderCover, untilReady, whenPast } from './undercover';
+import { watchForUpdates } from './updated';
+import { screenLock } from './wakelock';
 
-/** How long the camera comes down into the first view, s: at the start, and after a change of boat. */
-const DESCENT = 2.5;
-const DESCENT_CHANGE = 1.5;
-
-/** Whether the reader asks for less motion. */
-function reducedMotion(): boolean {
-  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-}
-
-/** Resolves after n animation frames: the scene's update has run since. */
-function frames(n: number): Promise<void> {
-  return new Promise((resolve) => {
-    const next = (left: number) =>
-      left <= 0 ? resolve() : requestAnimationFrame(() => next(left - 1));
-    next(n);
-  });
-}
-
-/**
- * Waits on the gate, from start (ms), the cover saying what it waits for
- * once the wait passes a second; the frame loop draws once the frames are
- * waited for. Resolves with what it waited for, and when.
- */
-async function untilReady(
-  gate: Gate,
-  world: SeaScene,
-  cover: Cover,
-  start: number,
-): Promise<Pick<Revealed, 'waits' | 'at' | 'timedOut' | 'drawn'>> {
-  const waits: { waiting: Waiting; at: number }[] = [];
-  let drawn = 0;
-  world.onDrawn = (work) => {
-    drawn++;
-    gate.drawn(work);
-  };
-  for (;;) {
-    const now = performance.now();
-    const w = gate.step(now);
-    if (waits[waits.length - 1]?.waiting !== w) {
-      waits.push({ waiting: w, at: Math.round(now - start) });
-    }
-    if (w === 'ready') {
-      break;
-    }
-    if (w === 'sail' && world.drawsWhenReady) {
-      world.stage.loopDraws = true;
-    }
-    if (now - start >= QUIET) {
-      cover.say(WAITING_WORDS[w]);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  world.onDrawn = null;
-  if (world.drawsWhenReady) {
-    world.stage.loopDraws = true;
-  }
-  return { waits, at: Math.round(performance.now() - start), timedOut: gate.timedOut, drawn };
-}
-
-/**
- * The world revealed: the cover fades out as the camera comes down into
- * the first view over descent seconds, the screen at sea coming in after
- * it. With less motion asked for, a short fade and no descent; on a page
- * under test, at once.
- */
-function reveal(world: SeaScene, cover: Cover, descent: number): void {
-  if (world.underTest) {
-    void cover.lift(0);
-    return;
-  }
-  const reduced = reducedMotion();
-  world.camera.descend(reduced ? 0 : descent);
-  void cover.lift(reduced ? LIFT_REDUCED : LIFT);
-}
+/** How far a boat tapped in the sea may be from a race's boat's place in its picture, m: two seconds' sailing. */
+const RACER_TAP = 30;
 
 /** The clear view, the scene's overlays hidden with the screen. */
 function clearView(world: SeaScene): ClearView {
@@ -241,6 +199,7 @@ function clearView(world: SeaScene): ClearView {
 
 async function start(): Promise<void> {
   const query = new URLSearchParams(location.search);
+  watchForUpdates();
   const backend = chooseBackend(query, 'gpu' in navigator);
   const cover = takeCover(document);
   const container = document.createElement('div');
@@ -324,6 +283,11 @@ async function start(): Promise<void> {
     // developer's own.
     const boatLook = boatLookFromQuery(query, catalog);
     world.setBoatLook(boatLook.look, boatLook.name);
+    // ?prizes=code&racenumber=n: the boat flying prizes of the developer's own.
+    world.setPrizes(
+      Number(query.get('prizes') ?? 0) || 0,
+      Number(query.get('racenumber') ?? 0) || 0,
+    );
     // ?boat=id: any of the catalog's boats; every kind is prepared, so the
     // developer panel can change it.
     const kind = boatFromQuery(
@@ -384,6 +348,7 @@ async function start(): Promise<void> {
           onPlaces: (p) => {
             world.lighthouses.setPlaces(p);
             world.wrecks.setPlaces(p);
+            world.race.setPlaces(p);
           },
           onLights: (l, drop) => world.lighthouses.setLights(l, drop),
         },
@@ -463,6 +428,12 @@ async function start(): Promise<void> {
     // it does without one.
     const chartFile = seed === null ? null : await fetchSandboxChart(seed);
     const parts = makeChart(world, sandboxModels(chartFile), null, forecasting);
+    hostReplay(parts);
+    // The course is kept for the sandbox's world, by its seed.
+    parts.chart.atWorld(`sandbox:${seed ?? 'sea'}`);
+    courseOnCompass(game, parts.chart);
+    // Sail to in the sandbox's scenes: no server says where the boat is.
+    hostSailTo(parts.chart, () => true);
     sandboxForecast = new SandboxForecast(
       {
         physics: sandbox.physics,
@@ -486,6 +457,34 @@ async function start(): Promise<void> {
       baro.barometer.hold(held, world.ticks);
     }
     const gales = steerByChart(game, world, parts, forecasting);
+    // A race's boat tapped on the charts or in the sea, by a page watching
+    // the race, is watched.
+    const watchRacer = (n: number): boolean => {
+      if (!racing.spectator() || !online.spectating.value || n <= 0) {
+        return false;
+      }
+      raceWatch.switchTo(n);
+      return true;
+    };
+    parts.sea.watchRacer = watchRacer;
+    world.onBoatTap = (east, north) => {
+      const p = racing.picture.peek();
+      if (p === null) {
+        return false;
+      }
+      // The race's boat nearest where the boat tapped is drawn: the picture
+      // is two seconds old at most.
+      let best = 0;
+      let d = RACER_TAP;
+      for (const r of p.racers) {
+        const dd = Math.hypot(r.east - east, r.north - north);
+        if (dd < d && r.number !== p.eye) {
+          d = dd;
+          best = r.number;
+        }
+      }
+      return watchRacer(best);
+    };
     issuer.onIssue = (f) => {
       gales.issued(f);
       world.galeUp = f.gale === null ? null : pointUp(f.gale.from);
@@ -518,6 +517,34 @@ async function start(): Promise<void> {
       }
       was = now;
     });
+    // Watching a race in the sandbox: a switch answered at once, the race's
+    // last picture told again with the boat asked for as its eye.
+    const sandboxWatch = new RaceWatch({
+      racing: parts.racing,
+      ask: (a) => {
+        const p = parts.racing.picture.peek();
+        if (p !== null) {
+          const q = { ...p, eye: a.number };
+          parts.racing.take(q);
+          sandboxWatch.picture(q);
+        }
+      },
+      cheer: () => {},
+      now: () => performance.now(),
+      length: (t) => catalog.boats[t.boat]?.lengthOverall ?? 4,
+      spectating: () => true,
+      bunting: (count) => {
+        if (game.settings.value.value.showCheers) {
+          game.bunting(count);
+        }
+      },
+      crowd: (count, own, racer) => {
+        if (own || game.settings.value.value.showCheers) {
+          game.cheer(count, own, racer);
+        }
+      },
+    });
+    setInterval(() => sandboxWatch.tick(), 250);
     const screen: ScreenProps = {
       model: game.hud,
       settings: game.settings,
@@ -550,8 +577,45 @@ async function start(): Promise<void> {
       },
       camera,
       clear,
+      // The race the boat sails in, as the tests tell it; Retire answered
+      // as the race committee would; a race watched, its switches answered
+      // as the server would.
+      racing: {
+        racing: parts.racing,
+        watch: sandboxWatch,
+        tick: () => world.ticks,
+        boat: () => ({
+          east: world.pose.east,
+          north: world.pose.north,
+          heading: world.pose.heading,
+        }),
+        retire: () => retireInSandbox(parts.racing),
+        races: null,
+        origin: location.origin,
+        replay: (code) => parts.replay.open(code),
+      },
     };
+    // ?races: races ashore on the sandbox, its routes answered by the tests.
+    if (query.has('races')) {
+      const races = racesOf();
+      races.replay = (code) => parts.replay.open(code);
+      pollRaces(races, parts.notices, catalog.notices.kinds);
+      screen.races = races;
+      setRaceHost((code) => {
+        parts.chart.show(null);
+        races.card.value = code;
+      });
+      if (screen.racing != null) {
+        screen.racing.races = races;
+      }
+      if (screen.harbour != null) {
+        screen.harbour.races = races;
+      }
+    }
     let unmount = mountScreen(document.body, screen);
+    // A name tapped opens its log on the chart screen's Log tab, as online.
+    setLogHost((who) => parts.chart.showLog(who));
+    setNewsHost((day) => parts.chart.showNews(day));
     game.listen(document, container);
     // The boat set down, then the world shown.
     await frames(2);
@@ -573,7 +637,13 @@ async function start(): Promise<void> {
     const start = performance.now();
     const ready = untilReady(
       new Gate(
-        { epoch: () => true, boat: () => true, view: () => true, land: () => true },
+        {
+          epoch: () => true,
+          boat: () => true,
+          view: () => true,
+          land: () => true,
+          judged: () => world.qualitySettled,
+        },
         { start, draws: world.drawsWhenReady },
       ),
       world,
@@ -595,19 +665,22 @@ async function start(): Promise<void> {
         sandbox,
         fullScreen: full,
         chart: parts,
+        raceWatch: sandboxWatch,
         forecast: issuer,
         barometer: baro.barometer,
         readBarometer: baro.read,
         clock: clock.clock,
         readClock: clock.read,
         countdown,
-        // The screen again, with a watch's parts or without, and sailing
-        // together's: the layout's tests.
-        remount: (watch, deck = null, statements = null) => {
+        // The screen again, with a watch's parts or without, sailing
+        // together's, and the way home's: the layout's tests.
+        remount: (watch, deck = null, statements = null, home = null) => {
           unmount();
           unmount = mountScreen(
             document.body,
-            watch === null && deck === null ? screen : { ...screen, watch, deck, statements },
+            watch === null && deck === null && home === null
+              ? screen
+              : { ...screen, watch, deck, statements, home },
           );
         },
       });
@@ -623,18 +696,33 @@ async function start(): Promise<void> {
   // sailor and its Set sail; a link to watch goes straight to the watch, or,
   // refused, to the player's own sailor, saying why.
   const notice = backSoon(document.body);
+  // The service worker, once the world is revealed or the start screen
+  // has stood a while.
+  const keeper = startWorker(query);
   const linked = linkFromQuery(query);
   // The wait begins at the tap that sets sail, or at once with no screen
   // to tap; the cover answers the tap at once.
   let tapped = performance.now();
+  // The start's stages for its report: the start screen shown, Set sail
+  // tapped.
+  const stages: Stages = {};
+  const usable = <T>(shown: Promise<T>): Promise<T> => {
+    stages.start ??= performance.now();
+    return shown;
+  };
   // The player's own sailor is loaded as soon as their look is known: at
-  // their own panel, or as the start screen sets sail.
+  // their own panel, or as the start screen sets sail. Known, there is a
+  // session: the page's reports go from now on.
   const own = (me: Me): Me => {
+    reports.open();
     world.sailAs(codeOf(catalog, lookFrom(me)), true);
     return me;
   };
   const set = (me: Me): Me => {
     tapped = performance.now();
+    stages.tap = tapped;
+    // A day of play, toward the home screen's offer.
+    homeScreen()?.sailed();
     cover.say(SETTING_SAIL);
     // The look chosen at the start: drawn now, though the own was loaded.
     world.sailAs(codeOf(catalog, lookFrom(me)));
@@ -646,6 +734,64 @@ async function start(): Promise<void> {
   // A link to come aboard (?s=<token>): once signed in, or the sailor
   // made, the skipper's boat and the knock in place of Set sail.
   const sailLink = linked === null ? sailFromQuery(query) : '';
+  // A race's link (?r=<code>): its card once signed in, or the sailor
+  // made, before the player's own Set sail; Make a race beside Set sail.
+  const raceCode = linked === null && sailLink === '' ? raceFromQuery(query) : null;
+  // A link into the list of sailors to watch (?watch, or ?watch=pick to
+  // pick one at once): once signed in, or the sailor made, the list in
+  // place of the player's own panel.
+  const listed =
+    linked === null && sailLink === '' && raceCode === null ? listFromQuery(query) : null;
+  const startRaces = racesOf();
+  const raceLinked = async (me: Me): Promise<Me> => {
+    if (raceCode !== null) {
+      // A race on the water, not the player's: watched, from the closest
+      // battle at the front.
+      const card = await readCard(raceCode);
+      if (
+        card.ok &&
+        (card.value.phase === 'starting' || card.value.phase === 'racing') &&
+        !card.value.mine.entered
+      ) {
+        forgetParams(RACE_PARAM);
+        return { ...me, watchRace: raceCode };
+      }
+      // After the race: its replay on the chart, once at sea.
+      if (card.ok && card.value.phase === 'finished') {
+        return { ...me, replayRace: raceCode };
+      }
+      // A race whose world has gone: its results alone, before the sea.
+      if (!card.ok ? card.refusal.status === 404 : card.value.phase === 'ended') {
+        const told = await readReplay(raceCode);
+        if (told.ok && !told.value.kept) {
+          const m = await loadReplay();
+          await m.showReplayAlone(document.body, told.value, location.origin);
+          forgetParams(RACE_PARAM);
+          return me;
+        }
+      }
+      let replay = '';
+      startRaces.replay = (code) => {
+        replay = code;
+      };
+      const m = await loadRaces();
+      startRaces.card.value = raceCode;
+      await m.showRaces(document.body, startRaces);
+      startRaces.replay = null;
+      // Seen: a reload just sails.
+      forgetParams(RACE_PARAM);
+      if (replay !== '') {
+        return { ...me, replayRace: replay };
+      }
+    }
+    return me;
+  };
+  const yours = (me: Me): Promise<Me> =>
+    raceLinked(me).then((m) =>
+      m.watchRace !== undefined || m.replayRace !== undefined
+        ? own(m)
+        : usable(showSailor(document.body, own(m), catalog, stage, catalog, startRaces)),
+    );
   const aboard = (me: Me): Promise<Me> =>
     import('../account/comeaboard').then((m) =>
       m.showComeAboard(document.body, own(me), sailLink, catalog, catalog),
@@ -661,21 +807,59 @@ async function start(): Promise<void> {
       return { ...me, watch: o.watch };
     }
     const linkNote = { refusal: o.refusal, code: linked.kind === 'sailor' ? linked.code : '' };
-    return showSailor(document.body, own({ ...me, linkNote }), catalog, stage, catalog).then(set);
+    return showSailor(
+      document.body,
+      own({ ...me, linkNote }),
+      catalog,
+      stage,
+      catalog,
+      startRaces,
+    ).then(set);
+  };
+  const listLinked = (me: Me): Promise<Me> => {
+    // Seen: a reload just sails.
+    forgetParams(LIST_PARAM);
+    return showSailor(
+      document.body,
+      own(me),
+      catalog,
+      stage,
+      catalog,
+      startRaces,
+      listed ?? undefined,
+    );
   };
   const [, physics, me] = await Promise.all([
     world.start(),
     loadPhysics(fetch(wasmUrl)),
     resolveSailor({
-      start: () =>
-        showStartScreen(document.body, {
-          looks: catalog,
-          boats: catalog,
-          ...(stage === undefined ? {} : { stage }),
-          ...(linked === null && sailLink === '' ? {} : { panel: false, straight: true }),
-          ...(linked === null ? {} : { watching: true }),
-        })
-          .then((me) => (sailLink !== '' ? aboard(me) : linked !== null ? watchLinked(me) : me))
+      start: ({ sailed, check }) =>
+        usable(
+          showStartScreen(document.body, {
+            sailed,
+            check,
+            looks: catalog,
+            boats: catalog,
+            ...(stage === undefined ? {} : { stage }),
+            ...(linked === null && sailLink === '' && raceCode === null && listed === null
+              ? {}
+              : { panel: false, straight: true }),
+            ...(linked === null && listed === null ? {} : { watching: true }),
+            ...(raceCode === null ? {} : { racing: true }),
+            races: startRaces,
+          }),
+        )
+          .then((me) =>
+            sailLink !== ''
+              ? aboard(me)
+              : linked !== null
+                ? watchLinked(me)
+                : raceCode !== null
+                  ? yours(me)
+                  : listed !== null
+                    ? listLinked(me)
+                    : me,
+          )
           .then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
       sailor: (me: Me) =>
@@ -683,7 +867,9 @@ async function start(): Promise<void> {
           ? aboard(me).then(set)
           : linked !== null
             ? watchLinked(me)
-            : showSailor(document.body, own(me), catalog, stage, catalog).then(set),
+            : listed !== null
+              ? listLinked(me).then(set)
+              : yours(me).then(set),
       backSoon: notice,
     }).then(own),
   ]);
@@ -713,6 +899,9 @@ async function start(): Promise<void> {
   if (watchFirst !== '') {
     // The connection's first Hello asks to watch.
     online.watch(watchFirst);
+  } else if (me.watchRace !== undefined) {
+    // Or to watch a race's boat, the one the server chooses.
+    online.watchRace({ race: 0, code: me.watchRace, number: 0 });
   }
   const knock = me.knock;
   const sending = me.knockMachine;
@@ -755,6 +944,8 @@ async function start(): Promise<void> {
   );
   world.useLand(land);
   const landNear = () => land.ready(world.pose.east, world.pose.north, NEAR_LAND);
+  // The land's chunks are fetched by its worker, which counts them.
+  fetched.land = () => land.stats.bytes;
   game.bedFriction = (east, north) => land.frictionAt(east, north);
   world.freeCam.ground = (east, north) => land.heightAt(east, north);
   // The free camera is the owner's alone: the server hears it from no other;
@@ -762,6 +953,16 @@ async function start(): Promise<void> {
   game.canFly = () => online.tools.value && !online.spectating.value;
   game.canSteer = () => !online.spectating.value;
   game.onRoam = (on, east, north, height) => online.roam(on, east, north, height);
+  // A race under way: its course laid in the sea, its committee boat's
+  // flags, and its gun; the race the boat sails in on the race line.
+  const racing = new Racing();
+  const raceInSea = raceSea({
+    lay: (id, c) => world.race.lay(id, c),
+    drop: (id) => world.race.drop(id),
+    signals: (id, f) => world.race.signals(id, f),
+    fire: (id, loud) => game.fireGun(id, loud, true),
+    tick: () => world.ticks,
+  });
   let worldId = '';
   const models = new Models();
   online.onWorld = (id, sailed) => {
@@ -770,6 +971,10 @@ async function start(): Promise<void> {
       // and its weather.
       world.lighthouses.clear();
       world.wrecks.clear();
+      world.race.clear();
+      raceInSea.clear();
+      racing.clear();
+      raceWatch.clear();
       models.clear();
       forecasting.forecasts.reset();
       gales.reset();
@@ -781,7 +986,81 @@ async function start(): Promise<void> {
   online.onPlaces = (p) => {
     world.lighthouses.setPlaces(p);
     world.wrecks.setPlaces(p);
+    world.race.setPlaces(p);
   };
+  // Watching a race: the bar's switches, follow the action, the crier and
+  // the cheers, for spectators and racers alike.
+  const raceWatch = new RaceWatch({
+    racing,
+    ask: (a) => {
+      // Another boat watched: a reload no longer opens a link to a sailor.
+      forgetParams(SAILOR_PARAM, FLEET_PARAM);
+      online.watchRace(a);
+    },
+    cheer: () => online.cheer(),
+    now: () => performance.now(),
+    length: (t) => catalog.boats[t.boat]?.lengthOverall ?? 4,
+    spectating: () => online.spectating.value,
+    bunting: (count) => {
+      if (game.settings.value.value.showCheers) {
+        game.bunting(count);
+      }
+    },
+    crowd: (count, own, racer) => {
+      if (own || game.settings.value.value.showCheers) {
+        game.cheer(count, own, racer);
+      }
+    },
+  });
+  setInterval(() => raceWatch.tick(), 250);
+  // A race's link opened under way follows the action from the first.
+  if (me.watchRace !== undefined) {
+    raceWatch.setFollow(true);
+  }
+  effect(() => {
+    const e = online.ended.value;
+    if (e !== null) {
+      raceWatch.ended(e.why);
+    }
+  });
+  online.onRaceTold = (t) => {
+    raceInSea.told(t);
+    racing.tell(t);
+  };
+  online.onRaceSignal = (s) => {
+    raceInSea.signal(s);
+    raceWatch.signal(s);
+  };
+  online.onRacePicture = (p) => {
+    racing.take(p);
+    raceWatch.picture(p);
+  };
+  online.onRaceCall = (c) => {
+    racing.called(c);
+    raceWatch.call(c);
+  };
+  online.onRaceFinish = (f) => {
+    racing.finished(f);
+    raceWatch.finish(f);
+  };
+  online.onRaceResults = (r) => racing.results(r);
+  online.onRaceCheered = (c) => raceWatch.cheered(c);
+  const certBook = { certificates: catalog.certificates ?? [], boats: catalog.boats };
+  // What the sailor's certificates came to: a course's on the finish's
+  // card, the log's tasks and an earning as notices, the earning with the
+  // bell and See, the log's Ribbons.
+  online.onCertified = (c) =>
+    certifiedTold(
+      {
+        book: certBook,
+        line: racing.certified,
+        shown: () => racing.finishOpen.peek() || racing.resultsOpen.peek(),
+        raise: (on, fill, action) => parts.notices.raise(on, fill, performance.now(), action),
+        see: () => parts.chart.showLog({ kind: 'own', tab: 'ribbons' }),
+        bell: (n) => game.bell(n),
+      },
+      c,
+    );
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   online.onLife = (l, drop) => world.life.set(l, drop);
   online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
@@ -800,8 +1079,47 @@ async function start(): Promise<void> {
   online.onWeather = (spells, keyframes) => forecasting.forecasts.keep(spells, keyframes);
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
-  const parts = makeChart(world, models, serverNews, forecasting);
+  const parts = makeChart(world, models, serverNews, forecasting, racing);
+  hostReplay(parts);
+  // The course is the sailor's own, kept for the world sailed: a boat
+  // watched shows none.
+  parts.chart.watching = () => online.spectating.value;
+  courseOnCompass(game, parts.chart);
+  const worldBefore = online.onWorld;
+  online.onWorld = (id, sailed) => {
+    worldBefore?.(id, sailed);
+    parts.chart.atWorld(id);
+  };
+  sailToBoats(online, parts);
   const gales = steerByChart(game, world, parts, forecasting);
+  // A race's boat tapped on the charts or in the sea, by a page watching
+  // the race, is watched.
+  const watchRacer = (n: number): boolean => {
+    if (!racing.spectator() || !online.spectating.value || n <= 0) {
+      return false;
+    }
+    raceWatch.switchTo(n);
+    return true;
+  };
+  parts.sea.watchRacer = watchRacer;
+  world.onBoatTap = (east, north) => {
+    const p = racing.picture.peek();
+    if (p === null) {
+      return false;
+    }
+    // The race's boat nearest where the boat tapped is drawn: the picture
+    // is two seconds old at most.
+    let best = 0;
+    let d = RACER_TAP;
+    for (const r of p.racers) {
+      const dd = Math.hypot(r.east - east, r.north - north);
+      if (dd < d && r.number !== p.eye) {
+        d = dd;
+        best = r.number;
+      }
+    }
+    return watchRacer(best);
+  };
   online.onForecast = (f, past) => {
     forecasting.forecasts.receive(f, past);
     gales.issued(f);
@@ -816,7 +1134,24 @@ async function start(): Promise<void> {
   void import('../ui/following').then(({ followSailing }) =>
     followSailing((who) => parts.notices.raise('followed-sailed', { who }, performance.now())),
   );
-  online.onChart = (entries, whole) => parts.chart.store.receive(entries, whole);
+  online.onChart = (entries, whole, courses) => parts.chart.store.receive(entries, whole, courses);
+  // Races ashore at sea: the board read once a minute, by the world clock;
+  // Enter with my crew for a skipper with others aboard.
+  const races: RacesView = racesOf({
+    now: () => {
+      const t = online.utcMs();
+      return Number.isFinite(t) ? t : Date.now();
+    },
+    crew: () => online.aboard.value === null && online.crew.value !== null,
+  });
+  races.board.value = startRaces.board.value;
+  races.replay = (code) => parts.replay.open(code);
+  // A race asked to be watched as it starts: Watch on its notice watches
+  // the closest battle at the front, following the action.
+  pollRaces(races, parts.notices, catalog.notices.kinds, (code) => {
+    raceWatch.setFollow(true);
+    void changeBoat(() => online.watchRace({ race: 0, code, number: 0 }));
+  });
   // The countdown to the world's end, by the world clock, and the notices
   // of the world's life, worked out here from the end each Welcome tells.
   const countdown = new Countdown(() => online.utcMs());
@@ -847,62 +1182,24 @@ async function start(): Promise<void> {
     countdown.tick();
     endNotices.tick(performance.now());
   }, 250);
-  // A change of boat at sea: the cover down over the screen, the boat
-  // asked for under it, and the cover up again once the new boat's world
-  // is ready; at once if none comes (a watch refused, a queue). One at a
-  // time: the cover takes the taps meanwhile.
-  let atSea = false;
-  let changing = false;
-  const changeBoat = async (act: () => void): Promise<void> => {
-    if (!atSea) {
-      act();
-      return;
-    }
-    if (changing) {
-      return;
-    }
-    changing = true;
-    const n = online.arrived.value;
-    const ended = online.ended.value;
-    clear.show();
-    const start = performance.now();
-    await cover.drop(world.underTest || reducedMotion() ? 0 : DROP);
-    if (world.drawsWhenReady) {
-      world.stage.loopDraws = false;
-    }
-    act();
-    let placed = false;
-    const arrived = () => online.arrived.value > n;
-    const gate = new Gate(
-      {
-        epoch: () => true,
-        boat: arrived,
-        view: () => placed,
-        land: () => landNear() && world.sailorReady,
-        abandoned: () =>
-          !arrived() &&
-          (online.ended.value !== ended ||
-            online.watchPlace.value !== null ||
-            online.place.value !== null),
-      },
-      { start, draws: world.drawsWhenReady },
-    );
-    const ready = untilReady(gate, world, cover, start);
-    // A boat that comes after the wait was given up is not this change's.
-    let waiting = true;
-    void whenArrived(online, n).then(async () => {
-      if (!waiting) {
-        return;
-      }
-      await frames(2);
-      world.placeFirstView();
-      placed = true;
-    });
-    await ready;
-    waiting = false;
-    reveal(world, cover, arrived() ? DESCENT_CHANGE : 0);
-    changing = false;
-  };
+  // A change of boat at sea, and a snap to where the boat is now after a
+  // while hidden or a connection made again: the cover down over the
+  // screen, and up once the world under it is ready. One at a time: the
+  // cover takes the taps meanwhile.
+  const underCover = new UnderCover({
+    world,
+    cover,
+    online,
+    landNear,
+    showScreen: () => clear.show(),
+  });
+  const changeBoat = (act: () => void): Promise<void> => underCover.change(act);
+  online.onSnap = () => void underCover.snap();
+  // The way home, under the same cover; a page aboard, whose skipper
+  // asked, covered as the lift comes.
+  const homeward = (ask: boolean): Promise<void> => underCover.home(ask);
+  online.onLift = () => void homeward(false);
+  const homeAsking = signal(false);
   // Watching, as the screens see it.
   const watchView: WatchView = {
     watching: online.watching,
@@ -954,6 +1251,11 @@ async function start(): Promise<void> {
       world.setBoatLook(b.look, b.name);
     }
   });
+  // And flying its skipper's prizes, with its race number while it races.
+  effect(() => {
+    const p = online.prizes.value;
+    world.setPrizes(p.prizes, p.number);
+  });
   // The screen comes back by itself when the player is needed.
   const neededNow = (): Needed => ({
     overboard: !online.spectating.value && overboard(game.hud.sailor.value),
@@ -993,7 +1295,7 @@ async function start(): Promise<void> {
     if (online.status.value === 'idle' || online.watchPlace.value !== null) {
       void loadWatch().then((m) => {
         if (!watchWaiting.atSea && watchWaiting.hide === null) {
-          watchWaiting.hide = m.showWatchWaiting(document.body, watchView);
+          watchWaiting.hide = m.showWatchWaiting(document.body, watchView, () => openNews(null));
         }
       });
     }
@@ -1009,6 +1311,7 @@ async function start(): Promise<void> {
       boat: () => boatIn,
       view: () => placed,
       land: () => landNear() && world.sailorReady,
+      judged: () => world.qualitySettled,
     },
     { start: tapped, draws: world.drawsWhenReady },
   );
@@ -1061,6 +1364,7 @@ async function start(): Promise<void> {
       store: parts.chart.store,
       look: harbourLook(world, online),
       boats: harbourBoats(catalog, online),
+      races,
     },
     watch: watchView,
     deck: deckOf(
@@ -1075,6 +1379,43 @@ async function start(): Promise<void> {
     lamp: online.lamp,
     camera,
     clear,
+    races,
+    racing: {
+      racing,
+      tick: () => world.ticks,
+      boat: () => ({ east: world.pose.east, north: world.pose.north, heading: world.pose.heading }),
+      retire: () => online.raceRetire(),
+      races,
+      origin: location.origin,
+      watch: raceWatch,
+      another: () => {
+        watchView.list.value = true;
+      },
+      sail: () => watchView.sail(),
+      replay: (code) => parts.replay.open(code),
+    },
+    home: {
+      offered: () =>
+        !online.spectating.value && online.watching.value === null && online.aboard.value === null,
+      asking: homeAsking,
+      racing: () => {
+        const r = racing.mine();
+        return racing.number() > 0 && (r === null || r.state === 'placed' || r.state === 'racing');
+      },
+      shipmates: () => online.crew.value !== null,
+      go: () => void homeward(true),
+    },
+  });
+  // A name tapped anywhere opens its log on the chart screen's Log tab, and
+  // a sailor's last story the News tab, now the chart screen can be shown;
+  // before, they open on their own over the screen.
+  setLogHost((who) => parts.chart.showLog(who));
+  setNewsHost((day) => parts.chart.showNews(day));
+  // A Harbourmaster's course in the log's Ribbons opens its card over the
+  // sea, the chart put away.
+  setRaceHost((code) => {
+    parts.chart.show(null);
+    races.card.value = code;
   });
   game.listen(document, container);
   if (view !== undefined) {
@@ -1105,27 +1446,71 @@ async function start(): Promise<void> {
     arrived: online.arrived.value,
     view: placed,
   };
-  atSea = true;
+  underCover.atSea = true;
   reveal(world, cover, view === undefined ? DESCENT : 0);
+  keeper.revealed();
+  keptAtSea(online, parts.chart, world, stages);
+  // A race's link opened after the race: its replay on the chart.
+  if (me.replayRace !== undefined) {
+    parts.replay.open(me.replayRace);
+  }
   // A word from the game's owner about chat, if one waits unread.
   void checkStatements(statements);
 }
 
-/** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */
-function overboard(line: string): boolean {
-  return line !== '' && line !== AGROUND;
+/** A race's replay, opened on the chart by its link's code, or its results alone. */
+function hostReplay(parts: ChartParts): void {
+  const host = parts.replay;
+  host.origin = location.origin;
+  host.open = (code) => {
+    void loadReplay().then((m) => m.openReplay(host, parts.chart, code));
+  };
+}
+
+/**
+ * The course set on the chart on the compass: its mark and its window,
+ * giving way to the race line in a race; and reached, said and cleared.
+ */
+function courseOnCompass(game: Game, chart: Chart): void {
+  game.hud.course = chart.compass();
+}
+
+/** Sail to on the panels sets a boat as the chart's course, while able says it may be offered. */
+function hostSailTo(chart: Chart, able: () => boolean): void {
+  setSailToHost({
+    able,
+    is: (sailor) => {
+      const c = chart.course.value;
+      return c?.kind === 'boat' && c.sailor === sailor;
+    },
+    sail: (sailor, name, machine) => chart.setCourse({ kind: 'boat', sailor, name, machine }),
+    clear: () => chart.clearCourse(),
+  });
+}
+
+/**
+ * A sailor's boat as the course: set by Sail to on the shipmates' and the
+ * machine sailors' panels, while the player's own compass is shown; the
+ * server asked where it is whenever the course is a boat (and again by
+ * each new connection), told to stop when it is not; where it is, and its
+ * end, told to the chart; and a shipmate sailing to the player, a notice.
+ */
+function sailToBoats(online: Online, parts: ChartParts): void {
+  const chart = parts.chart;
+  hostSailTo(chart, () => !online.spectating.value && online.status.value === 'sailing');
+  effect(() => {
+    const c = chart.course.value;
+    online.courseTo(c?.kind === 'boat' ? c.sailor : '');
+  });
+  online.onShipmateAt = (at) => chart.boatAt(at);
+  online.onCourseEnded = (sailor, why) => chart.boatEnded(sailor, why);
+  online.onShipmateCourse = (name) =>
+    parts.notices.raise('shipmate-course', { who: name }, performance.now());
 }
 
 /** Resolves once a boat has arrived after the n-th. */
 function whenArrived(online: Online, n: number): Promise<void> {
-  let stop = (): void => {};
-  return new Promise<void>((resolve) => {
-    stop = effect(() => {
-      if (online.arrived.value > n) {
-        resolve();
-      }
-    });
-  }).finally(() => stop());
+  return whenPast(online.arrived, n);
 }
 
 /**
@@ -1246,6 +1631,30 @@ function chooseSky(world: SeaScene, query: URLSearchParams): void {
   }
 }
 
+/**
+ * At sea from the reveal: the screen kept on while the connection is at
+ * sea, until the full chart or the menu stands two minutes untouched; the
+ * start's report, with the bytes fetched to the reveal; and from now on
+ * the Pings tell the server what the page fetches.
+ */
+function keptAtSea(online: Online, chart: Chart, world: SeaScene, stages: Stages): void {
+  const lock = screenLock();
+  // The menu, or a panel it opened (the account, the machine sailors).
+  lock.open = () => chart.open.value || document.querySelector('.menu') !== null;
+  effect(() => lock.sailing(online.status.value === 'sailing'));
+  lock.atSea(true);
+  const page = pageStart(import.meta.url);
+  reports.startup({
+    stages: { shell: page.shell, cover: page.cover, ...stages, reveal: performance.now() },
+    bytes: fetched.total,
+    visit: page.visit,
+    tier: world.tier.number,
+  });
+  // What came before the reveal is the start's.
+  fetched.take();
+  online.fetched = () => fetched.take();
+}
+
 /** The game connection's URL: this page's own host, /ws. */
 function gameURL(): string {
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
@@ -1258,11 +1667,19 @@ function gameURL(): string {
  * at most.
  */
 function connect(online: Online): void {
-  const versions = { catalog: CATALOG_VERSION, physicsLayout: LAYOUT_VERSION, build: 'web' };
+  const versions = { catalog: CATALOG_VERSION, physicsLayout: LAYOUT_VERSION, build: BUILD };
   online.start(gameURL(), versions);
+  if (document.visibilityState === 'hidden') {
+    // Opened behind another tab: one snapshot kept until it is shown.
+    online.shown(false);
+  }
   window.addEventListener('online', () => online.wake());
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
+    const visible = document.visibilityState === 'visible';
+    // Hidden, the worker keeps only the newest snapshot; shown after a
+    // while, the page snaps to it under the cover.
+    online.shown(visible);
+    if (visible) {
       online.wake();
     }
   });
@@ -1287,7 +1704,8 @@ function connect(online: Online): void {
         // Storage refused.
       }
       if (reloadForVersion(marks, Date.now())) {
-        location.reload();
+        // Under the new build's worker, if one waits.
+        void takeOverFirst().then(() => location.reload());
       } else {
         online.notice.value = {
           text: 'An update is coming. Reload in a minute.',
@@ -1298,10 +1716,48 @@ function connect(online: Online): void {
   });
 }
 
+// The page's reports, its errors among them, and what it fetches, from its
+// first moment; and Chrome's offer to install, should it come.
+const reports = new Reports();
+reportErrors(reports);
+reportViolations((v) => reports.policy(v));
+const fetched = watchFetched();
+homeScreen();
+
 start().catch((err: unknown) => {
+  reports.error(
+    err instanceof Error ? err.message : String(err),
+    err instanceof Error ? (err.stack ?? '') : '',
+  );
   const p = document.createElement('p');
   p.className = 'failure';
   p.textContent = `The sea could not be drawn: ${err instanceof Error ? err.message : String(err)}`;
   document.body.replaceChildren(p);
   console.error(err);
 });
+
+/** Retires the boat from the sandbox's race as the race committee would: its call, and its place gone from the picture. */
+function retireInSandbox(r: Racing): void {
+  const t = r.told.peek();
+  const n = r.number();
+  const p = r.picture.peek();
+  if (t === null || n === 0) {
+    return;
+  }
+  if (p !== null) {
+    r.take({
+      ...p,
+      racers: p.racers.map((x) => (x.number === n ? { ...x, state: 'retired', place: 0 } : x)),
+    });
+  }
+  r.called({
+    race: t.race,
+    kind: 'retired',
+    number: n,
+    other: 0,
+    article: '',
+    mark: 0,
+    added: 0,
+    place: 0,
+  });
+}

@@ -1,0 +1,212 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* The signing page: the game's paper, ink and lettering, no script. */
+
+@font-face {
+  font-family: "IM Fell English SC";
+  src: url("heading.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --paper: #efe4c8;
+  --ink: #2b2118;
+  --faded: #6f5e48;
+  --ok: #2f6b3a;
+  --bad: #9c2f24;
+  --rule: rgb(43 33 24 / 18%);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    16px / 1.55 system-ui,
+    sans-serif;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "IM Fell English SC", Georgia, serif;
+  font-weight: normal;
+  line-height: 1.15;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 2.1rem;
+}
+
+h2 {
+  margin: 2rem 0 0.6rem;
+  font-size: 1.45rem;
+}
+
+h3 {
+  margin: 1.5rem 0 0.4rem;
+  font-size: 1.15rem;
+  color: var(--faded);
+}
+
+a {
+  color: inherit;
+}
+
+.lead {
+  font-size: 1.05rem;
+}
+
+.who {
+  color: var(--faded);
+}
+
+.button,
+button {
+  display: inline-block;
+  min-height: 2.75rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.quiet {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-weight: normal;
+  text-decoration: underline;
+}
+
+.note {
+  margin: 1.5rem 0;
+  padding: 0.8rem 1rem;
+  border-left: 4px solid var(--faded);
+  background: rgb(255 255 255 / 35%);
+}
+
+.note.ok {
+  border-color: var(--ok);
+}
+
+.note.bad {
+  border-color: var(--bad);
+}
+
+.text {
+  margin: 2rem 0;
+  padding: 0.5rem 1.25rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 30%);
+  overflow-wrap: anywhere;
+}
+
+.text h1 {
+  font-size: 1.6rem;
+  margin-top: 1rem;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2rem 0;
+}
+
+form {
+  margin: 2rem 0;
+}
+
+fieldset {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+
+label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0.7rem 0;
+}
+
+label input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.15rem 0 0;
+}
+
+label.name {
+  display: block;
+}
+
+input[type="text"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.3rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--faded);
+  border-radius: 6px;
+  background: #fffaf0;
+  color: var(--ink);
+  font: inherit;
+}
+
+/* Under 18: the rest of the form is not for this signer, who continues
+   to the way to sign with a parent or guardian. */
+form:has(#age-minor:checked) .adult-only,
+form:not(:has(#age-minor:checked)) .minor-only {
+  display: none;
+}
+
+form.signout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin: 1rem 0;
+}
+
+footer code {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.signed {
+  padding: 0;
+  list-style: none;
+}
+
+.signed li {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+footer {
+  margin-top: 3rem;
+  color: var(--faded);
+  font-size: 0.9rem;
+}

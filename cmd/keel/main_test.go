@@ -24,6 +24,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/access"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
@@ -202,6 +203,7 @@ var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 // as two processes share a database.
 type memDB struct {
 	noAccounts
+	noRaces
 	epoch    time.Time
 	onClose  func()
 	sessions *edgetest.Sessions // nil for none
@@ -219,7 +221,8 @@ type memDB struct {
 	checkpoint *store.Checkpoint
 	events     []store.Event
 	chartings  []store.Charting
-	down       bool // the world's writes fail
+	log        store.LogRows // the log's rows written
+	down       bool          // the world's writes fail
 	bundle     *store.Bundle
 	weathers   map[[16]byte]*store.Weather
 	number     int // worlds ended before the active one
@@ -231,6 +234,8 @@ type memDB struct {
 	runs         map[string]*memRun
 	news         []store.WorldNews
 	switches     int
+	// newsKept is the news's stories and editions.
+	newsKept memNews
 }
 
 // emptyWorld makes a world of open sea at once: the generator of the
@@ -424,7 +429,21 @@ func (memWriter) Close() {}
 // with has a server use d for its database, its lease and its writer.
 func (d *memDB) with(opt serveOptions) serveOptions {
 	opt.openDB, opt.openLease, opt.openWriter = d.open, d.openLease, d.openWriter
+	if opt.access == nil {
+		opt.access = testAccess{}
+	}
 	return opt
+}
+
+// testAccess lets through the website's status's requests that carry the
+// token "test-access", as Cloudflare Access lets through the website's.
+type testAccess struct{}
+
+func (testAccess) Check(r *http.Request) error {
+	if r.Header.Get(access.Header) != "test-access" {
+		return errors.New("not through Access")
+	}
+	return nil
 }
 
 // Write is the world's writer's: fenced by the lease's epoch.
@@ -438,6 +457,8 @@ func (d *memDB) Write(_ context.Context, b store.Batch) error {
 		return errors.New("the database is down")
 	}
 	d.events = append(d.events, b.Events...)
+	d.log.Voyages = append(d.log.Voyages, b.Log.Voyages...)
+	d.log.Entries = append(d.log.Entries, b.Log.Entries...)
 	for i := range b.Charting {
 		c := &b.Charting[i]
 		if slices.ContainsFunc(d.chartings, func(o store.Charting) bool { return o.Subject == c.Subject && o.Number == c.Number }) {
@@ -449,6 +470,7 @@ func (d *memDB) Write(_ context.Context, b store.Batch) error {
 		}
 		d.chartings = append(d.chartings, *c)
 	}
+	d.writeNews(&b)
 	if b.Checkpoint != nil {
 		c := *b.Checkpoint
 		c.Data = slices.Clone(c.Data)
@@ -462,10 +484,6 @@ func (d *memDB) Chartings(context.Context, [16]byte) ([]store.Charting, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return slices.Clone(d.chartings), nil
-}
-
-func (d *memDB) News(context.Context, [16]byte, *[16]byte, int) ([]store.News, error) {
-	return nil, nil
 }
 
 func (d *memDB) SetNoticesOff(context.Context, store.AccountID, []string) error { return nil }
@@ -890,7 +908,7 @@ func TestServe(t *testing.T) {
 		}
 		// The world it sailed: its empty terrain, its water's way round.
 		sailed := worldgen.Empty(f.Header.Seed)
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 3,
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 3, Sky: catalogOf(t).PrepareSky(),
 			Terrain: sailed.Terrain(groundOf(t)), Edge: edgeOf(catalogOf(t))})
 		if err != nil {
 			t.Fatal(err)
@@ -1254,7 +1272,7 @@ func TestReplayDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 1,
+	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 1, Sky: catalogOf(t).PrepareSky(),
 		Terrain: sailed.Terrain(groundOf(t)), Edge: edgeOf(catalogOf(t)), At: func(fr *bus.Frame) {
 			if fr.Tick == at {
 				if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {

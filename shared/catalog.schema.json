@@ -28,10 +28,102 @@
     "encounters": { "$ref": "#/$defs/Encounters" },
     "world": { "$ref": "#/$defs/World" },
     "notices": { "$ref": "#/$defs/Notices" },
+    "polars": { "$ref": "#/$defs/Polars" },
     "news": { "$ref": "#/$defs/News" },
-    "life": { "$ref": "#/$defs/Life" }
+    "life": { "$ref": "#/$defs/Life" },
+    "certificates": {
+      "description": "The certificates, in the order they are earned: each opens boats to the sailor who holds it or a later one.",
+      "type": "array",
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/Certificate" }
+    },
+    "pendants": { "$ref": "#/$defs/Pendants" }
   },
   "$defs": {
+    "Certificate": {
+      "title": "Certificate",
+      "description": "A certificate: its name, its pendant, the boats it opens, and its tasks, of which it needs some. Every task counts only what the sailor sails alone, since the certificate before it was earned.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "pendant", "pendantNode", "opens", "needs", "tasks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its name: \"You're a Deckhand!\"", "type": "string", "minLength": 1, "maxLength": 40 },
+        "pendant": { "description": "The pendant worn by those who hold it, in words.", "type": "string", "minLength": 1, "maxLength": 60 },
+        "pendantNode": { "description": "The pendant's node in the pendants' model.", "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "maxLength": 40 },
+        "opens": {
+          "description": "The boats it opens, by their ids: each boat is opened by one certificate at most, and one opened by none is open to every sailor.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" }
+        },
+        "needs": { "description": "How many of its tasks earn it.", "type": "integer", "minimum": 1, "maximum": 20 },
+        "tasks": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/CertificateTask" } }
+      }
+    },
+    "Pendants": {
+      "title": "Pendants",
+      "description": "The certificates' pendants, worn on a cord at the neck by those who hold one: the highest held.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["art"],
+      "properties": {
+        "art": {
+          "title": "PendantsArt",
+          "description": "The pendants' art.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": {
+            "model": { "description": "The pendants' model: a glTF binary of a node for each pendant, its origin where the cord runs through its bail, x across, y up and z out from the chest, its back on z = 0; its parts' colours in its vertices, their metalness and roughness in its second texture coordinate.", "$ref": "#/$defs/ArtPath" }
+          }
+        }
+      }
+    },
+    "CertificateTask": {
+      "title": "CertificateTask",
+      "description": "A task toward a certificate: a course, sailed as a time trial (courses, with what sailing it by hand asks and what the autopilot's longer way asks), or a measure of the sailor's log reaching a mark (measure and at).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its words, as the log and the tools list it.", "type": "string", "minLength": 1, "maxLength": 80 },
+        "courses": {
+          "description": "A course task's courses: a buoy course by its shape and length, or any island course.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/CertificateCourse" }
+        },
+        "hand": { "$ref": "#/$defs/CertificateWay" },
+        "venture": { "$ref": "#/$defs/CertificateWay" },
+        "measure": {
+          "description": "A log task's measure: the distance sailed alone (NM), places seen, places charted first, kinds of the sea's life met, nights at sea, gales ridden out, storms ridden out or landfalls in fog, the closest approach to the lip survived (m, at most at), worlds sailed in, falls over the edge, and every weather met (a gale, a storm, fog and a night).",
+          "type": "string",
+          "enum": ["distance", "places-seen", "places-charted", "life-kinds", "nights", "gales", "storms-or-fogs", "lip", "worlds", "falls", "every-weather"]
+        },
+        "at": { "description": "The mark a log task's measure reaches: at least this, or for the lip at most this.", "type": "number", "exclusiveMinimum": 0, "maximum": 100000 }
+      }
+    },
+    "CertificateCourse": {
+      "title": "CertificateCourse",
+      "description": "A course a task is sailed on: the short windward-leeward, the long one, the short triangle, the long one, or an island course.",
+      "type": "string",
+      "enum": ["short", "long", "triangle", "long-triangle", "island"]
+    },
+    "CertificateWay": {
+      "title": "CertificateWay",
+      "description": "What a course task asks of runs sailed one way: the least medal (finish for any finish), how many runs, whether each on a different course of the world, and whether one on each of its courses.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["medal"],
+      "properties": {
+        "medal": { "type": "string", "enum": ["finish", "bronze", "silver", "gold"] },
+        "runs": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "apart": { "type": "boolean" },
+        "each": { "type": "boolean" }
+      }
+    },
     "Weather": {
       "title": "Weather",
       "description": "The weather's numbers.",
@@ -736,6 +828,12 @@
       "properties": {
         "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat with headsails, and a node for each of the boat's lights, named as the light, where its lantern is.", "$ref": "#/$defs/ArtPath" },
         "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.", "$ref": "#/$defs/ArtPath" },
+        "sailorClips": {
+          "description": "The files of clips beside each sailor look's clips (<version>.<name>.glb) its people aboard are drawn with, loaded only when someone is drawn aboard one of its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire, crossing her net, righting her); cruiser, a cruising yacht's (at her wheel, standing and sat by it, on her cockpit's bench, on her rail under her lifelines, crossing her cockpit and her coachroof); bridgedeck, a cruising catamaran's (at her raised wheel, standing and sat on the helm seat, beside the helm, on her cockpit's seats round her table, on her aft bench and her lounger, walking her cockpit, up and down her helm's ladder).",
+          "type": "array",
+          "items": { "type": "string", "enum": ["cat", "cruiser", "bridgedeck"] },
+          "uniqueItems": true
+        },
         "budget": {
           "description": "The most triangles each of the boat's models may have.",
           "type": "object",
@@ -753,7 +851,7 @@
       "description": "A sailor's art.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["model", "far", "close", "clips", "portrait", "portraitFallback", "portraitMask", "ink"],
+      "required": ["model", "far", "close", "clips", "portrait", "portraitFallback", "portraitMask", "ink", "cockade", "pendant"],
       "properties": {
         "model": { "description": "The sailor's deck level: a glTF binary of skinned meshes on the shared skeleton, with its atlas and mask, drawn on the boat in view and on the boats near the camera.", "$ref": "#/$defs/ArtPath" },
         "far": { "description": "The sailor's far level: one rigid figure posed seated at the helm, with the place node that seats it in the boat model; drawn in the fleet.", "$ref": "#/$defs/ArtPath" },
@@ -762,7 +860,31 @@
         "portrait": { "description": "The colour portrait's base, AVIF: head and shoulders, shaded, its option regions in neutral grey.", "$ref": "#/$defs/ArtPath" },
         "portraitFallback": { "description": "The colour portrait's base as WebP, for a browser without AVIF.", "$ref": "#/$defs/ArtPath" },
         "portraitMask": { "description": "The colour portrait's mask, lossless WebP: each pixel's share of the main colour (red), the skin or metal (green) and the hair (blue).", "$ref": "#/$defs/ArtPath" },
-        "ink": { "description": "The inked portrait, for the log: one-bit WebP on the logbook's paper.", "$ref": "#/$defs/ArtPath" }
+        "ink": { "description": "The inked portrait, for the log: one-bit WebP on the logbook's paper.", "$ref": "#/$defs/ArtPath" },
+        "cockade": {
+          "title": "Cockade",
+          "description": "Where a race's winner wears the cockade: on the hat's left side, or on the coat's left breast for a look with no hat.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at", "facing", "inked"],
+          "properties": {
+            "at": { "description": "Its middle on the figure as it is bound, m: across to its left, up and forward.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -2, "maximum": 2 } },
+            "facing": { "description": "The way it faces out from the cloth, the same axes.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -1, "maximum": 1 } },
+            "inked": { "description": "Its middle on the inked portrait, as shares of its width from the left and of its height from the top.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+          }
+        },
+        "pendant": {
+          "title": "PendantPlace",
+          "description": "Where the certificate's pendant hangs: where its cord runs through its bail, on the figure as it is bound, clear of the clothes in front of the breastbone.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at", "facing", "inked"],
+          "properties": {
+            "at": { "description": "Where its cord runs through its bail, on the figure as it is bound, m: across to its left, up and forward.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -2, "maximum": 2 } },
+            "facing": { "description": "The way its face looks out from the clothes under it, the same axes.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -1, "maximum": 1 } },
+            "inked": { "description": "Where its cord runs through its bail on the inked portrait, as shares of its width from the left and of its height from the top.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+          }
+        }
       }
     },
     "SailorVersion": {
@@ -869,12 +991,13 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "stations", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "racers", "stations", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
         "description": { "description": "What the boat is, in a few words.", "type": "string", "minLength": 1 },
         "capacity": { "description": "Most people aboard, the skipper included.", "type": "integer", "minimum": 1 },
+        "racers": { "description": "The most boats of this kind in one race.", "type": "integer", "minimum": 2, "maximum": 24 },
         "stations": {
           "description": "Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.",
           "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/BoatStation" }
@@ -909,21 +1032,22 @@
     },
     "BoatStation": {
       "title": "BoatStation",
-      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a keelboat's rail with the legs over the side; to windward, if it says so.",
+      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck (on a ship, sat on a hatch), hiking out on its rail, sat on a keelboat's rail with the legs over the side, leaning on a ship's rail, or in a ship's top; to windward or to leeward, if it says so.",
       "type": "object",
       "additionalProperties": false,
       "required": ["at", "pose", "facing"],
       "properties": {
-        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it; on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side.", "$ref": "#/$defs/BoatPoint" },
+        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it (on a ship, a hatch's edge on its grating, the feet on the deck before it); on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side; on a hull, the hull's deck at its inner edge, on its top, the person facing across the net; on a bench, its front edge on its top, the person sat on it facing the way the station faces, the feet on the floor before it; leaning, the cap rail's inner edge on its top, the forearms on it; aloft, the top's floor by the mast, the person out toward the shrouds on the weather side.", "$ref": "#/$defs/BoatPoint" },
         "pose": { "$ref": "#/$defs/StationPose" },
         "facing": { "description": "The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
-        "windward": { "description": "Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. Not said, the station is where it is.", "type": "boolean" }
+        "windward": { "description": "Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. On a ship with yards, her weather side is the side her after yards are braced for, and the person walks across when it changes. Not said, the station is where it is.", "type": "boolean" },
+        "lee": { "description": "Whether the person is to leeward, as windward is to windward: the station's mirror across the centreline (and its facing's) when its own side is the weather side. Not with windward.", "type": "boolean" }
       }
     },
     "StationPose": {
       "title": "StationPose",
-      "description": "How a person is at a station: standing; seated (leaning out as hiking in a breeze); hiking (sitting out on the rail and leaning out, as a dinghy's crew); or on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze).",
-      "type": "string", "enum": ["standing", "seated", "hiking", "rail"]
+      "description": "How a person is at a station: standing; seated (leaning out as hiking in a breeze; on a ship, sat on a hatch, standing up as she heels or the wind rises); hiking (sitting out on the rail and leaning out, as a dinghy's crew); on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze); leaning (on a ship's rail, the forearms on its cap, facing outboard); aloft (standing in a ship's top, a hand on a shroud: the only station above the boom); on a bench (sat on a cockpit's bench facing inboard, the feet on its floor, at ease and talking with a neighbour in a light wind, braced as she heels); or on a hull (sat on a boat of two hulls' windward hull by its inner edge, the legs across the net, and out on the trapeze's wire beside the helm, the feet on the hull's outer edge, once the helm is on theirs).",
+      "type": "string", "enum": ["standing", "seated", "hiking", "rail", "leaning", "aloft", "hull", "bench"]
     },
     "BoatControls": {
       "title": "BoatControls",
@@ -951,7 +1075,7 @@
       "description": "The boat's physics, in SI units with angles in degrees. Every value is required.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["hull", "rig", "headsails", "square", "downwind", "foils", "sailor", "rates", "autopilot"],
+      "required": ["hull", "rig", "headsails", "square", "downwind", "foils", "sailor", "rates", "autopilot", "hulls", "pitch"],
       "properties": {
         "hull": { "$ref": "#/$defs/PhysicsHull" },
         "rig": { "$ref": "#/$defs/PhysicsRig" },
@@ -961,7 +1085,9 @@
         "foils": { "$ref": "#/$defs/PhysicsFoils" },
         "sailor": { "$ref": "#/$defs/PhysicsSailor" },
         "rates": { "$ref": "#/$defs/PhysicsRates" },
-        "autopilot": { "$ref": "#/$defs/PhysicsAutopilot" }
+        "autopilot": { "$ref": "#/$defs/PhysicsAutopilot" },
+        "hulls": { "$ref": "#/$defs/PhysicsHulls" },
+        "pitch": { "$ref": "#/$defs/PhysicsPitch" }
       }
     },
     "PhysicsHull": {
@@ -969,7 +1095,7 @@
       "description": "The hull: its mass, resistance, inertia and stability.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "yawDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw", "outline", "transom", "stem"],
+      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "yawDamping", "rightingLever", "rightingLeverStep", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw", "outline", "transom", "stem"],
       "properties": {
         "displacement": { "description": "Boat, rig and sailor, in kg.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
         "waterlineLength": { "description": "Length on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
@@ -985,7 +1111,8 @@
         "rollInertia": { "description": "Moment of inertia in roll, added inertia included, in kg·m².", "type": "number", "exclusiveMinimum": 0, "maximum": 100000000 },
         "rollDamping": { "description": "The hull's own roll damping, in N·m·s/rad. The foils and sails damp through their flow.", "type": "number", "minimum": 0, "maximum": 10000000 },
         "yawDamping": { "description": "The hull's resistance to turning, from the water flowing across it as it turns, in N·m per (rad/s)²: its moment against the rate of turn times the rate's size. 0 where the foils alone damp the turning.", "type": "number", "minimum": 0, "maximum": 1000000000 },
-        "rightingLever": { "description": "Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.", "type": "array", "items": { "type": "number", "minimum": -10, "maximum": 10 }, "minItems": 19, "maxItems": 19 },
+        "rightingLever": { "description": "Righting lever (GZ) with the sailor on the centreline, every rightingLeverStep of heel from 0°, in m. Beyond the last, the last.", "type": "array", "items": { "type": "number", "minimum": -10, "maximum": 10 }, "minItems": 19, "maxItems": 19 },
+        "rightingLeverStep": { "description": "Heel between entries of rightingLever, in degrees: 10 reaches 180°, 5 reaches 90° (a catamaran's lever, which peaks within a few degrees of upright, held beyond). 180° over it is a whole number.", "type": "number", "minimum": 1, "maximum": 10 },
         "waterlineBeam": { "description": "Beam on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 50 },
         "waterplaneArea": { "description": "Area of the waterplane, in m²: the heave stiffness is the water's weight per metre of it.", "type": "number", "exclusiveMinimum": 0, "maximum": 5000 },
         "waterplanePitch": { "description": "The waterplane's second moment of area about its transverse axis, in m⁴: the pitch stiffness.", "type": "number", "exclusiveMinimum": 0, "maximum": 10000000 },
@@ -995,7 +1122,7 @@
         "pitchDamping": { "description": "Damping of the pitch, as a fraction of critical.", "type": "number", "minimum": 0, "maximum": 2 },
         "waveForce": { "description": "The share of the Froude–Krylov force of a wave's slope that pushes the hull along and across.", "type": "number", "minimum": 0, "maximum": 1.5 },
         "waveYaw": { "description": "The share of that force's moment along the hull, which yaws the boat with the water of an oblique wave.", "type": "number", "minimum": 0, "maximum": 1.5 },
-        "outline": { "description": "The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 15 }, "minItems": 11, "maxItems": 11 },
+        "outline": { "description": "The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point; a boat of two hulls (hulls.hullSpacing) has a flat bow, the last the bows' half-spread.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 15 }, "minItems": 11, "maxItems": 11 },
         "transom": { "description": "The transom's distance aft of the centre of gravity, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "stem": { "description": "The stem's distance forward of the centre of gravity, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
       }
@@ -1227,6 +1354,38 @@
         "stallGain": { "description": "Too little gain for a stalling turn, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 }
       }
     },
+    "PhysicsHulls": {
+      "title": "PhysicsHulls",
+      "description": "A boat of two hulls, a catamaran: one body whose stability, foils and drag take its hulls' values. A monohull has a spacing of 0, one rudder and one board, and a flying drag of 1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hullSpacing", "liftHeel", "flyingDrag", "rudderCount", "boardCount", "rudderSpread", "rudderLiftHeel", "rudderClearHeel"],
+      "properties": {
+        "hullSpacing": { "description": "Between the hulls' centrelines, in m: 0 for one hull. The drawing, the sea, the wake and the contacts read it: the boat heels about its lee hull.", "type": "number", "minimum": 0, "maximum": 30 },
+        "liftHeel": { "description": "The heel at which the windward hull leaves the water, in degrees: it is clear 5° later, its rudder and lateral plane with it.", "type": "number", "minimum": 0, "maximum": 45 },
+        "flyingDrag": { "description": "The drag area's share with the windward hull clear: one hull at twice the load has less wetted area than two.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "rudderCount": { "description": "Rudders, each the one rudder's lift and drag: 1, or 2, one on each hull of a boat of two hulls, or a pair either side of one hull's centreline (rudderSpread).", "type": "number", "minimum": 1, "maximum": 2 },
+        "boardCount": { "description": "Boards, or hulls' lateral planes, each the one board's lift and drag: 1, or 2 on a boat of two hulls.", "type": "number", "minimum": 1, "maximum": 2 },
+        "rudderSpread": { "description": "Each of one hull's two rudders' stock off the centreline, in m: 0 for a rudder on the centreline, and on a boat of two hulls, whose rudders are on its hulls.", "type": "number", "minimum": 0, "maximum": 5 },
+        "rudderLiftHeel": { "description": "On one hull with two rudders, the heel at which the windward blade's root leaves the water in still water, in degrees: from it the blade's share of the steering falls. 0 for any other boat.", "type": "number", "minimum": 0, "maximum": 90 },
+        "rudderClearHeel": { "description": "On one hull with two rudders, the heel at which the windward blade's tip leaves the water, in degrees: from it only the lee blade steers. 0 for any other boat.", "type": "number", "minimum": 0, "maximum": 90 }
+      }
+    },
+    "PhysicsPitch": {
+      "title": "PhysicsPitch",
+      "description": "Pitch from the rig: the sails' drive, high above the centre of gravity, and the hull's resistance below it pitch the bow down, and the sailor steps aft to hold it up. Past bowBuryPitch the bows bury: their spring weakens and their drag grows; past pitchpoleAngle the sailor is thrown off over the bow. None where rigPitch is 0, the rest unread: the pitch is the waves' alone.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rigPitch", "bowBuryPitch", "bowBuryRestoring", "bowBuryDrag", "pitchpoleAngle", "aftReach"],
+      "properties": {
+        "rigPitch": { "description": "1 where the rig pitches the hull, else 0.", "type": "number", "minimum": 0, "maximum": 1 },
+        "bowBuryPitch": { "description": "The trim, bow down off the water's surface, at which the lee bow's deck meets the water, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "bowBuryRestoring": { "description": "The share of the pitch spring's slope left past bowBuryPitch.", "type": "number", "minimum": 0, "maximum": 1 },
+        "bowBuryDrag": { "description": "The hull's drag area grows by this share of itself for each degree past bowBuryPitch.", "type": "number", "minimum": 0, "maximum": 10 },
+        "pitchpoleAngle": { "description": "Past this trim, bow down, the sailor is thrown off over the bow, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "aftReach": { "description": "How far aft of the helm's place the sailor steps to hold the bow up, in m.", "type": "number", "minimum": 0, "maximum": 10 }
+      }
+    },
     "World": {
       "title": "World",
       "description": "How a world is made from its seed, and how a boat meets its ground.",
@@ -1262,7 +1421,9 @@
         "flora",
         "score",
         "chart",
-        "instruments"
+        "instruments",
+        "courses",
+        "committee"
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
@@ -1317,7 +1478,9 @@
         "flora": { "$ref": "#/$defs/WorldFlora" },
         "score": { "$ref": "#/$defs/WorldScore" },
         "chart": { "$ref": "#/$defs/WorldChart" },
-        "instruments": { "$ref": "#/$defs/Instruments" }
+        "instruments": { "$ref": "#/$defs/Instruments" },
+        "courses": { "$ref": "#/$defs/WorldCourses" },
+        "committee": { "$ref": "#/$defs/Committee" }
       }
     },
     "WorldChart": {
@@ -1522,25 +1685,25 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Its name in the menu's switches.", "type": "string", "minLength": 1, "maxLength": 60 },
-        "on": { "description": "What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, or a sailor the player follows setting sail.", "type": "string", "enum": ["charted-own", "charted-great", "falls-coming", "falls-soon", "new-world", "gale-warned", "followed-sailed"] },
-        "before": { "description": "For a notice of the world's end near: the times before the end it is raised at, in minutes.", "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1440 } },
+        "on": { "description": "What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, a certificate earned, the course the player set reached, a shipmate sailing to the player, the player alongside a boat they sailed to, or a course to a boat ended.", "type": "string", "enum": ["charted-own", "charted-great", "falls-coming", "falls-soon", "new-world", "gale-warned", "followed-sailed", "harbour-race", "race-soon", "task-done", "certificate-earned", "course-reached", "shipmate-course", "course-alongside", "course-ended"] },
+        "before": { "description": "For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.", "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1440 } },
         "level": { "description": "Passive notices are for the player's leisure; active ones for now.", "type": "string", "enum": ["passive", "active"] },
         "switchable": { "description": "The player may switch it off.", "type": "boolean" },
         "stays": { "description": "How long it stays unless dismissed, in s.", "type": "number", "minimum": 1, "maximum": 60 },
-        "text": { "description": "Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), and for a gale warning {wind}, {when} and {where} are filled in.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "text": { "description": "Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), for a gale warning {wind}, {when} and {where}, and for a certificate {cert} (its name), {task} (the task's), {done} and {of} (the tasks done of those it needs) and {boats} (the boats it opens, as a sentence opens) are filled in.", "type": "string", "minLength": 1, "maxLength": 200 },
         "folded": { "description": "Its words for several at once: {count} is filled in.", "type": "string", "minLength": 1, "maxLength": 200 }
       }
     },
     "News": {
       "title": "News",
-      "description": "The news sheet: its columns, and how its items are folded and paged.",
+      "description": "The news: a daily edition of chosen stories, its columns, and the kinds of story with their scores.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["fold", "page", "columns"],
+      "required": ["columns", "edition", "stories"],
       "properties": {
-        "fold": { "description": "A sailor's places charted within this of an island's item are folded into it, in minutes.", "type": "number", "minimum": 0, "maximum": 1440 },
-        "page": { "description": "Items to a page.", "type": "integer", "minimum": 1, "maximum": 200 },
-        "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NewsColumn" } }
+        "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NewsColumn" } },
+        "edition": { "$ref": "#/$defs/NewsEdition" },
+        "stories": { "description": "The kinds of story, each written as a candidate with its score; the edition shows the best.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NewsStory" } }
       }
     },
     "NewsColumn": {
@@ -1552,7 +1715,52 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "title": { "description": "Its heading.", "type": "string", "minLength": 1, "maxLength": 60 },
-        "of": { "description": "What its items tell of: what is charted, or the world itself, its end.", "type": "string", "enum": ["charting", "world"] }
+        "of": { "description": "What its items tell of: the stories, or the world itself, its end.", "type": "string", "enum": ["charting", "world"] }
+      }
+    },
+    "NewsEdition": {
+      "title": "NewsEdition",
+      "description": "How a day's edition is chosen from the day's candidates.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stories", "shipmates", "ofKind", "recent", "giveWay", "ease", "falls", "aboard", "together", "run", "milestones"],
+      "properties": {
+        "stories": { "description": "The most stories on the front page.", "type": "integer", "minimum": 1, "maximum": 12 },
+        "shipmates": { "description": "The most stories in the reader's own box, about their shipmates, the sailors they follow and themselves.", "type": "integer", "minimum": 0, "maximum": 6 },
+        "ofKind": { "description": "The most stories of one kind on the front page.", "type": "integer", "minimum": 1, "maximum": 12 },
+        "recent": { "description": "How many editions back a sailor named in one gives way to one who was not.", "type": "integer", "minimum": 0, "maximum": 14 },
+        "giveWay": { "description": "A story about a sailor in the recent editions has its score times this.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "ease": { "description": "A story's score eases with its age through the day: halved after this many hours.", "type": "number", "exclusiveMinimum": 0, "maximum": 240 },
+        "falls": { "description": "A record at the falls: an approach survived within this of the lip, m, nearer than any boat's before it this world.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+        "aboard": { "description": "A crew in company: this many aboard, the skipper with them.", "type": "integer", "minimum": 2, "maximum": 30 },
+        "together": { "description": "A crew in company: each of them aboard this long, in minutes.", "type": "number", "minimum": 0, "maximum": 600 },
+        "run": { "description": "A run is a candidate for the day's longest from this distance, in nautical miles.", "type": "number", "minimum": 0, "maximum": 100 },
+        "milestones": { "$ref": "#/$defs/NewsMilestones" }
+      }
+    },
+    "NewsMilestones": {
+      "title": "NewsMilestones",
+      "description": "A sailor's milestones: each time their log's distance, worlds or places charted pass a multiple of these.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["distance", "worlds", "places"],
+      "properties": {
+        "distance": { "description": "Nautical miles sailed.", "type": "number", "minimum": 1, "maximum": 100000 },
+        "worlds": { "description": "Worlds sailed.", "type": "integer", "minimum": 1, "maximum": 1000 },
+        "places": { "description": "Places charted.", "type": "integer", "minimum": 1, "maximum": 100000 }
+      }
+    },
+    "NewsStory": {
+      "title": "NewsStory",
+      "description": "A kind of story: what makes it, and its score.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "of", "score"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "of": { "description": "What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better; a certificate earned.", "type": "string", "enum": ["great", "record", "life", "crew", "first", "run", "milestone", "charting", "course", "race", "trial", "certificate"] },
+        "score": { "description": "How interesting it is: the edition shows the highest first.", "type": "integer", "minimum": 0, "maximum": 100 },
+        "scores": { "description": "For a certificate earned: its score by the certificate, one for each in the certificates' order; score is for any it has no score for.", "type": "array", "minItems": 1, "maxItems": 10, "items": { "type": "integer", "minimum": 0, "maximum": 100 } }
       }
     },
     "WorldHazards": {
@@ -1731,7 +1939,8 @@
             "lagoon",
             "reef",
             "bar",
-            "wreck"
+            "wreck",
+            "beacon"
           ]
         },
         "count": {
@@ -1753,7 +1962,7 @@
         "worth": { "description": "What charting one is worth.", "type": "number", "minimum": 0, "maximum": 100 },
         "awash": { "description": "It lies awash: seen by the water breaking on it, within the chart's awash reach, not over the horizon.", "type": "boolean" },
         "water": { "description": "It is water: seen by looking into it, within the chart's water reach.", "type": "boolean" },
-        "news": { "description": "Its charting is an item of the news of its own; otherwise it is folded into its island's.", "type": "boolean" }
+        "news": { "description": "Its charting is an item of its own in the sheet a chart makes of itself, offline; online every charting is a candidate story of the day's news.", "type": "boolean" }
       }
     },
     "PlaceRig": {
@@ -1824,6 +2033,228 @@
           "minimum": 0,
           "maximum": 1
         }
+      }
+    },
+    "WorldCourses": {
+      "title": "WorldCourses",
+      "description": "Courses for races, made with the world: racing areas off Port Royal and island courses, and the checks a course passes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["areas", "margin", "depth", "mist", "site", "reach", "near", "tour", "ports", "beacon", "beacons", "minutes", "narrows", "step", "beat", "beatLeg", "set", "lengths"],
+      "properties": {
+        "areas": { "$ref": "#/$defs/CourseAreas" },
+        "margin": { "description": "How far a course's way keeps from land and shoal water, m.", "type": "number", "minimum": 0, "maximum": 500 },
+        "depth": { "description": "Water under the deepest boat's keel along a way, m.", "type": "number", "minimum": 0, "maximum": 10 },
+        "mist": { "description": "No way runs further from the centre, nautical miles.", "type": "number", "minimum": 1, "maximum": 4.5 },
+        "site": { "$ref": "#/$defs/CourseSite" },
+        "reach": { "description": "The islands a course rounds lie within this of its site, nautical miles.", "type": "number", "minimum": 0.5, "maximum": 9 },
+        "near": { "description": "How many of the nearest islands a site rounds one at a time.", "type": "integer", "minimum": 1, "maximum": 100 },
+        "tour": { "description": "A tour's islands lie within this of each other, nautical miles.", "type": "number", "minimum": 0, "maximum": 9 },
+        "ports": { "description": "How many of the nearest other ports a site runs to.", "type": "integer", "minimum": 0, "maximum": 20 },
+        "beacon": { "description": "A reef or bar within this of a way gets a beacon, m.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "beacons": { "description": "The most beacons a course may need.", "type": "integer", "minimum": 0, "maximum": 20 },
+        "minutes": { "description": "A boat is offered a course whose expected time in the typical wind is within these, minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 600 } },
+        "narrows": { "description": "Every narrows on a way is at least this many of a boat's lengths wide for it to be offered the course.", "type": "number", "minimum": 0, "maximum": 100 },
+        "step": { "description": "How often the narrows are sampled along a way, m.", "type": "number", "minimum": 4, "maximum": 500 },
+        "beat": { "description": "Of the sixteen winds, how many give the way a leg to beat up.", "type": "integer", "minimum": 0, "maximum": 16 },
+        "beatLeg": { "description": "The least leg that counts as a beat, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "set": { "description": "How many island courses a world has, the least it aims for and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 100 } },
+        "lengths": { "description": "A course from Port Royal is short below the first and long from the second, by the Jolly boat's expected minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 600 } }
+      }
+    },
+    "Committee": {
+      "title": "Committee",
+      "description": "The race committee's things in the sea: the committee boat, the pin buoy, the marks, the beacons, the signal flags and the signal gun's smoke.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["art", "reach", "mark", "boat", "gun", "dyes", "flags", "prizes"],
+      "properties": {
+        "art": {
+          "title": "CommitteeArt",
+          "description": "The committee's models: a glTF binary with the nodes committee-boat (with gun, muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern and number), pin-buoy (with flag-staff and lantern) and beacon-spar.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": { "model": { "$ref": "#/$defs/ArtPath" } }
+        },
+        "reach": { "description": "They are drawn within this of the camera, in m.", "type": "number", "minimum": 100, "maximum": 5000 },
+        "mark": { "description": "A mark's spar above the water, in m.", "type": "number", "minimum": 1, "maximum": 20 },
+        "boat": {
+          "title": "CommitteeBoat",
+          "description": "How the committee boat lies at her anchor.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sheer", "period", "scope"],
+          "properties": {
+            "sheer": { "description": "Her stern swings this far each way, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+            "period": { "description": "Over this, there and back, in s.", "type": "number", "minimum": 5, "maximum": 600 },
+            "scope": { "description": "Her anchor's cable, in m.", "type": "number", "minimum": 1, "maximum": 200 }
+          }
+        },
+        "gun": {
+          "title": "CommitteeGun",
+          "description": "The signal gun's smoke.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["puffs", "throw", "drag", "gathers", "rise", "slows", "size", "life", "reach"],
+          "properties": {
+            "puffs": { "description": "Puffs a report throws.", "type": "integer", "minimum": 1, "maximum": 64 },
+            "throw": { "description": "They leave the muzzle at this, in m/s.", "type": "number", "minimum": 0, "maximum": 100 },
+            "drag": { "description": "The air stops them over this, in s.", "type": "number", "minimum": 0.01, "maximum": 10 },
+            "gathers": { "description": "A puff gathers its rise over this, in s.", "type": "number", "minimum": 0.01, "maximum": 60 },
+            "rise": { "description": "A puff rises at this at most, in m/s.", "type": "number", "minimum": 0, "maximum": 20 },
+            "slows": { "description": "Its rise is halved after this, in s.", "type": "number", "minimum": 0.1, "maximum": 120 },
+            "size": { "description": "A puff's width at the muzzle and at its end, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 100 } },
+            "life": { "description": "A puff fades over this, in s.", "type": "number", "minimum": 1, "maximum": 300 },
+            "reach": { "description": "The smoke is drawn within this of the camera, in m.", "type": "number", "minimum": 100, "maximum": 5000 }
+          }
+        },
+        "dyes": {
+          "description": "The bunting's dyes, each by the letter a flag's rows name it with.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/SignalDye" }
+        },
+        "flags": {
+          "description": "The signal flags.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/SignalFlag" }
+        },
+        "prizes": {
+          "title": "Prizes",
+          "description": "What a sailor's races in a world show on the water while it lasts.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pennants", "spoons", "burgee", "gilded", "ran", "reach", "spoon", "cockade"],
+          "properties": {
+            "pennants": { "description": "A winner's pennants flown, the latest wins'.", "type": "integer", "minimum": 1, "maximum": 5 },
+            "spoons": { "description": "Wooden spoons hung from the stern, the latest.", "type": "integer", "minimum": 1, "maximum": 3 },
+            "burgee": { "description": "Races sailed in the world for the racing burgee.", "type": "integer", "minimum": 1, "maximum": 100 },
+            "gilded": { "description": "Races sailed in the world for the gilded burgee.", "type": "integer", "minimum": 1, "maximum": 100 },
+            "ran": { "description": "Races run in the world for the committee's flag.", "type": "integer", "minimum": 1, "maximum": 100 },
+            "reach": { "description": "They are drawn within this of the camera, in m.", "type": "number", "minimum": 50, "maximum": 2000 },
+            "spoon": {
+              "title": "PrizeSpoon",
+              "description": "A carved wooden spoon on its lanyard.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["length", "lanyard", "colour"],
+              "properties": {
+                "length": { "description": "Its length, m.", "type": "number", "minimum": 0.05, "maximum": 1 },
+                "lanyard": { "description": "Its lanyard from the rail, m.", "type": "number", "minimum": 0.05, "maximum": 1 },
+                "colour": { "description": "Its wood.", "$ref": "#/$defs/Colour" }
+              }
+            },
+            "cockade": {
+              "title": "PrizeCockade",
+              "description": "The winner's cockade: a pleated rosette of ribbon.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["across", "ribbon", "button"],
+              "properties": {
+                "across": { "description": "Its width, m.", "type": "number", "minimum": 0.02, "maximum": 0.2 },
+                "ribbon": { "description": "Its ribbon.", "$ref": "#/$defs/Colour" },
+                "button": { "description": "Its middle's button.", "$ref": "#/$defs/Colour" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "SignalDye": {
+      "title": "SignalDye",
+      "description": "A dye of the bunting.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["letter", "name", "colour"],
+      "properties": {
+        "letter": { "description": "The letter a flag's rows name it by.", "type": "string", "pattern": "^[a-z]$" },
+        "name": { "type": "string", "minLength": 1 },
+        "colour": { "$ref": "#/$defs/Colour" }
+      }
+    },
+    "SignalFlag": {
+      "title": "SignalFlag",
+      "description": "A signal flag: what it signals, its cut and size, and its design.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "signal", "cut", "length", "hoist", "rows"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "signal": { "description": "What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin; or, flown by a sailor's boat for the world, a race won (in that race's colour), races sailed (the racing burgee, then the gilded) or races run (the committee's flag).", "enum": ["class", "preparatory", "recall", "postponement", "mark", "pin", "victory", "burgee", "gilded", "committee"] },
+        "boat": { "description": "The boat whose class it is, by the boat's id: a class pennant's.", "$ref": "#/$defs/Id" },
+        "cut": { "description": "Its cut: a flag, oblong; a pennant, tapering to a point; or a swallowtail, tapering a little and forked at the fly.", "enum": ["flag", "pennant", "swallowtail"] },
+        "length": { "description": "From the hoist to the fly, in m.", "type": "number", "minimum": 0.2, "maximum": 5 },
+        "hoist": { "description": "Its depth at the hoist, in m.", "type": "number", "minimum": 0.1, "maximum": 3 },
+        "rows": {
+          "description": "Its design: rows of dyes' letters from the head down, each from the hoist to the fly, all of one length.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "type": "string", "pattern": "^[a-z]{1,32}$" }
+        }
+      }
+    },
+    "CourseAreas": {
+      "title": "CourseAreas",
+      "description": "Racing areas: circles of open water off Port Royal where a buoy course is laid to the wind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["within", "radius", "most", "apart", "margin", "mouth", "fan", "longest", "step", "turn"],
+      "properties": {
+        "within": { "description": "Every part of an area lies within this of Port Royal's centre, nautical miles.", "type": "number", "minimum": 0.1, "maximum": 4 },
+        "radius": { "description": "An area's radius, m.", "type": "number", "minimum": 50, "maximum": 2000 },
+        "most": { "description": "The most areas a world has.", "type": "integer", "minimum": 1, "maximum": 16 },
+        "apart": { "description": "Areas' centres lie at least this far apart, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "margin": { "description": "An area keeps this far from land and shoal water, m.", "type": "number", "minimum": 0, "maximum": 500 },
+        "mouth": { "description": "An area keeps this far from Port Royal's harbour mouth, m.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "fan": { "description": "An area keeps this far from the start's fan, m.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "longest": { "description": "Boats no longer than this race in the areas; their water is deep enough for each, m.", "type": "number", "minimum": 1, "maximum": 100 },
+        "step": { "description": "Candidates every this far out, m.", "type": "number", "minimum": 5, "maximum": 500 },
+        "turn": { "description": "Candidates every this many degrees round.", "type": "number", "minimum": 1, "maximum": 90 }
+      }
+    },
+    "CourseSite": {
+      "title": "CourseSite",
+      "description": "Where an island course's start and finish lie off a port.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "turn", "room", "fan"],
+      "properties": {
+        "from": { "description": "The nearest a site is to its port's waterfront, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "to": { "description": "The furthest, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "turn": { "description": "How far off its port's way out a site may lie, degrees.", "type": "number", "minimum": 0, "maximum": 180 },
+        "room": { "description": "Clear water round a site, m: room for the line and the start behind it.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "fan": { "description": "A site keeps this far from the start's fan, m.", "type": "number", "minimum": 0, "maximum": 2000 }
+      }
+    },
+    "Polars": {
+      "title": "Polars",
+      "description": "The boats' polars: each boat's steady speed in flat water by the true wind's speed and angle, written by tools/polar.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["winds", "angles", "boats"],
+      "properties": {
+        "winds": { "description": "The true winds, knots 10 m up, evenly spaced, ascending.", "type": "array", "minItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
+        "angles": { "description": "The angles off the true wind, degrees, evenly spaced, ascending.", "type": "array", "minItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } },
+        "boats": { "type": "array", "items": { "$ref": "#/$defs/BoatPolar" } }
+      }
+    },
+    "BoatPolar": {
+      "title": "BoatPolar",
+      "description": "One boat's polar.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boat", "speed", "up", "down"],
+      "properties": {
+        "boat": { "description": "The boat's id.", "type": "string", "minLength": 1 },
+        "speed": { "description": "Her speed through the water, knots: a row for each wind, a column for each angle, 0 where she cannot sail.", "type": "array", "items": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 100 } } },
+        "up": { "description": "For each wind, her best angle up the wind, degrees, and the speed she makes good toward it there, knots.", "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } } },
+        "down": { "description": "For each wind, her best angle down the wind, degrees, and the speed she makes good away from it, knots.", "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } } }
       }
     },
     "WorldPlaces": {
@@ -4464,6 +4895,7 @@
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
         "name": { "type": "string" },
         "plural": { "description": "Its name for more than one.", "type": "string" },
+        "news": { "description": "Meeting it is rare enough to be a story of the day's news.", "type": "boolean" },
         "form": { "$ref": "#/$defs/LifeForm" },
         "family": { "$ref": "#/$defs/LifeFamily" },
         "path": { "$ref": "#/$defs/LifePath" },

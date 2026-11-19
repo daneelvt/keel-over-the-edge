@@ -36,8 +36,11 @@ credential.
 - [ ] Push protection for yourself on
 - [ ] No classic personal access tokens; any token fine-grained, for this
       repository only, short-lived
-- [ ] Installed apps: Renovate only, on this repository only; no deploy keys,
-      no webhooks
+- [ ] Installed apps: Renovate, and the contributor agreement's own App
+      (**Keel Over the Edge CLA**, App ID 5756060, infra/MANUAL-STEPS.md
+      section 15), each on this repository only; no deploy keys, no
+      webhooks but the App's own. The App is public, so that anyone may
+      sign in through it; others' installations of it are passed over
 - [ ] Renovate's mode for this repository, in Mend's Developer Portal
       (developer.mend.io, signed in with GitHub): **Interactive**. Installed
       on all of an account's repositories, the hosted app starts in Silent
@@ -82,8 +85,13 @@ The tailnet policy is written from `infra/tailnet/policy.hujson` by the
       infra/MANUAL-STEPS.md section 11's check, and nothing else;
       `keel-cluster`: `/keel/DB_PASSWORD`, `/keel/DB_READER_PASSWORD`,
       `/keel/DB_GRAFANA_PASSWORD`, `/monitoring/DB_GRAFANA_PASSWORD`,
-      `/monitoring/GRAFANA_ADMIN_PASSWORD` and `/cloudflared/TUNNEL_TOKEN`,
-      all written by `accounts`, and nothing else
+      `/monitoring/GRAFANA_ADMIN_PASSWORD`, `/cloudflared/TUNNEL_TOKEN`,
+      `/keel/DB_AGREEMENT_PASSWORD`, `/keel/ADDRESS_KEY`,
+      `/keel/TURNSTILE_SITEKEY` and `/keel/TURNSTILE_SECRET`, all written by
+      `accounts`; and in
+      `/keel-agreement/`, put there by hand, `GITHUB_APP_PRIVATE_KEY`,
+      `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_SECRET` and
+      `CONTACT_EMAIL` (infra/MANUAL-STEPS.md section 15); nothing else
 - [ ] `eso-prod`'s client secrets: the one in use alone (an old one is
       revoked once `machine apply` has placed the new)
 
@@ -98,6 +106,9 @@ change says they are as the repository says. The rest is checked here.
       `keelovertheedge.com`; no token under **My Profile → API Tokens**
 - [ ] **Zero Trust → Networks → Tunnels**: `keel-prod` alone, Healthy,
       with two connectors
+- [ ] **Turnstile**: one widget, `play`, for `play.keelovertheedge.com`
+      alone, mode Managed, no pre-clearance; made by `accounts`, so a
+      second `accounts plan` shows no change to it
 - [ ] The zone: DNSSEC **Active** (`dig DS keelovertheedge.com +short`
       answers); no record but those `accounts` made
 - [ ] **Members**: the owner alone
@@ -131,6 +142,39 @@ each push while it stays.
 - [ ] `render`: the browser tests that `pr.render` leaves to the night
       (`render-nightly.yaml`). Not a required check: of the browser tests
       the `main` ruleset requires `pr-render` alone.
+
+And the one label that runs no workflow:
+
+- [ ] `agreement-checked`: the owner has checked, after asking, the authors
+      of a pull request that the contributor agreement's check cannot match
+      to a GitHub account (an unlinked e-mail, a co-author by a private
+      address, a bot that cannot sign); `pr-agreement` then passes them.
+      People with a GitHub account still sign. Only collaborators can label.
+
+## Pull requests from outside
+
+Anyone may open a pull request (`pull_request_creation_policy` in
+`repository.json`). Before it is merged, everyone who wrote it has signed
+the contributor agreement: the `main` ruleset requires `pr-agreement`,
+posted by the agreement's App alone (its `integration_id`; a test holds it
+to the App ID the keeper runs with).
+
+- [ ] Settings → Actions → General → **Fork pull request workflows from
+      outside collaborators**: "Require approval for all external
+      contributors" (`actions.json` keeps it too): every workflow run on an
+      outsider's pull request waits for the owner, on every push.
+- [ ] Settings → Moderation options → **Reported content**: reports reach
+      the repository's admins (the code of conduct sends them there).
+- [ ] Settings → **Allow edits by maintainers** is the contributor's to
+      leave on; CONTRIBUTING.md asks them to.
+
+**Shutting the door again**, as in a flood of generated pull requests:
+Settings → Moderation options → **Interaction limits** → "Limit to prior
+contributors" or "Limit to repository collaborators", for 24 hours to six
+months, takes effect at once. For longer, set `pull_request_creation_policy`
+back to `collaborators_only` in `repository.json` and run `go run
+./tools/github -apply`. Either way, open pull requests stay open.
+CONTRIBUTING.md says which pull requests are closed without review.
 
 ## Not available to this repository
 

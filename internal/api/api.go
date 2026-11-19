@@ -84,16 +84,21 @@ type Config struct {
 	Game http.Handler
 	// Page, if not nil, is the game's built page, served at / and
 	// /assets/. Without it, as in development, another server serves the
-	// page and sends the rest here.
+	// page and sends the rest here. Its pages' policies are built from
+	// Origin, CheckOrigin and PolicyReport (policy.go).
 	Page *Page
+	// PolicyReport sends the pages' policies as reports only, and
+	// CheckOrigin, if not "", is the human check's origin, whose script
+	// and frame the game's page may load.
+	PolicyReport bool
+	CheckOrigin  string
 	// Chunks, if not nil, are the world's chunks, served at their
 	// addresses under /w/; Models its islands' models.
 	Chunks *Chunks
 	Models *Models
-	// News, if not nil, is the world's news, served a page of NewsPage
-	// items at a time.
-	News     NewsSource
-	NewsPage int
+	// News, if not nil, is the world's news: a day's edition, and the
+	// stories naming a sailor, which a log's answer carries too.
+	News NewsSource
 	// Notices, if not nil, keeps an account's notices switched off, of
 	// NoticeKinds, the kinds that may be.
 	Notices     Notices
@@ -102,10 +107,13 @@ type Config struct {
 	// watch, the card about one, following, and the choice that lets
 	// others watch a human for a voyage.
 	Watch Watching
-	// Status, if not nil, is the game's status as last published, served
-	// at GET /api/status; Website is the origin whose pages may read it.
-	Status  func() *Status
-	Website string
+	// Ashore, if not nil, takes an account's boat out of the water at its
+	// player's word from the start screen: the game connection.
+	Ashore TakingOut
+	// Status, if not nil, is the game's status, served at GET /api/status
+	// behind Access, which must not be nil either for it to be served.
+	Status StatusSource
+	Access Access
 	// Sailing, if not nil, is sailing together's store: a month of birth
 	// given once, the Rules of the sea accepted, and skippers' links;
 	// Young stops an account whose player says they are under 13.
@@ -125,6 +133,14 @@ type Config struct {
 	Chat Chatting
 	// Shipmates, if not nil, is shipmates: the list, offers and the rest.
 	Shipmates Shipmating
+	// Logs, if not nil, are the sailors' logs.
+	Logs Logs
+	// Races, if not nil, are the world's races ashore.
+	Races Races
+	// NewSailors, if not nil, are the limits on making a new sailor: how
+	// many one address may make in a day, and the human check. Without
+	// them, as in most tests, neither applies.
+	NewSailors *NewSailors
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -150,14 +166,16 @@ var longLived = map[string]bool{"GET /ws": true}
 //
 //  1. the request ID and the access log, which learns the route and the
 //     account from the steps below
-//  2. the client's address (not yet: players reach the server directly)
+//  2. the client's address: Cloudflare's CF-Connecting-IP when it holds
+//     an address, else the connection's own (Address); never logged
 //  3. read and write deadlines, except on long-lived routes
 //  4. a limit on the body's size
 //  5. cross-origin protection: a browser's unsafe request from another
 //     origin is refused, but at the routes AI apps call (their token,
 //     revocation and registration), which read no cookie
 //  6. the session: the account the cookie names, if any
-//  7. limits on how often a client may ask (not yet)
+//  7. limits on how often a client may ask, each in its route's handler:
+//     new sailors from one address, notices, links, the page's reports
 //
 // A path with dot segments or repeated slashes is answered 404 before any of
 // it.
@@ -183,14 +201,21 @@ func Handler(cfg Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/version", versionHandler(cfg.Version))
 	required := func(h http.HandlerFunc) http.Handler { return auth.Required(writeError, h) }
-	signed := func(h http.HandlerFunc) http.Handler { return auth.Signed(writeError, h) }
+	// signed passes a request without a session to its own answer, if
+	// given, else answers it 401.
+	signed := func(h http.HandlerFunc, none ...http.HandlerFunc) http.Handler {
+		if len(none) > 0 {
+			return auth.SignedOr(none[0], h)
+		}
+		return auth.Signed(writeError, h)
+	}
 	mux.HandleFunc("POST /account/begin", a.beginAccount)
 	mux.HandleFunc("POST /account/finish", a.finishAccount)
 	mux.HandleFunc("POST /signin/begin", a.beginSignIn)
 	mux.HandleFunc("POST /signin/finish", a.finishSignIn)
 	mux.HandleFunc("POST /recovery", a.recover)
 	mux.Handle("POST /logout", signed(a.logout))
-	mux.Handle("GET /api/me", signed(a.me))
+	mux.Handle("GET /api/me", signed(a.me, a.noMe))
 	mux.Handle("GET /api/account", required(a.account))
 	mux.Handle("POST /api/account/passkeys/begin", signed(a.beginPasskey))
 	mux.Handle("POST /api/account/passkeys/finish", signed(a.finishPasskey))
@@ -222,11 +247,17 @@ func Handler(cfg Config) http.Handler {
 	if cfg.Notices != nil {
 		mux.Handle("POST /api/me/notices", required(a.setNotices))
 	}
+	if cfg.Ashore != nil {
+		mux.Handle("POST /api/me/ashore", required(a.takeOut))
+	}
 	if cfg.Sailing != nil {
 		a.registerSailing(mux, required)
 	}
 	a.registerChat(mux, required)
 	a.registerShipmates(mux, required)
+	a.registerLogs(mux, required)
+	a.registerRaces(mux, required)
+	a.registerClientReports(mux, required)
 	if cfg.Watch != nil {
 		mux.Handle("GET /api/watch", required(a.watchList))
 		mux.Handle("GET /api/watch/sailor", required(a.watchSailor))
@@ -236,16 +267,16 @@ func Handler(cfg Config) http.Handler {
 		mux.Handle("POST /api/me/spectators", required(a.setSpectators))
 	}
 	if cfg.News != nil {
-		mux.Handle(newsRoute, newNews(cfg.News, cfg.NewsPage))
+		mux.Handle(newsRoute, required(a.newsEdition))
 	}
-	if cfg.Status != nil {
-		mux.Handle(statusRoute, statusHandler(cfg.Status, cfg.Website))
+	if cfg.Status != nil && cfg.Access != nil {
+		mux.Handle(statusRoute, accessed(cfg.Access, statusHandler(cfg.Status)))
 	}
 	if cfg.Game != nil {
 		mux.Handle("GET /ws", cfg.Game)
 	}
 	if cfg.Page != nil {
-		cfg.Page.register(mux)
+		cfg.Page.register(mux, PolicyOptions{Origin: cfg.Origin, Check: cfg.CheckOrigin, Report: cfg.PolicyReport})
 	}
 	if cfg.Chunks != nil {
 		mux.Handle(chunkRoute, cfg.Chunks.serve(cfg.Metrics))
@@ -275,7 +306,12 @@ func Handler(cfg Config) http.Handler {
 	}))
 
 	open := map[string]bool{}
-	for p := range openRoutes {
+	for p := range sessionless {
+		open[p] = true
+	}
+	// The routes behind Access read no session either: the website's
+	// Worker has none.
+	for p := range accessRoutes {
 		open[p] = true
 	}
 	if cfg.OAuth != nil {
@@ -287,6 +323,7 @@ func Handler(cfg Config) http.Handler {
 	h = cop.Handler(h)
 	h = bodyLimit(BodyLimit, h)
 	h = deadlines(mux, cfg.ReadTimeout, cfg.WriteTimeout, h)
+	h = clientAddress(h)
 	h = cleanPaths(h)
 	h = route(mux, h)
 	return obs.AccessLog(cfg.Log, h)
@@ -295,11 +332,38 @@ func Handler(cfg Config) http.Handler {
 // robotsRoute is robots.txt's route.
 const robotsRoute = "GET /robots.txt"
 
-// openRoutes are the routes besides the page's that need no session: what
-// they serve is the same for everyone who has the address. The
-// authorization server's routes need none either: an AI app's sign-in is
+// openRoutes are the routes that answer without a session, each with why.
+// Nothing of the game is served to anyone without an account unless there
+// is a reason it must be: TestOpenRoutes finds every route registered
+// without auth.Required or auth.Signed and fails on one not here, so
+// opening a route is always a decision made in review. The authorization
+// server's routes (oauth.Routes) are open too: an AI app's sign-in is
 // never the game's session.
-var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, newsRoute: true, statusRoute: true}
+var openRoutes = map[string]string{
+	"GET /{$}":             "the page: the game must load for anyone to sign in",
+	"GET /{file}":          "the page's own files at the top, its icons and manifest",
+	"GET /assets/{file}":   "the page's built assets",
+	"GET /api/version":     "the page's build and catalog, which a page asks before it signs in to know it is current",
+	noticePageRoute:        "the notice page: anyone, with an account or not, may tell of illegal content (the DSA's notice and action)",
+	"POST /api/notice":     "the notice page's form, sent by anyone, limited by address",
+	"POST /account/begin":  "making a sailor and their passkey: there is no session before it",
+	"POST /account/finish": "making a sailor and their passkey: there is no session before it",
+	"POST /signin/begin":   "signing in with a passkey",
+	"POST /signin/finish":  "signing in with a passkey",
+	"POST /recovery":       "signing in with the recovery code",
+	"GET /ws":              "the game connection: it reads the session itself, to count those it refuses",
+	chunkRoute:             "the world's chunks: capability addresses handed only to a signed-in player over the game connection, cached once at the edge for everyone",
+	chunksRoute:            "every other address under /w/, answered not found",
+	modelRoute:             "the islands' models: capability addresses like the chunks', handed out over the game connection",
+	robotsRoute:            "robots.txt, which keeps crawlers off the game",
+}
+
+// sessionless are the open routes that read no session at all: what they
+// serve is the same for everyone who has the address, and the edge may
+// keep it for everyone, so their answers carry no cookie. The page's
+// routes (pageRoutes) read none either, so the page loads even when the
+// database cannot be asked.
+var sessionless = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true}
 
 // session reads the session for every route but the page's and the open
 // ones: the page is the same for everyone, and loads even when the database
@@ -329,6 +393,8 @@ type api struct {
 	links linkTimes
 	// notices are the notices from each address in the last hour.
 	notices notices
+	// reports are the page's reports' limits and counts.
+	reports clientReports
 }
 
 func versionHandler(v Version) http.Handler {

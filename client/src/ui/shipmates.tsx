@@ -3,8 +3,9 @@
 // Shipmates, the screens' parts of them. The panel over the sea: offers
 // waiting first, each with Accept and ✕ (declined without a word to
 // them); then the shipmates, each with where they are and Message, and
-// behind the row's ⋯ asking to come aboard the boat they skipper,
-// watching them at sea, ending, blocking and reporting; then the recent
+// behind the row's ⋯ sailing to them at sea (their boat the course, or
+// for the one sailed to, clearing it), asking to come aboard the boat
+// they skipper, watching them at sea, ending, blocking and reporting; then the recent
 // crew of the last day, with Be shipmates while it may be offered; and
 // "Appear offline" at its foot. Ending, a block and leaving the water to
 // watch ask once, in the row's place. A thread with one shipmate: its
@@ -22,12 +23,15 @@ import { Portrait } from '../account/portraits';
 import type { RecentCrew, Shipmate, ShipmateOffer } from '../account/shipmatesapi';
 import { catalog } from '../catalog';
 import { lookOf } from '../catalog/looks';
+import { CLEAR_COURSE, SAIL_TO } from '../chart/coursewords';
 import { LineRow, useKeyboard } from './chat';
 import { type ChatLine, lineLength, lineOf } from './chatlog';
 import { BLOCK, blockWords, CANCEL, CLOSE, leftText, REPORT, SEND } from './chatwords';
 import type { DeckView } from './decklazy';
 import { actionName, DISMISS, MORE, moreFor, plain, type Words } from './deckwords';
+import { openLog, THEIR_LOG } from './loglazy';
 import { PlayerText } from './player';
+import { sailTo } from './sailto';
 import type { ThreadNote } from './shipmatelog';
 import { nameOf, REFRESH_EVERY, type ShipmateAsk, type ShipmatesView } from './shipmatesview';
 import {
@@ -366,6 +370,20 @@ export function ShipmatesPanel({ deck, view }: { deck: DeckView; view: Shipmates
 
   const shipmateRow = (s: Shipmate) => {
     const more: { words: string; act: () => void }[] = [];
+    // Their boat as the course, while they are at sea and the player's own
+    // compass is shown; the one sailed to, cleared.
+    const host = sailTo();
+    if (host?.is(s.id)) {
+      more.push({ words: CLEAR_COURSE, act: () => host.clear() });
+    } else if (host !== null && s.presence === 'sea') {
+      more.push({
+        words: SAIL_TO,
+        act: () => {
+          close();
+          host.sail(s.id, s.name, false);
+        },
+      });
+    }
     if (s.skipper) {
       more.push({
         words: ASK_ABOARD,
@@ -389,6 +407,13 @@ export function ShipmatesPanel({ deck, view }: { deck: DeckView; view: Shipmates
       });
     }
     more.push(
+      {
+        words: THEIR_LOG,
+        act: () => {
+          close();
+          openLog({ kind: 'sailor', name: s.name });
+        },
+      },
       { words: NO_LONGER, act: () => ask(s.id, 'end') },
       { words: BLOCK, act: () => ask(s.id, 'block') },
       { words: REPORT, act: () => report(s.id, s.name) },
@@ -439,6 +464,13 @@ export function ShipmatesPanel({ deck, view }: { deck: DeckView; view: Shipmates
             open={opened === `recent-${r.id}`}
             toggle={() => toggle(`recent-${r.id}`)}
             keys={[
+              {
+                words: THEIR_LOG,
+                act: () => {
+                  close();
+                  openLog({ kind: 'sailor', name: r.name });
+                },
+              },
               { words: BLOCK, act: () => ask(r.id, 'block') },
               { words: REPORT, act: () => report(r.id, r.name) },
             ]}

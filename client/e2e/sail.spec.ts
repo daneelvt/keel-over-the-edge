@@ -2,8 +2,9 @@
 
 // Sailing in a real browser, on each back end: the page steps the physics
 // module and gets the module's own bits; two thumbs sail at once; the
-// keyboard steers; the boat capsizes and the sailor rights it; a frame the
-// cap skips leaves the picture; every new material is the factory's; the
+// keyboard steers; the boat capsizes and the sailor rights it; the boat in
+// view changing kind takes the sailor's look last told, a machine watched
+// or the own again; a frame the cap skips leaves the picture; every new material is the factory's; the
 // pictures match their references; sound starts on a tap and stops while
 // the page is hidden; and the frame allocates nothing that stays, with the
 // sea's birds in view.
@@ -19,7 +20,11 @@ import { decodePng, openScene, picture, pictureDifference } from './helpers';
 
 const catalog = JSON.parse(
   readFileSync(new URL('../src/catalog/catalog.gen.json', import.meta.url), 'utf8'),
-) as { boats: { physics: BoatPhysics }[]; weather: Weather; world: World };
+) as {
+  boats: { physics: BoatPhysics; fleet: string; art: { sailorClips?: string[] } }[];
+  weather: Weather;
+  world: World;
+};
 const wasm = readFileSync(new URL('../src/predict/physics.wasm', import.meta.url));
 
 test('the boat gains speed on a beam reach, with the module’s own bits', async ({ page }) => {
@@ -284,6 +289,50 @@ test('a machine sailor’s boat carries its machine, which sails as a sailor doe
   expect(Math.max(...r.glow) - Math.min(...r.glow)).toBeGreaterThan(0.05);
   // Back to a person's boat, the person is aboard again.
   expect(r.after?.machine).toBe(false);
+});
+
+test('the boat in view changing kind takes the look told: a machine watched, then the own sailor again', async ({
+  page,
+}) => {
+  // Every sailor's own boat, and the account's drawn with a cruising
+  // yacht's clips.
+  const jolly = catalog.boats.findIndex((b) => b.fleet === 'sailor');
+  const yacht = catalog.boats.findIndex(
+    (b) => b.fleet === 'account' && b.art.sailorClips?.includes('cruiser') === true,
+  );
+  expect(jolly).toBeGreaterThanOrEqual(0);
+  expect(yacht).toBeGreaterThanOrEqual(0);
+  await openScene(page);
+  const r = await page.evaluate(
+    async ({ jolly, yacht }) => {
+      const k = globalThis.keel;
+      // Sailing a yacht, a machine sailor's jolly boat watched: the look
+      // told while the yacht is in view, then the jolly boat brought into
+      // view, as the server tells its kind.
+      await k.useBoat(yacht);
+      const own = k.lookDrawn();
+      await k.machineAboard(true);
+      await k.useBoat(jolly);
+      const watched = k.lookDrawn();
+      // Sail again: the own look told with the jolly boat in view, then the
+      // yacht brought back.
+      await k.machineAboard(false);
+      await k.useBoat(yacht);
+      const back = k.lookDrawn();
+      // The look told while the kind is still being brought into view.
+      const changing = k.useBoat(jolly);
+      await k.machineAboard(true);
+      await changing;
+      const told = k.lookDrawn();
+      await k.machineAboard(false);
+      return { own, watched, back, told };
+    },
+    { jolly, yacht },
+  );
+  expect(r.own).toMatchObject({ machine: false, mark: false });
+  expect(r.watched).toMatchObject({ machine: true, mark: true });
+  expect(r.back).toMatchObject({ machine: false, mark: false });
+  expect(r.told).toMatchObject({ machine: true, mark: true });
 });
 
 test('capsized, the sailor treads water off the high side, clear of the hull', async ({ page }) => {

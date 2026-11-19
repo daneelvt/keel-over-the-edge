@@ -268,6 +268,44 @@ func TestMayBeShipmates(t *testing.T) {
 	}
 }
 
+// TestMayFind: a shipmate's boat is found by a shipmate of their band,
+// neither blocking the other, while they are not appearing offline; never
+// across the bands, by a machine sailor or of one.
+func TestMayFind(t *testing.T) {
+	ann := Speaker{Account: [16]byte{1}, Human: [16]byte{1}, Band: Adult}
+	bob := Speaker{Account: [16]byte{2}, Human: [16]byte{2}, Band: Adult}
+	if !MayFind(ann, bob, true, false) {
+		t.Fatal("a shipmate not found")
+	}
+	offline := bob
+	offline.Offline = true
+	teen := bob
+	teen.Band = Teen
+	machine := bob
+	machine.Machine = true
+	for _, c := range []struct {
+		name               string
+		seeker, shipmate   Speaker
+		shipmates, blocked bool
+	}{
+		{"not shipmates", ann, bob, false, false},
+		{"a block", ann, bob, true, true},
+		{"appearing offline", ann, offline, true, false},
+		{"across the bands", ann, teen, true, false},
+		{"a machine sailor", ann, machine, true, false},
+		{"by a machine sailor", machine, ann, true, false},
+	} {
+		if MayFind(c.seeker, c.shipmate, c.shipmates, c.blocked) {
+			t.Errorf("%s: found", c.name)
+		}
+	}
+	// The seeker's appearing offline hides nothing of the other.
+	ann.Offline = true
+	if !MayFind(ann, bob, true, false) {
+		t.Error("a seeker appearing offline found nobody")
+	}
+}
+
 // TestShipmatesTies: shipmates both ways at once, ended both ways, and
 // forgotten with an account; a line between shipmates is delivered only
 // with shipmates' messages on.

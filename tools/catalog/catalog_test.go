@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,7 @@ var validBoats = `boats:
     name: Test boat
     description: A boat for tests
     capacity: 2
+    racers: 12
     stations:
       - { at: [0.55, 0.3, 0.4], pose: seated, facing: 270 }
       - { at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }
@@ -45,10 +47,10 @@ const (
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors   = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    habit: tests\n    hair: colours\n    versions:\n      - id: test-version\n        name: version\n        art:\n          model: sailors/test.deck.glb\n          far: sailors/test.far.glb\n          close: sailors/test.glb\n          clips: sailors/test.clips.glb\n          portrait: sailors/test.portrait.avif\n          portraitFallback: sailors/test.portrait.webp\n          portraitMask: sailors/test.portrait-mask.webp\n          ink: sailors/test.ink.webp\n" + validOptions + validMachine
+	validSailors   = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    habit: tests\n    hair: colours\n    versions:\n      - id: test-version\n        name: version\n        art:\n          model: sailors/test.deck.glb\n          far: sailors/test.far.glb\n          close: sailors/test.glb\n          clips: sailors/test.clips.glb\n          portrait: sailors/test.portrait.avif\n          portraitFallback: sailors/test.portrait.webp\n          portraitMask: sailors/test.portrait-mask.webp\n          ink: sailors/test.ink.webp\n          cockade: {at: [0.1, 1.6, 0.1], facing: [1, 0, 0], inked: [0.7, 0.3]}\n          pendant: {at: [0, 1.25, 0.15], facing: [0, 0.3, 0.95], inked: [0.45, 0.88]}\n" + validOptions + validMachine
 	validBoatLooks = "boatLooks:\n  paints:\n    - {id: test-paint, name: paint, colour: \"#e9e2d0\"}\n  cloths:\n    - {id: test-cloth, name: cloth, colour: \"#efe7d2\", ink: \"#2b2622\"}\n  lettering: \"#c9a447\"\n  numbers: 9999\n"
 	validOptions   = "sailorOptions:\n  skins:\n    - {id: test-skin, name: skin, colour: \"#cda385\"}\n  hairs:\n    - {id: test-hair, name: hair, colour: \"#654a37\"}\n  greys:\n    - {id: test-grey, name: grey, colour: \"#817b76\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9b2226\"}\n"
-	validMachine   = "machine:\n  habit: tests\n  lamp: \"#ffb347\"\n  versions:\n    - id: test-machine\n      name: version\n      art:\n        model: sailors/m.deck.glb\n        far: sailors/m.far.glb\n        close: sailors/m.glb\n        clips: sailors/m.clips.glb\n        portrait: sailors/m.portrait.avif\n        portraitFallback: sailors/m.portrait.webp\n        portraitMask: sailors/m.portrait-mask.webp\n        ink: sailors/m.ink.webp\n  finishes:\n    - {id: test-finish, name: finish, colour: \"#808080\"}\n"
+	validMachine   = "machine:\n  habit: tests\n  lamp: \"#ffb347\"\n  versions:\n    - id: test-machine\n      name: version\n      art:\n        model: sailors/m.deck.glb\n        far: sailors/m.far.glb\n        close: sailors/m.glb\n        clips: sailors/m.clips.glb\n        portrait: sailors/m.portrait.avif\n        portraitFallback: sailors/m.portrait.webp\n        portraitMask: sailors/m.portrait-mask.webp\n        ink: sailors/m.ink.webp\n        cockade: {at: [0.1, 1.3, 0.1], facing: [0, 0, 1], inked: [0.7, 0.8]}\n        pendant: {at: [0, 1.25, 0.12], facing: [0, 0.3, 0.95], inked: [0.47, 0.88]}\n  finishes:\n    - {id: test-finish, name: finish, colour: \"#808080\"}\n"
 	sailorsPath    = "shared/catalog/sailors.yaml"
 	weatherPath    = "shared/catalog/weather.yaml"
 	skyPath        = "shared/catalog/sky.yaml"
@@ -81,6 +83,51 @@ func glb(nodes ...string) string {
 	out = binary.LittleEndian.AppendUint32(out, uint32(len(body)))
 	out = binary.LittleEndian.AppendUint32(out, glbJSON)
 	return string(append(out, body...))
+}
+
+// glbWith is a glTF binary holding only its JSON: nodes of the given names,
+// and nodes of the given names with the given data.
+func glbWith(names []string, extras map[string]string) string {
+	nodes := make([]string, 0, len(names)+len(extras))
+	for _, n := range names {
+		nodes = append(nodes, `{"name":"`+n+`"}`)
+	}
+	keys := make([]string, 0, len(extras))
+	for k := range extras {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		nodes = append(nodes, `{"name":"`+k+`","extras":`+extras[k]+`}`)
+	}
+	body := []byte(`{"nodes":[` + strings.Join(nodes, ",") + `]}`)
+	for len(body)%4 != 0 {
+		body = append(body, ' ')
+	}
+	out := binary.LittleEndian.AppendUint32(nil, glbMagic)
+	out = binary.LittleEndian.AppendUint32(out, 2)
+	out = binary.LittleEndian.AppendUint32(out, uint32(20+len(body)))
+	out = binary.LittleEndian.AppendUint32(out, uint32(len(body)))
+	out = binary.LittleEndian.AppendUint32(out, glbJSON)
+	return string(append(out, body...))
+}
+
+// yachtPlaces are the yacht's model's bench and lifelines, as its build
+// writes them: what her people's stations are checked against.
+var yachtPlaces = map[string]string{
+	"bench":     `{"bench":{"fore":0.35,"aft":2.75,"top":0.75,"inner":1.1303,"sole":0.33}}`,
+	"lifelines": `{"lifelines":{"heights":[0.32,0.62],"stanchions":[-4.4,-2.65,-1.25,0.2,1.75,3.25],"inboard":0.04,"fore":-4.75,"aft":4.6}}`,
+}
+
+// catamaranPlaces is the catamaran's hull's bridgedeck, which her people's
+// stations between her hulls stand on, and her seats, which they sit on.
+var catamaranPlaces = map[string]string{
+	"hull": `{"bridgedeck":{"fore":-4.45,"aft":4.75,"halfWidth":1.82,"underside":0.8,"top":3.46}}`,
+	"seats": `{"seats":{"helm":{"at":[-1.95,2.6,2.5],"facing":0,"along":[-3.25,-1.75]},` +
+		`"table":{"at":[1.75,1.6,3.35],"facing":270,"along":[2.15,4.05]},` +
+		`"tableFore":{"at":[0.85,1.6,2.15],"facing":180,"along":[0.55,1.75]},` +
+		`"beam":{"at":[0.85,1.6,4.2],"facing":0,"along":[-0.75,2.25]},` +
+		`"lounger":{"at":[-1.5,1.55,4.05],"facing":90,"along":[3.85,4.65]},"walk":[-0.21,1.15,3.05]}}`,
 }
 
 // realSky returns the real catalog's sky, which every fixture has unless
@@ -200,8 +247,8 @@ func fixture(t *testing.T, files map[string]string) string {
 			files[p] = "glTF"
 		}
 	}
-	// The real plants and the life's bodies.
-	for _, p := range []string{"art/flora/plants.glb", "art/life/swimmers.glb"} {
+	// The real plants, the life's bodies and the race committee's models.
+	for _, p := range []string{"art/flora/plants.glb", "art/life/swimmers.glb", "art/committee/committee.glb"} {
 		if files[p] == "" {
 			files[p] = "glTF"
 		}
@@ -234,6 +281,9 @@ func checkAll(root string) error {
 		return err
 	}
 	if err := checkLights(root, doc); err != nil {
+		return err
+	}
+	if err := checkPlaces(root, doc); err != nil {
 		return err
 	}
 	if err := checkWorld(doc); err != nil {
@@ -497,7 +547,92 @@ func TestRejects(t *testing.T) {
 			name: "a station to windward on another when the wind is on the other side",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
 				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.55, 0.3, 0.1], pose: seated, facing: 90, windward: true }", 1)},
-			want: "boats[0].stations[1]: to windward on the other side, within 0.45 m of stations[0]",
+			want: "boats[0].stations[1]: within 0.45 m of stations[0] with the weather to starboard",
+		},
+		{
+			name: "a station to leeward on another when the wind is on the other side",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.55, 0.3, 0.1], pose: seated, facing: 90, lee: true }", 1)},
+			want: "boats[0].stations[1]: within 0.45 m of stations[0] with the weather to port",
+		},
+		{
+			name: "a station both to windward and to leeward",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0, windward: true, lee: true }", 1)},
+			want: "boats[0].stations[1]: both to windward and to leeward",
+		},
+		{
+			name: "a station aloft above the lookout's eye",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [0, 2.5, -0.5], pose: aloft, facing: 0 }", 1)},
+			want: "boats[0].stations[1]: aloft 2.5 m up is not above the boom",
+		},
+		{
+			name: "a station on a bench of a boat whose model has none",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"pose: standing", "pose: bench", 1)},
+			want: "boats[test-boat].stations[1]: on a bench, but the model art/boats/test-boat/model.glb has no bench",
+		},
+		{
+			name: "a station on a bench off its top",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: bench", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"bench": `{"bench":{"fore":-1,"aft":0,"top":0.25,"inner":0.3,"sole":0.1}}`}),
+			},
+			want: "boats[test-boat].stations[1]: (0.3, 0.3, -0.5) is not on the bench's top at its front edge (0.25 up, 0.3 out, from -1 to 0)",
+		},
+		{
+			name: "a station on a bench beyond its end",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: bench", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"bench": `{"bench":{"fore":-0.4,"aft":0,"top":0.3,"inner":0.3,"sole":0.1}}`}),
+			},
+			want: "is not on the bench's top at its front edge",
+		},
+		{
+			name: "a station on none of its model's seats",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: bench", 1),
+				testArt: glbWith([]string{"hull", "tricolour"}, map[string]string{"seats": `{"seats":{
+					"aft":{"at":[-0.3,0.3,-0.46],"facing":180,"along":[-0.5,0]},
+					"side":{"at":[-0.34,0.3,-0.5],"facing":90,"along":[-1,0]},
+					"low":{"at":[-0.3,0.25,-0.46],"facing":0,"along":[-0.5,0]},
+					"short":{"at":[-0.3,0.3,-0.46],"facing":0,"along":[-0.2,0]},
+					"walk":[0,0.1,0]}}`}),
+			},
+			want: "boats[test-boat].stations[1]: (-0.3, 0.3, -0.5) facing 0 is not on any of the model's seats' tops at its front edge, within its ends, facing as it faces",
+		},
+		{
+			name: "a station on the rail by a stanchion",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: rail", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"lifelines": `{"lifelines":{"heights":[0.2,0.4],"stanchions":[-1,-0.3,0.5],"inboard":0.03,"fore":-1.5,"aft":1.5}}`}),
+			},
+			want: "boats[test-boat].stations[1]: on the rail at -0.5, within 0.25 m of the stanchion at -0.3",
+		},
+		{
+			name: "a station on the rail beyond the lifelines",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: rail", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"lifelines": `{"lifelines":{"heights":[0.2,0.4],"stanchions":[-1,0.5],"inboard":0.03,"fore":-0.4,"aft":1.5}}`}),
+			},
+			want: "boats[test-boat].stations[1]: on the rail at -0.5, outside the lifelines from -0.4 to 1.5",
+		},
+		{
+			name: "a station on a hull of a boat of one hull",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"pose: standing", "pose: hull", 1)},
+			want: "boats[0].stations[1]: on a hull, but the boat has one hull",
+		},
+		{
+			name: "a station of a boat of two hulls off its hulls",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.NewReplacer(
+				"hullSpacing: 0", "hullSpacing: 1",
+				"rudderCount: 1", "rudderCount: 2",
+				"boardCount: 1", "boardCount: 2",
+				"fixed: 0 #", "fixed: 1 #",
+			).Replace(validBoats)},
+			want: "stations[1]: 0.3 m out is not on a hull's top, from 0.4 to 0.6 m out, nor over a bridgedeck between them",
 		},
 		{
 			name:  "a station's pose unknown",
@@ -588,6 +723,7 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
     controls: {reef: [Full sail, One reef, Two reefs], sheet: {trim: Trim, name: Sheet, ease: Ease}}
     beam: 1.20
     capacity: 2
+    racers: 12
     stations: [{facing: 270, pose: seated, at: [0.55, 0.30, 0.4]}, {pose: standing, at: [-0.3, 0.3, -0.5], facing: 0}]
     description: A boat for tests
     name: Test boat
@@ -762,6 +898,13 @@ func TestEncounters(t *testing.T) {
 		{name: "close-hauled at 81°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 81", 1), want: "/boats/0/physics/rig/closeHauled"},
 		{name: "a restitution above 1", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: 1.2", 1), want: "/encounters/contact/restitution"},
 		{name: "a restitution below 0", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: -0.1", 1), want: "/encounters/contact/restitution"},
+		{name: "two hulls with a pointed bow", boats: strings.Replace(boats, "1.115, 1.07, 1.0]", "1.115, 1.07, 0]", 1), want: "not convex with a flat bow"},
+		{name: "two hulls and one rudder", boats: strings.Replace(boats, "rudderCount: 2", "rudderCount: 1", 1), want: "two hulls need two rudders"},
+		{name: "one hull and two rudders with no spread", boats: strings.Replace(boats, "        rudderCount: 1\n", "        rudderCount: 2\n", 1), want: "one hull's two rudders need a spread above 0"},
+		{name: "one hull's two rudders, the tip clear before the root", boats: strings.Replace(boats, "rudderClearHeel: 64", "rudderClearHeel: 5", 1), want: "before its tip (5°)"},
+		{name: "one rudder off the centreline", boats: strings.Replace(boats, "        rudderSpread: 0\n", "        rudderSpread: 0.5\n", 1), want: "one rudder is on the centreline"},
+		{name: "a righting lever's step of 7°", boats: strings.Replace(boats, "rightingLeverStep: 5", "rightingLeverStep: 7", 1), want: "not a whole number"},
+		{name: "the bows buried past the pitchpole", boats: strings.Replace(boats, "pitchpoleAngle: 25", "pitchpoleAngle: 4", 1), want: "before the pitchpole"},
 		{name: "a taper past the reach", enc: strings.Replace(realEncounters(), "taper: 8", "taper: 12", 1), want: "taper"},
 	}
 	for _, c := range cases {
@@ -782,6 +925,12 @@ func TestEncounters(t *testing.T) {
 			files["art/boats/tall-ship.far.glb"] = "glTF"
 			files["art/boats/skiff.glb"] = glb("hull", "tricolour")
 			files["art/boats/skiff.far.glb"] = "glTF"
+			files["art/boats/beach-cat.glb"] = glb("hull", "tricolour")
+			files["art/boats/beach-cat.far.glb"] = "glTF"
+			files["art/boats/yacht.glb"] = glbWith([]string{"hull", "port", "starboard", "stern"}, yachtPlaces)
+			files["art/boats/yacht.far.glb"] = "glTF"
+			files["art/boats/catamaran.glb"] = glbWith([]string{"port", "starboard", "stern"}, catamaranPlaces)
+			files["art/boats/catamaran.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)
 			if err == nil {
@@ -798,5 +947,36 @@ func TestEncounters(t *testing.T) {
 				t.Fatalf("got %v, want an error with %q", err, c.want)
 			}
 		})
+	}
+}
+
+// A station on a seat of a model's seats: facing as it faces, at its front
+// edge on its top, between its ends; the edge running across for a seat
+// facing ahead or astern, fore and aft for one facing across.
+func TestOnSeat(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	seats := map[string]modelSeat{
+		"settle": {At: []float64{-1.95, 2.6, 2.5}, Facing: f(0), Along: []float64{-3.25, -1.75}},
+		"long":   {At: []float64{1.75, 1.6, 3.35}, Facing: f(270), Along: []float64{2.15, 4.05}},
+		"fore":   {At: []float64{0.85, 1.6, 2.15}, Facing: f(180), Along: []float64{0.55, 1.75}},
+	}
+	for _, c := range []struct {
+		x, y, z, facing float64
+		want            string
+	}{
+		{-1.95, 2.6, 2.54, 0, "settle"},
+		{-3, 2.6, 2.54, 0, "settle"},
+		{-1.5, 2.6, 2.54, 0, ""},
+		{-1.95, 2.6, 2.54, 180, ""},
+		{-1.95, 2.62, 2.54, 0, ""},
+		{-1.95, 2.6, 2.7, 0, ""},
+		{1.79, 1.6, 2.8, 270, "long"},
+		{1.79, 1.6, 4.2, 270, ""},
+		{1.45, 1.6, 2.11, 180, "fore"},
+		{1.45, 1.6, 2.11, -180, "fore"},
+	} {
+		if got := onSeat(seats, c.x, c.y, c.z, c.facing); got != c.want {
+			t.Errorf("onSeat(%v, %v, %v facing %v) = %q, want %q", c.x, c.y, c.z, c.facing, got, c.want)
+		}
 	}
 }

@@ -43,6 +43,8 @@ type world struct {
 	// records are the bundle's records as made: its islands' scores, its
 	// features.
 	records *Bundle
+	// areas are its racing areas.
+	areas []Area
 }
 
 // validate runs every rule over a world.
@@ -165,6 +167,10 @@ func (c *config) validate(w *world) []Rule {
 		highest = max(highest, m.highest)
 	}
 	add("land's height", lowest >= c.land[0]-1e-9 && highest <= c.land[1]+1e-9, fmt.Sprintf("%.1f–%.1f m", lowest, highest), "%.1f–%.0f m", c.land[0], c.land[1])
+	// A racing area at least: a world without one could hold no race off
+	// Port Royal.
+	add("racing area", len(w.areas) >= 1, fmt.Sprintf("%d", len(w.areas)), "at least one, within %.1f nautical miles of Port Royal",
+		c.courses.Areas.Within)
 	if w.pw != nil {
 		rules = append(rules, c.placeRules(w)...)
 		rules = append(rules, c.townRules(w)...)

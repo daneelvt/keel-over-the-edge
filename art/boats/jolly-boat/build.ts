@@ -307,19 +307,48 @@ function planking(): MeshBuilder {
   return both;
 }
 
+/**
+ * How many pieces the transom's top is in across, following the deck's
+ * crown: the plain deck's own, where the model has one.
+ */
+const transomCross = (): number => (D.plankedDeck ? 12 : PLAIN_ACROSS.length - 1);
+
 function transom(): MeshBuilder {
   const m = new MeshBuilder('timber');
   const c: Vec3 = [TIMBER[0] * 0.8, TIMBER[1] * 0.8, TIMBER[2] * 0.8];
   const ring: number[] = [];
-  const n = 2 * D.round;
-  const lap = D.laps ? LAP : 0;
-  for (let i = 0; i <= n; i++) {
-    const p = section(0, i / n);
-    ring.push(m.vertex([p[0] + lap, p[1], p[2]], c));
+  // Its edge runs through the planking's own points at the transom, each
+  // plank's lap and land, keel to sheer, so no slit opens between them.
+  const edge: Vec3[] = [];
+  const strakes = D.strakes;
+  for (let k = 0; k + 1 < strakes.length; k++) {
+    const g0 = strakes[k] as number;
+    const g1 = strakes[k + 1] as number;
+    for (const s of D.strakeRows) {
+      const g = g0 + (g1 - g0) * s;
+      const p = section(0, g);
+      const n = sectionNormal(0, g);
+      const lap = k === 0 || !D.laps ? 0 : LAP * (1 - s) ** 0.8;
+      const at: Vec3 = [p[0] + n[0] * lap, p[1] + n[1] * lap, p[2]];
+      const last = edge[edge.length - 1];
+      if (last === undefined || Math.hypot(at[0] - last[0], at[1] - last[1]) > 1e-9) {
+        edge.push(at);
+      }
+    }
   }
-  for (let i = n; i >= 0; i--) {
-    const p = section(0, i / n);
-    ring.push(m.vertex([-p[0] - LAP, p[1], p[2]], c));
+  for (const p of edge) {
+    ring.push(m.vertex(p, c));
+  }
+  // Its top follows the deck's crown across, so no sliver opens under the
+  // deck's edge.
+  const b = halfBeam(0);
+  const cross = transomCross();
+  for (let j = 1; j < cross; j++) {
+    const x = b * (1 - (2 * j) / cross);
+    ring.push(m.vertex([x, deckY(x, 0), TRANSOM_Z], c));
+  }
+  for (const p of [...edge].reverse()) {
+    ring.push(m.vertex([-p[0], p[1], p[2]], c));
   }
   const mid = m.vertex([0, (sheer(0) - keelDepth(0)) / 2, TRANSOM_Z], c);
   for (const k of [...ring, mid]) {
@@ -353,7 +382,7 @@ const DECK = srgb(0.8, 0.62, 0.4);
 
 function deck(): MeshBuilder {
   const m = new MeshBuilder('deck');
-  const us = [...stations(), uAt(COCKPIT_FORE), uAt(COCKPIT_AFT)].sort((a, b) => a - b);
+  const us = deckRows();
   const planks = Math.ceil(HALF_BEAM / PLANK - 0.5);
   for (let j = -planks; j <= planks; j++) {
     const x0 = (j - 0.5) * PLANK;
@@ -361,20 +390,20 @@ function deck(): MeshBuilder {
     const tone = 0.88 + 0.22 * jitter(j + 50);
     const c: Vec3 = [DECK[0] * tone, DECK[1] * tone, DECK[2] * tone];
     const seam: Vec3 = [c[0] * 0.55, c[1] * 0.55, c[2] * 0.55];
-    let prev: number[] | null = null;
+    let prev: { row: number[]; in: boolean } | null = null;
     for (const u of us) {
       const b = halfBeam(u);
-      const lo = Math.max(x0, -b);
-      const hi = Math.min(x1, b);
       const z = zAt(u);
       const inCockpit =
         Math.abs((x0 + x1) / 2) < COCKPIT_HALF_WIDTH &&
         z > COCKPIT_FORE + 1e-6 &&
         z < COCKPIT_AFT - 1e-6;
-      if (hi - lo < 1e-4) {
-        prev = null;
-        continue;
-      }
+      // A plank the sheer has run past closes to the sheer's point there (the
+      // stem's at the bow), so no wedge is left open between it and the edge.
+      const inside = Math.min(x1, b) - Math.max(x0, -b) > 1e-4;
+      const edge = x0 >= 0 ? b : -b;
+      const lo = inside ? Math.max(x0, -b) : edge;
+      const hi = inside ? Math.min(x1, b) : edge;
       // A dark caulked seam along each plank's edge.
       const w = Math.min(0.006, (hi - lo) / 4);
       const xs = [lo, lo + w, hi - w, hi];
@@ -382,14 +411,18 @@ function deck(): MeshBuilder {
       const row = xs.map((x, i) => m.vertex([x, deckY(x, u), z], cs[i] as Vec3, [x, u]));
       // Rows run aft to fore (-z), columns port to starboard (+x): seen
       // from above, counter-clockwise.
-      if (prev !== null && !inCockpit) {
-        m.strip(prev, row);
+      if (prev !== null && (prev.in || inside) && !inCockpit) {
+        m.strip(prev.row, row);
       }
-      prev = inCockpit ? null : row;
+      prev = inCockpit ? null : { row, in: inside };
     }
   }
   return m;
 }
+
+/** The deck's rows along the hull: its stations and the cockpit's ends. */
+const deckRows = (): number[] =>
+  [...stations(), uAt(COCKPIT_FORE), uAt(COCKPIT_AFT)].sort((a, b) => a - b);
 
 function cockpit(m: MeshBuilder): void {
   const c: Vec3 = [DECK[0] * 0.75, DECK[1] * 0.75, DECK[2] * 0.75];
@@ -416,40 +449,50 @@ function cockpit(m: MeshBuilder): void {
     ],
     [0, 1, 0],
   );
-  quad(
-    [
-      [-w, y, f],
-      [w, y, f],
-      [w, top(w, f), f],
-      [-w, top(-w, f), f],
-    ],
+  // The ends and sides stand up to the deck's edge through the deck's own
+  // points, its crown across and its sheer along, so no slit opens between
+  // them and the deck.
+  const across: number[] = [];
+  for (let j = -2; j <= 2; j++) {
+    const x0 = (j - 0.5) * PLANK;
+    const x1 = (j + 0.5) * PLANK;
+    across.push(x0, x0 + 0.006, x1 - 0.006, x1);
+  }
+  const wall = (points: [number, number][], n: Vec3): void => {
+    for (let i = 0; i + 1 < points.length; i++) {
+      const [x0, z0] = points[i] as [number, number];
+      const [x1, z1] = points[i + 1] as [number, number];
+      if (Math.hypot(x1 - x0, z1 - z0) < 1e-9) {
+        continue;
+      }
+      quad(
+        [
+          [x0, y, z0],
+          [x1, y, z1],
+          [x1, top(x1, z1), z1],
+          [x0, top(x0, z0), z0],
+        ],
+        n,
+      );
+    }
+  };
+  wall(
+    across.map((x) => [x, f]),
     [0, 0, 1],
   );
-  quad(
-    [
-      [-w, y, a],
-      [w, y, a],
-      [w, top(w, a), a],
-      [-w, top(-w, a), a],
-    ],
+  wall(
+    across.map((x) => [x, a]),
     [0, 0, -1],
   );
-  quad(
-    [
-      [w, y, f],
-      [w, y, a],
-      [w, top(w, a), a],
-      [w, top(w, f), f],
-    ],
+  const along = deckRows()
+    .map(zAt)
+    .filter((z) => z >= f - 1e-9 && z <= a + 1e-9);
+  wall(
+    along.map((z) => [w, z]),
     [-1, 0, 0],
   );
-  quad(
-    [
-      [-w, y, f],
-      [-w, y, a],
-      [-w, top(-w, a), a],
-      [-w, top(-w, f), f],
-    ],
+  wall(
+    along.map((z) => [-w, z]),
     [1, 0, 0],
   );
 }
@@ -741,16 +784,17 @@ function gooseneck(): MeshBuilder {
 
 // --- The model ---------------------------------------------------------------
 
+/** Where the plain deck of the far model is laid across, from port (−1) to starboard (1). */
+const PLAIN_ACROSS = [-1, -0.5, 0, 0.5, 1];
+
 /** The far model's deck: plain, a few strips across, no cockpit. */
 function plainDeck(): MeshBuilder {
   const m = new MeshBuilder('deck');
-  const across = [-1, -0.5, 0, 0.5, 1];
+  const across = PLAIN_ACROSS;
   let prev: number[] | null = null;
   for (const u of stations()) {
+    // Where the beam comes to nothing, at the stem, the row closes to its point.
     const b = halfBeam(u);
-    if (b < 1e-4) {
-      continue;
-    }
     const row = across.map((f) => m.vertex([f * b, deckY(f * b, u), zAt(u)], DECK, [f * b, u]));
     if (prev !== null) {
       m.strip(prev, row);

@@ -20,6 +20,7 @@ import {
 } from './format';
 import {
   HudModel,
+  helmText,
   SAIL_CLEAR,
   SAIL_SHOW,
   SailHold,
@@ -178,6 +179,18 @@ describe('settings', () => {
     }
   });
 
+  test('the sound starts at 70% volume, the sea and every other sound full; each read as a number in range', () => {
+    expect(DEFAULTS).toMatchObject({ sound: true, volume: 0.7, seaVolume: 1, soundsVolume: 1 });
+    const m = memory();
+    saveSettings({ ...DEFAULTS, volume: 0.25, seaVolume: 0, soundsVolume: 0.5 }, m);
+    expect(loadSettings(m)).toMatchObject({ volume: 0.25, seaVolume: 0, soundsVolume: 0.5 });
+    m.data.set('keel.settings', '{"volume": 1.2, "seaVolume": "0.5", "soundsVolume": -1}');
+    expect(loadSettings(m)).toMatchObject({ volume: 0.7, seaVolume: 1, soundsVolume: 1 });
+    // Saved before there were sliders: the defaults.
+    m.data.set('keel.settings', '{"sound": false}');
+    expect(loadSettings(m)).toMatchObject({ sound: false, volume: 0.7 });
+  });
+
   test('the full screen is off until asked for, and the choice is kept', () => {
     expect(DEFAULTS.fullScreen).toBe(false);
     const m = memory();
@@ -281,6 +294,23 @@ describe('the instruments', () => {
       [3, 'Climbing back in'],
       [0, ''],
     ] as const) {
+      pose.sailorMode = mode;
+      now += 1000;
+      model.frame(now, now / 1000, pose, out, w, 0, 0, 0, 0);
+      expect(model.sailor.value).toBe(line);
+    }
+    // A boat of two hulls flying her windward hull, or her bows burying,
+    // while her sailor sails: no line, as she shows it; in the water, the
+    // sailor's line; aground, Aground.
+    for (const [flying, burying, mode, line] of [
+      [1, 0, 0, ''],
+      [1, 1, 0, ''],
+      [0, 1, 0, ''],
+      [1, 0, 1, 'In the water'],
+      [0, 0, 0, ''],
+    ] as const) {
+      out[RECORDS.out.hullFlying] = flying;
+      out[RECORDS.out.bowsBurying] = burying;
       pose.sailorMode = mode;
       now += 1000;
       model.frame(now, now / 1000, pose, out, w, 0, 0, 0, 0);
@@ -496,5 +526,40 @@ describe('the sail on the sheet', () => {
       model.frame(t * 1000, t, pose, out, wind(5, 0), 0, 0.6, 0, 0.6);
     }
     expect(written.at(-1)).toBe('Sheet 60%, luffing: trim in');
+  });
+
+  test('the helm’s words for assistive technology: the rudder asked for, written only as the whole degree changes', () => {
+    expect(helmText(0)).toBe('Helm amidships');
+    expect(helmText(-0.3, 40)).toBe('Helm 12° to port');
+    expect(helmText(0.3, 40)).toBe('Helm 12° to starboard');
+    expect(helmText(-1, 35)).toBe('Helm 35° to port');
+    expect(helmText(0.01, 40)).toBe('Helm amidships');
+    const model = new HudModel();
+    const written: string[] = [];
+    const el = {
+      setAttribute(name: string, v: string) {
+        if (name === 'aria-valuetext') {
+          written.push(v);
+        }
+      },
+    } as unknown as HTMLElement;
+    model.helmText.attach(el);
+    model.setKind({
+      controls: { sheet: { name: 'Sheet', trim: 'Trim', ease: 'Ease' }, reef: ['', '', ''] },
+      physics: { rig: { reefs: [1, 0.8, 0.6] }, foils: { rudderAngle: 30 } },
+    });
+    const pose = newPose();
+    const out = outOf(LUFFING);
+    let t = 0;
+    for (const helm of [0, 0.001, -0.4, -0.401, -0.41, -0.45, 0.45]) {
+      t += 1 / 60;
+      model.frame(t * 1000, t, pose, out, wind(5, 0), helm, 0.5, helm, 0.5);
+    }
+    expect(written).toEqual([
+      'Helm amidships',
+      'Helm 12° to port',
+      'Helm 14° to port',
+      'Helm 14° to starboard',
+    ]);
   });
 });

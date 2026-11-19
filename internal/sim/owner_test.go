@@ -87,7 +87,7 @@ func TestPlacedVoyage(t *testing.T) {
 	for w.Latest().Voyage[r.Slot].Falling() {
 		w.Tick()
 	}
-	if v := w.Latest().Voyage[r.Slot]; v != (bus.Voyage{}) {
+	if v := w.Latest().Voyage[r.Slot]; v != newVoyage(v.Log.Began) || v.Log.Began == 0 {
 		t.Fatalf("the voyage after going over: %+v", v)
 	}
 	// The next voyage's approach is its own, and not placed.

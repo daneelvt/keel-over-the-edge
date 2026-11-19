@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# keel's settings for new sailors, which the accounts workflow's OpenTofu
+# writes to keel-cluster's folder /keel/ (infra/tofu/newsailors.tf): the
+# key their addresses are kept under, and the Turnstile widget's site key
+# and secret, the human check.
+#
+# Until they are there, a missing value leaves its key out rather than
+# failing (deletionPolicy Merge), and keel, which names each key optional,
+# starts without it: with no address key it makes one at each start (the
+# counts start again with it), and with neither of the widget's keys it
+# checks no one, saying so in its log. keel reads them when it starts:
+# after a change, restart it.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keel-new-sailors
+  namespace: keel
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical
+  target:
+    name: keel-new-sailors
+    creationPolicy: Owner
+    deletionPolicy: Merge
+  data:
+    - secretKey: KEEL_ADDRESS_KEY
+      remoteRef:
+        key: /keel/ADDRESS_KEY
+    - secretKey: KEEL_TURNSTILE_SITEKEY
+      remoteRef:
+        key: /keel/TURNSTILE_SITEKEY
+    - secretKey: KEEL_TURNSTILE_SECRET
+      remoteRef:
+        key: /keel/TURNSTILE_SECRET

@@ -67,6 +67,35 @@ type Sandbox struct {
 	Checks  []SandboxCheck `json:"checks"`
 	// Fog is the same runs' looks in a fog bank held off the main port.
 	Fog SandboxFog `json:"fog"`
+	// Courses are the world's island courses, as the game connection
+	// tells of one open, each with the subjects it needs charted.
+	Courses []SandboxCourse `json:"courses"`
+}
+
+// SandboxCourse is an island course as the page's chart reads it, and the
+// subjects, by their index in the entries, that open it once charted.
+type SandboxCourse struct {
+	Number int32          `json:"number"`
+	Kind   string         `json:"kind"`
+	Name   string         `json:"name"`
+	Way    [][2]float64   `json:"way"`
+	Length float64        `json:"length"`
+	Rounds []SandboxRound `json:"rounds"`
+	Boats  []SandboxBoat  `json:"boats"`
+	Needs  []int32        `json:"needs"`
+}
+
+// SandboxRound is what a course rounds, as the page reads it.
+type SandboxRound struct {
+	Subject   string `json:"subject"`
+	Number    int32  `json:"number"`
+	Starboard bool   `json:"starboard"`
+}
+
+// SandboxBoat is a boat a course suits, as the page reads it.
+type SandboxBoat struct {
+	Kind    int32   `json:"kind"`
+	Seconds float64 `json:"seconds"`
 }
 
 // SandboxFog is a weather of one fog bank, its spell's and its system's
@@ -102,6 +131,22 @@ func (m *Model) SandboxFile() ([]byte, error) {
 			se.Model = "#" + strconv.Itoa(s.Model)
 		}
 		out.Entries = append(out.Entries, se)
+	}
+	out.Courses = []SandboxCourse{}
+	for k, c := range w.Courses {
+		pc := m.course(int32(k))
+		sc := SandboxCourse{Number: c.Number, Kind: c.Kind, Name: c.Name, Length: float64(pc.Length), Needs: w.CourseSubjects[k],
+			Rounds: []SandboxRound{}, Boats: []SandboxBoat{}}
+		for i := 0; i+1 < len(pc.Way); i += 2 {
+			sc.Way = append(sc.Way, [2]float64{float64(pc.Way[i]), float64(pc.Way[i+1])})
+		}
+		for _, r := range pc.Rounds {
+			sc.Rounds = append(sc.Rounds, SandboxRound{Subject: KindWord(subjectKind(r.Subject)), Number: int32(r.Number), Starboard: r.Starboard})
+		}
+		for _, b := range pc.Boats {
+			sc.Boats = append(sc.Boats, SandboxBoat{Kind: int32(b.Kind), Seconds: float64(b.Seconds)})
+		}
+		out.Courses = append(out.Courses, sc)
 	}
 	home := w.Subjects[0]
 	out.Checks = w.runs(home, w.Calm())

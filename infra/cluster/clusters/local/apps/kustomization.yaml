@@ -28,8 +28,15 @@ configMapGenerator:
       # The seed of a world made here: one the preview draws too
       # (go run ./tools/worldgen-preview -seed 1).
       - KEEL_WORLD_SEED=1
+      # The human check with Cloudflare's test keys, public and always
+      # passing (its token XXXX.DUMMY.TOKEN.XXXX), so the page loads the
+      # real Turnstile script here as players do. No address key: keel
+      # makes one at each start.
+      - KEEL_TURNSTILE_SITEKEY=1x00000000000000000000AA
+      - KEEL_TURNSTILE_SECRET=1x0000000000000000000000000000000AA
 patches:
   - path: keel.yaml
+  - path: agreement.yaml
   - path: database.yaml
   # The local cluster's bucket, never production's.
   - target:

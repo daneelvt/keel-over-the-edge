@@ -47,20 +47,42 @@ import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webg
 import type { FullScreen } from '../boot/fullscreen';
 import type { Revealed } from '../boot/gate';
 import { harbourWater } from '../boot/harbour';
+import { raceSea } from '../boot/racesea';
 import { catalog } from '../catalog';
-import type { ChartMode } from '../chart/chart';
+import type { ChartMode, LogWho } from '../chart/chart';
+import type { Course } from '../chart/course';
 import type { ChartParts } from '../chart/make';
 import { placeWords, pointsOf, warningInForce } from '../chart/placeweather';
 import { formatPosition } from '../chart/position';
 import { type Layer, momentOf } from '../chart/weather';
+import { BAROMETER_LONGEST, BAROMETER_SHORTEST } from '../chart/words';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
+import { hullLift } from '../game/hullpose';
+import { PILOT_WIND } from '../input/pilot';
 import type { LifeBird } from '../life/draw';
 import type { GullTown } from '../life/gulls';
 import { nowUs, worldUs } from '../net/clock';
-import type { BumpTold, ChartEntry, ChartSubject, KnockStateTold, LifeSeen } from '../net/messages';
+import type {
+  BumpTold,
+  CertifiedIn,
+  ChartEntry,
+  ChartSubject,
+  CourseEndWhy,
+  KnockStateTold,
+  LifeSeen,
+  RaceCallIn,
+  RaceCheeredIn,
+  RaceFinishIn,
+  RacePictureIn,
+  RaceResultsIn,
+  RacerAtIn,
+  RaceSignalIn,
+  RaceToldIn,
+  ShipmateAtIn,
+} from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -73,6 +95,8 @@ import {
   detailOn,
   farLook,
   type Probe,
+  SEA_LAYERS,
+  type SeaLayer,
   tileHashNode,
   tileIdentity,
   tileLook,
@@ -89,6 +113,7 @@ import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
 import { lookPalette } from '../render/boatlook';
+import { type CourseLaid, signalFlag } from '../render/committee';
 import { LEAN_STRIDE, MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
@@ -100,10 +125,15 @@ import {
   domeDrop,
   seaMaterial,
 } from '../render/materials';
-import { rungName, TIERS } from '../render/quality';
+import { prizeCode } from '../render/prizes';
+import { pixelRatioOf, rungName, TIERS } from '../render/quality';
+import { type CrewMove, moveAt } from '../render/sailors/crewrules';
 import { CREW_MOST } from '../render/sailors/fleetcrews';
+import { pendantsLoaded } from '../render/sailors/pendant';
+import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
-import { look } from '../render/sky';
+import { look, SKY_LAYERS, type SkyLayer } from '../render/sky';
+import { courseNear, raceNear } from '../sandbox/coursescene';
 import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
 import { aboardScene, lifeScene, raiseScene } from '../sandbox/lifescene';
@@ -111,10 +141,16 @@ import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
+import { certifiedTold } from '../ui/certwords';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
+import type { HomeView } from '../ui/home';
+import { setLogHost } from '../ui/loglazy';
 import { downwindLine, type SailState } from '../ui/model';
+import { openNews, setNewsHost } from '../ui/newslazy';
+import { serverNews } from '../ui/newsread';
+import type { RaceWatch } from '../ui/racewatch';
 import type { Settings } from '../ui/settings';
 import type { StatementsView } from '../ui/statementlazy';
 import type { WatchView } from '../ui/watchlazy';
@@ -124,6 +160,7 @@ import {
   drawnHeight,
   hexCentre as landHexCentre,
 } from '../workers/mesh/build';
+import { type CountOptions, FrameCounter, type FrameReport } from './counts';
 import { type DeckSceneName, deckScene } from './deckscenes';
 import { setSky } from './skypanel';
 
@@ -140,6 +177,8 @@ export interface Info {
   adaptive: boolean;
   /** How the detail band is made. */
   detail: string;
+  /** The sea's look the tier draws: whole, or plain (seamaterial.ts's PLAIN_SEA, the tiles by the hulls apart). */
+  sea: 'whole' | 'plain';
   dispatches: number;
   /** Drops of spray in the air. */
   spray: number;
@@ -266,14 +305,17 @@ export type Sailing = (
   countdown?: Countdown;
   /** The full screen's switch and key. */
   fullScreen?: FullScreen;
-  /** The sandbox's screen drawn again, with a watch's parts or without, and sailing together's. */
+  /** The sandbox's screen drawn again, with a watch's parts or without, sailing together's, and the way home's. */
   remount?: (
     watch: WatchView | null,
     deck?: DeckView | null,
     statements?: StatementsView | null,
+    home?: HomeView | null,
   ) => void;
   /** What the page did from the tap to the world's reveal; null before it. */
   revealed?: () => Revealed | null;
+  /** Watching a race: the bar's switches, follow the action, the crier, the cheers. */
+  raceWatch?: RaceWatch;
 };
 
 /** Puts the hooks on globalThis.keel. */
@@ -302,12 +344,23 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   let lifeRaised = 0;
   // What the screen of the latest scene of sailing together asked of it.
   let deckCalls: string[] = [];
+  // The view before the sea, shown by watchWaiting: what takes it away.
+  let waiting: (() => void) | null = null;
   // Every notice shown, in order, for tests that look after it has gone.
   const noticesShown: string[] = [];
   sailing.chart?.notices.shown.subscribe((s) => {
     if (s !== null && noticesShown.at(-1) !== s.text) {
       noticesShown.push(s.text);
     }
+  });
+  // A race told as the server would tell it, laid in the sea and on the
+  // race line: the tests' stand-in for the race committee.
+  const seaRace = raceSea({
+    lay: (id, c) => world.race.lay(id, c),
+    drop: (id) => world.race.drop(id),
+    signals: (id, f) => world.race.signals(id, f),
+    fire: (id, loud) => game.fireGun(id, loud, true),
+    tick: () => world.ticks,
   });
   const chartParts = (): ChartParts => {
     if (sailing.chart === undefined) {
@@ -605,6 +658,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         rungs: (world.quality?.ladder ?? []).map(rungName),
         adaptive: world.quality?.enabled ?? false,
         detail: world.ocean.detail.state.kind,
+        sea: TIERS[world.rung.tier].sea,
         dispatches: world.stats.last.dispatches,
         spray: world.spray.count,
         floatTargets: g?.floatTargets ?? false,
@@ -656,6 +710,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       stage.freeze(on);
       if (!on) {
         stage.resumed();
+      }
+    },
+
+    /**
+     * Hides the page, or shows it again, as a tab put behind another and
+     * brought back: the document says so and visibilitychange is fired,
+     * and no frame is drawn meanwhile, the first one back timed from the
+     * last one drawn, as a hidden tab's is.
+     */
+    hide(on: boolean): void {
+      const state: DocumentVisibilityState = on ? 'hidden' : 'visible';
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => on });
+      if (on) {
+        stage.freeze(true);
+      }
+      document.dispatchEvent(new Event('visibilitychange'));
+      if (!on) {
+        stage.freeze(false, true);
       }
     },
 
@@ -955,10 +1028,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     async lookAboard(code: number): Promise<void> {
       await world.showLook(code);
     },
-    /** The boat in view's sailor's look as drawn: its art's deck level and whether it is a machine; null for none. */
-    lookDrawn(): { model: string; machine: boolean } | null {
+    /**
+     * The boat in view's sailor's look as drawn: its art's deck level,
+     * whether it is a machine, and whether the sail carries the machine
+     * mark; null for none.
+     */
+    lookDrawn(): { model: string; machine: boolean; mark: boolean } | null {
       const b = world.boat;
-      return b === null ? null : b.drawnLook();
+      const d = b?.drawnLook() ?? null;
+      return b === null || d === null ? null : { ...d, mark: b.marked };
     },
     /** Puts the camera at a preset, by name, or at a view of its own. */
     camera(name: string | CameraView): void {
@@ -1391,6 +1469,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       game.helm.target = 0;
       game.sheet.target = 0.5;
       world.windowMs = null;
+      world.screenShort = null;
       if (world.quality !== null) {
         world.quality.enabled = false;
       }
@@ -1602,6 +1681,18 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       );
       return { x: at.x, y: at.y, front: at.z < 1 };
     },
+    /** The autopilot as its keys work it: on at the boat's angle to the wind, about in a tack or a wear (gybe), or off. */
+    autopilot(order: 'wind' | 'tack' | 'gybe' | 'off'): void {
+      if (order === 'wind') {
+        game.engagePilot(PILOT_WIND);
+      } else if (order === 'tack') {
+        game.pilotTack();
+      } else if (order === 'gybe') {
+        game.pilotGybe();
+      } else {
+        game.takeHelm();
+      }
+    },
     /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
     setControls(helm: number, sheet: number): void {
       game.helm.target = helm;
@@ -1678,9 +1769,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
 
-    /** Draws only every n-th animation frame; null for the measured cap. */
-    capFrames(n: number | null): void {
+    /** Draws only every n-th animation frame, null for the measured cap; and takes the display's rate as hz, null for the measured one. */
+    capFrames(n: number | null, hz: number | null = null): void {
       stage.cap.forced = n;
+      stage.cap.forcedRate = hz;
     },
     settings(change: Partial<Settings>): void {
       game.settings.set(change);
@@ -1732,6 +1824,24 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return [...deckCalls];
     },
     /**
+     * The sandbox's screen with the way home offered in its menu, and its
+     * question asked, racing and with shipmates aboard as given; null as it
+     * is offline, with neither.
+     */
+    homeScene(home: { asking: boolean; racing: boolean; shipmates: boolean } | null): void {
+      if (home === null) {
+        sailing.remount?.(null, null);
+        return;
+      }
+      sailing.remount?.(null, null, null, {
+        offered: () => true,
+        asking: signal(home.asking),
+        racing: () => home.racing,
+        shipmates: () => home.shipmates,
+        go: () => {},
+      });
+    },
+    /**
      * The question asked before the own boat leaves the water to watch, in
      * its window over the screen at sea, as the list shows it; false takes
      * it away. Resolves once it is drawn.
@@ -1751,6 +1861,43 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const gone = () => host.remove();
       render(h(LeaveWindow, { className: 'panel watch-list', leave: gone, stay: gone }), host);
     },
+    /**
+     * The view before the sea while a watch waits, as after a refused one:
+     * the plate at the foot of the cover with its keys and the day's news,
+     * which (as before the sea) opens on its own, as do the logs from it;
+     * false takes it away, the chart screen's News and Log tabs again where
+     * they open. Resolves once it is drawn.
+     */
+    async watchWaiting(sailor: string | null): Promise<void> {
+      waiting?.();
+      waiting = null;
+      const c = chartParts().chart;
+      if (sailor === null) {
+        setLogHost((who) => c.showLog(who));
+        setNewsHost((day) => c.showNews(day));
+        return;
+      }
+      setLogHost(null);
+      setNewsHost(null);
+      const { showWatchWaiting } = await import('../ui/watch');
+      waiting = showWatchWaiting(
+        document.body,
+        {
+          watching: signal(null),
+          spectating: signal(false),
+          status: signal('idle'),
+          ended: signal({ why: 'left', sailor }),
+          place: signal(null),
+          boatPlace: signal(null),
+          watchers: signal(0),
+          list: signal(false),
+          watch: () => {},
+          sail: () => {},
+          unwatch: () => {},
+        },
+        () => openNews(null),
+      );
+    },
     /** What the page did from the tap to the world's reveal; null before it, or in the sandbox. */
     revealed(): Revealed | null {
       return sailing.revealed?.() ?? null;
@@ -1767,12 +1914,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
     },
     /**
-     * Holds the case's readouts at the shortest or the longest they say, or
-     * lets them follow the boat again (null).
+     * Holds the case's readouts and the barometer's words at the shortest
+     * or the longest they say, or lets them follow the boat again (null).
      */
     readouts(at: 'shortest' | 'longest' | null): void {
       const h = game.hud;
       h.held = at !== null;
+      sailing.barometer?.holdWords(
+        at === null ? null : at === 'longest' ? BAROMETER_LONGEST : BAROMETER_SHORTEST,
+      );
       if (at === null) {
         h.flush();
         return;
@@ -1873,6 +2023,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         traffic: { ...o.traffic },
         tools: o.tools.value,
         stays: p.stays,
+        // The records waiting for a frame at most at once since the page
+        // was last hidden, the snaps seen through, and the boat in view's
+        // newest snapshot.
+        mostQueued: o.mostQueued,
+        snapped: o.snapped.value,
+        newest: o.newest(),
       };
     },
     /**
@@ -1976,6 +2132,373 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         wreckVertices: world.wrecks.mesh.geometry.getAttribute('position')?.count ?? 0,
         shadowVertices: world.wrecks.shadows.geometry.getAttribute('position')?.count ?? 0,
         worldUs: Math.floor((world.ticks * 1e6) / STEPS_PER_SECOND),
+      };
+    },
+    /**
+     * Lays a race's course in the sea by its number: the one given, or the
+     * sandbox's (a line ahead of the boat square to the wind, the committee
+     * boat at its starboard end flying the class pennant of the boat's kind,
+     * the pin, and three marks); the course laid.
+     */
+    layCourse(id: number, course?: CourseLaid): CourseLaid {
+      const laid =
+        course ??
+        courseNear(world.pose.east, world.pose.north, world.pose.heading, world.wind.meanFrom, [
+          signalFlag(catalog.world.committee.flags, 'class', world.kind.id),
+        ]);
+      world.race.lay(id, laid);
+      return laid;
+    },
+    /** Takes a course up. */
+    dropCourse(id: number): void {
+      world.race.drop(id);
+    },
+    /** The flags a course's committee boat flies, by what each signals (a class by its boat's id), the top one first. */
+    raceSignals(id: number, signals: { signal: string; boat?: string }[]): number[] {
+      const flags = signals.map((s) =>
+        signalFlag(
+          catalog.world.committee.flags,
+          s.signal as (typeof catalog.world.committee.flags)[number]['signal'],
+          s.boat,
+        ),
+      );
+      world.race.signals(id, flags);
+      return flags;
+    },
+    /** Fires a course's gun, as loud as loud; its report as the player would hear it, or null for none. */
+    fireGun(id: number, loud = 1, inRace = true) {
+      const fired = game.fireGun(id, loud, inRace);
+      return { fired, report: game.lastGun, played: game.sound.guns };
+    },
+    /**
+     * Tells a race as the server would: the one given, or the sandbox's
+     * (the course laid near, its start two minutes on, the boats entered
+     * by name, the player's first), laid in the sea and on the race line.
+     */
+    raceTell(
+      t?: Partial<RaceToldIn>,
+      entrants?: { name: string; boat: string; machine?: boolean }[],
+    ): RaceToldIn {
+      const course = courseNear(
+        world.pose.east,
+        world.pose.north,
+        world.pose.heading,
+        world.wind.meanFrom,
+        [],
+      );
+      const told = {
+        ...raceNear(
+          course,
+          1,
+          catalog.boats.findIndex((b) => b.id === world.kind.id),
+          world.ticks,
+          entrants ?? [
+            { name: 'Mira', boat: 'Gull' },
+            { name: '', boat: 'Petrel' },
+            { name: 'Iron Mary', boat: 'Iron Mary', machine: true },
+          ],
+        ),
+        ...t,
+      };
+      seaRace.told(told);
+      chartParts().racing.tell(told);
+      return told;
+    },
+    /** A race's picture: its boats as given, each filled out; eye, the boat watched or sailed, by number. */
+    racePicture(racers: Partial<RacerAtIn>[], race = 1, eye?: number): void {
+      const p: RacePictureIn = {
+        race,
+        tick: world.ticks,
+        eye: eye ?? chartParts().racing.eye.peek(),
+        racers: racers.map((r, i) => ({
+          number: i + 1,
+          east: world.pose.east,
+          north: world.pose.north,
+          heading: 0,
+          place: 0,
+          gap: 0,
+          added: 0,
+          state: 'racing',
+          leg: 1,
+          toGo: 500,
+          cheers: 0,
+          ...r,
+        })),
+      };
+      chartParts().racing.take(p);
+      sailing.raceWatch?.picture(p);
+    },
+    /** A signal from the committee boat: its flags hoisted, its gun fired. */
+    raceSignal(s: Partial<RaceSignalIn>): void {
+      const sig: RaceSignalIn = { race: 1, signal: 'start', gun: true, number: 0, place: 0, ...s };
+      seaRace.signal(sig);
+      sailing.raceWatch?.signal(sig);
+    },
+    /** A call of the committee's. */
+    raceCall(c: Partial<RaceCallIn>): void {
+      const call: RaceCallIn = {
+        race: 1,
+        kind: 'bump',
+        number: 1,
+        other: 2,
+        article: '10',
+        mark: 0,
+        added: 10,
+        place: 0,
+        ...c,
+      };
+      chartParts().racing.called(call);
+      sailing.raceWatch?.call(call);
+    },
+    /** A boat home. */
+    raceFinish(f: Partial<RaceFinishIn>): void {
+      const fin: RaceFinishIn = {
+        race: 1,
+        number: 1,
+        place: 1,
+        elapsedMs: 600_000,
+        added: 0,
+        ...f,
+      };
+      chartParts().racing.finished(fin);
+      sailing.raceWatch?.finish(fin);
+    },
+    /**
+     * The sandbox's screen as it is while a boat of the race told is watched
+     * (the race bar at its foot, nothing that steers), the boat of number
+     * eye; null as it is while sailing.
+     */
+    raceWatching(eye: number | null): void {
+      if (eye === null) {
+        sailing.remount?.(null);
+        return;
+      }
+      const r = chartParts().racing;
+      const p = r.picture.peek();
+      if (p !== null) {
+        const q = { ...p, eye };
+        r.take(q);
+        sailing.raceWatch?.picture(q);
+      } else {
+        r.eye.value = eye;
+      }
+      sailing.remount?.({
+        watching: signal({ sailor: '', machine: false, mine: false, look: -1 }),
+        spectating: signal(true),
+        status: signal('sailing'),
+        ended: signal(null),
+        place: signal(null),
+        boatPlace: signal(null),
+        watchers: signal(0),
+        list: signal(false),
+        watch: () => {},
+        sail: () => {},
+        unwatch: () => {},
+      });
+    },
+    /**
+     * What the sailor's certificates came to, as the server tells it: a
+     * task done (the first certificate's first task by hand, unless told
+     * otherwise), a venture's run, a certificate earned; raised as the
+     * page online raises it. The bell's rings so far.
+     */
+    certified(c: Partial<CertifiedIn>): number {
+      const p = chartParts();
+      certifiedTold(
+        {
+          book: { certificates: catalog.certificates ?? [], boats: catalog.boats },
+          line: p.racing.certified,
+          shown: () => p.racing.finishOpen.peek() || p.racing.resultsOpen.peek(),
+          raise: (on, fill, action) => p.notices.raise(on, fill, performance.now(), action),
+          see: () => p.chart.showLog({ kind: 'own', tab: 'ribbons' }),
+          bell: (n) => game.bell(n),
+        },
+        {
+          certificate: 0,
+          task: 0,
+          done: 1,
+          of: 3,
+          way: 'hand',
+          runs: 0,
+          runsOf: 0,
+          earned: false,
+          byHand: false,
+          ...c,
+        },
+      );
+      return game.bellsRung;
+    },
+    /** The crowd's cheers gathered for a boat, as the server tells them. */
+    raceCheered(c: Partial<RaceCheeredIn>): void {
+      sailing.raceWatch?.cheered({ race: 1, number: 1, count: 1, crowd: 1, mine: false, ...c });
+    },
+    /** Watching a race as the bar has it: follow the action, the boat asked for, the crier's line, the lines after cheers, what is open. */
+    raceWatch() {
+      const w = sailing.raceWatch;
+      return {
+        follow: w?.follow.value ?? false,
+        asking: w?.asking.value ?? null,
+        crier: w?.crier.value?.text ?? null,
+        cheered: w?.cheeredText.value?.text ?? null,
+        cheering: w?.cheering.value?.crowd ?? null,
+        standings: w?.standings.value ?? false,
+        more: w?.more.value ?? false,
+        eye: chartParts().racing.eye.value,
+        bunting: world.race.stats.bunting,
+        cheers:
+          game.lastCheer === null
+            ? null
+            : { voices: game.lastCheer.voices.length, roar: game.lastCheer.roar },
+      };
+    },
+    /** Sets follow the action on or off. */
+    raceFollow(on: boolean): void {
+      sailing.raceWatch?.setFollow(on);
+    },
+    /** The race's results. */
+    raceResults(r: Partial<RaceResultsIn>): void {
+      chartParts().racing.results({ race: 1, code: 'abcdefghij', prizes: true, results: [], ...r });
+    },
+    /** The race over and its course taken up; with all, every race forgotten. */
+    raceGone(race = 1, all = false): void {
+      const t = chartParts().racing.known.get(race);
+      if (t !== undefined) {
+        seaRace.told({ ...t, gone: true });
+        chartParts().racing.tell({ ...t, gone: true });
+      }
+      if (all) {
+        seaRace.clear();
+        chartParts().racing.clear();
+      }
+    },
+    /** The race as the screen and the chart have it. */
+    racing() {
+      const r = chartParts().racing;
+      const view = chartParts().chart.view;
+      return {
+        told: r.told.value,
+        number: r.number(),
+        call: r.call.value,
+        tracks: [...r.tracks().entries()].map(([n, t]) => ({ number: n, points: t.length / 2 })),
+        chart: { ...view.race.drawn, shown: view.race.group.visible },
+      };
+    },
+    /** Opens a race's replay by its code, as its link does after the race; resolves once it is shown. */
+    async replay(code: string, runs: number[] = []): Promise<boolean> {
+      const { loadReplay } = await import('../ui/replayhost');
+      const m = await loadReplay();
+      return m.openReplay(chartParts().replay, chartParts().chart, code, runs);
+    },
+    /** The replay open: the slider's moment and reach, the boat followed, the standings and what the chart draws; null for none. With at, the slider moved there first. */
+    replayed(at?: number) {
+      const m = chartParts().replay.model.peek();
+      if (m === null) {
+        return null;
+      }
+      if (at !== undefined) {
+        m.playing.value = false;
+        m.setTime(at);
+      }
+      const view = chartParts().chart.view;
+      return {
+        t: m.t.peek(),
+        lo: m.lo,
+        hi: m.hi,
+        playing: m.playing.peek(),
+        speed: m.speed.peek(),
+        followed: m.followed.peek(),
+        standings: m
+          .standings()
+          .map((x) => ({ key: x.key, place: x.place, state: x.state, toGo: x.toGo })),
+        drawing: m.drawing()?.boats ?? [],
+        chart: { ...view.race.drawn, shown: view.race.group.visible },
+      };
+    },
+    /**
+     * The own boat flies prizes, as if the server told them: a prize code
+     * (keel.prizeCode) and its race number while it races (0 none).
+     */
+    setPrizes(code: number, number = 0): void {
+      world.setPrizes(code, number);
+    },
+    /** A prize code: the pennants' colours (newest first), the burgee (0 none, 1 racing, 2 gilded), the spoons, the committee's flag, the pendant worn (0 none, else the certificate's place and one). */
+    prizeCode(p: {
+      pennants?: number[];
+      burgee?: number;
+      spoons?: number;
+      committee?: boolean;
+      pendant?: number;
+    }): number {
+      return prizeCode(p);
+    },
+    /**
+     * The certificates' pendants drawn: the own boat's sailor's (the one
+     * worn, and whether it is drawn: the pendants' model loaded), and how
+     * many of the boat's crew, of the near boats' skippers and of their
+     * crews wear one, as last drawn.
+     */
+    pendantsDrawn() {
+      let fleet = 0;
+      for (const v of world.fleet.views) {
+        fleet += v?.pendants !== null && (v?.pendants.count ?? 0) > 0 ? (v?.wearing ?? 0) : 0;
+      }
+      return {
+        own: world.boat?.pendantWorn ?? { worn: 0, drawn: false },
+        crew: world.crew.drawn.pendants,
+        fleet,
+        crews: world.crews.drawn.pendants,
+        loaded: pendantsLoaded() !== null,
+      };
+    },
+    /**
+     * The prizes drawn this frame: how many boats, flags, pennants,
+     * burgees, committee's flags and spoons; each flag's head (m east,
+     * north and up) and design (the catalog's flag index); the own boat's
+     * code, race number and whether its sailor wears the cockade.
+     */
+    prizesDrawn() {
+      const p = world.prizes;
+      return {
+        ...p.stats,
+        heads: p.shown
+          .slice(0, p.stats.flags)
+          .map((f) => ({ east: f.east, north: f.north, up: f.top, flag: f.flag })),
+        own: { ...world.ownPrizes, cockade: world.boat?.sailor?.cockade ?? false },
+        number: world.boat?.drawnBoatLook().number ?? 0,
+      };
+    },
+    /** The race committee's things as drawn this frame, the beacons known, and the courses laid. */
+    raceMarks() {
+      const r = world.race;
+      const lanterns = [];
+      for (let i = 0; i < r.lanternCount; i++) {
+        lanterns.push({
+          x: r.lanterns[3 * i] ?? 0,
+          y: r.lanterns[3 * i + 1] ?? 0,
+          z: r.lanterns[3 * i + 2] ?? 0,
+        });
+      }
+      const place = r.smoke.place.array as Float32Array;
+      const puffs = [];
+      for (let i = 0; i < r.smoke.count; i++) {
+        puffs.push({
+          east: (place[i * 4] ?? 0) + world.origin.world.x,
+          up: place[i * 4 + 1] ?? 0,
+          north: -(place[i * 4 + 2] ?? 0) + world.origin.world.y,
+          width: place[i * 4 + 3] ?? 0,
+        });
+      }
+      return {
+        ...r.stats,
+        laid: [...r.courses.entries()].map(([id, c]) => ({ id, ...c })),
+        known: [...r.beacons.values()].map(({ number, east, north, heading }) => ({
+          number,
+          east,
+          north,
+          heading,
+        })),
+        lanternsAt: lanterns,
+        puffsAt: puffs,
       };
     },
     land() {
@@ -2472,6 +2995,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           d.pitch = boats[i]?.pitch ?? w[RECORDS.wave.ahead] ?? 0;
         });
       }
+      // A boat of two hulls heeled about her lee hull, as float.ts has it.
+      for (const d of drawn) {
+        d.heave += hullLift(
+          (catalog.boats[d.kind] ?? world.kind).physics.hulls.hullSpacing,
+          d.heel,
+        );
+      }
       world.fleetSource = { drawn, count: drawn.length };
       // Boats put somewhere at once: their sailors met afresh.
       world.fleet.forgetSailors();
@@ -2497,7 +3027,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             l.state === 'loading' ||
             l.clipsState === 'loading' ||
             l.wheelState === 'loading' ||
-            l.trapezeState === 'loading',
+            l.trapezeState === 'loading' ||
+            l.catState === 'loading' ||
+            l.cruiserState === 'loading' ||
+            l.bridgeState === 'loading',
         ) ??
           false);
       while (busy()) {
@@ -2508,13 +3041,18 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * Puts n people aboard the boat in view as the sandbox's ?crew does (the
      * second at the helm, or the seat holder holds the controls), or none
-     * but its sailor for 0.
+     * but its sailor for 0; each wearing the pendant given in seat order, if
+     * given (0 none).
      */
-    showCrew(n: number, holder?: number): Promise<void> {
+    showCrew(n: number, holder?: number, pendants: readonly number[] = []): Promise<void> {
       if (n <= 0) {
         return world.showCrew(null);
       }
-      const crew = sandboxCrew(Math.min(n, world.kind.capacity), catalog);
+      const made = sandboxCrew(Math.min(n, world.kind.capacity), catalog);
+      const crew = {
+        ...made,
+        people: made.people.map((p, i) => ({ ...p, pendant: pendants[i] ?? 0 })),
+      };
       return world.showCrew(holder === undefined ? crew : { ...crew, holder });
     },
 
@@ -2524,6 +3062,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * own looks, the helm's look, and where each one's head is on screen
      * (CSS pixels, with the dome's drop).
      */
+    /** Aboard a ship: everyone walks at once to the next one's place (showCrew sends them back). */
+    shipShuffle(): void {
+      const rules = world.crew.rules;
+      if (rules instanceof ShipRules) {
+        rules.shuffle();
+      }
+    },
     crew(): {
       aboard: number;
       ready: boolean;
@@ -2541,6 +3086,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       /** Whether the helm is away from the tiller, walking to or from it as the controls change hands, and drawn. */
       helmAway: boolean;
       helmShown: boolean;
+      /** Aboard a beach cat: where the helm crossing her net is across it (null if not), and whether the crew crossing holds them. */
+      helmNet: number | null;
+      helmHeld: boolean;
+      /** Aboard a beach cat: each side's crew's wire drawn to whoever hangs on it (starboard, port). */
+      crewWires: [boolean, boolean];
+      /** At a cruising yacht's wheels: the wheel the helm stands at (+ starboard), how far sat by it (0 to 1), and whether walking between them. */
+      helmWheel: number;
+      helmSeat: number;
+      helmWalking: boolean;
       /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it, from which station). */
       members: {
         seat: number;
@@ -2550,7 +3104,35 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         moving: string | null;
         from: number;
         t: number;
+        /** After a capsize: in the water, righting her or climbing back, and whether thrown off over her bows; null aboard. */
+        wet: string | null;
+        thrown: boolean;
+        /** Across a beach cat's net: where across it, and how far on hands and knees; null if not. */
+        net: number | null;
+        crawl: number;
+        /** Aboard a cruising catamaran, a stretch of a walk not walked they are on: up or down her ladder ('up', 'down'), or edging along a gap ('edge'); null if walking or not moving. */
+        stretch: string | null;
+        /** Aboard a ship: whether gone (on a ladder or aloft), seconds waited on a walk, and whether sat (1) or stood (0) at a hatch. */
+        gone?: boolean;
+        waited?: number;
+        sat?: number;
+        /** Aboard a ship, their work: hauling ('haul') or aloft ('aloft'), going to it, at it or back; the brace's index and side, how hard they haul; the yard's index. */
+        work?: {
+          kind: string;
+          phase: string;
+          brace: number;
+          side: number;
+          pull: number;
+          yard: number;
+        } | null;
       }[];
+      /** Aboard a ship: whose seat is drawn at the wheel, and whether those on a hatch stand for the weather. */
+      wheel: number | null;
+      standing: boolean;
+      /** Aboard a ship: the hands at the braces (which group's, which side's, coiling down), the band of yards her topmen are aloft for (0 none), and her braces' lines drawn. */
+      gang: { group: string; side: number; coil: number } | null;
+      aloftBand: number;
+      braces: number;
       heads: {
         x: number;
         y: number;
@@ -2558,6 +3140,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         station: number;
         across: number;
         moving: boolean;
+        /** The seat, and the clip last posed in (the first of two blended). */
+        seat: number;
+        clip: string | null;
+        /** Where the head is in the boat's model. */
+        model: [number, number, number];
       }[];
     } {
       const c = world.crew;
@@ -2576,15 +3163,55 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         changes: rules?.side.changes ?? 0,
         helmAway: c.helmAway,
         helmShown: sailor?.shown === true && !sailor.away,
-        members: (rules?.members ?? []).map((m) => ({
-          seat: m.seat,
-          station: m.station,
-          side: m.side,
-          lean: m.lean,
-          moving: m.moving?.kind ?? null,
-          from: m.moving?.from.station ?? m.station,
-          t: m.moving?.t ?? 0,
-        })),
+        helmNet: sailor?.runtime.netAt ?? null,
+        helmHeld: c.helmHeld,
+        crewWires: c.wiresDrawn,
+        helmWheel: sailor?.runtime.windward ?? 0,
+        helmSeat: sailor?.runtime.seat ?? 0,
+        helmWalking: sailor?.runtime.walking ?? false,
+        members: (rules?.members ?? []).map((m) => {
+          const ship = 'ship' in m ? (m as ShipMember).ship : null;
+          return {
+            seat: m.seat,
+            station: m.station,
+            side: m.side,
+            lean: m.lean,
+            moving: m.moving?.kind ?? null,
+            from: m.moving?.from.station ?? m.station,
+            t: m.moving?.t ?? 0,
+            wet: m.wet?.phase ?? null,
+            thrown: m.wet?.thrown ?? false,
+            net: m.moving?.net?.x ?? null,
+            crawl: m.moving?.net?.crawl ?? 0,
+            stretch: stretchOf(m.moving),
+            ...(ship === null
+              ? {}
+              : {
+                  gone: ship.gone,
+                  waited: ship.waited,
+                  sat: ship.sat,
+                  work:
+                    ship.work === null
+                      ? null
+                      : {
+                          kind: ship.work.kind,
+                          phase: ship.work.phase,
+                          brace: ship.work.haul?.brace ?? -1,
+                          side: ship.work.haul?.side ?? 0,
+                          pull: ship.work.pull,
+                          yard: ship.work.yard?.yard ?? -1,
+                        },
+                }),
+          };
+        }),
+        wheel: c.wheelSeat,
+        standing: rules instanceof ShipRules ? rules.standing : false,
+        gang: rules instanceof ShipRules && rules.gang !== null ? { ...rules.gang } : null,
+        aloftBand: rules instanceof ShipRules ? rules.aloftBand : 0,
+        braces:
+          c.braces?.mesh.geometry.drawRange.count === undefined
+            ? 0
+            : c.braces.mesh.geometry.drawRange.count / 2,
         heads: c.heads().map((h) => {
           const p = h.at;
           p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
@@ -2596,6 +3223,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             station: h.station,
             across: h.across,
             moving: h.moving,
+            seat: h.seat,
+            clip: h.clip,
+            model: h.model,
           };
         }),
       };
@@ -2669,8 +3299,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           moving: string | null;
           from: number;
           t: number;
+          work: { kind: string; phase: string } | null;
+          lean: number;
+          wet: string | null;
         }[];
-        heads: { x: number; y: number }[];
+        heads: { x: number; y: number; up: number }[];
+        hooked: number;
       }[];
       drawn: { near: number; far: number };
       stats: { frames: number; posed: number; ms: number };
@@ -2684,11 +3318,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         boats: c.boats().map((b) => ({
           ...b,
           heads: b.heads.map((p) => {
+            const up = p.y;
             p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
             p.project(stage.camera);
             return {
               x: ((p.x + 1) / 2) * (canvas?.clientWidth ?? 0),
               y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
+              /** How high over the sea, m. */
+              up,
             };
           }),
         })),
@@ -3086,6 +3723,38 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       await world.setRung(index, 'test');
       world.ocean.detail.finishBake();
     },
+    /**
+     * Builds the sea without some of its layers (seamaterial.ts's
+     * SEA_LAYERS), and with apart the tiles a hull may reach drawn apart or
+     * not; each null as its tier draws it. Resolves once drawn.
+     */
+    async seaLayers(off: string[] | null, apart: boolean | null = null): Promise<void> {
+      await world.setSeaLayers(off === null ? null : new Set(off as SeaLayer[]), apart);
+    },
+    /**
+     * The fragment shaders the sea's tiles are drawn with now, as the back
+     * end runs them: the tiles', and the tiles by the hulls' where those are
+     * drawn apart (null where they are not).
+     */
+    async seaShaders(): Promise<{ tiles: string; byHulls: string | null }> {
+      const g = gfx();
+      const tiles = world.ocean.tiles;
+      const shader = async (mesh: Mesh): Promise<string> =>
+        (await g.renderer.debug.getShaderAsync(stage.scene, stage.camera, mesh)).fragmentShader ??
+        '';
+      return {
+        tiles: await shader(tiles.mesh),
+        byHulls: tiles.hullMesh.visible ? await shader(tiles.hullMesh) : null,
+      };
+    },
+    /** The names of the sea's layers and the sky's, as seaLayers and skyLayers take them. */
+    layerNames(): { sea: string[]; sky: string[] } {
+      return { sea: [...SEA_LAYERS], sky: [...SKY_LAYERS] };
+    },
+    /** Builds the sky without some of its layers (sky.ts's SKY_LAYERS); none for the whole sky. */
+    skyLayers(off: string[]): void {
+      world.sky.setLayers(new Set(off as SkyLayer[]));
+    },
     /** Adaptive quality on or off, and what it has done. */
     adapt(on: boolean): void {
       if (world.quality !== null) {
@@ -3108,8 +3777,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         q.wait = wait;
       }
     },
-    /** Makes every drawn frame take at least ms of the main thread's time; 0 stops. */
-    slowFrames(ms: number): void {
+    /**
+     * Makes every drawn frame take at least ms of the main thread's time; 0
+     * stops. With byPixels, ms on the top rung of the ladder, and on a lower
+     * one less by its share of the top's pixels: a device whose GPU can shade
+     * only so many pixels a second, as a laptop's built-in graphics.
+     */
+    slowFrames(ms: number, byPixels = false): void {
       const prev = world.onFrame as ((() => void) & { base?: (() => void) | null }) | null;
       // The frame's own callback, under any slowing put on it before.
       const base = prev !== null && 'base' in prev ? (prev.base ?? null) : prev;
@@ -3117,16 +3791,110 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         world.onFrame = base;
         return;
       }
+      const top = world.quality?.ladder[0];
       world.onFrame = Object.assign(
         () => {
           base?.();
-          const until = performance.now() + ms;
+          const share =
+            byPixels && top !== undefined
+              ? (stage.pixelRatio() / pixelRatioOf(world.top, top, world.display())) ** 2
+              : 1;
+          const until = performance.now() + ms * share;
           while (performance.now() < until) {
             // Busy, as a slow phone is.
           }
         },
         { base },
       );
+    },
+    /**
+     * Adaptive quality as on a first visit: nothing remembered, the ladder's
+     * top at the full rate, the first seconds' short windows; on a display
+     * whose shorter side is short CSS pixels, or the screen's (null).
+     */
+    async qualityAfresh(short: number | null = null): Promise<void> {
+      world.screenShort = short;
+      world.windowMs = null;
+      await world.qualityAfresh();
+    },
+    /** The frame cap: the display's rate, the divisor drawn at, and whether adaptive quality halved the rate. */
+    frameCap(): { display: number; divisor: number; interval: number; halved: boolean } {
+      const c = stage.cap;
+      return { display: c.display, divisor: c.divisor, interval: c.interval, halved: c.halved };
+    },
+    /**
+     * Counts each drawn frame from now on (src/dev/counts.ts): the buffer
+     * writes and their bytes, the texture writes, the render passes, the
+     * compute dispatches, the draws and triangles, the main thread's work
+     * and the interval between frames. With gpu false only the work and the
+     * intervals, with nothing of the GPU's wrapped; with detail, which
+     * buffers are written and what each pass draws into. Starting again
+     * starts afresh.
+     */
+    countStart(options: CountOptions = {}): void {
+      if (stage.counter instanceof FrameCounter) {
+        stage.counter.detach();
+      }
+      stage.counter = new FrameCounter(options);
+    },
+    /** What the frames since countStart showed; counting stops, unless keep is set. */
+    countStop(keep = false): FrameReport | null {
+      const c = stage.counter;
+      if (!(c instanceof FrameCounter)) {
+        return null;
+      }
+      const report = c.report();
+      if (!keep) {
+        c.detach();
+        stage.counter = null;
+      }
+      return report;
+    },
+    /**
+     * Counts the next n drawn frames (countStart's options), and stops: drawn
+     * by the frame loop when it draws, or here, one an animation frame, when
+     * it does not (a frozen page, or one under test not yet thawed).
+     */
+    async countFrames(n: number, options: CountOptions = {}): Promise<FrameReport> {
+      hooks.countStart(options);
+      const c = stage.counter as FrameCounter;
+      const byHand = !stage.loopDraws || stage.frozen;
+      const started = performance.now();
+      // The first frame counted only starts the count.
+      while (c.frames < n) {
+        await new Promise((r) => requestAnimationFrame(r));
+        if (byHand) {
+          stage.renderOnce(performance.now());
+        }
+        if (performance.now() - started > 120_000) {
+          break;
+        }
+      }
+      return hooks.countStop() as FrameReport;
+    },
+    /**
+     * Keeps an object hidden whatever the scene sets its visible to, or lets
+     * it go back to what it was: for measuring what each part of the frame
+     * costs.
+     */
+    keepHidden(o: { visible: boolean } | null | undefined, on: boolean): void {
+      if (o === null || o === undefined) {
+        return;
+      }
+      const held = o as { visible: boolean; heldVisible?: boolean };
+      if (on && held.heldVisible === undefined) {
+        held.heldVisible = o.visible;
+        Object.defineProperty(o, 'visible', {
+          configurable: true,
+          get: () => false,
+          set: () => undefined,
+        });
+      } else if (!on && held.heldVisible !== undefined) {
+        const was = held.heldVisible;
+        delete (o as { visible?: boolean }).visible;
+        delete held.heldVisible;
+        o.visible = was;
+      }
     },
     /**
      * The bytes the GPU holds for the look's textures on the rung in use, as
@@ -3165,8 +3933,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     tier() {
       return { ...TIERS[world.rung.tier], shadows: world.rung.shadows };
     },
-    /** Draws the detail band, the foam, or neither. */
-    setParts(parts: { detail?: boolean; foam?: boolean; wakes?: boolean }): void {
+    /** Draws the detail band, the foam, the wakes and a ship's braces, or not. */
+    setParts(parts: { detail?: boolean; foam?: boolean; wakes?: boolean; braces?: boolean }): void {
+      if (parts.braces !== undefined && world.crew.braces !== null) {
+        // A ship's braces, which the fleet does not draw.
+        world.crew.braces.mesh.visible = parts.braces;
+      }
       if (parts.detail !== undefined) {
         detailOn.value = parts.detail ? 1 : 0;
       }
@@ -3258,7 +4030,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       target.dispose();
       m.dispose();
       const maker = new FieldMaker(c.patch);
-      maker.set(world.catalogSea, c.inputs);
+      maker.set(world.catalogSea, c.follower.inputs);
       const f = maker.at(world.ocean.frame.time, newFields(n));
       const cpu = new Array<number>(n * n * 4);
       for (let i = 0; i < n * n; i++) {
@@ -3267,7 +4039,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         cpu[i * 4 + 2] = f.convergence[i] ?? 0;
         cpu[i * 4 + 3] = f.height[i] ?? 0;
       }
-      return { size: n, gpu: Array.from(got), cpu, variance: c.inputs.variance };
+      return { size: n, gpu: Array.from(got), cpu, variance: c.follower.inputs.variance };
     },
     /**
      * The tiles seen from straight above the boat, each pixel's numbers of
@@ -3986,9 +4758,29 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       c.setEnd({ world: 'sandbox', zone: '', ...end });
     },
 
-    /** Opens the chart, its list or the news; null closes it. */
+    /** Opens the chart, its list, the news or the log; null closes it. */
     openChart(mode: ChartMode | null): void {
       chartParts().chart.show(mode);
+    },
+
+    /** Opens the chart screen's News tab on a day's edition (2006-01-02), today's for null. */
+    openNews(day: string | null = null): void {
+      chartParts().chart.showNews(day);
+    },
+
+    /** Reads the news from the server's route (GET /api/news, which a test may stand in for), not from the sandbox's own chart. */
+    newsFromServer(): void {
+      chartParts().sea.news = serverNews;
+    },
+
+    /** How many listen for what the chart charts: the chart's own, and the news sheet's while it is open. */
+    chartListeners(): number {
+      return chartParts().chart.store.listening;
+    },
+
+    /** Opens the chart screen's Log tab on a log: the player's own, a sailor's or a machine sailor's. */
+    openLog(who: LogWho): void {
+      chartParts().chart.showLog(who);
     },
 
     /** Where a charted subject lies on the chart's screen, CSS pixels. */
@@ -4046,6 +4838,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         size: c.store.size,
         titles: c.store.entries.map((e) => c.store.title(e)),
         mine: c.store.entries.filter((e) => c.store.mine(e)).map((e) => c.store.title(e)),
+        courses: c.store.courses.map((k) => k.name),
         credits: c.store.entries.map((e) => [c.store.title(e), e.by] as [string, string]),
         models: v.modelsHad,
         draws: v.draws,
@@ -4235,6 +5028,53 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return chartParts().chart.view.screenOf(east, north);
     },
 
+    /** Sets the course, or with null clears it, as the chart's boxes do. */
+    setCourse(c: Course | null): void {
+      const chart = chartParts().chart;
+      if (c === null) {
+        chart.clearCourse();
+      } else {
+        chart.setCourse(c);
+      }
+    },
+
+    /** Where the boat the course is set to is, as the server tells it every two seconds. */
+    courseBoatAt(at: ShipmateAtIn): void {
+      chartParts().chart.boatAt(at);
+    },
+
+    /** A course to a sailor's boat ended, as the server tells it. */
+    courseBoatEnded(sailor: string, why: CourseEndWhy): void {
+      chartParts().chart.boatEnded(sailor, why);
+    },
+
+    /**
+     * The course as the screens have it: what is set, where it is from the
+     * boat, the compass's window and mark, the pin box and the chart's pins,
+     * the pocket's and the sea's tags.
+     */
+    course() {
+      const chart = chartParts().chart;
+      const a = chart.aim(world.pose.east, world.pose.north);
+      const pin = document.querySelector<HTMLElement>('.chart-pin.chart-course');
+      return {
+        course: chart.course.value,
+        marked: chart.marked.value,
+        aim: a,
+        window: document.querySelector('[data-readout=course-distance]')?.textContent ?? null,
+        mark:
+          document.querySelector<SVGElement>('[data-readout=course-mark]')?.style.transform ?? null,
+        words: document.querySelector('[data-readout=course]')?.textContent ?? '',
+        pin: pin === null || pin.hidden ? null : (pin.textContent ?? ''),
+        dropped: document.querySelector<HTMLElement>('.chart-pin.chart-dropped')?.hidden === false,
+        line: chart.view.course.drawn.line,
+        tag: (() => {
+          const t = document.querySelector<HTMLElement>('[data-readout=mark-tag]');
+          return t === null || t.hidden ? null : t.textContent;
+        })(),
+      };
+    },
+
     /** The boat's arrow on the chart: its nose and tail on the screen, CSS pixels, and its scale. */
     chartArrow() {
       return chartParts().chart.view.arrowEnds();
@@ -4401,4 +5241,16 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   };
 
   return hooks;
+}
+
+/** Aboard a cruising catamaran, the stretch of a walk not walked someone moving is on now: up or down her ladder, or edging; null if not. */
+function stretchOf(mv: CrewMove | null): string | null {
+  if (mv === null || mv.t < 0 || (mv.stretches ?? []).length === 0) {
+    return null;
+  }
+  const at = moveAt(mv);
+  if (at.rise < 1 || at.sit > 0) {
+    return null;
+  }
+  return mv.stretches?.find((l) => at.along > l.s0 && at.along < l.s1)?.kind ?? null;
 }

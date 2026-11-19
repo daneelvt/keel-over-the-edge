@@ -7,6 +7,7 @@
 
 import type { ReadonlySignal, Signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
+import { lazyFailed } from '../boot/updated';
 import type { Status, WatchingTold } from '../net/messages';
 import type { Place, WatchEnd } from '../net/online';
 
@@ -55,6 +56,8 @@ export function loadWatch(): Promise<Watch> {
   if (loading === null) {
     loading = import('./watch').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }

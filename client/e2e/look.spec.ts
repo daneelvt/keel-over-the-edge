@@ -156,6 +156,7 @@ test.describe('the tiers', () => {
     if (project() === 'webgl2') {
       expect(info.tier).toBe('low');
       expect(info.detail).toBe('baked');
+      expect(info.sea).toBe('plain');
       expect(info.dispatches).toBe(0);
     } else if (project() === 'compat') {
       // Compatibility mode's limits, enforced: and the transform built to them.
@@ -164,6 +165,7 @@ test.describe('the tiers', () => {
       expect(info.vertexStorageTextures).toBe(0);
       expect(info.tier).toBe('medium');
       expect(info.detail).toBe('fft 128 × 1');
+      expect(info.sea).toBe('whole');
       // The detail band's four, and the wake's waves' four in one call.
       expect(info.dispatches).toBe(5);
     } else {
@@ -171,6 +173,7 @@ test.describe('the tiers', () => {
       expect(info.workgroup).toBeGreaterThanOrEqual(256);
       expect(info.tier).toBe('high');
       expect(info.detail).toBe('fft 256 × 2');
+      expect(info.sea).toBe('whole');
       expect(info.dispatches).toBe(9);
     }
   });
@@ -982,7 +985,8 @@ test.describe('shadows', () => {
     const [on, off] = await page.evaluate(() => {
       const k = globalThis.keel;
       const rungs = k.info().rungs;
-      const lit = rungs.findIndex((r) => r.includes('0.7, shadows'));
+      // The last rung with shadows, and the next, alike but for them.
+      const lit = rungs.map((r) => r.includes('shadows')).lastIndexOf(true);
       return [lit, lit + 1];
     });
     const take = async (rung: number, boat: boolean) => {
@@ -1095,6 +1099,134 @@ test.describe('budgets', () => {
 });
 
 test.describe('adaptive quality', () => {
+  // The page is the worker's, shared with the pictures: its size goes back
+  // after a test that made it small, pass or fail.
+  test.afterEach(async ({ page }) => {
+    const size = page.viewportSize();
+    if (size?.width !== 960 || size.height !== 600) {
+      await page.setViewportSize({ width: 960, height: 600 });
+    }
+  });
+
+  test('a slow page settles within ten seconds of drawing, then holds an even rate', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    // On a software GPU, a small page (no picture is judged here: a frame
+    // there takes over a second at full size on a slow runner) on the low
+    // tier's ladder: no shaders to change on the way down.
+    if (softwareGPU) {
+      await page.setViewportSize({ width: 320, height: 200 });
+    }
+    await openLook(page, 'sea=fresh', !softwareGPU);
+    // Slowed on the main thread, nothing a rung changes helps: the last rung
+    // at half the rate. Slowed by the pixels drawn, as a GPU that shades only
+    // so many a second: a rung that holds 60. On a software GPU the main
+    // thread's slowing, with windows made to hold six of its frames, and
+    // the display taken as 60 Hz: its animation frames come so late that
+    // even a probe reads the display slow. Its timing is not judged.
+    const cases = softwareGPU
+      ? [{ ms: 40, byPixels: false, halved: true }]
+      : [
+          { ms: 20, byPixels: false, halved: true },
+          { ms: 40, byPixels: true, halved: false },
+        ];
+    for (const c of cases) {
+      const r = await page.evaluate(
+        async ({ ms, byPixels, software }) => {
+          const k = globalThis.keel;
+          const w = k.world;
+          k.slowFrames(ms, byPixels);
+          // On a software GPU, the loop's own interval between drawn frames,
+          // with nothing judged: a lone render and its fence come back far
+          // sooner than the loop draws (1.3 s a frame on a slow runner), and
+          // a window must hold four of the loop's frames to say anything:
+          // six, so that four windows (two to step, two to halve) fit.
+          let window = 0;
+          if (software) {
+            k.adapt(false);
+            const seen: number[] = [];
+            w.onDrawn = () => seen.push(performance.now());
+            k.thaw();
+            while (seen.length < 7) {
+              await k.frames(1);
+            }
+            w.onDrawn = null;
+            const gaps = seen.slice(1).map((t, i) => t - (seen[i] as number));
+            gaps.sort((a, b) => a - b);
+            window = Math.max(250, 6 * (gaps[Math.floor(gaps.length / 2)] ?? 0));
+          }
+          // A first visit, on a display of 1,080 lines: the floor at half its pixels.
+          await k.qualityAfresh(1080);
+          if (software) {
+            k.qualityTiming(window, null);
+            k.capFrames(null, 60);
+          }
+          const drawn: number[] = [];
+          w.onDrawn = () => drawn.push(performance.now());
+          const start = performance.now();
+          k.thaw();
+          // Ten seconds to settle and three to hold; on a software GPU, until the half rate.
+          const budget = software ? 60_000 : 13_000;
+          while (performance.now() - start < budget) {
+            await k.frames(5);
+            if (software && k.frameCap().halved) {
+              break;
+            }
+          }
+          w.onDrawn = null;
+          const steps = (w.quality?.log ?? [])
+            .filter((s) => s.at >= start)
+            .map((s) => ({ at: s.at - start, from: s.from, to: s.to, why: s.why }));
+          const last = steps.at(-1)?.at ?? 0;
+          // The intervals between frames drawn from half a second after the last step.
+          const intervals: number[] = [];
+          for (let i = 1; i < drawn.length; i++) {
+            if ((drawn[i - 1] as number) - start > last + 500) {
+              intervals.push((drawn[i] as number) - (drawn[i - 1] as number));
+            }
+          }
+          intervals.sort((a, b) => a - b);
+          const cap = k.frameCap();
+          const out = {
+            steps,
+            log: k.qualityLog().slice(-steps.length),
+            rungs: w.quality?.ladder.length ?? 0,
+            p90: intervals[Math.max(0, Math.ceil(0.9 * intervals.length) - 1)] ?? 0,
+            frames: intervals.length,
+            cap,
+          };
+          k.slowFrames(0);
+          k.capFrames(null);
+          k.adapt(false);
+          k.freeze(100);
+          return out;
+        },
+        { ...c, software: softwareGPU },
+      );
+      test.info().annotations.push({
+        type: `slowed ${c.ms} ms${c.byPixels ? ' by pixels' : ''}`,
+        description: `${r.log.join('; ')}; p90 ${r.p90.toFixed(1)} ms over ${r.frames} frames, cap ${r.cap.interval.toFixed(1)} ms`,
+      });
+      const downs = r.steps.filter((s) => s.why === 'slow');
+      expect(downs.length).toBeGreaterThan(0);
+      // Far too slow: big steps, not a rung at a time.
+      expect(downs.length).toBeLessThan(5);
+      expect(r.cap.halved).toBe(c.halved);
+      if (c.halved) {
+        expect(r.steps.at(-1)?.to).toBe(r.rungs);
+      }
+      if (!softwareGPU) {
+        expect(r.steps.at(-1)?.at ?? 0).toBeLessThan(10_000);
+        expect(r.p90).toBeLessThan(1.15 * r.cap.interval);
+      }
+    }
+    await page.evaluate(() => globalThis.keel.qualityAfresh(null));
+    await page.evaluate(() => globalThis.keel.adapt(false));
+    expect(errors).toEqual([]);
+  });
+
   test('steps down a slow page to the low tier, and up again when it is fast', {
     tag: '@long',
   }, async ({ page }) => {
@@ -1173,8 +1305,55 @@ test.describe('adaptive quality', () => {
   });
 });
 
+test.describe('the low tier’s sea', () => {
+  test('keeps the hulls’ cut out of all but the tiles by a hull, and is shorter', async ({
+    page,
+  }) => {
+    await openLook(page, 'tier=low', false);
+    const plain = await page.evaluate(() => globalThis.keel.seaShaders());
+    // The whole look, every tile in one draw, as the tiers above draw it.
+    const whole = await page.evaluate(async () => {
+      const k = globalThis.keel;
+      await k.seaLayers([], false);
+      const s = await k.seaShaders();
+      await k.seaLayers(null);
+      return s;
+    });
+    // Throwing a fragment away is what the cut does: only where a hull may be.
+    expect(plain.tiles).not.toMatch(/\bdiscard\b/);
+    expect(plain.byHulls).toMatch(/\bdiscard\b/);
+    expect(whole.tiles).toMatch(/\bdiscard\b/);
+    expect(whole.byHulls).toBeNull();
+    // The rain's pocks and the shimmer read the pattern twice and once more.
+    const reads = (code: string): number => (code.match(/texture(Sample)?\w*\(/g) ?? []).length;
+    expect(reads(plain.tiles)).toBeLessThan(reads(whole.tiles));
+    expect(plain.tiles.length).toBeLessThan(whole.tiles.length * 0.9);
+  });
+});
+
 test.describe('pictures', () => {
   test.beforeEach(heavy);
+
+  // The low tier's look, as a weak laptop draws it, on every back end.
+  for (const [name, sea, hour] of [
+    ['day', 'breeze', 12],
+    ['dusk', 'breeze', 18.2],
+    ['gale', 'gale', 12],
+  ] as const) {
+    test(`the low tier, ${name}`, async ({ page }) => {
+      test.skip(project() === 'compat', 'the low tier on WebGPU is the webgpu project’s');
+      await openLook(page, `sea=${sea}&tier=low`, false);
+      await page.evaluate(async (hour) => {
+        const k = globalThis.keel;
+        k.setState({ heading: (330 * Math.PI) / 180 - 2 * Math.PI });
+        k.setSky(hour);
+        k.render();
+        await k.show();
+      }, hour);
+      expect(await page.evaluate(() => globalThis.keel.info().sea)).toBe('plain');
+      await expect.soft(page.locator('canvas.scene')).toHaveScreenshot(`low-${name}.png`);
+    });
+  }
 
   for (const sea of ['calm', 'breeze', 'fresh', 'gale']) {
     test(sea, async ({ page }) => {

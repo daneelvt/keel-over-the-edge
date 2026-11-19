@@ -3,15 +3,31 @@
 // The net worker with a fake socket and fake timers: the clock's estimate
 // and its slew; the Pings' schedule and the empty Inputs; a connection
 // gone quiet; what each close code leads to; the session check after a
-// failed upgrade; and the waits a wake cuts short.
+// failed upgrade; the waits a wake cuts short; and a hidden page's one
+// snapshot, every other message passed on.
 
 import { describe, expect, test } from 'vitest';
 import { applied, Clock, SET_BEYOND } from '../../net/clock';
 import { decodeClient, encodeServer } from '../../net/frame';
-import { ChatRefusal, ChatStatus, ReportReason, WatchEnd } from '../../net/gen/keel/v1/game_pb';
+import {
+  ChatRefusal,
+  ChatStatus,
+  CourseEnd,
+  ReportReason,
+  WatchEnd,
+} from '../../net/gen/keel/v1/game_pb';
 import type { FromWorker } from '../../net/messages';
 import { HEADER_SIZE, newSnapshot, writeSnapshot } from '../../net/snapshot';
-import { FLEET_META, FLEET_RECORD_BYTES, fleetOf } from '../../net/view';
+import {
+  CHANGE,
+  FLEET_META,
+  FLEET_RECORD_BYTES,
+  fleetOf,
+  foldHeld,
+  SLOT,
+  slotAt,
+  VIEW_SLOTS,
+} from '../../net/view';
 import { NetWorker, type Socket } from './net';
 import { afterClose, backoff, WAIT_CAP } from './policy';
 import { ACK_AFTER, BURST_EVERY, PING_EVERY, PONG_TIMEOUT, Session } from './session';
@@ -98,6 +114,21 @@ describe('the session', () => {
     expect(pings.slice(0, 8)).toEqual([0, 1, 2, 3, 4, 5, 6, 7].map((i) => i * BURST_EVERY));
     expect((pings[8] ?? 0) - (pings[7] ?? 0)).toBe(PING_EVERY);
     expect((pings[9] ?? 0) - (pings[8] ?? 0)).toBe(PING_EVERY);
+  });
+
+  test('a Ping tells the bytes the page fetched since the last, once', () => {
+    const s = welcomed();
+    const ping = (now: number) =>
+      s
+        .time(now)
+        .out.map(decodeClient)
+        .find((m) => m.body.case === 'ping');
+    s.fetchedBytes += 120_000;
+    s.fetchedBytes += 3_000;
+    const first = ping(s.deadline());
+    expect(first?.body.case === 'ping' && first.body.value.fetchedBytes).toBe(123_000);
+    const next = ping(s.deadline());
+    expect(next?.body.case === 'ping' && next.body.value.fetchedBytes).toBe(0);
   });
 
   test('an empty Input after 100 ms of silence, with the newest snapshot’s tick', () => {
@@ -325,6 +356,68 @@ describe('the session', () => {
     });
   });
 
+  test('a course to a boat: asked and stopped, where it is, its ends, and a shipmate sailing to the player', () => {
+    const s = welcomed();
+    const id = '0b6a2f9e-1c1d-4e55-9a51-8d2f0e3b7c41';
+    expect(decodeClient(s.courseToCommand(1, id)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'courseTo', value: { sailor: id } } },
+    });
+    expect(decodeClient(s.courseToCommand(2, '')).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'courseTo', value: { sailor: '' } } },
+    });
+    expect(
+      s.receive(
+        3,
+        encodeServer({
+          body: {
+            case: 'shipmateAt',
+            value: { sailor: id, name: 'Ann Bonny', east: -1200, north: 3400 },
+          },
+        }),
+      ),
+    ).toEqual({
+      kind: 'shipmateAt',
+      at: { sailor: id, name: 'Ann Bonny', east: -1200, north: 3400 },
+    });
+    for (const [why, told] of [
+      [CourseEnd.ASHORE, 'ashore'],
+      [CourseEnd.GONE, 'gone'],
+      [CourseEnd.REFUSED, 'refused'],
+      [CourseEnd.UNSPECIFIED, 'refused'],
+    ] as const) {
+      expect(
+        s.receive(4, encodeServer({ body: { case: 'courseEnded', value: { sailor: id, why } } })),
+      ).toEqual({ kind: 'courseEnded', sailor: id, why: told });
+    }
+    expect(
+      s.receive(5, encodeServer({ body: { case: 'shipmateCourse', value: { name: 'Bob Read' } } })),
+    ).toEqual({ kind: 'shipmateCourse', name: 'Bob Read' });
+  });
+
+  test('the way home: Home asked, and Lifted told, lifted at its tick or not, too soon', () => {
+    const s = welcomed();
+    expect(decodeClient(s.homeCommand(1)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'home', value: {} } },
+    });
+    expect(
+      s.receive(2, encodeServer({ body: { case: 'lifted', value: { tick: 4200n } } })),
+    ).toEqual({
+      kind: 'lifted',
+      tick: 4200,
+      soon: false,
+    });
+    expect(s.receive(3, encodeServer({ body: { case: 'lifted', value: { soon: true } } }))).toEqual(
+      {
+        kind: 'lifted',
+        tick: 0,
+        soon: true,
+      },
+    );
+  });
+
   test('the commands of chat: a line, a mute by seat, a block by line, a report', () => {
     const s = welcomed();
     expect(decodeClient(s.sayCommand(1, 'Fair winds', 4)).body).toMatchObject({
@@ -366,6 +459,48 @@ function snapshotBytes(tick: number, base = 0): Uint8Array<ArrayBuffer> {
   sn.base = base;
   const b = new Uint8Array(HEADER_SIZE);
   writeSnapshot(sn, new DataView(b.buffer));
+  return b;
+}
+
+/** A boat entering view slot slot, of kind kind, at x metres east: an enter's bytes. */
+function enter(slot: number, kind: number, x: number): number[] {
+  const b = [(1 << 6) | slot];
+  // Its kind and rig as a uvarint, then no look and no boat look.
+  for (let v = kind * 64; ; v = Math.floor(v / 128)) {
+    if (v < 128) {
+      b.push(v);
+      break;
+    }
+    b.push((v & 0x7f) | 0x80);
+  }
+  b.push(0, 0, 0);
+  const q = Math.round(x * 100);
+  b.push(q & 0xff, (q >> 8) & 0xff, (q >> 16) & 0xff, 0, 0, 0);
+  // The heading, heel, boom, rudder and sailor (two bytes each), the sail.
+  b.push(...Array.from({ length: 11 }, () => 0));
+  return b;
+}
+
+/** The boat in view slot slot turned to a heading: an update's bytes. */
+function turn(slot: number, steps: number): number[] {
+  return [slot, 2, steps & 0xff, (steps >> 8) & 0xff];
+}
+
+/** The boat in view slot slot gone: a leave's bytes. */
+function leave(slot: number): number[] {
+  return [(2 << 6) | slot];
+}
+
+/** A snapshot of tick, against the snapshot base ticks before it, with these entries. */
+function snapshotWith(tick: number, base: number, entries: number[][]): Uint8Array<ArrayBuffer> {
+  const sn = newSnapshot();
+  sn.tick = tick;
+  sn.base = base;
+  sn.entries = entries.length;
+  const body = entries.flat();
+  const b = new Uint8Array(HEADER_SIZE + body.length);
+  writeSnapshot(sn, new DataView(b.buffer));
+  b.set(body, HEADER_SIZE);
   return b;
 }
 
@@ -874,5 +1009,107 @@ describe('watching, in the net worker', () => {
       case: 'hello',
       value: { watch: 'Iron Mary' },
     });
+  });
+});
+
+describe('a hidden page, in the net worker', () => {
+  const names = (s: FakeSocket, slot: number, name: string) =>
+    s.deliver(encodeServer({ body: { case: 'boatNames', value: { names: [{ slot, name }] } } }));
+  const watchers = (s: FakeSocket, count: number) =>
+    s.deliver(encodeServer({ body: { case: 'watchers', value: { count } } }));
+  const records = (posted: FromWorker[]) =>
+    posted.flatMap((m) => (m.type === 'snapshot' ? [fleetOf(m.data)] : []));
+
+  test('keeps the newest snapshot alone, every other message passed on; shown, hands it over with what the others did to each slot', () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    h.welcome(s);
+    // Boats in slots 1 and 3, seen by the page.
+    s.deliver(snapshotWith(4, 0, [enter(1, 2, 10), enter(3, 2, 30)]));
+    h.net.handle({ type: 'hidden', on: true });
+    const before = h.posted.length;
+    // Hidden: boat 1 turns, boat 3 leaves and another takes its slot, a
+    // boat enters slot 5 and leaves it, one enters slot 7; the names and
+    // the watchers come between.
+    s.deliver(snapshotWith(6, 2, [turn(1, 100), leave(3), enter(5, 2, 50)]));
+    names(s, 3, 'Swift');
+    s.deliver(snapshotWith(8, 2, [enter(3, 4, 33), leave(5)]));
+    watchers(s, 2);
+    s.deliver(snapshotWith(10, 2, [enter(7, 2, 70)]));
+    for (let t = 12; t <= 200; t += 2) {
+      s.deliver(snapshotWith(t, 2, [turn(1, t)]));
+    }
+    const hidden = h.posted.slice(before);
+    expect(hidden.map((m) => m.type)).toEqual(['boatNames', 'watchers']);
+    // One record held, made once and filled again for each.
+    expect(h.net.made).toBe(2);
+    h.net.handle({ type: 'hidden', on: false });
+    const shown = records(h.posted.slice(before));
+    expect(shown.length).toBe(1);
+    const f = shown[0] as Float64Array;
+    expect(f[FLEET_META.tick]).toBe(200);
+    const slot = (i: number) => ({
+      present: f[slotAt(i) + SLOT.present],
+      change: f[slotAt(i) + SLOT.change],
+      relook: f[slotAt(i) + SLOT.relook],
+      sampled: f[slotAt(i) + SLOT.sampled],
+      kind: f[slotAt(i) + SLOT.kind],
+    });
+    expect(slot(1)).toEqual({ present: 1, change: CHANGE.updated, relook: 0, sampled: 1, kind: 2 });
+    // Another boat in slot 3: entered, not the one the page holds.
+    expect(slot(3)).toEqual({ present: 1, change: CHANGE.entered, relook: 0, sampled: 1, kind: 4 });
+    expect(f[slotAt(3) + SLOT.x]).toBeCloseTo(33, 9);
+    // In and out again: the page never saw it, and is told it is gone.
+    expect(slot(5)).toMatchObject({ present: 0, change: CHANGE.left });
+    expect(slot(7)).toEqual({ present: 1, change: CHANGE.entered, relook: 0, sampled: 1, kind: 2 });
+    // Shown, the snapshots go to the page as they come.
+    s.deliver(snapshotWith(202, 2, []));
+    expect(records(h.posted.slice(before)).length).toBe(2);
+  });
+
+  test('a Welcome while hidden lets the last boat’s snapshot go; shown after a while, the clock is set at once', () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    h.welcome(s);
+    h.net.handle({ type: 'hidden', on: true });
+    s.deliver(snapshotWith(4, 0, [enter(1, 2, 10)]));
+    h.welcome(s);
+    const before = h.posted.length;
+    h.net.handle({ type: 'hidden', on: false, settle: true });
+    expect(h.posted.slice(before).map((m) => m.type)).toEqual(['clock']);
+  });
+
+  test('what the snapshots before did to a slot folds into the newest', () => {
+    const f = new Float64Array(5 + VIEW_SLOTS * 27);
+    const change = new Uint8Array(VIEW_SLOTS);
+    const relook = new Uint8Array(VIEW_SLOTS);
+    const set = (i: number, c: number, r = 0, present = 1) => {
+      f[slotAt(i) + SLOT.change] = c;
+      f[slotAt(i) + SLOT.relook] = r;
+      f[slotAt(i) + SLOT.present] = present;
+    };
+    // The first: as it is.
+    set(0, CHANGE.entered, 1);
+    set(1, CHANGE.updated);
+    set(2, CHANGE.entered, 1);
+    set(3, CHANGE.left, 0, 0);
+    foldHeld(f, change, relook, true);
+    // Then: 0 updated, 1 nothing, 2 a relook again, 3 another boat.
+    set(0, CHANGE.updated);
+    set(1, CHANGE.none);
+    set(2, CHANGE.entered, 1);
+    set(3, CHANGE.entered, 1);
+    foldHeld(f, change, relook, false);
+    const got = [0, 1, 2, 3].map((i) => [f[slotAt(i) + SLOT.change], f[slotAt(i) + SLOT.relook]]);
+    expect(got).toEqual([
+      [CHANGE.entered, 1],
+      [CHANGE.updated, 0],
+      [CHANGE.entered, 1],
+      [CHANGE.entered, 0],
+    ]);
   });
 });

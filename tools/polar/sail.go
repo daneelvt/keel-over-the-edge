@@ -69,6 +69,77 @@ var orcJib = orcSail{
 	side:      []float64{27, 50, 60},
 }
 
+// orcMainHigh and orcJibHigh are ORC's high-lift mainsail and jib
+// (Tables 5.1 and 5.4): a rig whose camber can be worked more, the main's
+// by its mast's bend, the jib's by its forestay. ORC's VPP Documentation
+// 2023 gives both sets to five places; the low sets above are its, to
+// three.
+var orcMainHigh = orcSail{
+	name: "ORC's high-lift mainsail",
+	points: []struct{ awa, cl, cd float64 }{
+		{7, 0.94828, 0.01724},
+		{9, 1.13793, 0.01466},
+		{12, 1.25, 0.01466},
+		{28, 1.42681, 0.02586},
+		{60, 1.38319, 0.11302},
+		{90, 1.26724, 0.3825},
+		{120, 0.93103, 0.96888},
+		{150, 0.38793, 1.31578},
+		{180, -0.11207, 1.34483},
+	},
+	quadratic: orcMain.quadratic,
+	from:      orcMain.from,
+	to:        orcMain.to,
+	side:      orcMain.side,
+}
+
+var orcJibHigh = orcSail{
+	name: "ORC's high-lift jib",
+	points: []struct{ awa, cl, cd float64 }{
+		{7, 0, 0.05},
+		{15, 1.1, 0.032},
+		{20, 1.475, 0.031},
+		{27, 1.5, 0.037},
+		{50, 1.45, 0.25},
+		{60, 1.25, 0.35},
+		{100, 0.40, 0.73},
+		{150, 0, 0.95},
+		{180, -0.10, 0.90},
+	},
+	quadratic: orcJib.quadratic,
+	from:      orcJib.from,
+	to:        orcJib.to,
+	side:      orcJib.side,
+}
+
+// blend is ORC's sail between its low and high sets, high of the high set.
+func blend(low, hi orcSail, high float64, name string) orcSail {
+	out := low
+	out.name = name
+	out.points = make([]struct{ awa, cl, cd float64 }, len(low.points))
+	for i, p := range low.points {
+		h := hi.points[i]
+		out.points[i].awa = p.awa
+		out.points[i].cl = p.cl*(1-high) + h.cl*high
+		out.points[i].cd = p.cd*(1-high) + h.cd*high
+	}
+	return out
+}
+
+// orcSails returns the main and jib ORC rates a rig with: the low sets,
+// or for a backstay without runners the medium sets, blended by the rig's
+// fractionality (ORC's VPP Documentation 2023, eqs. 5.5, 5.6 and 5.9):
+// fcoef = sin(π min(0.3, max(0, 1/F − 1)) / 0.6), the main's medium set
+// fcoef/2 of the high, the jib's 1 − fcoef.
+func orcSails(r *rigData) (orcSail, orcSail) {
+	if r == nil || !r.Backstay {
+		return orcMain, orcJib
+	}
+	f := math.Sin(math.Pi * math.Min(0.3, math.Max(0, 1/r.Fractionality-1)) / 0.6)
+	return blend(orcMain, orcMainHigh, f/2, fmt.Sprintf("ORC's medium mainsail (fcoef %.3f)", f)),
+		blend(orcJib, orcJibHigh, 1-f, fmt.Sprintf("ORC's medium jib (fcoef %.3f)", f))
+}
+
 // orcGennaker is ORC's asymmetric spinnaker tacked on the centreline
 // (Table 5.7, "asc"): a gennaker on a bowsprit. It is held to from 41° to
 // 180°: closer to the wind it collapses, its lift gone and its drag left,
@@ -173,14 +244,19 @@ func trimmed(c coefficients, awa float64) (cl, cd, angle float64) {
 // that drives her best near the wind is not the one ORC's sails, trimmed
 // for a sloop's lift, are taken at, and a ship never sails so close to
 // the apparent wind.
-func runSail(k *kind) error {
+func runSail(k *kind, ref *reference) error {
 	area := ((k.p.SailArea + k.p.HeadsailArea) + k.p.SquareForeArea) + k.p.SquareAfterArea
 	induced := area / (math.Pi * k.p.EffectiveHeight * k.p.EffectiveHeight)
 	fmt.Printf("%s\n", k.name)
 	square := k.p.SquareForeArea > 0 || k.p.SquareAfterArea > 0
-	failed := compareSail("the main", mainOf(k), orcMain, induced)
+	var r *rigData
+	if ref != nil {
+		r = ref.Rig
+	}
+	main, jib := orcSails(r)
+	failed := compareSail("the main", mainOf(k), main, induced)
 	if k.p.HeadsailArea > 0 {
-		failed = append(failed, compareSail("the headsails", headsailsOf(k), orcJib, induced)...)
+		failed = append(failed, compareSail("the headsails", headsailsOf(k), jib, induced)...)
 	}
 	if k.p.DownwindArea > 0 {
 		// Set, its area joins the rig's induced drag.

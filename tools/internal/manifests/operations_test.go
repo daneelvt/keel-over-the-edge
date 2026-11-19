@@ -524,6 +524,33 @@ func TestForwards(t *testing.T) {
 	if want := "http://" + Forwards[i].IP + ":9428/insert/journald"; defaults["observe_logs_url"] != want {
 		t.Errorf("the journal is sent to %v, VictoriaLogs is at %s", defaults["observe_logs_url"], want)
 	}
+	// The machine advertises the forwards routed to the tailnet, and no
+	// other (the access role's routes).
+	data, err = os.ReadFile(filepath.Join("..", "..", "..", "infra", "ansible", "roles", "access", "defaults", "main.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var access map[string]any
+	if err := yaml.Unmarshal(data, &access); err != nil {
+		t.Fatal(err)
+	}
+	routes, _ := access["access_tailscale_routes"].([]any)
+	var got []string
+	for _, r := range routes {
+		s, _ := r.(string)
+		got = append(got, s)
+	}
+	want := TailnetRoutes()
+	slices.Sort(got)
+	slices.Sort(want)
+	if len(want) == 0 || !slices.Equal(got, want) {
+		t.Errorf("the machine advertises %v, the forwards routed to the tailnet are %v", got, want)
+	}
+	for _, f := range Forwards {
+		if f.Tailnet && f.Namespace != "monitoring" {
+			t.Errorf("%s/%s is routed to the tailnet: the monitoring pages alone are", f.Namespace, f.Service)
+		}
+	}
 	// The scraper's port on keel is the metrics listener's, and no other.
 	apps := release(t, prod, "apps")
 	keel := Container(PodSpec(Find(apps, "Deployment", Deployment)), "containers", "keel")

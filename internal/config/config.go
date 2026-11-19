@@ -62,6 +62,10 @@ type Config struct {
 	// listener then serves; it must hold index.html. Unset, another server
 	// serves the page, as Vite does in development.
 	ClientDir string
+	// PolicyReport sends the pages' Content Security Policy as a report
+	// only (KEEL_PAGE_POLICY=report): the browser says what it would
+	// refuse, and refuses nothing. Unset, or enforce, it is enforced.
+	PolicyReport bool
 	// BoatLimit is the most boats the world holds at once; beyond it,
 	// players wait in a queue.
 	BoatLimit int
@@ -96,9 +100,20 @@ type Config struct {
 	// WorldKeep is how long an ended world's data is kept before its
 	// partitions are dropped.
 	WorldKeep time.Duration
+	// AccessTeam and AccessAUD are the Cloudflare Access application the
+	// website's status is behind: the team's domain, as
+	// keel.cloudflareaccess.com, and the application's audience tag. Only
+	// with both is GET /api/status served, to requests that carry a token
+	// Access signed for it; with either unset, it is not served at all.
+	AccessTeam, AccessAUD string
+	// StatusBoats is the most boats the website's status shows.
+	StatusBoats int
 	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
 	// as pgx reads them. It holds a password: it is never logged.
 	DatabaseURL string
+	// NewSailors is how new sailors are let in: their addresses' key and
+	// the human check (newsailors.go). Its String leaves its secrets out.
+	NewSailors NewSailors
 }
 
 // String leaves the database's URL out, so a Config can be logged.
@@ -143,6 +158,13 @@ const (
 	MaxBell     = 10 * time.Second
 )
 
+// DefaultStatusBoats is how many boats the website's status shows unless
+// KEEL_STATUS_BOATS says otherwise; MaxStatusBoats the most it may.
+const (
+	DefaultStatusBoats = 12
+	MaxStatusBoats     = 100
+)
+
 // DefaultWorldKeep is how long an ended world is kept unless
 // KEEL_WORLD_KEEP sets it: four weeks.
 const DefaultWorldKeep = 4 * 7 * 24 * time.Hour
@@ -177,6 +199,9 @@ func Load(getenv func(string) string) (Config, error) {
 		Bell:           DefaultBell,
 		Land:           true,
 		WorldKeep:      DefaultWorldKeep,
+		AccessTeam:     getenv("KEEL_ACCESS_TEAM"),
+		AccessAUD:      getenv("KEEL_ACCESS_AUD"),
+		StatusBoats:    DefaultStatusBoats,
 	}
 	addrs := []struct{ name, addr string }{
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
@@ -305,6 +330,19 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		c.WorldKeep = d
 	}
+	if c.AccessTeam != "" && !accessTeam(c.AccessTeam) {
+		errs = append(errs, fmt.Errorf("KEEL_ACCESS_TEAM: %q is not a team's domain, as keel.cloudflareaccess.com", c.AccessTeam))
+	}
+	if c.AccessAUD != "" && !lettersAndDigits(c.AccessAUD) {
+		errs = append(errs, fmt.Errorf("KEEL_ACCESS_AUD: %q is not an application's audience tag, letters and digits", c.AccessAUD))
+	}
+	if v := getenv("KEEL_STATUS_BOATS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > MaxStatusBoats {
+			errs = append(errs, fmt.Errorf("KEEL_STATUS_BOATS: %q is not a number from 0 to %d", v, MaxStatusBoats))
+		}
+		c.StatusBoats = n
+	}
 	switch v := getenv("KEEL_DEV_COMMANDS"); v {
 	case "", "0":
 	case "1":
@@ -312,7 +350,52 @@ func Load(getenv func(string) string) (Config, error) {
 	default:
 		errs = append(errs, fmt.Errorf("KEEL_DEV_COMMANDS: %q is not 0 or 1", v))
 	}
+	ns, nsErrs := loadNewSailors(getenv)
+	c.NewSailors, errs = ns, append(errs, nsErrs...)
+	if err := c.pagePolicy(getenv("KEEL_PAGE_POLICY")); err != nil {
+		errs = append(errs, err)
+	}
 	return c, errors.Join(errs...)
+}
+
+// pagePolicy reads KEEL_PAGE_POLICY: enforce, the default, or report.
+func (c *Config) pagePolicy(v string) error {
+	switch v {
+	case "", "enforce":
+		c.PolicyReport = false
+	case "report":
+		c.PolicyReport = true
+	default:
+		return fmt.Errorf("KEEL_PAGE_POLICY: %q is not enforce or report", v)
+	}
+	return nil
+}
+
+// Access reports whether the website's status is behind Access: both its
+// settings are set.
+func (c Config) Access() bool { return c.AccessTeam != "" && c.AccessAUD != "" }
+
+// accessTeam reports whether s is a team's domain: a lowercase host name
+// of two labels or more, with no scheme, port or path.
+func accessTeam(s string) bool {
+	if !strings.Contains(s, ".") || strings.HasPrefix(s, ".") || strings.HasSuffix(s, ".") || strings.Contains(s, "..") {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '.') {
+			return false
+		}
+	}
+	return true
+}
+
+func lettersAndDigits(s string) bool {
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func or(v, def string) string {

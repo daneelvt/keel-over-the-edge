@@ -9,19 +9,19 @@
  */
 export type Id = string;
 /**
- * In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it; on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side.
+ * In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it (on a ship, a hatch's edge on its grating, the feet on the deck before it); on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side; on a hull, the hull's deck at its inner edge, on its top, the person facing across the net; on a bench, its front edge on its top, the person sat on it facing the way the station faces, the feet on the floor before it; leaning, the cap rail's inner edge on its top, the forearms on it; aloft, the top's floor by the mast, the person out toward the shrouds on the weather side.
  *
  * @minItems 3
  * @maxItems 3
  */
 export type BoatPoint = [number, number, number];
 /**
- * How a person is at a station: standing; seated (leaning out as hiking in a breeze); hiking (sitting out on the rail and leaning out, as a dinghy's crew); or on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze).
+ * How a person is at a station: standing; seated (leaning out as hiking in a breeze; on a ship, sat on a hatch, standing up as she heels or the wind rises); hiking (sitting out on the rail and leaning out, as a dinghy's crew); on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze); leaning (on a ship's rail, the forearms on its cap, facing outboard); aloft (standing in a ship's top, a hand on a shroud: the only station above the boom); on a bench (sat on a cockpit's bench facing inboard, the feet on its floor, at ease and talking with a neighbour in a light wind, braced as she heels); or on a hull (sat on a boat of two hulls' windward hull by its inner edge, the legs across the net, and out on the trapeze's wire beside the helm, the feet on the hull's outer edge, once the helm is on theirs).
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "StationPose".
  */
-export type StationPose = "standing" | "seated" | "hiking" | "rail";
+export type StationPose = "standing" | "seated" | "hiking" | "rail" | "leaning" | "aloft" | "hull" | "bench";
 /**
  * A navigation light a boat shows from sunset to sunrise, by the arc it shows over (International Regulations for Preventing Collisions at Sea, Rule 21): a red sidelight to port and a green to starboard, each from right ahead to 22.5° abaft the beam; a white sternlight over the 135° astern; or the three combined in one lantern at the masthead, which Rule 25(b) allows a sailing vessel of less than 20 m.
  *
@@ -101,6 +101,18 @@ export type FeatureSite1 =
  */
 export type Colour4 = string;
 /**
+ * A colour, as #rrggbb in sRGB.
+ */
+export type Colour5 = string;
+/**
+ * A colour, as #rrggbb in sRGB.
+ */
+export type Colour6 = string;
+/**
+ * A colour, as #rrggbb in sRGB.
+ */
+export type Colour7 = string;
+/**
  * What it is, as the phone draws it.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -153,6 +165,13 @@ export type LifeBody =
   | "shark"
   | "booby"
   | "booby-asleep";
+/**
+ * A course a task is sailed on: the short windward-leeward, the long one, the short triangle, the long one, or an island course.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateCourse".
+ */
+export type CertificateCourse = "short" | "long" | "triangle" | "long-triangle" | "island";
 /**
  * A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
  *
@@ -220,8 +239,141 @@ export interface Catalog {
   encounters: Encounters;
   world: World;
   notices: Notices;
+  polars?: Polars;
   news: News;
   life: Life;
+  /**
+   * The certificates, in the order they are earned: each opens boats to the sailor who holds it or a later one.
+   *
+   * @maxItems 16
+   */
+  certificates?:
+    | []
+    | [Certificate]
+    | [Certificate, Certificate]
+    | [Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ];
+  pendants?: Pendants;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -241,6 +393,10 @@ export interface Boat {
    * Most people aboard, the skipper included.
    */
   capacity: number;
+  /**
+   * The most boats of this kind in one race.
+   */
+  racers: number;
   /**
    * Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.
    *
@@ -282,7 +438,7 @@ export interface Boat {
   art: BoatArt;
 }
 /**
- * A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a keelboat's rail with the legs over the side; to windward, if it says so.
+ * A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck (on a ship, sat on a hatch), hiking out on its rail, sat on a keelboat's rail with the legs over the side, leaning on a ship's rail, or in a ship's top; to windward or to leeward, if it says so.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "BoatStation".
@@ -295,9 +451,13 @@ export interface BoatStation {
    */
   facing: number;
   /**
-   * Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. Not said, the station is where it is.
+   * Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. On a ship with yards, her weather side is the side her after yards are braced for, and the person walks across when it changes. Not said, the station is where it is.
    */
   windward?: boolean;
+  /**
+   * Whether the person is to leeward, as windward is to windward: the station's mirror across the centreline (and its facing's) when its own side is the weather side. Not with windward.
+   */
+  lee?: boolean;
 }
 /**
  * The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' and the downwind sail's in the same share, and the yards' brace.
@@ -347,6 +507,8 @@ export interface BoatPhysics {
   sailor: PhysicsSailor;
   rates: PhysicsRates;
   autopilot: PhysicsAutopilot;
+  hulls: PhysicsHulls;
+  pitch: PhysicsPitch;
 }
 /**
  * The hull: its mass, resistance, inertia and stability.
@@ -441,7 +603,7 @@ export interface PhysicsHull {
    */
   yawDamping: number;
   /**
-   * Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.
+   * Righting lever (GZ) with the sailor on the centreline, every rightingLeverStep of heel from 0°, in m. Beyond the last, the last.
    *
    * @minItems 19
    * @maxItems 19
@@ -467,6 +629,10 @@ export interface PhysicsHull {
     number,
     number
   ];
+  /**
+   * Heel between entries of rightingLever, in degrees: 10 reaches 180°, 5 reaches 90° (a catamaran's lever, which peaks within a few degrees of upright, held beyond). 180° over it is a whole number.
+   */
+  rightingLeverStep: number;
   /**
    * Beam on the waterline, in m.
    */
@@ -504,7 +670,7 @@ export interface PhysicsHull {
    */
   waveYaw: number;
   /**
-   * The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point.
+   * The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point; a boat of two hulls (hulls.hullSpacing) has a flat bow, the last the bows' half-spread.
    *
    * @minItems 11
    * @maxItems 11
@@ -1354,6 +1520,78 @@ export interface PhysicsAutopilot {
   stallGain: number;
 }
 /**
+ * A boat of two hulls, a catamaran: one body whose stability, foils and drag take its hulls' values. A monohull has a spacing of 0, one rudder and one board, and a flying drag of 1.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsHulls".
+ */
+export interface PhysicsHulls {
+  /**
+   * Between the hulls' centrelines, in m: 0 for one hull. The drawing, the sea, the wake and the contacts read it: the boat heels about its lee hull.
+   */
+  hullSpacing: number;
+  /**
+   * The heel at which the windward hull leaves the water, in degrees: it is clear 5° later, its rudder and lateral plane with it.
+   */
+  liftHeel: number;
+  /**
+   * The drag area's share with the windward hull clear: one hull at twice the load has less wetted area than two.
+   */
+  flyingDrag: number;
+  /**
+   * Rudders, each the one rudder's lift and drag: 1, or 2, one on each hull of a boat of two hulls, or a pair either side of one hull's centreline (rudderSpread).
+   */
+  rudderCount: number;
+  /**
+   * Boards, or hulls' lateral planes, each the one board's lift and drag: 1, or 2 on a boat of two hulls.
+   */
+  boardCount: number;
+  /**
+   * Each of one hull's two rudders' stock off the centreline, in m: 0 for a rudder on the centreline, and on a boat of two hulls, whose rudders are on its hulls.
+   */
+  rudderSpread: number;
+  /**
+   * On one hull with two rudders, the heel at which the windward blade's root leaves the water in still water, in degrees: from it the blade's share of the steering falls. 0 for any other boat.
+   */
+  rudderLiftHeel: number;
+  /**
+   * On one hull with two rudders, the heel at which the windward blade's tip leaves the water, in degrees: from it only the lee blade steers. 0 for any other boat.
+   */
+  rudderClearHeel: number;
+}
+/**
+ * Pitch from the rig: the sails' drive, high above the centre of gravity, and the hull's resistance below it pitch the bow down, and the sailor steps aft to hold it up. Past bowBuryPitch the bows bury: their spring weakens and their drag grows; past pitchpoleAngle the sailor is thrown off over the bow. None where rigPitch is 0, the rest unread: the pitch is the waves' alone.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsPitch".
+ */
+export interface PhysicsPitch {
+  /**
+   * 1 where the rig pitches the hull, else 0.
+   */
+  rigPitch: number;
+  /**
+   * The trim, bow down off the water's surface, at which the lee bow's deck meets the water, in degrees.
+   */
+  bowBuryPitch: number;
+  /**
+   * The share of the pitch spring's slope left past bowBuryPitch.
+   */
+  bowBuryRestoring: number;
+  /**
+   * The hull's drag area grows by this share of itself for each degree past bowBuryPitch.
+   */
+  bowBuryDrag: number;
+  /**
+   * Past this trim, bow down, the sailor is thrown off over the bow, in degrees.
+   */
+  pitchpoleAngle: number;
+  /**
+   * How far aft of the helm's place the sailor steps to hold the bow up, in m.
+   */
+  aftReach: number;
+}
+/**
  * A boat's art. Every art object's values are paths under art/, checked to exist.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -1368,6 +1606,10 @@ export interface BoatArt {
    * The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.
    */
   far: string;
+  /**
+   * The files of clips beside each sailor look's clips (<version>.<name>.glb) its people aboard are drawn with, loaded only when someone is drawn aboard one of its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire, crossing her net, righting her); cruiser, a cruising yacht's (at her wheel, standing and sat by it, on her cockpit's bench, on her rail under her lifelines, crossing her cockpit and her coachroof); bridgedeck, a cruising catamaran's (at her raised wheel, standing and sat on the helm seat, beside the helm, on her cockpit's seats round her table, on her aft bench and her lounger, walking her cockpit, up and down her helm's ladder).
+   */
+  sailorClips?: ("cat" | "cruiser" | "bridgedeck")[];
   /**
    * The most triangles each of the boat's models may have.
    */
@@ -1874,6 +2116,60 @@ export interface SailorArt {
    * The inked portrait, for the log: one-bit WebP on the logbook's paper.
    */
   ink: string;
+  cockade: Cockade;
+  pendant: PendantPlace;
+}
+/**
+ * Where a race's winner wears the cockade: on the hat's left side, or on the coat's left breast for a look with no hat.
+ */
+export interface Cockade {
+  /**
+   * Its middle on the figure as it is bound, m: across to its left, up and forward.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  at: [number, number, number];
+  /**
+   * The way it faces out from the cloth, the same axes.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  facing: [number, number, number];
+  /**
+   * Its middle on the inked portrait, as shares of its width from the left and of its height from the top.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  inked: [number, number];
+}
+/**
+ * Where the certificate's pendant hangs: where its cord runs through its bail, on the figure as it is bound, clear of the clothes in front of the breastbone.
+ */
+export interface PendantPlace {
+  /**
+   * Where its cord runs through its bail, on the figure as it is bound, m: across to its left, up and forward.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  at: [number, number, number];
+  /**
+   * The way its face looks out from the clothes under it, the same axes.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  facing: [number, number, number];
+  /**
+   * Where its cord runs through its bail on the inked portrait, as shares of its width from the left and of its height from the top.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  inked: [number, number];
 }
 /**
  * The options a sailor's look takes: skins, hair colours, greys for the looks of greying sailors, and main colours, which the machines' coats take too. At most 16 of each: a look code holds each choice in 4 bits.
@@ -4423,6 +4719,8 @@ export interface World {
   score: WorldScore;
   chart: WorldChart;
   instruments: Instruments;
+  courses: WorldCourses;
+  committee: Committee;
 }
 /**
  * The disk.
@@ -5810,7 +6108,7 @@ export interface PlaceKind {
   /**
    * The rule its sites are found by.
    */
-  site: "harbour" | "village" | "light" | "anchorage" | "cove" | "lagoon" | "reef" | "bar" | "wreck";
+  site: "harbour" | "village" | "light" | "anchorage" | "cove" | "lagoon" | "reef" | "bar" | "wreck" | "beacon";
   /**
    * How many a world has, the least and the most.
    *
@@ -5835,7 +6133,7 @@ export interface PlaceKind {
    */
   water?: boolean;
   /**
-   * Its charting is an item of the news of its own; otherwise it is folded into its island's.
+   * Its charting is an item of its own in the sheet a chart makes of itself, offline; online every charting is a candidate story of the day's news.
    */
   news?: boolean;
 }
@@ -8279,6 +8577,535 @@ export interface Barometer {
       ];
 }
 /**
+ * Courses for races, made with the world: racing areas off Port Royal and island courses, and the checks a course passes.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldCourses".
+ */
+export interface WorldCourses {
+  areas: CourseAreas;
+  /**
+   * How far a course's way keeps from land and shoal water, m.
+   */
+  margin: number;
+  /**
+   * Water under the deepest boat's keel along a way, m.
+   */
+  depth: number;
+  /**
+   * No way runs further from the centre, nautical miles.
+   */
+  mist: number;
+  site: CourseSite;
+  /**
+   * The islands a course rounds lie within this of its site, nautical miles.
+   */
+  reach: number;
+  /**
+   * How many of the nearest islands a site rounds one at a time.
+   */
+  near: number;
+  /**
+   * A tour's islands lie within this of each other, nautical miles.
+   */
+  tour: number;
+  /**
+   * How many of the nearest other ports a site runs to.
+   */
+  ports: number;
+  /**
+   * A reef or bar within this of a way gets a beacon, m.
+   */
+  beacon: number;
+  /**
+   * The most beacons a course may need.
+   */
+  beacons: number;
+  /**
+   * A boat is offered a course whose expected time in the typical wind is within these, minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  minutes: [number, number];
+  /**
+   * Every narrows on a way is at least this many of a boat's lengths wide for it to be offered the course.
+   */
+  narrows: number;
+  /**
+   * How often the narrows are sampled along a way, m.
+   */
+  step: number;
+  /**
+   * Of the sixteen winds, how many give the way a leg to beat up.
+   */
+  beat: number;
+  /**
+   * The least leg that counts as a beat, m.
+   */
+  beatLeg: number;
+  /**
+   * How many island courses a world has, the least it aims for and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  set: [number, number];
+  /**
+   * A course from Port Royal is short below the first and long from the second, by the Jolly boat's expected minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  lengths: [number, number];
+}
+/**
+ * Racing areas: circles of open water off Port Royal where a buoy course is laid to the wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CourseAreas".
+ */
+export interface CourseAreas {
+  /**
+   * Every part of an area lies within this of Port Royal's centre, nautical miles.
+   */
+  within: number;
+  /**
+   * An area's radius, m.
+   */
+  radius: number;
+  /**
+   * The most areas a world has.
+   */
+  most: number;
+  /**
+   * Areas' centres lie at least this far apart, m.
+   */
+  apart: number;
+  /**
+   * An area keeps this far from land and shoal water, m.
+   */
+  margin: number;
+  /**
+   * An area keeps this far from Port Royal's harbour mouth, m.
+   */
+  mouth: number;
+  /**
+   * An area keeps this far from the start's fan, m.
+   */
+  fan: number;
+  /**
+   * Boats no longer than this race in the areas; their water is deep enough for each, m.
+   */
+  longest: number;
+  /**
+   * Candidates every this far out, m.
+   */
+  step: number;
+  /**
+   * Candidates every this many degrees round.
+   */
+  turn: number;
+}
+/**
+ * Where an island course's start and finish lie off a port.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CourseSite".
+ */
+export interface CourseSite {
+  /**
+   * The nearest a site is to its port's waterfront, m.
+   */
+  from: number;
+  /**
+   * The furthest, m.
+   */
+  to: number;
+  /**
+   * How far off its port's way out a site may lie, degrees.
+   */
+  turn: number;
+  /**
+   * Clear water round a site, m: room for the line and the start behind it.
+   */
+  room: number;
+  /**
+   * A site keeps this far from the start's fan, m.
+   */
+  fan: number;
+}
+/**
+ * The race committee's things in the sea: the committee boat, the pin buoy, the marks, the beacons, the signal flags and the signal gun's smoke.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Committee".
+ */
+export interface Committee {
+  art: CommitteeArt;
+  /**
+   * They are drawn within this of the camera, in m.
+   */
+  reach: number;
+  /**
+   * A mark's spar above the water, in m.
+   */
+  mark: number;
+  boat: CommitteeBoat;
+  gun: CommitteeGun;
+  /**
+   * The bunting's dyes, each by the letter a flag's rows name it with.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  dyes:
+    | [SignalDye]
+    | [SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ];
+  /**
+   * The signal flags.
+   *
+   * @minItems 1
+   * @maxItems 32
+   */
+  flags: [SignalFlag, ...SignalFlag[]];
+  prizes: Prizes;
+}
+/**
+ * The committee's models: a glTF binary with the nodes committee-boat (with gun, muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern and number), pin-buoy (with flag-staff and lantern) and beacon-spar.
+ */
+export interface CommitteeArt {
+  model: ArtPath;
+}
+/**
+ * How the committee boat lies at her anchor.
+ */
+export interface CommitteeBoat {
+  /**
+   * Her stern swings this far each way, in degrees.
+   */
+  sheer: number;
+  /**
+   * Over this, there and back, in s.
+   */
+  period: number;
+  /**
+   * Her anchor's cable, in m.
+   */
+  scope: number;
+}
+/**
+ * The signal gun's smoke.
+ */
+export interface CommitteeGun {
+  /**
+   * Puffs a report throws.
+   */
+  puffs: number;
+  /**
+   * They leave the muzzle at this, in m/s.
+   */
+  throw: number;
+  /**
+   * The air stops them over this, in s.
+   */
+  drag: number;
+  /**
+   * A puff gathers its rise over this, in s.
+   */
+  gathers: number;
+  /**
+   * A puff rises at this at most, in m/s.
+   */
+  rise: number;
+  /**
+   * Its rise is halved after this, in s.
+   */
+  slows: number;
+  /**
+   * A puff's width at the muzzle and at its end, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  size: [number, number];
+  /**
+   * A puff fades over this, in s.
+   */
+  life: number;
+  /**
+   * The smoke is drawn within this of the camera, in m.
+   */
+  reach: number;
+}
+/**
+ * A dye of the bunting.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SignalDye".
+ */
+export interface SignalDye {
+  /**
+   * The letter a flag's rows name it by.
+   */
+  letter: string;
+  name: string;
+  colour: Colour3;
+}
+/**
+ * A signal flag: what it signals, its cut and size, and its design.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SignalFlag".
+ */
+export interface SignalFlag {
+  id: Id;
+  name: string;
+  /**
+   * What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin; or, flown by a sailor's boat for the world, a race won (in that race's colour), races sailed (the racing burgee, then the gilded) or races run (the committee's flag).
+   */
+  signal:
+    | "class"
+    | "preparatory"
+    | "recall"
+    | "postponement"
+    | "mark"
+    | "pin"
+    | "victory"
+    | "burgee"
+    | "gilded"
+    | "committee";
+  /**
+   * Stable identifier of a kind, stored in the database: never renamed or reused.
+   */
+  boat?: string;
+  /**
+   * Its cut: a flag, oblong; a pennant, tapering to a point; or a swallowtail, tapering a little and forked at the fly.
+   */
+  cut: "flag" | "pennant" | "swallowtail";
+  /**
+   * From the hoist to the fly, in m.
+   */
+  length: number;
+  /**
+   * Its depth at the hoist, in m.
+   */
+  hoist: number;
+  /**
+   * Its design: rows of dyes' letters from the head down, each from the hoist to the fly, all of one length.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  rows:
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+}
+/**
+ * What a sailor's races in a world show on the water while it lasts.
+ */
+export interface Prizes {
+  /**
+   * A winner's pennants flown, the latest wins'.
+   */
+  pennants: number;
+  /**
+   * Wooden spoons hung from the stern, the latest.
+   */
+  spoons: number;
+  /**
+   * Races sailed in the world for the racing burgee.
+   */
+  burgee: number;
+  /**
+   * Races sailed in the world for the gilded burgee.
+   */
+  gilded: number;
+  /**
+   * Races run in the world for the committee's flag.
+   */
+  ran: number;
+  /**
+   * They are drawn within this of the camera, in m.
+   */
+  reach: number;
+  spoon: PrizeSpoon;
+  cockade: PrizeCockade;
+}
+/**
+ * A carved wooden spoon on its lanyard.
+ */
+export interface PrizeSpoon {
+  /**
+   * Its length, m.
+   */
+  length: number;
+  /**
+   * Its lanyard from the rail, m.
+   */
+  lanyard: number;
+  colour: Colour5;
+}
+/**
+ * The winner's cockade: a pleated rosette of ribbon.
+ */
+export interface PrizeCockade {
+  /**
+   * Its width, m.
+   */
+  across: number;
+  ribbon: Colour6;
+  button: Colour7;
+}
+/**
  * The notices that pop up: one at a time, the rest queued, the same kind folded.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -8307,11 +9134,26 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, or a sailor the player follows setting sail.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, a certificate earned, the course the player set reached, a shipmate sailing to the player, the player alongside a boat they sailed to, or a course to a boat ended.
    */
-  on: "charted-own" | "charted-great" | "falls-coming" | "falls-soon" | "new-world" | "gale-warned" | "followed-sailed";
+  on:
+    | "charted-own"
+    | "charted-great"
+    | "falls-coming"
+    | "falls-soon"
+    | "new-world"
+    | "gale-warned"
+    | "followed-sailed"
+    | "harbour-race"
+    | "race-soon"
+    | "task-done"
+    | "certificate-earned"
+    | "course-reached"
+    | "shipmate-course"
+    | "course-alongside"
+    | "course-ended";
   /**
-   * For a notice of the world's end near: the times before the end it is raised at, in minutes.
+   * For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.
    *
    * @minItems 1
    * @maxItems 4
@@ -8330,7 +9172,7 @@ export interface NoticeKind {
    */
   stays: number;
   /**
-   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), and for a gale warning {wind}, {when} and {where} are filled in.
+   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), for a gale warning {wind}, {when} and {where}, and for a certificate {cert} (its name), {task} (the task's), {done} and {of} (the tasks done of those it needs) and {boats} (the boats it opens, as a sentence opens) are filled in.
    */
   text: string;
   /**
@@ -8339,24 +9181,68 @@ export interface NoticeKind {
   folded: string;
 }
 /**
- * The news sheet: its columns, and how its items are folded and paged.
+ * The boats' polars: each boat's steady speed in flat water by the true wind's speed and angle, written by tools/polar.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Polars".
+ */
+export interface Polars {
+  /**
+   * The true winds, knots 10 m up, evenly spaced, ascending.
+   *
+   * @minItems 2
+   */
+  winds: [number, number, ...number[]];
+  /**
+   * The angles off the true wind, degrees, evenly spaced, ascending.
+   *
+   * @minItems 2
+   */
+  angles: [number, number, ...number[]];
+  boats: BoatPolar[];
+}
+/**
+ * One boat's polar.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatPolar".
+ */
+export interface BoatPolar {
+  /**
+   * The boat's id.
+   */
+  boat: string;
+  /**
+   * Her speed through the water, knots: a row for each wind, a column for each angle, 0 where she cannot sail.
+   */
+  speed: number[][];
+  /**
+   * For each wind, her best angle up the wind, degrees, and the speed she makes good toward it there, knots.
+   */
+  up: [number, number][];
+  /**
+   * For each wind, her best angle down the wind, degrees, and the speed she makes good away from it, knots.
+   */
+  down: [number, number][];
+}
+/**
+ * The news: a daily edition of chosen stories, its columns, and the kinds of story with their scores.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "News".
  */
 export interface News {
   /**
-   * A sailor's places charted within this of an island's item are folded into it, in minutes.
-   */
-  fold: number;
-  /**
-   * Items to a page.
-   */
-  page: number;
-  /**
    * @minItems 1
    */
   columns: [NewsColumn, ...NewsColumn[]];
+  edition: NewsEdition;
+  /**
+   * The kinds of story, each written as a candidate with its score; the edition shows the best.
+   *
+   * @minItems 1
+   */
+  stories: [NewsStory, ...NewsStory[]];
 }
 /**
  * A column of the news sheet.
@@ -8371,9 +9257,124 @@ export interface NewsColumn {
    */
   title: string;
   /**
-   * What its items tell of: what is charted, or the world itself, its end.
+   * What its items tell of: the stories, or the world itself, its end.
    */
   of: "charting" | "world";
+}
+/**
+ * How a day's edition is chosen from the day's candidates.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NewsEdition".
+ */
+export interface NewsEdition {
+  /**
+   * The most stories on the front page.
+   */
+  stories: number;
+  /**
+   * The most stories in the reader's own box, about their shipmates, the sailors they follow and themselves.
+   */
+  shipmates: number;
+  /**
+   * The most stories of one kind on the front page.
+   */
+  ofKind: number;
+  /**
+   * How many editions back a sailor named in one gives way to one who was not.
+   */
+  recent: number;
+  /**
+   * A story about a sailor in the recent editions has its score times this.
+   */
+  giveWay: number;
+  /**
+   * A story's score eases with its age through the day: halved after this many hours.
+   */
+  ease: number;
+  /**
+   * A record at the falls: an approach survived within this of the lip, m, nearer than any boat's before it this world.
+   */
+  falls: number;
+  /**
+   * A crew in company: this many aboard, the skipper with them.
+   */
+  aboard: number;
+  /**
+   * A crew in company: each of them aboard this long, in minutes.
+   */
+  together: number;
+  /**
+   * A run is a candidate for the day's longest from this distance, in nautical miles.
+   */
+  run: number;
+  milestones: NewsMilestones;
+}
+/**
+ * A sailor's milestones: each time their log's distance, worlds or places charted pass a multiple of these.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NewsMilestones".
+ */
+export interface NewsMilestones {
+  /**
+   * Nautical miles sailed.
+   */
+  distance: number;
+  /**
+   * Worlds sailed.
+   */
+  worlds: number;
+  /**
+   * Places charted.
+   */
+  places: number;
+}
+/**
+ * A kind of story: what makes it, and its score.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NewsStory".
+ */
+export interface NewsStory {
+  id: Id;
+  /**
+   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better; a certificate earned.
+   */
+  of:
+    | "great"
+    | "record"
+    | "life"
+    | "crew"
+    | "first"
+    | "run"
+    | "milestone"
+    | "charting"
+    | "course"
+    | "race"
+    | "trial"
+    | "certificate";
+  /**
+   * How interesting it is: the edition shows the highest first.
+   */
+  score: number;
+  /**
+   * For a certificate earned: its score by the certificate, one for each in the certificates' order; score is for any it has no score for.
+   *
+   * @minItems 1
+   * @maxItems 10
+   */
+  scores?:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number];
 }
 /**
  * The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.
@@ -8575,6 +9576,10 @@ export interface LifeKind {
    * Its name for more than one.
    */
   plural: string;
+  /**
+   * Meeting it is rare enough to be a story of the day's news.
+   */
+  news?: boolean;
   form: LifeForm;
   family: LifeFamily;
   path: LifePath;
@@ -8824,6 +9829,339 @@ export interface LifeGlow {
   colour: Colour3;
   moon: number;
 }
+/**
+ * A certificate: its name, its pendant, the boats it opens, and its tasks, of which it needs some. Every task counts only what the sailor sails alone, since the certificate before it was earned.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Certificate".
+ */
+export interface Certificate {
+  id: Id;
+  /**
+   * Its name: "You're a Deckhand!"
+   */
+  name: string;
+  /**
+   * The pendant worn by those who hold it, in words.
+   */
+  pendant: string;
+  /**
+   * The pendant's node in the pendants' model.
+   */
+  pendantNode: string;
+  /**
+   * The boats it opens, by their ids: each boat is opened by one certificate at most, and one opened by none is open to every sailor.
+   */
+  opens: Id[];
+  /**
+   * How many of its tasks earn it.
+   */
+  needs: number;
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  tasks:
+    | [CertificateTask]
+    | [CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ];
+}
+/**
+ * A task toward a certificate: a course, sailed as a time trial (courses, with what sailing it by hand asks and what the autopilot's longer way asks), or a measure of the sailor's log reaching a mark (measure and at).
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateTask".
+ */
+export interface CertificateTask {
+  id: Id;
+  /**
+   * Its words, as the log and the tools list it.
+   */
+  name: string;
+  /**
+   * A course task's courses: a buoy course by its shape and length, or any island course.
+   *
+   * @minItems 1
+   * @maxItems 5
+   */
+  courses?:
+    | [CertificateCourse]
+    | [CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse];
+  hand?: CertificateWay;
+  venture?: CertificateWay;
+  /**
+   * A log task's measure: the distance sailed alone (NM), places seen, places charted first, kinds of the sea's life met, nights at sea, gales ridden out, storms ridden out or landfalls in fog, the closest approach to the lip survived (m, at most at), worlds sailed in, falls over the edge, and every weather met (a gale, a storm, fog and a night).
+   */
+  measure?:
+    | "distance"
+    | "places-seen"
+    | "places-charted"
+    | "life-kinds"
+    | "nights"
+    | "gales"
+    | "storms-or-fogs"
+    | "lip"
+    | "worlds"
+    | "falls"
+    | "every-weather";
+  /**
+   * The mark a log task's measure reaches: at least this, or for the lip at most this.
+   */
+  at?: number;
+}
+/**
+ * What a course task asks of runs sailed one way: the least medal (finish for any finish), how many runs, whether each on a different course of the world, and whether one on each of its courses.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateWay".
+ */
+export interface CertificateWay {
+  medal: "finish" | "bronze" | "silver" | "gold";
+  runs?: number;
+  apart?: boolean;
+  each?: boolean;
+}
+/**
+ * The certificates' pendants, worn on a cord at the neck by those who hold one: the highest held.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Pendants".
+ */
+export interface Pendants {
+  art: PendantsArt;
+}
+/**
+ * The pendants' art.
+ */
+export interface PendantsArt {
+  /**
+   * Path of an art file, relative to the repository's art/ folder.
+   */
+  model: string;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '0e5e1240a73a066f';
+export const CATALOG_VERSION = '3ffedd6a7cd63a06';

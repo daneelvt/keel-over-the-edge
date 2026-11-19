@@ -73,7 +73,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	}
 	f.switches = aboard.NewSwitches(aboard.DefaultLifetime)
 	o := owner.New(owner.Config{Weather: wcfg.Prepared, Accounts: st, Sessions: sessions, Hand: hand, Machines: st, Lifetime: f.lifetime, Log: log, Metrics: metrics,
-		Switches: f.switches, Sail: st, ChatSettings: st, Reports: review.New(review.Config{Store: st, Hand: hand, Log: log, Metrics: metrics})})
+		Switches: f.switches, Sail: st, ChatSettings: st, NewSailors: st, Reports: review.New(review.Config{Store: st, Hand: hand, Log: log, Metrics: metrics})})
 	f.srv = httptest.NewServer(o.Handler())
 	t.Cleanup(f.srv.Close)
 	return f
@@ -362,7 +362,7 @@ func TestAdminReports(t *testing.T) {
 func TestAdminChat(t *testing.T) {
 	f := newAdminFixture(t)
 	ctx := context.Background()
-	if out, _, err := f.admin(t, "", "settings"); err != nil || !strings.HasSuffix(out, "\nchat on; shipmates' messages on; spectators reading machine sailors' chat on; chat off in no country\n") {
+	if out, _, err := f.admin(t, "", "settings"); err != nil || !strings.HasSuffix(out, "\nchat on; shipmates' messages on; spectators reading machine sailors' chat on; chat off in no country\nnew sailors: 20 an address a day; the human check on\n") {
 		t.Fatalf("settings: %v %q", err, out)
 	}
 	if out, _, err := f.admin(t, "", "chat", "off"); err != nil || !strings.Contains(out, "Would set: chat off for everyone") ||

@@ -400,6 +400,8 @@ function band(
   to: (u: number) => number,
   rows: number[],
   colour: (row: number, i: number) => Vec3,
+  /** Collects the girths of its edge at the transom, for the transom to meet. */
+  atTransom?: number[],
 ): void {
   const grid: number[][] = rows.map(() => []);
   stations().forEach((u, i) => {
@@ -407,6 +409,9 @@ function band(
     const g1 = to(u);
     rows.forEach((s, r) => {
       const g = g0 + (g1 - g0) * s;
+      if (i === 0) {
+        atTransom?.push(g);
+      }
       const k = m.vertex(section(u, g), colour(r, i), [s, u]);
       m.normal(k, surfaceNormal(u, g));
       (grid[r] as number[]).push(k);
@@ -429,6 +434,9 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBu
   const topsides = new MeshBuilder('topsides');
   const bootFrom = (u: number): number => girthAt(u, BOOT_FROM);
   const bootTo = (u: number): number => girthAt(u, BOOT_TO);
+  // Every girth the shell's edge has at the transom, so the transom's edge
+  // runs through the same points and no slit opens between them.
+  const girths: number[] = [];
   const side = new MeshBuilder('copper');
   const rows = Array.from({ length: D.copperRows + 1 }, (_, i) => i / D.copperRows);
   // Sheets about 1.2 m long, each its own tone, a few going green.
@@ -442,13 +450,14 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBu
       const tone = 0.88 + 0.2 * jitter(sheet + 300);
       return shade(mix(COPPER, VERDIGRIS, jitter(sheet + 700) > 0.85 ? 0.35 : 0), tone);
     },
+    girths,
   );
   copper.append(side);
   copper.append(side, true);
 
   const top = new MeshBuilder('paint');
   const sides = new MeshBuilder('topsides');
-  band(top, bootFrom, bootTo, [0, 1], () => BOOT);
+  band(top, bootFrom, bootTo, [0, 1], () => BOOT, girths);
   // The strakes from the boot top to the sheer, the top one the dark sheer
   // strake, an eighth of the girth; each plank's own tone, its lower edge a
   // dark seam.
@@ -466,27 +475,33 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBu
       (u) => lerp(bootTo(u), 1, f1),
       seam,
       (r) => shade(base, D.seams && r === 0 ? tone * 0.55 : tone),
+      girths,
     );
   }
   paint.append(top);
   paint.append(top, true);
-  paint.append(transom());
+  paint.append(transom(girths));
   topsides.append(sides);
   topsides.append(sides, true);
   return { copper, paint, topsides };
 }
 
 /** The transom: varnished mahogany, flat across the hull's after end. */
-function transom(): MeshBuilder {
+function transom(girths: number[]): MeshBuilder {
   const m = new MeshBuilder('paint');
   const ring: number[] = [];
-  const n = 2 * D.round;
-  for (let i = 0; i <= n; i++) {
-    const p = section(0, i / n);
-    ring.push(m.vertex(p, MAHOGANY));
+  const sorted = [...girths].sort((a, b) => a - b);
+  const gs = sorted.filter((g, i) => i === 0 || g - (sorted[i - 1] as number) > 1e-9);
+  for (const g of gs) {
+    ring.push(m.vertex(section(0, g), MAHOGANY));
   }
-  for (let i = n; i >= 0; i--) {
-    const p = section(0, i / n);
+  // Its top follows the deck's crown across, through the deck's own points
+  // at its after edge, so no sliver opens under the deck's edge.
+  for (const x of deckXs(0).reverse().slice(1, -1)) {
+    ring.push(m.vertex([x, deckY(x, 0), TRANSOM_Z], MAHOGANY));
+  }
+  for (const g of [...gs].reverse()) {
+    const p = section(0, g);
     ring.push(m.vertex([-p[0], p[1], p[2]], MAHOGANY));
   }
   const mid = m.vertex([0, (sheer(0) - keelDepth(0)) / 2, TRANSOM_Z], MAHOGANY);
@@ -528,6 +543,8 @@ const GUNWALE: Vec3 = [halfBeam(SEAT_U), sheer(SEAT_U), SEAT_Z];
 /** The cockpit: between the side decks, as wide as the stage's at the seat, its floor as deep. */
 const COCKPIT_HALF_WIDTH = GUNWALE[0] - STAGE.sideDeck;
 const COCKPIT_FLOOR = GUNWALE[1] - STAGE.floorDrop;
+/** The dark under the floor's boards, between their seams. */
+const COCKPIT_UNDER = COCKPIT_FLOOR - 0.002;
 const COCKPIT_AFT = 2.55;
 /** The cuddy, between the mast and the cockpit, which begins at its after end. */
 const CUDDY_FORE = -0.95;
@@ -550,13 +567,57 @@ const GLASS = srgb(0.1, 0.14, 0.17);
 const cuddyWidth = (z: number): number =>
   COCKPIT_HALF_WIDTH - 0.19 * smoothstep(CUDDY_AFT, CUDDY_FORE, z);
 
-/** Whether the deck between x0 and x1 at z (between two rows) is open: the cockpit, or under the cuddy. */
-function open(x0: number, x1: number, z: number): boolean {
+/**
+ * Whether the deck between x0 and x1, between the rows at za and zb, is
+ * open: the cockpit, or under the cuddy, well inside its sides' feet at
+ * both rows.
+ */
+function open(x0: number, x1: number, za: number, zb: number): boolean {
   const outer = Math.max(Math.abs(x0), Math.abs(x1));
+  const z = (za + zb) / 2;
   if (z > COCKPIT_FORE && z < COCKPIT_AFT) {
     return outer <= COCKPIT_HALF_WIDTH + 1e-6;
   }
-  return z > CUDDY_FORE && z < CUDDY_AFT && outer <= cuddyWidth(z) - 0.02;
+  return (
+    z > CUDDY_FORE && z < CUDDY_AFT && outer <= Math.min(cuddyWidth(za), cuddyWidth(zb)) - 0.02
+  );
+}
+
+/** The planks' count either side of the middle one. */
+const PLANKS = Math.ceil(HALF_BEAM / PLANK - 0.5);
+
+/**
+ * A plank's points across its row at u, between x0 and x1: its edges and
+ * the inner edges of its seams. Beyond the sheer the plank ends: its row
+ * closed at the edge, so the deck meets the sheer with no gap where it
+ * narrows.
+ */
+function plankRow(x0: number, x1: number, u: number): { xs: number[]; inside: boolean } {
+  const b = halfBeam(u);
+  const inside = Math.min(x1, b) - Math.max(x0, -b) > 1e-4;
+  const edge = x0 >= 0 ? b : -b;
+  const lo = inside ? Math.max(x0, -b) : edge;
+  const hi = inside ? Math.min(x1, b) : edge;
+  // A dark caulked seam along each plank's edge.
+  const w = Math.min(0.006, (hi - lo) / 4);
+  return { xs: [lo, lo + w, hi - w, hi], inside };
+}
+
+/** Where the plain deck of the far model is laid across, from port (−1) to starboard (1). */
+const PLAIN_ACROSS = [-1, -0.5, 0, 0.5, 1];
+
+/** Every point the deck has across its row at u, port to starboard: what meets its edge there meets it through them. */
+function deckXs(u: number): number[] {
+  const xs: number[] = [];
+  if (D.plankedDeck) {
+    for (let j = -PLANKS; j <= PLANKS; j++) {
+      xs.push(...plankRow((j - 0.5) * PLANK, (j + 0.5) * PLANK, u).xs);
+    }
+  } else {
+    xs.push(...PLAIN_ACROSS.map((f) => f * halfBeam(u)));
+  }
+  xs.sort((a, b) => a - b);
+  return xs.filter((x, i) => i === 0 || x - (xs[i - 1] as number) > 1e-9);
 }
 
 /** The deck's rows: the deck's stations, the outline's points, and the ends of the cockpit and the cuddy. */
@@ -572,8 +633,7 @@ function deckRows(): number[] {
 function deck(): MeshBuilder {
   const m = new MeshBuilder('deck');
   const us = deckRows();
-  const planks = Math.ceil(HALF_BEAM / PLANK - 0.5);
-  for (let j = -planks; j <= planks; j++) {
+  for (let j = -PLANKS; j <= PLANKS; j++) {
     const x0 = (j - 0.5) * PLANK;
     const x1 = (j + 0.5) * PLANK;
     const tone = 0.88 + 0.22 * jitter(j + 50);
@@ -581,22 +641,13 @@ function deck(): MeshBuilder {
     const seam = shade(c, 0.55);
     let prev: { row: number[]; z: number; in: boolean } | null = null;
     for (const u of us) {
-      const b = halfBeam(u);
       const z = zAt(u);
-      // Beyond the sheer the plank ends: its row closed at the edge, so
-      // the deck meets the sheer with no gap where it narrows.
-      const inside = Math.min(x1, b) - Math.max(x0, -b) > 1e-4;
-      const edge = x0 >= 0 ? b : -b;
-      const lo = inside ? Math.max(x0, -b) : edge;
-      const hi = inside ? Math.min(x1, b) : edge;
-      // A dark caulked seam along each plank's edge.
-      const w = Math.min(0.006, (hi - lo) / 4);
-      const xs = [lo, lo + w, hi - w, hi];
+      const { xs, inside } = plankRow(x0, x1, u);
       const cs = [seam, c, c, seam];
       const row = xs.map((x, i) => m.vertex([x, deckY(x, u), z], cs[i] as Vec3, [x, u]));
       // Rows run aft to fore (-z), columns port to starboard (+x): seen
       // from above, counter-clockwise.
-      if (prev !== null && (prev.in || inside) && !open(x0, x1, (prev.z + z) / 2)) {
+      if (prev !== null && (prev.in || inside) && !open(x0, x1, prev.z, z)) {
         m.strip(prev.row, row);
       }
       prev = { row, z, in: inside };
@@ -624,7 +675,8 @@ function cockpit(m: MeshBuilder): void {
   const y = COCKPIT_FLOOR;
   const top = (x: number, z: number): number => deckY(x, uAt(z));
   const sides = shade(DECK, 0.75);
-  // The floor's boards.
+  // The floor's boards, over the dark of their seams: one dark floor under
+  // them from side to side, which the cockpit's sides and ends stand on.
   const boards = 6;
   for (let i = 0; i < boards; i++) {
     const x0 = -w + (2 * w * i) / boards;
@@ -640,41 +692,58 @@ function cockpit(m: MeshBuilder): void {
       [0, 1, 0],
       shade(DECK, 0.8 + 0.15 * jitter(i + 90)),
     );
-    quad(
-      m,
-      [
-        [x0 - 0.004, y - 0.002, f],
-        [x0 + 0.004, y - 0.002, f],
-        [x0 + 0.004, y - 0.002, a],
-        [x0 - 0.004, y - 0.002, a],
-      ],
-      [0, 1, 0],
-      shade(DECK, 0.35),
-    );
   }
+  const under = COCKPIT_UNDER;
   quad(
     m,
     [
-      [-w, y, a],
-      [w, y, a],
-      [w, top(w, a), a],
-      [-w, top(-w, a), a],
+      [-w, under, f],
+      [w, under, f],
+      [w, under, a],
+      [-w, under, a],
     ],
-    [0, 0, -1],
-    sides,
+    [0, 1, 0],
+    shade(DECK, 0.35),
   );
-  for (const s of [1, -1]) {
+  // The after end, its top through the deck's own points along its row, so
+  // it follows the crown with no sliver open under the deck's edge.
+  const ends = deckXs(uAt(a)).filter((x) => Math.abs(x) <= w + 1e-6);
+  for (let i = 0; i + 1 < ends.length; i++) {
+    const x0 = ends[i] as number;
+    const x1 = ends[i + 1] as number;
     quad(
       m,
       [
-        [s * w, y, f],
-        [s * w, y, a],
-        [s * w, top(s * w, a), a],
-        [s * w, top(s * w, f), f],
+        [x0, under, a],
+        [x1, under, a],
+        [x1, top(x1, a), a],
+        [x0, top(x0, a), a],
       ],
-      [-s, 0, 0],
+      [0, 0, -1],
       sides,
     );
+  }
+  // The sides, their tops through the deck's edge at each of its rows.
+  const zs = deckRows()
+    .map(zAt)
+    .filter((z) => z >= f - 1e-6 && z <= a + 1e-6)
+    .sort((p, q) => p - q);
+  for (const s of [1, -1]) {
+    for (let i = 0; i + 1 < zs.length; i++) {
+      const z0 = zs[i] as number;
+      const z1 = zs[i + 1] as number;
+      quad(
+        m,
+        [
+          [s * w, under, z0],
+          [s * w, under, z1],
+          [s * w, top(s * w, z1), z1],
+          [s * w, top(s * w, z0), z0],
+        ],
+        [-s, 0, 0],
+        sides,
+      );
+    }
   }
 }
 
@@ -746,12 +815,18 @@ function cuddy(): { wood: MeshBuilder; roof: MeshBuilder; glass: MeshBuilder; br
   // roof's edge across.
   for (const [t, bottom, n3] of [
     [0, deckY(0, uAt(CUDDY_FORE)), [0, 0.3, -1]],
-    [1, COCKPIT_FLOOR, [0, 0, 1]],
+    [1, COCKPIT_UNDER, [0, 0, 1]],
   ] as [number, number, Vec3][]) {
     const f = foot(t, 1);
+    // The after end goes down past the deck to the floor: its edge stands
+    // straight under the side's foot, then leans in with the side, so the
+    // side and the cockpit's side meet it with no slit between.
+    const feet: Vec3[] = t === 1 ? [[-f[0], f[1], f[2]]] : [];
     const ring: Vec3[] = [
       [-f[0], t === 1 ? bottom : f[1], f[2]],
+      ...feet,
       ...Array.from({ length: across + 1 }, (_, j) => roofAt(t, -1 + (2 * j) / across)),
+      ...feet.map((p): Vec3 => [-p[0], p[1], p[2]]),
       [f[0], t === 1 ? bottom : f[1], f[2]],
     ];
     const centre = wood.vertex([0, bottom, f[2]], VARNISH);
@@ -1111,9 +1186,13 @@ function jib(): MeshBuilder {
 /**
  * A tapering foil: sections from the root down, each its height, its
  * leading and trailing edges and its thickness; n segments a side, the
- * bottom capped.
+ * bottom capped, and the root too where it stands out of the hull.
  */
-function foil(m: MeshBuilder, sections: { y: number; z0: number; z1: number; t: number }[]): void {
+function foil(
+  m: MeshBuilder,
+  sections: { y: number; z0: number; z1: number; t: number }[],
+  capRoot = false,
+): void {
   const n = D.small ? 10 : 3;
   const rings = sections.map(({ y, z0, z1, t }) => {
     const out: number[] = [];
@@ -1131,12 +1210,18 @@ function foil(m: MeshBuilder, sections: { y: number; z0: number; z1: number; t: 
   for (let r = 0; r + 1 < rings.length; r++) {
     m.strip(rings[r + 1] as number[], rings[r] as number[], true);
   }
-  const last = sections[sections.length - 1] as { y: number; z0: number; z1: number };
-  const ring = rings[rings.length - 1] as number[];
-  const centre = m.vertex([0, last.y, (last.z0 + last.z1) / 2]);
-  m.normal(centre, [0, -1, 0]);
-  for (let i = 0; i + 1 < ring.length; i++) {
-    m.triFacing(centre, ring[i] as number, ring[i + 1] as number, [0, -1, 0]);
+  const caps: [number, number][] = [[sections.length - 1, -1]];
+  if (capRoot) {
+    caps.push([0, 1]);
+  }
+  for (const [r, dir] of caps) {
+    const at = sections[r] as { y: number; z0: number; z1: number };
+    const ring = rings[r] as number[];
+    const centre = m.vertex([0, at.y, (at.z0 + at.z1) / 2]);
+    m.normal(centre, [0, dir, 0]);
+    for (let i = 0; i + 1 < ring.length; i++) {
+      m.triFacing(centre, ring[i] as number, ring[i + 1] as number, [0, dir, 0]);
+    }
   }
 }
 
@@ -1222,6 +1307,8 @@ function rudder(): { blade: MeshBuilder; bronze: MeshBuilder } {
       const z1 = z0 + lerp(c, c * 0.78, f);
       return { y: lerp(top, bottom, f), z0, z1, t: 0.1 * (z1 - z0) };
     }),
+    // Its head is closed: aft of the transom it stands clear of the counter.
+    true,
   );
   m.tube(
     [
@@ -1380,13 +1467,11 @@ function gooseneck(): MeshBuilder {
 /** The far model's deck: plain, a few strips across. */
 function plainDeck(): MeshBuilder {
   const m = new MeshBuilder('deck');
-  const across = [-1, -0.5, 0, 0.5, 1];
+  const across = PLAIN_ACROSS;
   let prev: number[] | null = null;
   for (const u of stations()) {
+    // Where the beam comes to nothing, at the stem, the row closes to its point.
     const b = halfBeam(u);
-    if (b < 1e-4) {
-      continue;
-    }
     const row = across.map((f) => m.vertex([f * b, deckY(f * b, u), zAt(u)], DECK, [f * b, u]));
     if (prev !== null) {
       m.strip(prev, row);

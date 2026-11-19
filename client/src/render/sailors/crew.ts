@@ -18,6 +18,12 @@
 // deck level, posed every frame; the rest at their far level, posed in
 // turn, every FAR_EVERY frames.
 //
+// Aboard a beach cat, her crew go out on her trapeze's wire: theirs drawn
+// from the hounds to their hips, the model's own on that side hidden.
+// Aboard a cruising yacht, her people are drawn with her own clips (her
+// bench, her rail, her ways at a crouch), loaded with their looks; aboard a
+// cruising catamaran, with hers (her seats, her ways upright, her ladder).
+//
 // The group is a child of the boat's model: the people heel, pitch and
 // heave with it. Allocation-free from frame to frame once each person is
 // made.
@@ -25,10 +31,11 @@
 import { Color, Group, Mesh, type Object3D, Raycaster, Vector3 } from 'three';
 import type { BoatStation } from '../../catalog';
 import type { SailorLook } from '../boat';
+import { catFloor } from './cat';
 import { CrewBody, type Stance, stance } from './crewbody';
 import { deckFigure, farFigure } from './crewfigures';
 import { CrewLevel } from './crewlevel';
-import { type PoseInput, poseMember } from './crewpose';
+import { type Level, type PoseInput, poseMember } from './crewpose';
 import {
   type CrewMember,
   type CrewMoment,
@@ -36,13 +43,21 @@ import {
   CrewRules,
   duckFor,
   duckStep,
+  waysOf,
 } from './crewrules';
 import type { FleetLook, FleetLooks, FleetSeat } from './fleetlooks';
+import { setWire, wireColour, wireMesh } from './onboat';
+import { ShipBraces } from './shipbraces';
+import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
+import { type ShipMember, ShipRules } from './shiprules';
+import { stillNow } from './still';
 
-/** Someone aboard, as the crew drawn needs them: their seat and look code. */
+/** Someone aboard, as the crew drawn needs them: their seat and look code, whether they wear the winner's cockade, and the pendant they wear (0 none). */
 export interface CrewPerson {
   seat: number;
   look: number;
+  cockade?: boolean;
+  pendant?: number;
 }
 
 /** Who is aboard, the skipper (seat 0) first, and the seat of whoever holds the controls. */
@@ -98,21 +113,29 @@ export { stationPlace } from './crewpose';
 const down = new Vector3(0, -1, 0);
 const from = new Vector3();
 
-/** The materials of what is walked on: the deck and the cockpit's floor, and a cuddy's canvas roof. */
-const WALKED = ['deck', 'canvas'];
+/** The materials of what is walked on: the deck and the cockpit's floor, a cuddy's canvas roof, and a beach cat's net. */
+const WALKED = ['deck', 'canvas', 'net'];
+
+/** What else is stepped on or over walking a cruising yacht's ways: her coachroof's scuttles and handrails, her hatches. */
+export const STEPPED = ['varnish', 'glass'];
 
 /**
  * The deck of a boat's model, as a height under (x, z) in the model's
  * frame: the highest of its hull's meshes walked on (the deck, the
- * cockpit's floor, a cuddy's roof) there, or null.
+ * cockpit's floor, a cuddy's roof) there, or null; and of those of the
+ * materials also given, stepped on or over.
  */
-export function modelDeck(model: Object3D): (x: number, z: number) => number | null {
+export function modelDeck(
+  model: Object3D,
+  also: readonly string[] = [],
+): (x: number, z: number) => number | null {
   model.updateMatrixWorld(true);
   const inverse = model.matrixWorld.clone().invert();
   const meshes: Mesh[] = [];
   const hull = model.getObjectByName('hull') ?? model;
+  const walked = [...WALKED, ...also];
   hull.traverse((o) => {
-    if (o instanceof Mesh && WALKED.includes((o.material as { name?: string }).name ?? '')) {
+    if (o instanceof Mesh && walked.includes((o.material as { name?: string }).name ?? '')) {
       meshes.push(o);
     }
   });
@@ -124,6 +147,12 @@ export function modelDeck(model: Object3D): (x: number, z: number) => number | n
     return hit === undefined ? null : hit.point.applyMatrix4(inverse).y;
   };
 }
+
+/** How far out on the wire a crew leans before it hangs from it: the wire drawn to them. */
+const WIRE_HOOKED = 0.5;
+
+/** A boat lying still, for a moment that does not say how she lies. */
+const NOT_LYING = { pitch: 0, heave: 0, aft: 0 };
 
 /** How far the tiller's top is over its nodes (its head and the extension's hinge), m: its half-depth. */
 const TILLER_HALF = 0.03;
@@ -176,7 +205,9 @@ export class CrewDeck {
   #near: CrewLevel | null = null;
   #far: CrewLevel | null = null;
   #stations: readonly BoatStation[] = [];
-  #rules: CrewRules | null = null;
+  #rules: CrewRules | ShipRules | null = null;
+  /** A ship's braces, drawn under her model; null aboard any other boat. */
+  braces: ShipBraces | null = null;
   #crew: CrewShown | null = null;
   #people: Drawn[] = [];
   /** Those drawn at each level, in order of their rows. */
@@ -187,11 +218,23 @@ export class CrewDeck {
   /** The levels' figures must be pooled again: a look or the nearest changed. */
   #dirty = true;
   #frames = 0;
-  /** The boat's moment, as last told: the boom now and a frame ago, the heel. */
+  /** The boat's moment, as last told: the boom now and a frame ago, the heel; how the boat lies (for those in the water) and how far aft her helm stands. */
   #boom = 0;
   #boomRate = 0;
   #heel = 0;
-  readonly #still: boolean;
+  readonly #level: Level = { heel: 0, pitch: 0, heave: 0, cog: 0, solid: null };
+  #aft = 0;
+  /** The world's time, s: what picks an idle on a cruising yacht's bench. */
+  #world = 0;
+  #plan: CrewPlan | null = null;
+  /** Aboard a beach cat, what her people's joints keep over: her net and decks. */
+  #floor: ((x: number, z: number) => number | null) | null = null;
+  /** Aboard a beach cat: each side's crew's wire drawn to whoever hangs on it, and the model's own (starboard, port). */
+  #wires: { mesh: Mesh; node: Object3D | null }[] = [];
+  /** Under reduced motion, read every frame: a change while playing is followed. */
+  get #still(): boolean {
+    return stillNow();
+  }
   /** Each person's distance from the camera, squared, and the people by it, nearest first. */
   #d2 = new Float64Array(0);
   #order: number[] = [];
@@ -200,8 +243,6 @@ export class CrewDeck {
 
   constructor(readonly sailorLookOf: (code: number) => SailorLook) {
     this.group.name = 'crew';
-    this.#still =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /** The fleet's looks, which the crew is drawn in; until given, nothing is drawn. */
@@ -210,9 +251,12 @@ export class CrewDeck {
       return;
     }
     this.#looks = looks;
-    this.#near = new CrewLevel('near', looks.bones, 3 * DECK_TRIANGLES, 12, looks);
+    this.#near = new CrewLevel('near', looks.bones, 3 * DECK_TRIANGLES, 12, looks, true);
     this.#far = new CrewLevel('far', looks.bones, 3 * FAR_TRIANGLES, FAR_FIGURES, looks);
     this.group.add(this.#near.mesh, this.#far.mesh);
+    if (this.#near.pendants !== null) {
+      this.group.add(this.#near.pendants);
+    }
     this.#show();
   }
 
@@ -220,18 +264,65 @@ export class CrewDeck {
   aboard(model: Object3D, plan: CrewPlan): void {
     model.add(this.group);
     this.#stations = plan.stations;
-    this.#rules = new CrewRules(plan);
+    this.#plan = plan;
+    this.#floor = plan.cat == null ? null : catFloor(plan.cat);
+    this.#level.cog = plan.cog ?? 0;
+    this.#level.solid = plan.solid ?? null;
+    for (const w of this.#wires) {
+      this.group.remove(w.mesh);
+    }
+    this.#wires = [];
+    if (plan.cat?.crewRings != null && plan.cat.hounds !== null) {
+      for (const name of ['trapeze-crew-starboard', 'trapeze-crew-port']) {
+        const node = model.getObjectByName(name) ?? null;
+        const mesh = wireMesh(wireColour(node ?? undefined));
+        mesh.visible = false;
+        mesh.castShadow = true;
+        this.group.add(mesh);
+        this.#wires.push({ mesh, node });
+      }
+    }
+    const ship = plan.ship ?? null;
+    this.#rules =
+      ship === null
+        ? new CrewRules(plan)
+        : new ShipRules({ stations: plan.stations, ship }, this.#still);
+    if (this.braces !== null) {
+      this.group.remove(this.braces.mesh);
+      this.braces = null;
+    }
+    if (ship !== null && ship.company.braces.length > 0) {
+      this.braces = new ShipBraces(ship.company);
+      this.group.add(this.braces.mesh);
+    }
     this.#show();
   }
 
-  /** The crew's rules, as they stand: who is where, crossing or changing places. */
-  get rules(): CrewRules | null {
+  /** The crew's rules, as they stand: who is where, crossing or changing places; a ship's company's, aboard a ship. */
+  get rules(): CrewRules | ShipRules | null {
     return this.#rules;
+  }
+
+  /** Aboard a ship, the seat whose look is drawn at the wheel (whoever holds the controls once relieved); null elsewhere. */
+  get wheelSeat(): number | null {
+    const r = this.#rules;
+    return r instanceof ShipRules ? r.wheelSeat : null;
   }
 
   /** Whether whoever holds the controls is walking to or from the helm: the helm's figure is not drawn meanwhile. */
   get helmAway(): boolean {
     return this.#rules?.helmAway ?? false;
+  }
+
+  /** Aboard a beach cat, each side's crew's wire drawn to whoever hangs on it (starboard, port). */
+  get wiresDrawn(): [boolean, boolean] {
+    return [this.#wires[0]?.mesh.visible === true, this.#wires[1]?.mesh.visible === true];
+  }
+
+  /** Aboard a beach cat, whether someone crossing her net is in the helm's way: the helm waits to cross. */
+  get helmHeld(): boolean {
+    const r = this.#rules;
+    return r instanceof CrewRules && r.helmHeld;
   }
 
   /** The people aboard; null for nobody but the one at the helm. */
@@ -240,13 +331,27 @@ export class CrewDeck {
     this.#show();
   }
 
-  /** The boat's moment, each frame before frame(): the rules stepped by it; heel the boat's, radians. */
-  sail(moment: CrewMoment, heel: number): void {
+  /**
+   * The boat's moment, each frame before frame(): the rules stepped by it;
+   * heel the boat's, radians; how she lies (her pitch, radians, and heave,
+   * m) and how far aft of their places her helm stands, m.
+   */
+  sail(moment: CrewMoment, heel: number, lie = NOT_LYING): void {
     const dt = Math.max(1e-6, moment.dt);
     this.#boomRate = (moment.boom - this.#boom) / dt;
     this.#boom = moment.boom;
     this.#heel = heel;
+    this.#level.heel = heel;
+    this.#level.pitch = lie.pitch;
+    this.#level.heave = lie.heave;
+    this.#aft = lie.aft;
+    this.#world = moment.ship?.time ?? this.#world + dt;
     this.#rules?.step(moment);
+    // Her braces as her yards are now, and the falls those at them haul.
+    const rules = this.#rules;
+    if (this.braces !== null && rules instanceof ShipRules) {
+      this.braces.update(rules.turns, rules.reef, this.#crew === null ? null : rules);
+    }
   }
 
   /** Whether everyone aboard is drawn, in their own look, at the level their distance asks. */
@@ -261,6 +366,11 @@ export class CrewDeck {
           (settled(p.look.state) &&
             settled(p.look.clipsState) &&
             (!p.look.railed || settled(p.look.railState)) &&
+            (!p.look.shipped || settled(p.look.shipState)) &&
+            (!p.look.aloft || settled(p.look.aloftState)) &&
+            (!this.#catted || settled(p.look.catState)) &&
+            (!this.#yachted || settled(p.look.cruiserState)) &&
+            (!this.#bridged || settled(p.look.bridgeState)) &&
             (p.look.clipsState === 'failed' || (p.shown && p.posed))),
       ) &&
       this.drawn.near + this.drawn.far === this.#people.filter((p) => p.shown).length
@@ -278,7 +388,16 @@ export class CrewDeck {
    * far out from the centreline their head is (+ starboard) in the boat's
    * frame.
    */
-  heads(): { at: Vector3; near: boolean; station: number; across: number; moving: boolean }[] {
+  heads(): {
+    at: Vector3;
+    near: boolean;
+    station: number;
+    across: number;
+    moving: boolean;
+    seat: number;
+    clip: string | null;
+    model: [number, number, number];
+  }[] {
     const parent = this.group.parent;
     if (parent === null) {
       return [];
@@ -294,6 +413,9 @@ export class CrewDeck {
           station: p.member.station,
           across: head.x,
           moving: p.member.moving !== null,
+          seat: p.member.seat,
+          clip: p.a.clip?.name ?? null,
+          model: [head.x, head.y, head.z] as [number, number, number],
         };
       });
   }
@@ -306,25 +428,64 @@ export class CrewDeck {
   }
 
   #show(): void {
-    const looks = this.#looks;
     const rules = this.#rules;
     if (rules === null) {
       this.#people = [];
       return;
     }
     rules.set(this.#crew, this.#people.length > 0);
+    this.#sync();
+  }
+
+  /** The members' version of a ship's rules last drawn: a relief changes who is at the wheel and who walks. */
+  #version = -1;
+
+  /** Those drawn, as the rules have them aboard: those already met kept. */
+  #sync(): void {
+    const looks = this.#looks;
+    const rules = this.#rules;
+    if (rules === null) {
+      this.#people = [];
+      return;
+    }
+    if (rules instanceof ShipRules) {
+      this.#version = rules.version;
+    }
     const before = new Map(this.#people.map((p) => [p.member, p]));
     this.#people = [];
     if (looks !== null) {
+      const ship = rules instanceof ShipRules;
+      const aloft = this.#stations.some((s) => s.pose === 'aloft');
+      if (ship) {
+        // Whoever is at the wheel too: relieved, they walk with the crew.
+        for (const p of this.#crew?.people ?? []) {
+          const l = this.sailorLookOf(p.look);
+          looks.want(looks.add(l.art, l.machine), true, false, false, true, aloft);
+        }
+      }
       for (const member of rules.members) {
         const l = this.sailorLookOf(member.look);
         const look = looks.add(l.art, l.machine);
-        // The rail's clips and the crouch for anyone who sits on a rail or moves about.
+        // The rail's clips and the crouch for anyone who sits on a rail or
+        // moves about; a ship's deck's (and aloft, if she has a top) for
+        // anyone aboard a ship.
         const station = this.#stations[member.station];
         const railed =
-          this.#stations.some((s) => s.windward === true || s.pose === 'rail') ||
-          station?.pose === 'rail';
-        looks.want(look, true, false, railed);
+          !ship &&
+          !this.#yachted &&
+          (this.#stations.some((s) => s.windward === true || s.pose === 'rail') ||
+            station?.pose === 'rail');
+        looks.want(
+          look,
+          true,
+          false,
+          railed,
+          ship,
+          ship && aloft,
+          this.#catted,
+          this.#yachted,
+          this.#bridged,
+        );
         const was = before.get(member);
         if (was !== undefined && was.look === look) {
           this.#people.push(was);
@@ -382,15 +543,25 @@ export class CrewDeck {
       return;
     }
     this.#frames++;
+    const rules = this.#rules;
+    if (rules instanceof ShipRules && rules.version !== this.#version) {
+      this.#sync();
+    }
     const people = this.#people;
     // Who is drawn: anyone not at the helm, or walking to or from it, once their look can be posed.
     for (const p of people) {
       const l = p.look;
+      const done = (s: string): boolean => s === 'ready' || s === 'failed';
       const can =
         l.deck !== null &&
         l.clips !== null &&
         l.clipsState === 'ready' &&
-        (!l.railed || l.railState === 'ready' || l.railState === 'failed');
+        (!l.railed || done(l.railState)) &&
+        (!l.shipped || done(l.shipState)) &&
+        (!l.aloft || done(l.aloftState)) &&
+        (!this.#catted || done(l.catState)) &&
+        (!this.#yachted || done(l.cruiserState)) &&
+        (!this.#bridged || done(l.bridgeState));
       const shown = can && (p.member.station > 0 || p.member.moving !== null);
       if (shown && p.body === null && l.deck !== null) {
         p.body = new CrewBody(l.deck, 1 + p.member.seat * 977 + l.index * 31, l.machine);
@@ -431,6 +602,7 @@ export class CrewDeck {
     }
     // Each person posed: the near every frame, the far in their turn.
     const t0 = performance.now();
+    plumbOf(this.group.parent.matrixWorld, this.#up);
     for (const p of people) {
       if (!p.shown || p.body === null) {
         continue;
@@ -447,6 +619,7 @@ export class CrewDeck {
     }
     this.stats.frames++;
     this.stats.ms += performance.now() - t0;
+    this.#drawWires();
     if (this.#dirty) {
       this.#dirty = false;
       this.#pool(near, far, looks.seat);
@@ -455,10 +628,58 @@ export class CrewDeck {
     this.#rows(far, this.#farRows);
   }
 
+  /** Whether the boat is a beach cat, whose people are drawn with her own clips. */
+  get #catted(): boolean {
+    return this.#plan?.cat != null;
+  }
+
+  /** Whether the boat is a cruising yacht, whose people are drawn with her own clips. */
+  get #yachted(): boolean {
+    return this.#plan?.yacht != null;
+  }
+
+  /** Whether the boat is a cruising catamaran, whose people are drawn with her own clips. */
+  get #bridged(): boolean {
+    return this.#plan?.bridge != null;
+  }
+
+  /**
+   * Aboard a beach cat, each side's crew's wire: from the hounds to the hips
+   * of whoever hangs on it, out on the wire (and not moving about or in the
+   * water), the model's own on that side hidden; else the model's hanging.
+   */
+  #drawWires(): void {
+    const cat = this.#plan?.cat ?? null;
+    if (this.#wires.length !== 2 || cat === null || cat.hounds === null) {
+      return;
+    }
+    for (let k = 0; k < 2; k++) {
+      const side = k === 0 ? 1 : -1;
+      const w = this.#wires[k] as { mesh: Mesh; node: Object3D | null };
+      const on = this.#people.find(
+        (p) =>
+          p.shown &&
+          p.body !== null &&
+          p.member.moving === null &&
+          (p.member.wet ?? null) === null &&
+          p.member.lean >= WIRE_HOOKED &&
+          p.member.side === side &&
+          this.#stations[p.member.station]?.pose === 'hull',
+      );
+      w.mesh.visible = on !== undefined;
+      if (w.node !== null) {
+        w.node.visible = on === undefined;
+      }
+      if (on?.body != null) {
+        setWire(w.mesh, cat.hounds, on.body.hips);
+      }
+    }
+  }
+
   /** The duck: down quickly as the boom comes near the head (or will in a moment), up slowly after. */
   #duck(p: Drawn, dt: number): void {
     const rules = this.#rules;
-    if (rules === null || p.body === null || !p.posed) {
+    if (!(rules instanceof CrewRules) || p.body === null || !p.posed) {
       return;
     }
     p.duck = duckStep(p.duck, duckFor(rules.plan, this.#boom, this.#boomRate, p.body.headUp), dt);
@@ -469,6 +690,26 @@ export class CrewDeck {
     const seat = this.#looks?.seat;
     const clips = p.look.clips;
     if (seat === undefined || clips === null) {
+      return;
+    }
+    const rules = this.#rules;
+    if (rules instanceof ShipRules) {
+      const s = this.#shipInput;
+      s.rules = rules;
+      rules.still = this.#still;
+      s.clips = clips;
+      s.machine = p.look.machine;
+      s.time = this.#still ? p.hold : p.time;
+      s.world = rules.time;
+      s.life.dt = dt;
+      s.life.heel = this.#heel;
+      s.life.upright = 0;
+      s.life.still = this.#still;
+      s.a = p.a;
+      s.b = p.b;
+      if (!poseShip(p.body as CrewBody, p.member as ShipMember, s)) {
+        p.body?.hide();
+      }
       return;
     }
     const input = this.#input;
@@ -484,8 +725,32 @@ export class CrewDeck {
     input.life.still = this.#still;
     input.a = p.a;
     input.b = p.b;
+    input.cat = this.#plan?.cat ?? null;
+    input.aft = this.#aft;
+    input.level = this.#level;
+    input.life.floor = this.#floor;
+    input.cruiser = this.#plan?.yacht ?? null;
+    input.world = this.#world;
+    input.machine = p.look.machine;
+    input.ways = this.#plan === null ? null : waysOf(this.#plan);
+    input.bridge = this.#plan?.bridge?.boat ?? null;
     poseMember(p.body as CrewBody, p.member, input);
   }
+
+  /** The vertical in the boat's model's frame, kept within the sea legs' reach: what a ship's standing people are kept plumb to. */
+  readonly #up = new Vector3(0, 1, 0);
+
+  readonly #shipInput: ShipPoseInput = {
+    rules: null as unknown as ShipRules,
+    clips: new Map(),
+    machine: false,
+    time: 0,
+    world: 0,
+    life: { dt: 0, heel: 0, upright: 0, still: false, plumb: null },
+    up: this.#up,
+    a: stance(),
+    b: stance(),
+  };
 
   readonly #input: PoseInput = {
     stations: [],
@@ -535,7 +800,16 @@ export class CrewDeck {
       rows.forEach((p, r) => {
         const placed = level.pool.placed.get(keys[r] as string);
         if (placed !== undefined) {
-          level.head(r, placed, p.colours, p.look.layer, p.look.machine);
+          const told = this.#crew?.people.find((q) => q.seat === p.member.seat);
+          level.head(
+            r,
+            placed,
+            p.colours,
+            p.look.layer,
+            p.look.machine,
+            told?.cockade === true,
+            told?.pendant ?? 0,
+          );
           level.frame(r, null);
         }
       });
@@ -554,6 +828,7 @@ export class CrewDeck {
       far: this.#farRows.length,
       nearTriangles: tn,
       farTriangles: tf,
+      pendants: near.wearing,
     };
   }
 
@@ -576,8 +851,8 @@ export class CrewDeck {
 
   /**
    * How many were drawn at each level at the last change, and their
-   * figures' triangles (the draws' own count is more: every instance runs
+   * figures' triangles, and how many near wear a pendant (the draws' own count is more: every instance runs
    * its level's largest figure's vertices, those past its own folded).
    */
-  drawn = { near: 0, far: 0, nearTriangles: 0, farTriangles: 0 };
+  drawn = { near: 0, far: 0, nearTriangles: 0, farTriangles: 0, pendants: 0 };
 }

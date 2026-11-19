@@ -10,7 +10,7 @@
 export const KNOT = 1852 / 3600;
 
 /** Changed by hand whenever the tiers' values change: what a phone remembered of an older build's is let go. */
-export const QUALITY_VERSION = 3;
+export const QUALITY_VERSION = 4;
 
 /** The detail band: the waves shorter than the boat band's shortest, drawn and never felt. */
 export const DETAIL = {
@@ -343,8 +343,6 @@ export const WAKE_WAVES = {
   tileTexel: 2.5,
   /** The low tier steps its field at most this often, per second of world time. */
   cpuRate: 30,
-  /** A frame longer than this, in seconds (a page hidden and shown again), starts the field afresh. */
-  longest: 1,
 } as const;
 
 /** Spray: sprites thrown from the bow, and torn off the crests from force 7. */

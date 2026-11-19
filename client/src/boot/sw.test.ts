@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import { describe, expect, test } from 'vitest';
+import { keepStorage, type WorkerEnv, wantsWorker } from './sw';
+
+describe('whether the page registers the worker', () => {
+  const env: WorkerEnv = { built: true, on: true, supported: true };
+  const q = (s: string) => new URLSearchParams(s);
+
+  test('a built page, at a link or not', () => {
+    expect(wantsWorker(env, q(''))).toBe(true);
+    expect(wantsWorker(env, q('w=abc'))).toBe(true);
+    expect(wantsWorker(env, q('s=abc'))).toBe(true);
+  });
+
+  test('never under the development server, a test, the sandbox, or switched off', () => {
+    expect(wantsWorker({ ...env, built: false }, q(''))).toBe(false);
+    expect(wantsWorker(env, q('test'))).toBe(false);
+    expect(wantsWorker(env, q('sandbox'))).toBe(false);
+    expect(wantsWorker({ ...env, on: false }, q(''))).toBe(false);
+    expect(wantsWorker({ ...env, supported: false }, q(''))).toBe(false);
+  });
+});
+
+describe('the game’s storage kept', () => {
+  const marks = () => {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+    };
+  };
+  const storage = (persisted = false) => {
+    const asked: string[] = [];
+    return {
+      asked,
+      persisted: async () => persisted,
+      persist: async () => {
+        asked.push('persist');
+        return true;
+      },
+    };
+  };
+
+  test('asked once, only where the game runs installed', async () => {
+    const s = storage();
+    const m = marks();
+    expect(await keepStorage(s, false, m)).toBe(false);
+    expect(s.asked).toEqual([]);
+    expect(await keepStorage(s, true, m)).toBe(true);
+    expect(await keepStorage(s, true, m)).toBe(false);
+    expect(s.asked).toEqual(['persist']);
+  });
+
+  test('not asked when already kept, or with no storage manager', async () => {
+    const s = storage(true);
+    expect(await keepStorage(s, true, marks())).toBe(false);
+    expect(s.asked).toEqual([]);
+    expect(await keepStorage(undefined, true, marks())).toBe(false);
+  });
+});

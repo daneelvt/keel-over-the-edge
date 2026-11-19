@@ -14,10 +14,27 @@
   src: url("../fonts/IMFellEnglish-Italic.woff2") format("woff2");
 }
 
+/* Libre Caslon Text, drawn for text at 16 px: the log's words and the
+   news's. Each file loads only when words are first set in it. */
+@font-face {
+  font-family: "Libre Caslon Text";
+  font-style: normal;
+  font-display: swap;
+  src: url("../fonts/LibreCaslonText-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Libre Caslon Text";
+  font-style: italic;
+  font-display: swap;
+  src: url("../fonts/LibreCaslonText-Italic.woff2") format("woff2");
+}
+
 /* The chart over the whole screen: the picture is the renderer's; these are
    the pointers' surface, the names over it, and its panels. */
 .chart-screen {
-  --paper: #ece0c2;
+  /* One paper for the chart's sheets, the log's ink and its glyphs. */
+  --paper: #efe4c8;
   --chart-ink: #3b2e22;
   --magenta: #a8236e;
   position: fixed;
@@ -198,6 +215,24 @@
   color: var(--gold);
 }
 
+/* A story not yet read in today's edition: a gold dot over the News tab's
+   corner, the tab no wider. */
+.chart-tab {
+  position: relative;
+}
+
+.chart-tab-dot {
+  position: absolute;
+  top: 6px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 4px rgb(232 180 80 / 70%);
+  pointer-events: none;
+}
+
 .chart-position {
   flex: 1 1 auto;
   display: flex;
@@ -220,8 +255,9 @@
   font-size: 16px;
 }
 
-/* The ship's clock in the strip: the world's time of the moment shown,
-   its rim gold while that is ahead. Not a button. */
+/* The chart's ship's clock, in the strip or under it held upright: the
+   world's time of the moment shown, its rim gold while that is ahead. Not
+   a button. */
 .chart-clock {
   flex: none;
   display: block;
@@ -259,23 +295,13 @@
   font-weight: 500;
 }
 
-.news-column h3 {
-  margin: 8px 0 4px;
-  font-family: "IM Fell English SC", serif;
-  font-weight: 400;
-}
-
-.news-world {
-  padding: 4px 0;
-}
-
 .chart-panel {
   position: absolute;
   pointer-events: auto;
   /* The chart's paper, in the plate's brass frame. */
   border: 1px solid var(--brass-dark);
   border-radius: 12px;
-  background: rgb(236 224 194 / 96%);
+  background: rgb(239 228 200 / 96%);
   color: var(--chart-ink);
   box-shadow:
     inset 0 0 0 1px rgb(201 162 76 / 55%),
@@ -309,11 +335,13 @@
 }
 
 .chart-box {
+  box-sizing: border-box;
   left: var(--edge-left, 12px);
   bottom: calc(var(--edge-bottom, 12px) + 60px);
-  width: min(320px, calc(100vw - 24px));
-  /* Its padding is outside its height. */
-  max-height: calc(100dvh - var(--chart-head) - 8px - var(--edge-bottom, 12px) - 60px - 24px);
+  /* Its border and padding inside its size: on a phone 360 px across it
+     ran past the right edge. */
+  width: min(354px, calc(100vw - var(--edge-left, 12px) - var(--edge-right, 12px)));
+  max-height: calc(100dvh - var(--chart-head) - 8px - var(--edge-bottom, 12px) - 60px);
   overflow-y: auto;
   padding: 12px 16px;
 }
@@ -337,11 +365,83 @@
   margin-top: 8px;
 }
 
+/* Each key on one line, as wide as its words and sharing what is left:
+   three fit a box on a phone 360 px across. */
 .chart-buttons button {
-  flex: 1;
+  flex: 1 1 auto;
+  padding: 0 8px;
+  white-space: nowrap;
   border: 1px solid rgb(59 46 34 / 40%);
   border-radius: 8px;
   background: rgb(255 255 255 / 30%);
+}
+
+/* Set course, the box's first key, in the instruments' brass. */
+.chart-buttons .chart-set-course {
+  border-color: var(--brass-dark);
+  background: rgb(201 162 76 / 45%);
+}
+
+/* The course on the chart: a brass drawing pin, its point on the place,
+   its name under it; a pin dropped on open water, its box open, the same
+   unnamed. The pin is the head's size, laid so its point is at its place. */
+.chart-pin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--chart-ink);
+  translate: -50% -100%;
+}
+
+.chart-pin[hidden] {
+  display: none;
+}
+
+.chart-pin.chart-course {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.chart-pin-head {
+  display: block;
+  width: 16px;
+  height: 22px;
+  overflow: visible;
+}
+
+.chart-pin-head path {
+  fill: #c9a24c;
+  stroke: #3b2e22;
+  stroke-width: 1.2;
+}
+
+.chart-pin-head circle {
+  fill: #3b2e22;
+}
+
+.chart-pin.chart-dropped .chart-pin-head path {
+  fill: #e6cf8f;
+}
+
+.chart-pin-name {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  translate: -50% 0;
+  font:
+    italic 13px / 1.1 "IM Fell English",
+    Georgia,
+    serif;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px var(--paper),
+    0 0 2px var(--paper);
 }
 
 .chart-list,
@@ -363,15 +463,13 @@
   border-bottom: 1px solid rgb(59 46 34 / 30%);
 }
 
-.chart-list ul,
-.news-items {
+.chart-list ul {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.chart-list li button,
-.news-items li button {
+.chart-list li button {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0 12px;
@@ -381,10 +479,6 @@
   border-bottom: 1px solid rgb(59 46 34 / 12%);
   background: none;
   text-align: left;
-}
-
-.news-items li button {
-  display: block;
 }
 
 .chart-list-kind,
@@ -397,32 +491,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.news-masthead {
-  text-align: center;
-  border-bottom: 3px double var(--chart-ink);
-  margin-bottom: 8px;
-}
-
-.news-masthead h2 {
-  font-family: "IM Fell English SC", Georgia, serif;
-  font-size: 26px;
-}
-
-.news-masthead p {
-  font-style: italic;
-  letter-spacing: 0.1em;
-}
-
-.news-title {
-  letter-spacing: 0.04em;
-}
-
-.news-fresh,
-.news-more {
-  width: 100%;
-  border: 1px solid rgb(59 46 34 / 40%);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 30%);
+/* A course's boats, under its name and where it starts, across the line. */
+.chart-list-course .chart-credit {
+  grid-column: 1 / -1;
 }
 
 /* The lights' characters, printed only close in. */
@@ -526,6 +597,12 @@
 }
 
 /* The notices. */
+.notice-line {
+  /* A screen for reading: its words follow the browser's text size. */
+  --text: 0.0625rem;
+  font-size: 0.9375rem;
+}
+
 .notice-line:empty {
   display: none;
 }
@@ -542,13 +619,76 @@
   color: var(--gold);
 }
 
+/* Under the case, a notice is no wider than the column beside the pocket
+   chart, its words wrapping: a long one ran under the pocket chart on a
+   phone held upright, and hid its ×. The column is sailing together's
+   (--deck-width), here before its parts are loaded. */
+.hud-top .notice {
+  box-sizing: border-box;
+  max-width: min(320px, calc(100vw - var(--edge-left) - var(--edge-right) - 114px));
+}
+
 .hud .notice-dismiss {
   min-width: 44px;
   min-height: 44px;
   border: 0;
   background: none;
   color: var(--ink);
-  font-size: 20px;
+  font-size: 1.25rem;
+}
+
+/* A notice's key, as Enter on a harbour race's: the head keys' size. */
+.hud .notice-act {
+  flex: none;
+  position: relative;
+  height: var(--key, 40px);
+  min-width: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 40%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: #1a242c;
+  font:
+    500 0.875rem / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.hud .notice-act::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+/* A notice with a key: no wider than the column under the case, clear
+   of the pocket chart; its words beside the ×, the key under them. */
+.hud .notice.with-act {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 4px;
+  box-sizing: border-box;
+  max-width: var(--deck-width, 250px);
+  padding-bottom: 8px;
+}
+
+.notice.with-act > span {
+  padding-top: 8px;
+}
+
+.notice.with-act > .notice-act {
+  grid-row: 2;
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.notice.with-act > .notice-dismiss {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .menu-chart {
@@ -754,8 +894,18 @@
     flex: 1 1 100%;
   }
 
+  /* Four tabs, where the boat is and the way back fit a phone's width. */
+  .chart-tab {
+    padding: 0 7px;
+  }
+
+  .chart-top > .chart-clock {
+    margin-left: 2px;
+  }
+
   .chart-screen:has(.chart-falls) .chart-list,
-  .chart-screen:has(.chart-falls) .news-sheet {
+  .chart-screen:has(.chart-falls) .news-sheet,
+  .chart-screen:has(.chart-falls) .log-sheet {
     top: calc(var(--edge-top, 12px) + 90px);
   }
 }
@@ -831,4 +981,72 @@
     left: 2px;
     bottom: -6px;
   }
+}
+
+/* A race on the chart: its marks' numbers, its line, every boat's place,
+   and the tags of the boat watched and the leader: a bar of the boat's
+   colour, the name, the place. */
+.race-chart-mark,
+.race-chart-line,
+.race-chart-place,
+.race-chart-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--chart-ink);
+  font:
+    600 13px / 1.1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.race-chart-mark[hidden],
+.race-chart-line[hidden],
+.race-chart-place[hidden],
+.race-chart-tag[hidden] {
+  display: none;
+}
+
+.race-chart-mark {
+  translate: 7px -115%;
+  font-size: 15px;
+}
+
+.race-chart-line {
+  translate: -50% 35%;
+  font:
+    italic 12px / 1.1 "IM Fell English",
+    Georgia,
+    serif;
+}
+
+.race-chart-place {
+  translate: 7px -50%;
+  font-size: 12px;
+  text-shadow:
+    0 0 2px rgb(236 224 194),
+    0 0 2px rgb(236 224 194);
+}
+
+.race-chart-tag {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+  translate: 9px -125%;
+  padding: 0 6px 0 0;
+  border: 1px solid var(--chart-ink);
+  border-radius: 3px;
+  background: rgb(236 224 194 / 94%);
+  line-height: 18px;
+}
+
+.race-chart-bar {
+  width: 5px;
+  background: var(--race-colour);
+}
+
+.race-chart-tag-place {
+  color: #7a5a1c;
 }

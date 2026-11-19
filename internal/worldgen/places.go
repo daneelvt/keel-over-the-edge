@@ -58,6 +58,8 @@ type PlaceDetails struct {
 	Mouth    float64 `json:"mouth,omitempty"`    // m: a cove's mouth
 	Length   float64 `json:"length,omitempty"`   // m: a reef's crest, a bar
 	Offshore bool    `json:"offshore,omitempty"` // a reef or bar of its own, on no island's shelf
+	// Marks is what a beacon marks: the reef's or bar's place number.
+	Marks int32 `json:"marks,omitempty"`
 	// Offers is what its site offers a name: its qualities, and what it
 	// shows that names may need.
 	Offers []string `json:"offers"`

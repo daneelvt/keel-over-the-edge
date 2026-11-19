@@ -18,6 +18,7 @@ import {
   aboardWords,
   type BoatCatalog,
   boatTitle,
+  closed,
   type FleetBoat,
   inOrder,
   kindOf,
@@ -94,6 +95,25 @@ function sailsOf(b: Boat): { sails: Point[][]; masts: [number, number][]; top: n
   return { sails, masts, top };
 }
 
+/** Whether a boat of two hulls carries people between them, over a bridgedeck: a station inboard of her hulls' tops. */
+function bridged(b: Boat): boolean {
+  const inner = b.physics.hulls.hullSpacing - b.beam / 2;
+  return b.stations.some((s) => Math.abs(s.at[0] ?? 0) < inner);
+}
+
+/**
+ * Her round-house side on, m ahead of her middle and up from the water,
+ * over her hulls' freeboard f: from the stations' aftmost, aft, to a raked
+ * front well forward of her mast, its roof 1 m under her boom.
+ */
+function houseAt(b: Boat, f: number): string {
+  const L = b.lengthOverall;
+  const roof = b.physics.rig.boomHeight - 1;
+  const aft = -Math.max(...b.stations.map((s) => s.at[2] ?? 0)) - 0.6;
+  const fore = 0.26 * L;
+  return `M ${aft} ${-f} L ${aft} ${-roof} L ${fore - 0.07 * L} ${-roof} L ${fore} ${-f} Z`;
+}
+
 /**
  * Where a kind's sail number is drawn, side on: on the main topsail of a
  * ship of square sails, else on the mainsail; null for neither.
@@ -155,10 +175,20 @@ export function BoatPicture({
   const { width: w, top } = room(cat);
   const below = w * 0.06;
   const L = b.lengthOverall;
-  const f = 0.09 * L + 0.18;
+  // A boat of two hulls: each slender, the far one a little behind and
+  // above the near one, and a beam between them.
+  const twin = b.physics.hulls.hullSpacing > 0;
+  const f = twin ? 0.06 * L + 0.12 : 0.09 * L + 0.18;
   const stern = -0.48 * L;
   const bow = 0.5 * L;
-  const hull = `M ${stern} ${-f} L ${bow} ${-1.15 * f} Q ${0.42 * L} ${0.2 * f} ${0.28 * L} ${0.32 * f} L ${-0.4 * L} ${0.32 * f} Q ${stern} ${0.2 * f} ${stern} ${-f} Z`;
+  const hullAt = (dx: number, dy: number) =>
+    `M ${stern + dx} ${-f + dy} L ${bow + dx} ${-1.15 * f + dy} Q ${0.42 * L + dx} ${0.2 * f + dy} ${0.28 * L + dx} ${0.32 * f + dy} L ${-0.4 * L + dx} ${0.32 * f + dy} Q ${stern + dx} ${0.2 * f + dy} ${stern + dx} ${-f + dy} Z`;
+  const hull = hullAt(0, 0);
+  const farHull = twin ? hullAt(0.04 * L, -0.45 * f) : null;
+  // A boat of two hulls whose people sit between them, on a bridgedeck:
+  // her round-house on it, its roof carried aft over her cockpit, a little
+  // under her boom.
+  const house = twin && bridged(b) ? houseAt(b, f) : null;
   const { sails, masts } = sailsOf(b);
   const at = numberAt(b);
   const id = `boat-clip-${++pictures}`;
@@ -180,6 +210,14 @@ export function BoatPicture({
           ))}
         </clipPath>
       </defs>
+      {farHull === null ? null : (
+        <path
+          d={farHull}
+          fill={p?.colour}
+          class="boat-picture-hull boat-picture-far"
+          stroke-width={w * 0.006}
+        />
+      )}
       <line
         class="boat-picture-water"
         x1={-w / 2}
@@ -230,6 +268,9 @@ export function BoatPicture({
           {number}
         </text>
       ) : null}
+      {house === null ? null : (
+        <path d={house} class="boat-picture-house" stroke-width={w * 0.006} />
+      )}
       <path d={hull} fill={p?.colour} class="boat-picture-hull" stroke-width={w * 0.006} />
       {p?.grain === true ? (
         <g class="boat-picture-grain" stroke-width={w * 0.004}>
@@ -328,10 +369,13 @@ export function BoatLookChooser({
   chooser: c,
   board = false,
   className = '',
+  guard = (act) => act(),
 }: {
   chooser: BoatChooser;
   board?: boolean;
   className?: string;
+  /** Asks first, with the boat still in the water, before a change is saved. */
+  guard?: (act: () => void) => void;
 }) {
   const b = c.yours;
   if (b === null) {
@@ -423,7 +467,12 @@ export function BoatLookChooser({
           <button type="button" class={k.cancel} disabled={busy} onClick={() => c.cancel()}>
             Cancel
           </button>
-          <button type="button" class={k.save} disabled={busy} onClick={() => void c.save()}>
+          <button
+            type="button"
+            class={k.save}
+            disabled={busy}
+            onClick={() => (c.changed() ? guard(() => void c.save()) : void c.save())}
+          >
             Save
           </button>
         </div>
@@ -446,11 +495,14 @@ export function ChangeBoat({
   chooser: c,
   board = false,
   className = '',
+  guard = (act) => act(),
 }: {
   chooser: BoatChooser;
   /** On the board, at sea in a port: only the available boats, and one chosen takes the place of the one sailed. */
   board?: boolean;
   className?: string;
+  /** Asks first, with the boat still in the water, before another boat is chosen. */
+  guard?: (act: () => void) => void;
 }) {
   const f = c.fleet.value;
   if (f === null) {
@@ -459,7 +511,7 @@ export function ChangeBoat({
   const k = partsFor(board);
   const atSea = board;
   const busy = c.busy.value;
-  const boats = inOrder(c.cat, f.boats).filter((b) => !atSea || !taken(b));
+  const boats = inOrder(c.cat, f.boats).filter((b) => !atSea || (!taken(b) && !closed(b)));
   return (
     <section
       key="change-boat"
@@ -475,8 +527,10 @@ export function ChangeBoat({
               type="button"
               class="change-boat-choice"
               aria-current={b.id === f.boat ? 'true' : undefined}
-              disabled={busy || taken(b)}
-              onClick={() => void c.choose(b.id)}
+              disabled={busy || taken(b) || closed(b)}
+              onClick={() =>
+                b.id === f.boat ? void c.choose(b.id) : guard(() => void c.choose(b.id))
+              }
             >
               <Picture cat={c.cat} b={b} width={56} />
               <span class="change-boat-words">

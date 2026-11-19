@@ -85,6 +85,10 @@ type Core struct {
 
 	mu    sync.Mutex
 	helms map[store.AccountID]*helm
+	// courses are the machine sailors' courses, by account (course.go):
+	// a lock of their own, taken with no other held after it.
+	coursesMu sync.Mutex
+	courses   map[store.AccountID]*course
 
 	hub *hub
 	// stopping is closed as keel stops: every wait ends at once.
@@ -122,9 +126,11 @@ func (c *Core) Limits() Limits { return c.cfg.Limits }
 
 // Open is told of a world as it opens, and returns what its simulation
 // must hand each frame to. Boats of the world before are gone: each helm
-// joins the new world at its agent's next call, told of the new world.
+// joins the new world at its agent's next call, told of the new world, and
+// every course set in the world before is let go.
 func (c *Core) Open(s *Sea) *Recorder {
 	c.sea.Store(s)
+	c.forgetCourses()
 	if s.Chat != nil {
 		s.Chat.AddOut(chatOut{core: c, sea: s})
 	}
@@ -459,6 +465,12 @@ type helm struct {
 	// slot.
 	cands []view.Candidate
 	kept  []uint8
+	// raceKnown are the races its boat sails in as their cards told them,
+	// by their keys; raceCalls the calls on its boat in each; courseTold
+	// the race whose course card the last report told.
+	raceKnown  map[uint32]*knownRace
+	raceCalls  map[uint32][]string
+	courseTold uint32
 }
 
 // take waits for the helm's turn, or for ctx.

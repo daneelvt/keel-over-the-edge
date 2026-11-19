@@ -89,7 +89,10 @@ export function arrowSize(
   return scale;
 }
 
-/** Places the chart's camera: looking at target from distance m, at its elevation, turned by bearing rad. */
+/**
+ * Places the chart's camera: looking at target from distance m, at its elevation, turned by
+ * bearing rad. The website's map places the same (website/worker/src/map/camera.ts).
+ */
 export function placeChartCamera(
   camera: PerspectiveCamera,
   target: Vector2,

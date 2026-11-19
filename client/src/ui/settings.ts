@@ -18,7 +18,15 @@ export type WatchWho = (typeof WATCH_WHOS)[number];
 export interface Settings {
   /** The most frames a second: 60, or 30 to save battery. */
   frameRate: 60 | 30;
+  /** Sound on: off is the mute. */
   sound: boolean;
+  /**
+   * The sound's sliders, 0 to 1, each heard as its cube: the volume of it
+   * all, the sea and wind's, and every other sound's.
+   */
+  volume: number;
+  seaVolume: number;
+  soundsVolume: number;
   /** The beginners' overlays. */
   windOverlay: boolean;
   forcesOverlay: boolean;
@@ -50,11 +58,16 @@ export interface Settings {
   watchWho: WatchWho;
   /** The whole screen, without the browser's bars or the phone's: entered by the menu, and by Set sail. */
   fullScreen: boolean;
+  /** The crowd's cheers in a race: its bunting in the sea and its sound; off for quiet. */
+  showCheers: boolean;
 }
 
 export const DEFAULTS: Settings = {
   frameRate: 60,
   sound: true,
+  volume: 0.7,
+  seaVolume: 1,
+  soundsVolume: 1,
   windOverlay: false,
   forcesOverlay: false,
   rightOfWay: false,
@@ -70,6 +83,7 @@ export const DEFAULTS: Settings = {
   watchSort: 'liveliest',
   watchWho: 'all',
   fullScreen: false,
+  showCheers: true,
 };
 
 const KEY = 'keel.settings';
@@ -108,8 +122,11 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
   if (r.detail === 'auto' || r.detail === 'low') {
     out.detail = r.detail;
   }
-  if (typeof r.nightLight === 'number' && r.nightLight >= 0 && r.nightLight <= 1) {
-    out.nightLight = r.nightLight;
+  for (const k of ['nightLight', 'volume', 'seaVolume', 'soundsVolume'] as const) {
+    const v = r[k];
+    if (typeof v === 'number' && v >= 0 && v <= 1) {
+      out[k] = v;
+    }
   }
   if (WATCH_SORTS.includes(r.watchSort as WatchSort)) {
     out.watchSort = r.watchSort as WatchSort;
@@ -130,6 +147,7 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'pilotHead',
     'pocketWeather',
     'fullScreen',
+    'showCheers',
   ] as const) {
     if (typeof r[k] === 'boolean') {
       out[k] = r[k];

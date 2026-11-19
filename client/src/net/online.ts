@@ -22,6 +22,13 @@
 // at the mouth: the Welcome says the boat is new and where the harbour is,
 // and its first snapshot where the boat lies. A boat rejoined, one back
 // from the edge and a watch open behind the boat.
+//
+// While the page is hidden the worker keeps only the newest snapshot. Shown
+// again after more than SNAP_AFTER, or welcomed on a connection made again,
+// the page snaps: it starts again from the newest snapshot, the boat
+// drawn where it is now and the world at its true pace, rather than play
+// through what it missed; the page covers it (onSnap). Hidden for less, the
+// render ticks' slew covers it.
 
 import { computed, signal } from '@preact/signals';
 import { catalog } from '../catalog';
@@ -45,6 +52,7 @@ import {
 } from '../predict/predictor';
 import { ChatLog } from '../ui/chatlog';
 import type { WorldEnd } from '../ui/countdown';
+import { LIFTED_SOON } from '../ui/homewords';
 import { queueLines } from '../ui/queue';
 import { ShipmateThreads } from '../ui/shipmatelog';
 import { BOAT_IN_THE_WATER, endedText, type WatchEndWhy } from '../ui/watchwords';
@@ -63,9 +71,12 @@ import type {
   AshoreWhyTold,
   BumpTold,
   CapSeen,
+  CertifiedIn,
   ChartEntry,
   ChatStateTold,
   ChunksHanded,
+  CourseEndWhy,
+  CourseOpen,
   CrewTold,
   ForecastTold,
   FromWorker,
@@ -78,7 +89,16 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  RaceCallIn,
+  RaceCheeredIn,
+  RaceFinishIn,
+  RacePictureIn,
+  RaceResultsIn,
+  RaceSignalIn,
+  RaceToldIn,
+  RaceWatchAsk,
   ReportReasonTold,
+  ShipmateAtIn,
   Status,
   ToWorker,
   Traffic,
@@ -142,6 +162,8 @@ const FRAME_EVERY = 2_000_000;
 const NOTICE_FOR = 6_000_000;
 /** A new boat within this of the harbour's mouth, m, opens on the view past it at the mouth. */
 export const OPENING_RANGE = 1500;
+/** A page hidden longer than this, µs, snaps to the newest snapshot when it is shown again. */
+export const SNAP_AFTER = 2_000_000;
 
 export class Online {
   readonly status = signal<Status>('connecting');
@@ -162,6 +184,12 @@ export class Online {
    * before a Welcome.
    */
   readonly boatLook = signal<{ look: number; name: string } | null>(null);
+  /**
+   * What the boat in view, the own or the one watched, flies for its
+   * skipper's races in the world: its prize code (render/prizes.ts), and
+   * its race number while it races, 0 for none; none before a Welcome.
+   */
+  readonly prizes = signal<{ prizes: number; number: number }>({ prizes: 0, number: 0 });
   /** The kind of the boat in view, the own or the one watched, as the last Welcome told it: an index into the catalog's boats. */
   readonly kind = signal(0);
   /** The world's harbour, Port Royal's, as the last Welcome named it; null for none. */
@@ -194,6 +222,8 @@ export class Online {
   readonly shipmatesChanged = signal(0);
   /** Why the connection last left a boat it was aboard, until its own boat's Welcome. */
   #ashore: AshoreWhyTold | null = null;
+  /** The sailor whose boat a course is set to, asked again of each new connection; "" for none. */
+  #courseTo = '';
   /** What the server last told of the AI of the own machine sailor watched, and of which watch. */
   readonly #lamp = signal<{ state: LampState; of: WatchingTold } | null>(null);
   /**
@@ -226,6 +256,21 @@ export class Online {
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
   onBump: ((b: BumpTold) => void) | null = null;
+  /** A race under way told or taken up, and its committee boat's signals. */
+  onRaceTold: ((t: RaceToldIn) => void) | null = null;
+  onRaceSignal: ((s: RaceSignalIn) => void) | null = null;
+  /** A race's picture, its calls, its boats home and its results. */
+  onRacePicture: ((p: RacePictureIn) => void) | null = null;
+  onRaceCall: ((c: RaceCallIn) => void) | null = null;
+  onRaceFinish: ((f: RaceFinishIn) => void) | null = null;
+  onRaceResults: ((r: RaceResultsIn) => void) | null = null;
+  onRaceCheered: ((c: RaceCheeredIn) => void) | null = null;
+  /** What the sailor's certificates came to: a task done, a venture's run, a certificate earned. */
+  onCertified: ((c: CertifiedIn) => void) | null = null;
+  /** Where the boat a course is set to is; a course to a boat ended; a shipmate sailing to the player. */
+  onShipmateAt: ((at: ShipmateAtIn) => void) | null = null;
+  onCourseEnded: ((sailor: string, why: CourseEndWhy) => void) | null = null;
+  onShipmateCourse: ((name: string) => void) | null = null;
   /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
   onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
     null;
@@ -241,7 +286,7 @@ export class Online {
   /** Told of the places in chunks just handed. */
   onPlaces: ((p: PlaceSeen[]) => void) | null = null;
   /** Told of the world's chart: whole after each Welcome, then what is charted. */
-  onChart: ((entries: ChartEntry[], whole: boolean) => void) | null = null;
+  onChart: ((entries: ChartEntry[], whole: boolean, courses: CourseOpen[]) => void) | null = null;
   /** Told of each forecast as it is issued, with what has been after a Welcome. */
   onForecast: ((f: ForecastTold, past: PastTold | null) => void) | null = null;
   /** Told of the weather as it is sent: the spells in play, or null to keep them, and keyframes. */
@@ -250,6 +295,8 @@ export class Online {
   onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
   /** Told of the sea's life come within reach or changed, and encounters to drop; at a new connection's Welcome, of every one dropped. */
   onLife: ((life: LifeSeen[], drop: string[] | 'all') => void) | null = null;
+  /** The bytes the page has fetched over HTTP since last asked, told the server with the frame time; none where unknown. */
+  fetched: (() => number) | null = null;
   /** Islands' caps come into sight, and those to drop: all of them for a new connection. */
   onCaps: ((caps: CapSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
@@ -268,6 +315,24 @@ export class Online {
   readonly arrived = signal(0);
   /** How many times the own boat has been returned to port. */
   readonly returned = signal(0);
+  /** Told of each snap, as it begins: the page covers it until the boat is drawn where it is now. */
+  onSnap: (() => void) | null = null;
+  /** How many snaps have been seen through: counted at the first snapshot taken after each. */
+  readonly snapped = signal(0);
+  /** The most records waiting for a frame at once since the page was last hidden (the tests). */
+  mostQueued = 0;
+  /** How many lifts home have arrived: counted at the first snapshot of each, the boat at the start from it. */
+  readonly lifted = signal(0);
+  /** How many lifts home asked for came to nothing: too soon, or no boat of the connection's own. */
+  readonly unlifted = signal(0);
+  /** Told of a lift home of the boat aboard, which its skipper asked for: the page covers its screen. */
+  onLift: (() => void) | null = null;
+  /** The tick of a lift home whose first snapshot has not been taken yet; 0 for none. */
+  #liftTick = 0;
+  /** The tick of the newest snapshot taken. */
+  #takenTick = 0;
+  /** Whether the page asked for the lift home now coming. */
+  #homing = false;
 
   readonly #port: Port;
   readonly #predictor: Predictor;
@@ -296,6 +361,12 @@ export class Online {
   #ready: () => void = () => {};
   /** A Welcome came, and its boat's first snapshot has not. */
   #arriving = false;
+  /** A snap began, and the first snapshot after it has not been taken. */
+  #snapping = false;
+  /** When the page was hidden, µs; NaN while it is shown. */
+  #hiddenAt = Number.NaN;
+  /** A Welcome has come: a later first Welcome is a connection made again. */
+  #welcomed = false;
   readonly #frames = new Float64Array(120);
   #frameN = 0;
   #frameSent = 0;
@@ -330,6 +401,51 @@ export class Online {
   }
 
   /**
+   * The page hidden, or shown again, at now (µs): the worker holds the
+   * newest snapshot while it is hidden, and shown after SNAP_AFTER, the page
+   * snaps to it. Whether it snapped.
+   */
+  shown(visible: boolean, now = nowUs()): boolean {
+    if (!visible) {
+      if (Number.isNaN(this.#hiddenAt)) {
+        this.#hiddenAt = now;
+        this.mostQueued = this.#queued.length;
+      }
+      this.#port.postMessage({ type: 'hidden', on: true });
+      return false;
+    }
+    const away = now - this.#hiddenAt;
+    this.#hiddenAt = Number.NaN;
+    const snap = away > SNAP_AFTER;
+    if (snap) {
+      this.#snap();
+    }
+    this.#port.postMessage({ type: 'hidden', on: false, settle: snap });
+    return snap;
+  }
+
+  /**
+   * Starts again from the next snapshot: none waiting for a frame, the boat
+   * drawn or predicted from it, the other boats, their render ticks and the
+   * lateness from it, no wakes; the page told, to cover it.
+   */
+  #snap(): void {
+    for (const data of this.#queued) {
+      this.#port.postMessage({ type: 'return', data }, [data]);
+    }
+    this.#queued.length = 0;
+    if (this.watched) {
+      this.#watcher.reset();
+    } else {
+      this.#predictor.started = false;
+    }
+    this.fleet.snap();
+    this.#predictor.wakes.reset();
+    this.#snapping = true;
+    this.onSnap?.();
+  }
+
+  /**
    * The owner's free camera: off the boat over (east, north), height up,
    * metres, or back on it. The server hears it only from an account with
    * the owner's flag.
@@ -347,9 +463,32 @@ export class Online {
     this.#port.postMessage({ type: 'watch', sailor });
   }
 
+  /** Watches a race's boat, by its race and number (0: the boat the game chooses): a boat sailed leaves the water at once. */
+  watchRace(ask: RaceWatchAsk): void {
+    this.#port.postMessage({ type: 'watchRace', ask });
+  }
+
+  /** Cheers the boat watched in a race. */
+  cheer(): void {
+    this.#port.postMessage({ type: 'cheer' });
+  }
+
   /** Asks to come aboard by a link's token, or sends the player's machine sailor named machine: knocking tells how it stands. */
   knock(token: string, machine = ''): void {
     this.#port.postMessage({ type: 'knock', token, machine });
+  }
+
+  /**
+   * Asks where a sailor's boat is, for a course to it: a shipmate or one of
+   * the player's own machine sailors, by account; "" stops it. Asked again
+   * of each new connection while it is set.
+   */
+  courseTo(sailor: string): void {
+    if (sailor === this.#courseTo) {
+      return;
+    }
+    this.#courseTo = sailor;
+    this.#port.postMessage({ type: 'courseTo', sailor });
   }
 
   /** Asks to come aboard the boat a shipmate (their account ID) skippers, without a link. */
@@ -387,6 +526,62 @@ export class Online {
   /** The skipper's: puts the person in seat ashore. */
   putAshore(seat: number): void {
     this.#port.postMessage({ type: 'ashore', who: seat });
+  }
+
+  /** Retires the boat from the race it sails in. */
+  raceRetire(): void {
+    this.#port.postMessage({ type: 'raceRetire' });
+  }
+
+  /** Lifts the own boat home to the start off Port Royal: lifted counts it in, or unlifted counts it refused. */
+  home(): void {
+    this.#homing = true;
+    this.#port.postMessage({ type: 'home' });
+  }
+
+  /**
+   * A lift home answered: refused, said so if too soon; lifted, from its
+   * tick's first snapshot on (at once if that has been taken already), and
+   * a page aboard that did not ask told to cover its screen.
+   */
+  #liftAnswered(tick: number, soon: boolean): void {
+    const asked = this.#homing;
+    this.#homing = false;
+    if (tick === 0) {
+      if (soon) {
+        this.say(LIFTED_SOON);
+      }
+      this.unlifted.value++;
+      return;
+    }
+    if (!asked) {
+      this.onLift?.();
+    }
+    this.#liftTick = tick;
+    if (this.#takenTick >= tick) {
+      this.#landedHome(this.#takenTick);
+    }
+  }
+
+  /**
+   * A snapshot of tick taken; the first of a lift home starts the boat's
+   * drawing afresh there, as a Welcome does, nothing of where it was
+   * carried over, and counts the lift in.
+   */
+  #landedHome(tick: number): void {
+    this.#takenTick = tick;
+    if (this.#liftTick === 0 || tick < this.#liftTick) {
+      return;
+    }
+    this.#liftTick = 0;
+    if (this.watched) {
+      this.#watcher.reset();
+    } else {
+      this.#predictor.started = false;
+    }
+    this.fleet.clear();
+    this.#predictor.wakes.reset();
+    this.lifted.value++;
   }
 
   /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
@@ -555,6 +750,23 @@ export class Online {
       case 'shipmates':
         this.shipmatesChanged.value++;
         break;
+      case 'shipmateAt':
+        if (m.at.sailor === this.#courseTo) {
+          this.onShipmateAt?.(m.at);
+        }
+        break;
+      case 'courseEnded':
+        if (m.sailor === this.#courseTo) {
+          this.#courseTo = '';
+          this.onCourseEnded?.(m.sailor, m.why);
+        }
+        break;
+      case 'shipmateCourse':
+        this.onShipmateCourse?.(m.name);
+        break;
+      case 'lifted':
+        this.#liftAnswered(m.tick, m.soon);
+        break;
       case 'chatState':
         this.chatState.value = m.state;
         break;
@@ -579,6 +791,14 @@ export class Online {
         break;
       case 'boatNames':
         this.fleet.names(m.names);
+        break;
+      case 'boatPrizes':
+        for (const p of m.prizes) {
+          if (p.own) {
+            this.prizes.value = { prizes: p.prizes, number: p.number };
+          }
+        }
+        this.fleet.prizes(m.prizes);
         break;
       case 'crews':
         this.fleet.crews(m.crews);
@@ -607,6 +827,30 @@ export class Online {
       case 'bump':
         this.onBump?.(m.bump);
         break;
+      case 'raceTold':
+        this.onRaceTold?.(m.told);
+        break;
+      case 'raceSignal':
+        this.onRaceSignal?.(m.signal);
+        break;
+      case 'racePicture':
+        this.onRacePicture?.(m.picture);
+        break;
+      case 'raceCall':
+        this.onRaceCall?.(m.call);
+        break;
+      case 'raceFinish':
+        this.onRaceFinish?.(m.finish);
+        break;
+      case 'raceResults':
+        this.onRaceResults?.(m.results);
+        break;
+      case 'raceCheered':
+        this.onRaceCheered?.(m.cheered);
+        break;
+      case 'certified':
+        this.onCertified?.(m.certified);
+        break;
       case 'chunks':
         this.onChunks?.(m.chunks);
         break;
@@ -623,12 +867,14 @@ export class Online {
         this.onCaps?.(m.caps, m.drop);
         break;
       case 'chart':
-        this.onChart?.(m.entries, m.whole);
+        this.onChart?.(m.entries, m.whole, m.courses);
         break;
       case 'tools':
         this.tools.value = m.on;
         break;
-      case 'welcome':
+      case 'welcome': {
+        const again = m.first && this.#welcomed;
+        this.#welcomed = true;
         // A new boat in the water at the start, not one back from the edge.
         this.#opening =
           m.watching === null && m.aboard === null && !m.rejoined && (this.#away || !this.#hadBoat)
@@ -678,6 +924,10 @@ export class Online {
         this.holding.value = m.watching === null && m.aboard === null;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
+        if (m.first && this.#courseTo !== '') {
+          // A new connection knows nothing of the course: asked again.
+          this.#port.postMessage({ type: 'courseTo', sailor: this.#courseTo });
+        }
         this.onWorld?.(m.world, m.land);
         this.world = m.world;
         this.endsMs = m.endsUs / 1000;
@@ -724,13 +974,24 @@ export class Online {
         // its controls are not this boat's.
         this.#queued.length = 0;
         // A new connection's views start afresh: the boats fade out, and
-        // in again with its first snapshot.
+        // in again with its first snapshot; the boat in view's prizes are
+        // told again.
         this.fleet.clear();
+        this.prizes.value = { prizes: 0, number: 0 };
         this.#predictor.wakes.reset();
+        if (again) {
+          // A connection made again: the own boat predicted afresh from its
+          // first snapshot, drawn where it is now, under the page's cover.
+          this.#predictor.started = false;
+          this.#snapping = true;
+          this.onSnap?.();
+        }
         break;
+      }
       case 'snapshot':
         if (this.watched ? this.#watcher.started : this.#predictor.started) {
           this.#queued.push(m.data);
+          this.mostQueued = Math.max(this.mostQueued, this.#queued.length);
         } else {
           // The first: it starts the prediction, and the sea can be shown.
           this.#take(m.data, nowUs());
@@ -863,6 +1124,7 @@ export class Online {
   /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
   #take(data: ArrayBuffer, now: number): void {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
+      this.#landedHome(this.#scratch.tick);
       const f = fleetOf(data);
       // The other boats' samples first: the steps the reconciliation
       // replays sail in their shadow, and the watched boat's step.
@@ -877,6 +1139,10 @@ export class Online {
       }
       this.snapshotBytes = f[FLEET_META.bytes] ?? 0;
       this.fleet.add(f, worldUs(this.clock, f[FLEET_META.received] ?? now));
+      if (this.#snapping) {
+        this.#snapping = false;
+        this.snapped.value++;
+      }
     }
     this.#port.postMessage({ type: 'return', data }, [data]);
   }
@@ -911,6 +1177,29 @@ export class Online {
       east: (o[lo * 4 + 1] ?? 0) + ((o[hi * 4 + 1] ?? 0) - (o[lo * 4 + 1] ?? 0)) * f,
       north: (o[lo * 4 + 2] ?? 0) + ((o[hi * 4 + 2] ?? 0) - (o[lo * 4 + 2] ?? 0)) * f,
       heading: h0 + turn * f,
+    };
+  }
+
+  /** The boat in view's newest snapshot, as the server had it: its tick, east and north; null before one (the tests). */
+  newest(): { tick: number; east: number; north: number } | null {
+    if (this.watched) {
+      const s = this.#watcher.newestState();
+      return s === null
+        ? null
+        : {
+            tick: this.#watcher.newest,
+            east: s[RECORDS.state.x] ?? 0,
+            north: s[RECORDS.state.y] ?? 0,
+          };
+    }
+    if (!this.#haveLatest) {
+      return null;
+    }
+    const s = this.#latest.state;
+    return {
+      tick: this.#latest.tick,
+      east: s[RECORDS.state.x] ?? 0,
+      north: s[RECORDS.state.y] ?? 0,
     };
   }
 
@@ -979,14 +1268,22 @@ export class Online {
     const world = worldUs(c, now);
     const due = aheadTicks(world, c.rtt, this.ahead.m);
     const target = Math.ceil(due);
-    if (target - p.tick > BEHIND && this.#haveLatest && this.#latest.tick > p.tick) {
+    const h = this.#helmsman;
+    if (target - p.tick > BEHIND) {
+      if (!this.#haveLatest || this.#latest.tick <= p.tick) {
+        // Far behind with nothing newer from the server (a connection lost
+        // before its Welcome): the boat held where it was last, rather
+        // than sailed on alone at many times real time.
+        h.clock.steps = p.tick - 1;
+        h.clock.alpha = 1 - EPSILON;
+        return;
+      }
       p.reset(this.#latest);
     }
     // A step for a tick an input sent now would not reach with a tick to
     // spare, as when catching up after a slow frame, keeps the controls the
     // server holds; so do all until the clock knows the round trip.
     const reach = c.rough ? Number.POSITIVE_INFINITY : Math.ceil(aheadTicks(world, c.rtt, 0)) + 1;
-    const h = this.#helmsman;
     for (let n = Math.min(MAX_STEPS, target - p.tick); n > 0; n--) {
       if (p.tick + 1 < reach) {
         p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512, this.#sentPilot, this.#sentReef);
@@ -1037,6 +1334,10 @@ export class Online {
     const n = Math.min(this.#frameN, this.#frames.length);
     const v = Array.from(this.#frames.subarray(0, n)).sort((a, b) => a - b);
     this.#port.postMessage({ type: 'frame', ms: v[Math.ceil(0.95 * n) - 1] ?? 0 });
+    const bytes = this.fetched?.() ?? 0;
+    if (bytes > 0) {
+      this.#port.postMessage({ type: 'fetched', bytes });
+    }
   }
 }
 

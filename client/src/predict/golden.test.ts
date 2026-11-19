@@ -43,21 +43,47 @@ beforeAll(async () => {
 });
 
 describe('golden', () => {
+  const scenarios = readJSON<ScenarioFile>('scenarios.json');
+  const golden = readJSON<GoldenFile>('golden.json');
+  /** Each scenario's boat: the one it names, or the first. */
+  const first = Object.keys(scenarios.params)[0] ?? '';
+  const boatOf = (i: number): string => scenarios.scenarios[i]?.boat ?? first;
+  const boats = [...new Set(scenarios.scenarios.map((_, i) => boatOf(i)))];
+
   test('the golden file is for this layout', () => {
-    const golden = readJSON<GoldenFile>('golden.json');
     expect(golden.layout).toBe(`0x${LAYOUT_VERSION.toString(16).padStart(8, '0')}`);
+    expect(scenarios.scenarios.length).toBeGreaterThanOrEqual(36);
   });
 
-  test('every scenario and function value matches the server bit for bit', async () => {
+  // A boat's scenarios at a time, so that each test's time is one boat's.
+  test.each(boats)('%s: every scenario matches the server bit for bit', async (boat) => {
+    const at = scenarios.scenarios.map((_, i) => i).filter((i) => boatOf(i) === boat);
     const report = await checkGolden(
       physics,
-      readJSON<ScenarioFile>('scenarios.json'),
-      readJSON<GoldenFile>('golden.json'),
+      {
+        ...scenarios,
+        scenarios: at.map((i) => scenarios.scenarios[i] as (typeof scenarios.scenarios)[number]),
+      },
+      {
+        ...golden,
+        scenarios: at.map((i) => golden.scenarios[i] as (typeof golden.scenarios)[number]),
+        functions: [],
+      },
       terrain,
     );
     expect(report.problems).toEqual([]);
     expect(report.skipped).toBe(0);
-    expect(report.scenarios).toBeGreaterThanOrEqual(36);
+    expect(report.scenarios).toBe(at.length);
+  });
+
+  test('every function value matches the server bit for bit', async () => {
+    const report = await checkGolden(
+      physics,
+      { ...scenarios, scenarios: [] },
+      { ...golden, scenarios: [] },
+      terrain,
+    );
+    expect(report.problems).toEqual([]);
     expect(report.values).toBeGreaterThanOrEqual(6 * 256);
   });
 });

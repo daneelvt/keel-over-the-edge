@@ -10,6 +10,7 @@
 import { computed, effect, type ReadonlySignal, type Signal, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { type ChatServer, chatServer } from '../account/chatapi';
+import { lazyFailed } from '../boot/updated';
 import type {
   AboardTold,
   ChatStateTold,
@@ -316,6 +317,8 @@ export function loadDeck(): Promise<Deck> {
   if (loading === null) {
     loading = import('./deck').catch((err: unknown) => {
       loading = null;
+      // A file gone with an update: the page is told so.
+      lazyFailed();
       throw err;
     });
   }

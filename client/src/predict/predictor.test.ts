@@ -5,9 +5,10 @@
 // the boat back and steps exactly the ticks since, with the controls kept;
 // the drawn boat eases the difference away over 100 ms, unless it is over
 // 3 m or 20°; a snapshot older than the ticks kept is let go. And Online's
-// pacing: every step due in one frame, up to 30, the controls
-// starting at the indices in force, inputs only when they change, and none
-// for a tick an input could no longer reach.
+// pacing: every step due in one frame, up to 30, and the boat held rather
+// than sailed on alone when it falls further behind with nothing newer;
+// the controls starting at the indices in force, inputs only when they
+// change, and none for a tick an input could no longer reach.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
@@ -328,15 +329,22 @@ describe('pacing online', () => {
     expect(helmsman.clock.steps).toBe(112);
   });
 
-  test('a snapshot ahead of the prediction starts it again; a frame takes 30 steps at most', async () => {
-    const { o, p } = await online();
+  test('a snapshot ahead of the prediction starts it again; a frame takes 30 steps at most; further behind with nothing newer, the boat is held', async () => {
+    const { o, p, helmsman } = await online();
     o.pace(worldAt(100));
     const later = start(200);
     later.margin = NO_MARGIN;
     o.reconcile(later, worldAt(201));
     expect(p.tick).toBe(200);
-    o.pace(worldAt(300));
+    // m is 2: the tick due is 30 on.
+    o.pace(worldAt(200 + BEHIND - 2));
     expect(p.tick).toBe(200 + BEHIND);
+    // A second further on with no snapshot (a connection lost): held there,
+    // and the world clock with it, rather than 30 steps a frame alone.
+    o.pace(worldAt(300));
+    o.pace(worldAt(301));
+    expect(p.tick).toBe(200 + BEHIND);
+    expect(helmsman.clock.steps + helmsman.clock.alpha).toBeCloseTo(200 + BEHIND, 6);
   });
 
   test('a step for a tick an input could not reach with a tick to spare keeps the server’s controls', async () => {

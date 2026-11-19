@@ -15,9 +15,10 @@ import (
 
 const migrateUsage = `usage: keel migrate [-status]
 
-Applies the migrations the database has not had, in order, and exits. Two
-runs at once take turns. keel serve refuses a database without every
-migration it was built with.
+Applies the migrations the database has not had, in order, grants the
+roles made beside the database (the contributor agreement's keeper's)
+their tables, and exits. Two runs at once take turns. keel serve refuses
+a database without every migration it was built with.
 
   -status   list the migrations and whether each is applied, and change nothing
 
@@ -76,6 +77,12 @@ func migrate(ctx context.Context, args []string, getenv func(string) string, std
 	}
 	if len(applied) == 0 {
 		fmt.Fprintln(stdout, "nothing to apply: the database has every migration")
+	}
+	// The roles the database's operator makes beside it are granted what
+	// they may reach on every run, as one may appear after the migrations
+	// that made its tables.
+	if err := store.GrantRoles(ctx, url); err != nil {
+		return fmt.Errorf("granting the roles their tables: %w", err)
 	}
 	return nil
 }

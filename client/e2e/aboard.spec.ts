@@ -12,7 +12,7 @@
 
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { answerBorn, GAME, holdPasskeys, sail, sailor, stamp } from './helpers';
+import { answerBorn, everyBoat, GAME, holdPasskeys, sail, sailor, stamp } from './helpers';
 
 type Deck = ReturnType<typeof globalThis.keel.deck>;
 
@@ -55,9 +55,16 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   // The skipper at sea, the Rules accepted, a link made.
   const ann = await sailor(context, 'Skipper');
   await holdPasskeys(context, ann.passkey);
+  // A new sailor holds no certificate: the keelboat opened by the owner's box.
+  await everyBoat(context.request, ann.name);
   expect((await context.request.post('/api/me/rules', { data: {} })).status()).toBe(204);
-  // The keelboat from the fleet: she carries five.
-  const keelboat = data.boats.find((b) => b.capacity === 5)?.id;
+  // The keelboat from the fleet: her crew on her rail, her trimmer sat to
+  // windward in her cockpit.
+  const keelboat = data.boats.find(
+    (b) =>
+      b.stations.some((s) => s.pose === 'rail') &&
+      b.stations.some((s) => s.pose === 'seated' && 'windward' in s && s.windward),
+  )?.id;
   const fleet = (await (await context.request.get('/api/fleet')).json()) as {
     boats: { id: string; kind: string }[];
   };

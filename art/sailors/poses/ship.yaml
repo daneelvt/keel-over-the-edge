@@ -1,0 +1,361 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The ship's company: the clips a sailor aboard the tall ship stands about
+# her decks, leans on her rail, sits on her hatch and walks in (written to
+# <version>.ship.glb), and those of her work and aloft (to
+# <version>.aloft.glb). Each file is loaded only when someone is drawn who
+# needs it.
+#
+# The ship's work and aloft, made here from key poses: hauling on the main
+# brace, standing in the main top, lying out on the main topsail yard. Each
+# is placed from the ship's place it is made at (stage.Ship, from her
+# model's `company` node), on the starboard side; its -port the mirror on
+# the port side.
+poses:
+  # Hauling on the main brace's fall, facing its lead (aft, on the
+  # quarterdeck): the fall before the body at the waist's height, both
+  # hands on it; the feet forward of the hips, the left ahead, the knees
+  # bent, and the body leaning back from them on the rope, the chest turned a little to the
+  # fall. Targets on the fall are along it toward the lead, across it
+  # inboard, and up, each brought along it toward the lead to its share of
+  # the arm from its shoulder (the forward hand's the further), so every
+  # body hauls with the same stretch; the feet's likewise from the deck under the hauler.
+  haul-grip:
+    place: brace
+    turn:
+      - [index_01_l, lx, 50]
+      - [index_02_l, lx, 65]
+      - [index_03_l, lx, 40]
+      - [middle_01_l, lx, 50]
+      - [middle_02_l, lx, 65]
+      - [middle_03_l, lx, 40]
+      - [ring_01_l, lx, 50]
+      - [ring_02_l, lx, 65]
+      - [ring_03_l, lx, 40]
+      - [pinky_01_l, lx, 50]
+      - [pinky_02_l, lx, 65]
+      - [pinky_03_l, lx, 40]
+      - [index_01_r, lx, 50]
+      - [index_02_r, lx, 65]
+      - [index_03_r, lx, 40]
+      - [middle_01_r, lx, 50]
+      - [middle_02_r, lx, 65]
+      - [middle_03_r, lx, 40]
+      - [ring_01_r, lx, 50]
+      - [ring_02_r, lx, 65]
+      - [ring_03_r, lx, 40]
+      - [pinky_01_r, lx, 50]
+      - [pinky_02_r, lx, 65]
+      - [pinky_03_r, lx, 40]
+      - [thigh_l, x, -26]
+      - [thigh_r, x, -30]
+      - [calf_l, x, 38]
+      - [calf_r, x, 46]
+      - [pelvis, x, -6]
+      - [spine_02, z, 6]
+      - [spine_03, z, 10]
+      - [neck_01, x, 8]
+      - [head, x, 6]
+      - [neck_01, z, -6]
+      - [head, z, -8]
+    ik:
+      foot_l: { at: haul-deck, offset: [0.16, -0.06, 0.1] }
+      foot_r: { at: haul-deck, offset: [0.0, 0.12, 0.1] }
+
+  # The left hand reached over the right along the fall, the body coming
+  # forward to it.
+  haul-left-over:
+    from: haul-grip
+    turn:
+      - [spine_01, x, 10]
+      - [spine_02, x, 8]
+      - [spine_03, x, 4]
+      - [spine_03, z, 4]
+      - [neck_01, x, -10]
+      - [head, x, -8]
+    ik:
+      hand_l: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.76, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.02, 0.0, 0.0], reach: 0.73, pole: [-0.5, 0.4, -0.5] }
+
+  # Heaving: leaning back, both hands come back with the fall; a glance
+  # aloft at the yards.
+  haul-left-heave:
+    from: haul-grip
+    turn:
+      - [spine_01, x, -4]
+      - [spine_02, x, -2]
+      - [neck_01, x, 4]
+      - [head, x, -16]
+    ik:
+      hand_l: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.76, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [-0.1, 0.0, 0.0], reach: 0.73, pole: [-0.5, 0.4, -0.5] }
+
+  haul-right-over:
+    from: haul-grip
+    turn:
+      - [spine_01, x, 10]
+      - [spine_02, x, 8]
+      - [spine_03, x, 4]
+      - [spine_03, z, 8]
+      - [neck_01, x, -10]
+      - [head, x, -8]
+    ik:
+      hand_l: { at: brace, offset: [0.0, 0.0, 0.0], reach: 0.73, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
+
+  haul-right-heave:
+    from: haul-grip
+    turn:
+      - [spine_01, x, -4]
+      - [spine_02, x, -2]
+      - [neck_01, x, 4]
+      - [head, x, 2]
+    ik:
+      hand_l: { at: brace, offset: [-0.12, 0.0, 0.0], reach: 0.73, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
+
+  # Standing in the main top, out toward the starboard shrouds, facing
+  # forward, the knees soft, as far out as leaves the right hand an easy
+  # reach to a topmast shroud about the shoulder's height; the left at the
+  # side; looking ahead.
+  aloft-stand:
+    place: top
+    shift: [0.0, 0.0, -0.04]
+    turn:
+      - [upperarm_l, y, 30]
+      - [lowerarm_l, x, 14]
+      - [index_01_r, lx, 50]
+      - [index_02_r, lx, 65]
+      - [index_03_r, lx, 40]
+      - [middle_01_r, lx, 50]
+      - [middle_02_r, lx, 65]
+      - [middle_03_r, lx, 40]
+      - [ring_01_r, lx, 50]
+      - [ring_02_r, lx, 65]
+      - [ring_03_r, lx, 40]
+      - [pinky_01_r, lx, 50]
+      - [pinky_02_r, lx, 65]
+      - [pinky_03_r, lx, 40]
+    ik:
+      hand_r: { at: topmast-shroud, offset: [0.0, 0.04, 0.0], pole: [-0.8, 0.2, -0.3] }
+      foot_l: { at: aloft, offset: [0.08, 0.12, 0.1] }
+      foot_r: { at: aloft, offset: [-0.04, -0.12, 0.1] }
+
+  # Out over the sea to starboard, down at the deck, and up at the
+  # topsail.
+  aloft-out:
+    from: aloft-stand
+    turn:
+      - [spine_03, z, -6]
+      - [neck_01, z, -16]
+      - [head, z, -34]
+      - [head, x, 4]
+
+  aloft-down:
+    from: aloft-stand
+    turn:
+      - [neck_01, x, 18]
+      - [head, x, 20]
+      - [head, z, 10]
+
+  aloft-up:
+    from: aloft-stand
+    turn:
+      - [neck_01, x, -16]
+      - [head, x, -26]
+
+  # Lying out on the main topsail yard, on its starboard arm, facing
+  # forward over it: the hips aft of the yard and above it, the body bent
+  # over it from the hips, the belly on it; the feet on the footrope (the
+  # balls on it, the heels behind, the knees apart), the hands on its fore
+  # side at the sail's head.
+  yard-lie:
+    place: yard
+    turn:
+      - [pelvis, x, 30]
+      - [thigh_l, x, 24]
+      - [thigh_r, x, 24]
+      - [spine_01, x, 24]
+      - [spine_02, x, 22]
+      - [spine_03, x, 18]
+      - [neck_01, x, -32]
+      - [head, x, -24]
+      - [index_01_l, lx, 30]
+      - [index_02_l, lx, 40]
+      - [middle_01_l, lx, 30]
+      - [middle_02_l, lx, 40]
+      - [ring_01_l, lx, 30]
+      - [ring_02_l, lx, 40]
+      - [pinky_01_l, lx, 30]
+      - [pinky_02_l, lx, 40]
+      - [index_01_r, lx, 30]
+      - [index_02_r, lx, 40]
+      - [middle_01_r, lx, 30]
+      - [middle_02_r, lx, 40]
+      - [ring_01_r, lx, 30]
+      - [ring_02_r, lx, 40]
+      - [pinky_01_r, lx, 30]
+      - [pinky_02_r, lx, 40]
+    ik:
+      hand_l: { at: yard, offset: [0.18, 0.18, 0.05], reach: 0.74, pole: [0.7, 0.3, 0.0] }
+      hand_r: { at: yard, offset: [0.18, -0.18, 0.05], reach: 0.74, pole: [-0.7, 0.3, 0.0] }
+      foot_l: { at: yard-foot-in, offset: [-0.1, 0.0, 0.09], pole: [0.6, -0.3, 0.0] }
+      foot_r: { at: yard-foot-out, offset: [-0.1, 0.0, 0.09], pole: [-0.6, -0.3, 0.0] }
+
+  # Gathering the sail up onto the yard: the hands up to the yard's fore
+  # side, the body a little up off it.
+  yard-gather:
+    from: yard-lie
+    turn:
+      - [neck_01, x, 8]
+      - [head, x, 6]
+    ik:
+      hand_l: { at: yard, offset: [0.14, 0.2, 0.13], reach: 0.74, pole: [0.7, 0.3, 0.0] }
+      hand_r: { at: yard, offset: [0.14, -0.2, 0.13], reach: 0.74, pole: [-0.7, 0.3, 0.0] }
+
+  # Looking out along the yard to its arm.
+  yard-out:
+    from: yard-lie
+    turn:
+      - [neck_01, z, -14]
+      - [head, z, -28]
+
+clips:
+  # Hauling, hand over hand: the left reaches over and both heave, then the
+  # right; a loop the game plays while the yards swing. Its -port hauls the
+  # port brace.
+  haul:
+    loop: true
+    sides: true
+    # The rear hand's elbow folds near the end of its range at the hip.
+    strain: [lowerarm]
+    group: aloft
+    keys:
+      - { pose: haul-left-over, hold: 0.35, ramp: 0.8, arc: [0.06, 0.08] }
+      - { pose: haul-left-heave, hold: 0.3, ramp: 0.8 }
+      - { pose: haul-right-over, hold: 0.25, ramp: 0.8, arc: [0.06, 0.08] }
+      - { pose: haul-right-heave, hold: 0.3, ramp: 0.8 }
+
+  # In the top, a hand on a shroud: looking ahead, out to sea, down at the
+  # deck and aloft. Its -port is for the port side of the top.
+  aloft:
+    loop: true
+    idle: true
+    sides: true
+    # The elbow of the arm on the shroud is bent near the end of its range.
+    strain: [lowerarm]
+    group: aloft
+    keys:
+      - { pose: aloft-stand, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: aloft-out, hold: 1.4, ramp: 1.5, lead: head, anticipate: 0.05 }
+      - { pose: aloft-stand, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: aloft-down, hold: 1.2, ramp: 1.5, lead: head, anticipate: 0.05 }
+      - { pose: aloft-stand, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: aloft-up, hold: 1.2, ramp: 1.6, lead: head, anticipate: 0.05 }
+
+  # On the yard: reaching down to the sail, gathering it up, and a look out
+  # along the yard. Its -port is on the yard's port arm.
+  yard:
+    loop: true
+    sides: true
+    group: aloft
+    keys:
+      - { pose: yard-lie, hold: 0.8, ramp: 1.2 }
+      - { pose: yard-gather, hold: 0.5, ramp: 1.0 }
+      - { pose: yard-lie, hold: 0.6, ramp: 1.0 }
+      - { pose: yard-out, hold: 1.0, ramp: 1.3 }
+
+# Quaternius' clips (CC0), retargeted by rotation and checked bone by bone,
+# each set on a flat deck: the soles on it, each foot held there by IK
+# while it bears. Standing about and walking, they are not placed: the
+# figure stands at its origin facing +z, as the crouch's do.
+retarget:
+  # Standing about, looking round (the right hand kept at the side: the
+  # source raises it to the brow, where a hat's brim is); arms folded;
+  # talking (the hands moving as one speaks).
+  look-about:
+    file: vendor/quaternius/Idle_LookAround_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    still: [hand_r]
+    group: ship
+  fold-arms:
+    file: vendor/quaternius/Idle_FoldArms_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    group: ship
+  talking:
+    file: vendor/quaternius/Idle_Talking_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    group: ship
+  # Leaning on the ship's rail, facing outboard, the forearms on the cap
+  # rail's top (the clip's line re-locked to her rail's height over her
+  # deck). Placed from the rail's point (the cap's inner edge on its top).
+  # The elbows folded on the rail are near the ends of their range.
+  # The Bosun's: the forearms further over the rail, her loose sleeves
+  # falling lower.
+  bosun-leaning:
+    file: vendor/quaternius/Idle_Rail_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: ship-rail
+    clear: 0.035
+    strain: [lowerarm]
+    group: ship
+  leaning:
+    file: vendor/quaternius/Idle_Rail_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: ship-rail
+    strain: [lowerarm]
+    group: ship
+  # Sat on the fore hatch's forward edge facing forward, the feet on the
+  # deck before it, the buttocks on the grating: still, shifting, nodding
+  # off, talking (the wrists bent near the ends of their range as the
+  # hands move). Placed from the hatch's edge on her centreline.
+  hatch-sit:
+    file: vendor/quaternius/Sitting_Idle_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: ship-hatch
+    strain: [hand]
+    group: ship
+  hatch-shift:
+    file: vendor/quaternius/Sitting_Idle02_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: ship-hatch
+    strain: [hand]
+    group: ship
+  hatch-nod:
+    file: vendor/quaternius/Sitting_Nodding_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: ship-hatch
+    strain: [hand]
+    group: ship
+  hatch-talk:
+    file: vendor/quaternius/Sitting_Talking_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: ship-hatch
+    strain: [hand]
+    group: ship
+  # Walking about her decks, in place: a foot bearing on the deck moves
+  # back at the walk's speed.
+  walk:
+    file: vendor/quaternius/Walk_Loop.glb
+    loop: true
+    deck: true
+    speed: 0.9
+    group: ship

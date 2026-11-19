@@ -1,0 +1,991 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* The page, in the game's own look: the instruments' lacquer cases in
+   their brass frames, the raised keys, the gold Set sail, the log's paper
+   and ink, IM Fell English SC for titles, Libre Caslon Text for the log's
+   words and Alegreya Sans for the rest (client/src/ui/hud.css,
+   client/src/account/start.css). Its colours are the hour's, from the
+   sky's steps (../gen/sky.css): the page names its step as data-sky. */
+
+@import "../gen/fonts.css";
+@import "../gen/sky.css";
+
+:root {
+  /* What does not change with the hour: the paper and ink of the log's
+     pages, the chart's table, the gold of Set sail, and the opening's
+     words over the picture. */
+  --paper: #efe4c8;
+  --paper-deep: #e4d5ae;
+  --log-ink: #2b2118;
+  --log-faded: #63523d;
+  --table: #22303a;
+  --gold-light: #f6e3a8;
+  --gold: #e2b65a;
+  --gold-dark: #b8862f;
+  --gold-ink: #1c140a;
+  --plaque: rgb(12 17 21 / 86%);
+  --plaque-ink: #f2efe7;
+  --opening-ground: #0a1015;
+  --opening-title: #efe4c8;
+  --opening-ink: #f2efe7;
+  --opening-faint: #ddd6c8;
+  /* How dark the veil behind the opening's words is, for the hour's
+     picture: the day's sea is brightest under them. */
+  --veil: 0.58;
+
+  --titles: "IM Fell English SC", "IM Fell English", Georgia, serif;
+  --caslon: "Libre Caslon Text", Georgia, serif;
+  --sans: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --gutter: max(16px, env(safe-area-inset-left, 0px));
+  color-scheme: dark;
+}
+
+:root[data-opening="night"] {
+  --veil: 0.32;
+}
+:root[data-opening="dawn"] {
+  --veil: 0.55;
+}
+:root[data-opening="day"] {
+  --veil: 0.68;
+}
+:root[data-opening="dusk"] {
+  --veil: 0.58;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ground-deep);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(140% 70rem at 50% -10rem, var(--glow), transparent 70%),
+    linear-gradient(var(--ground) 0, var(--ground) 40%, var(--ground-deep) 100%);
+  color: var(--ink);
+  font: 400 16px / 1.5 var(--sans);
+  overflow-wrap: break-word;
+}
+
+a {
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.wrap {
+  max-width: calc(1280px + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+main.wrap {
+  display: grid;
+  gap: 56px;
+  padding-block: 56px 48px;
+}
+
+/* ---- The keys: the instruments' raised lacquer; Set sail in gold ---- */
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background-color: var(--key-deep);
+  background-image: linear-gradient(var(--key), var(--key-deep));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: var(--key-ink);
+  font: 500 14px / 1.2 var(--sans);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.key:hover {
+  background-image: linear-gradient(color-mix(in oklab, var(--key) 88%, white), var(--key-deep));
+}
+
+.key:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 65%);
+}
+
+.key svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 30px 0 26px;
+  border-radius: 9px;
+  background-color: var(--gold-dark);
+  background-image: linear-gradient(var(--gold-light), var(--gold) 52%, var(--gold-dark));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 45%),
+    0 1px 2px rgb(0 0 0 / 55%),
+    0 8px 26px rgb(226 182 90 / 28%);
+  color: var(--gold-ink);
+  font: 500 19px / 1 var(--sans);
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.go:hover {
+  filter: brightness(1.06);
+}
+
+.go:active {
+  transform: translateY(1px);
+}
+
+.go svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---- The cases: lacquer in a brass frame ---- */
+
+.case {
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background-color: var(--case-deep);
+  background-image: linear-gradient(var(--case), var(--case-deep));
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 2px 10px rgb(0 0 0 / 22%);
+  color: var(--ink);
+}
+
+h2 {
+  font: 400 clamp(32px, 4.6vw, 50px) / 1 var(--titles);
+  color: var(--title);
+  text-wrap: balance;
+}
+
+h3 {
+  font: 400 22px / 1.1 var(--titles);
+}
+
+.lead {
+  font: italic 400 20px / 1.4 var(--caslon);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.words {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  padding: 24px;
+}
+
+.words p:not(.lead) {
+  max-width: 40em;
+  text-wrap: pretty;
+}
+
+.head {
+  display: grid;
+  gap: 6px;
+}
+
+.stars {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.stars li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.stars li::before {
+  content: "\2726";
+  color: var(--title);
+  font-size: 13px;
+}
+
+/* A picture in a brass frame, its caption on a plaque. */
+.framed {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--opening-ground);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 25%);
+}
+
+.framed picture,
+.framed img {
+  width: 100%;
+  height: 100%;
+}
+
+.framed img {
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+figcaption {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  padding: 7px 12px 8px;
+  border-radius: 8px;
+  background: var(--plaque);
+  box-shadow: inset 0 0 0 1px rgb(243 223 160 / 18%);
+  color: var(--plaque-ink);
+  font: 400 17px / 1.05 var(--titles);
+}
+
+/* ---- The opening: the boat at the edge, the name and Set sail ---- */
+
+.opening {
+  position: relative;
+  display: grid;
+  background: var(--opening-ground);
+  color: var(--opening-ink);
+}
+
+.opening-picture,
+.opening-picture img {
+  display: block;
+  width: 100%;
+}
+
+.opening-picture img {
+  height: auto;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+}
+
+/* The veil behind the words: the picture's foot drawn down into the dark,
+   as dark under the words as the hour's picture needs. */
+.opening::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent calc(125vw - 210px),
+    rgb(10 16 21 / var(--veil)) calc(125vw - 125px),
+    rgb(10 16 21 / calc(var(--veil) + 0.3)) calc(125vw - 45px),
+    var(--opening-ground) 125vw
+  );
+}
+
+.opening-words {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin-top: -122px;
+  padding: 0 var(--gutter) 22px;
+}
+
+.eyebrow {
+  font: 400 15px / 1 var(--titles);
+  letter-spacing: 0.12em;
+  color: #f0c977;
+}
+
+.opening h1 {
+  font: 400 42px / 0.94 var(--titles);
+  color: var(--opening-title);
+  text-shadow:
+    0 2px 0 rgb(0 0 0 / 35%),
+    0 6px 28px rgb(0 0 0 / 50%);
+}
+
+.title-tail {
+  display: block;
+}
+
+.line {
+  max-width: 30em;
+  font: italic 400 17px / 1.42 var(--caslon);
+  color: var(--opening-ink);
+  text-shadow: 0 1px 8px rgb(0 0 0 / 60%);
+  text-wrap: pretty;
+}
+
+.go-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-top: 4px;
+}
+
+.go-note {
+  font-size: 14px;
+  color: var(--opening-faint);
+}
+
+@media (min-width: 701px), (orientation: landscape) {
+  .opening {
+    max-width: 1280px;
+    margin: 16px var(--gutter) 0;
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgb(0 0 0 / 35%);
+  }
+
+  .opening-picture img {
+    aspect-ratio: 16 / 10;
+    max-height: calc(100svh - 32px);
+  }
+
+  .opening::after {
+    background: linear-gradient(to top, rgb(10 16 21 / calc(var(--veil) * 0.6)) 0, transparent 40%);
+  }
+
+  /* On a wide screen the veil lies behind the words themselves, wherever
+     they fall on the picture, darkest under them and fading out past
+     their edges. */
+  .opening-words::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: -110px -140px 0 0;
+    background: linear-gradient(
+      to right,
+      rgb(10 16 21 / var(--veil)) 0,
+      rgb(10 16 21 / var(--veil)) 58%,
+      rgb(10 16 21 / calc(var(--veil) * 0.35)) 82%,
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(transparent 0, #000 18%);
+    mask-image: linear-gradient(transparent 0, #000 18%);
+    pointer-events: none;
+  }
+
+  .opening-words {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 0 clamp(24px, 4vw, 60px) clamp(24px, 4vw, 56px);
+    gap: 14px;
+  }
+
+  .eyebrow {
+    font-size: 17px;
+  }
+
+  .opening h1 {
+    font-size: clamp(56px, 7.4vw, 112px);
+  }
+
+  .line {
+    max-width: 27em;
+    font-size: clamp(18px, 1.7vw, 23px);
+  }
+
+  .go-note {
+    font-size: 15px;
+  }
+}
+
+@media (min-width: 1313px) {
+  .opening {
+    margin-inline: auto;
+  }
+}
+
+/* ---- Race, and sailing together: words in a case beside the pictures ---- */
+
+.race,
+.together {
+  display: grid;
+  gap: 14px;
+}
+
+.chart-frame {
+  background: var(--table);
+}
+
+@media (min-width: 960px) {
+  .race {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  }
+
+  .together {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 3.2fr);
+  }
+
+  .together .words {
+    grid-column: 1 / span 2;
+  }
+
+  .together-big {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .together-big img {
+    aspect-ratio: auto;
+  }
+}
+
+@media (min-width: 620px) and (max-width: 959px) {
+  .together {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .together .words,
+  .together-big {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---- The boats, on the log's paper ---- */
+
+.boats {
+  display: grid;
+  gap: 18px;
+}
+
+.fleet {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 8px 14px;
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow:
+    inset 0 0 0 3px var(--paper),
+    inset 0 0 0 4px var(--log-ink),
+    0 2px 8px rgb(0 0 0 / 18%);
+  color: var(--log-ink);
+  text-align: center;
+}
+
+.card img {
+  width: 80px;
+  height: 80px;
+  image-rendering: pixelated;
+}
+
+.card h3 {
+  font-size: 19px;
+}
+
+.card .aboard {
+  font: italic 400 14px / 1.2 var(--caslon);
+  color: var(--log-faded);
+}
+
+.card.gilt {
+  grid-column: 1 / -1;
+  background: linear-gradient(var(--gold-light), var(--gold));
+  box-shadow:
+    inset 0 0 0 3px var(--gold-light),
+    inset 0 0 0 4px var(--log-ink),
+    0 4px 18px rgb(226 182 90 / 30%);
+}
+
+.card.gilt .aboard {
+  color: var(--log-ink);
+}
+
+@media (min-width: 620px) {
+  .fleet {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .card.gilt {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 980px) {
+  .fleet {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+/* ---- The weather ---- */
+
+.weather {
+  display: grid;
+  gap: 14px;
+}
+
+.skies {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 620px) {
+  .skies {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---- The world now: the chart on its table, the numbers, the end ---- */
+
+.world {
+  display: grid;
+  gap: 12px;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 14px 20px;
+}
+
+.bar h2 {
+  font-size: clamp(26px, 3.2vw, 34px);
+}
+
+.as-of {
+  color: var(--faint);
+  font-size: 15px;
+}
+
+.table {
+  padding: clamp(6px, 1.2vw, 14px);
+  border-radius: 12px;
+  background: var(--table);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 30%),
+    0 2px 12px rgb(0 0 0 / 25%);
+}
+
+.table img {
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  max-width: 1100px;
+}
+
+.resting {
+  padding: 12px 20px;
+}
+
+.numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 20px;
+}
+
+.numbers div {
+  display: grid;
+  gap: 2px;
+}
+
+.numbers dd {
+  order: -1;
+  font: 400 clamp(32px, 3.6vw, 40px) / 1 var(--caslon);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ink);
+}
+
+.numbers dt {
+  color: var(--faint);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.ends {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px 18px;
+}
+
+.ends-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+}
+
+.ends h3 {
+  font-size: 22px;
+  color: var(--title);
+}
+
+.clock {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.clock b {
+  font: 400 36px / 0.9 var(--caslon);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.clock .unit {
+  margin-left: 2px;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.when {
+  color: var(--faint);
+  font-size: 15px;
+}
+
+@media (min-width: 860px) {
+  .world {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  }
+
+  .bar,
+  .table,
+  .resting {
+    grid-column: 1 / -1;
+  }
+
+  .numbers {
+    align-content: center;
+  }
+}
+
+/* ---- What waits out there: the log's tales ---- */
+
+.out {
+  display: grid;
+  gap: 18px;
+}
+
+.medal-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.medal {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow:
+    inset 0 0 0 2px var(--paper),
+    inset 0 0 0 3px var(--log-ink),
+    0 2px 10px rgb(0 0 0 / 30%);
+}
+
+.medal img {
+  width: 56px;
+  height: 56px;
+  image-rendering: pixelated;
+}
+
+.tales {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 620px) {
+  .tales {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 980px) {
+  .tales {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.tale {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  border: 1px solid var(--log-ink);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 22%);
+  color: var(--log-ink);
+}
+
+.tale img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+.tale div {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 12px 16px 16px;
+  border-top: 2px solid var(--log-ink);
+}
+
+.tale p {
+  font: 400 14.5px / 1.55 var(--caslon);
+}
+
+/* ---- The log's pages: watching, and the AI ---- */
+
+.log {
+  display: grid;
+  gap: 18px;
+}
+
+@media (min-width: 860px) {
+  .log {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.leaf {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 26px 24px 24px;
+  border-radius: 4px;
+  background:
+    radial-gradient(120% 90% at 20% 10%, rgb(255 255 255 / 22%), transparent 60%),
+    radial-gradient(90% 70% at 90% 100%, rgb(150 120 70 / 16%), transparent 70%), var(--paper);
+  box-shadow:
+    inset 0 0 0 6px var(--paper),
+    inset 0 0 0 7px var(--log-ink),
+    inset 0 0 0 9px var(--paper),
+    inset 0 0 0 10px var(--log-ink),
+    0 10px 30px rgb(0 0 0 / 30%);
+  color: var(--log-ink);
+  color-scheme: light;
+}
+
+.leaf-top {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.leaf-top img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border: 1px solid var(--log-ink);
+}
+
+.leaf h2 {
+  font-size: clamp(27px, 3vw, 34px);
+  color: var(--log-ink);
+}
+
+.kicker {
+  margin-top: 6px;
+  font: italic 400 15.5px / 1.35 var(--caslon);
+  color: var(--log-faded);
+}
+
+.leaf > p:not(.keys, .address, .small) {
+  font: 400 16px / 1.55 var(--caslon);
+}
+
+.leaf .small,
+.leaf details {
+  color: var(--log-faded);
+  font-size: 14.5px;
+}
+
+.leaf .key {
+  --key: #34434e;
+  --key-deep: #1c262d;
+  --key-ink: #f2efe7;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+
+.leaf :focus-visible {
+  outline-color: var(--log-ink);
+}
+
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.address code {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0 12px;
+  border: 1px solid var(--log-ink);
+  border-radius: 5px;
+  background: var(--paper-deep);
+  font: 400 14px / 40px var(--mono);
+  white-space: nowrap;
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.command {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--log-ink);
+  border-radius: 5px;
+  background: var(--paper-deep);
+  color: var(--log-ink);
+  font: 400 13.5px / 1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+/* ---- The close, and the foot ---- */
+
+.closing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.closing p {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font: 400 clamp(26px, 3.4vw, 34px) / 1.05 var(--titles);
+  color: var(--title);
+}
+
+.foot {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 40px;
+}
+
+.foot-links {
+  justify-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+}
+
+.foot-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 7px;
+  color: var(--title);
+  font: 500 14.5px var(--sans);
+  text-decoration: none;
+}
+
+.foot-links a:hover {
+  text-decoration: underline;
+}
+
+.privacy {
+  max-width: 46em;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+@media (max-width: 619px) {
+  main.wrap {
+    gap: 40px;
+    padding-top: 36px;
+  }
+
+  .words {
+    padding: 20px 18px;
+  }
+
+  .leaf {
+    padding: 24px 20px 22px;
+  }
+
+  .leaf-top {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+}
+
+/* Last, to win over each element's own display: what the script has not
+   yet shown. */
+[hidden] {
+  display: none;
+}

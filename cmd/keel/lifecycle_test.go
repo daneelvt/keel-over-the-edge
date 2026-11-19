@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -12,12 +13,13 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/daneelvt/keel-over-the-edge/internal/api"
+	"github.com/daneelvt/keel-over-the-edge/internal/access"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
+	"github.com/daneelvt/keel-over-the-edge/internal/status"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -195,8 +197,8 @@ func TestBeginByHandKeepsTheSchedule(t *testing.T) {
 		if !toldClosing(db, 2) {
 			t.Error("the news does not tell world 2's end")
 		}
-		var st api.Status
-		getJSON(t, s, "http://127.0.0.1:8080/api/status", &st)
+		var st status.Status
+		getStatus(t, s, &st)
 		if st.World != 2 || st.EndsAt != sundayEnd.Format(time.RFC3339) || !st.Closing {
 			t.Errorf("the status: %+v", st)
 		}
@@ -474,6 +476,31 @@ func getJSON(t *testing.T, s *server, url string, v any) {
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("GET %s: %d", url, resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// getStatus reads the website's status through the server's network, as
+// Cloudflare Access lets the website's Worker through; without its
+// token, it is refused.
+func getStatus(t *testing.T, s *server, v any) {
+	t.Helper()
+	if resp, err := s.client.Get("http://127.0.0.1:8080/api/status"); err != nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("the status without Access's token: %v %v", resp, err)
+	} else {
+		resp.Body.Close()
+	}
+	req, _ := http.NewRequest("GET", "http://127.0.0.1:8080/api/status", nil)
+	req.Header.Set(access.Header, "test-access")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("the status: %d", resp.StatusCode)
 	}
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		t.Fatal(err)

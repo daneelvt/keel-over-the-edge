@@ -34,6 +34,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
@@ -47,6 +48,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -102,6 +104,9 @@ Configured from the environment:
   KEEL_CLIENT_DIR      the game's built page, served by the game's listener,
                        and its world page, owner/ in it, by the internal one
                        (default none: another server serves them)
+  KEEL_PAGE_POLICY     enforce: the pages' Content Security Policy refuses what
+                       it does not allow; report: it only tells the pages what
+                       it would refuse (default enforce)
   KEEL_BOAT_LIMIT      the most boats at sea at once, from 1 to 4096; beyond it
                        players wait in a queue (default 1000)
   KEEL_BELL            how long the world sails on once players are told the
@@ -120,6 +125,29 @@ Configured from the environment:
                        from=2026-11-01T00:00:00Z notice=4m ahead=3m"
   KEEL_WORLD_KEEP      how long an ended world's data is kept before its
                        partitions are dropped (default 672h)
+  KEEL_ACCESS_TEAM     the Cloudflare Access team's domain the website's
+                       status is behind, as keel.cloudflareaccess.com
+                       (default none)
+  KEEL_ACCESS_AUD      the Access application's audience tag; with the team,
+                       GET /api/status answers requests Access signed for it,
+                       and without both it is not served (default none)
+  KEEL_STATUS_BOATS    the most boats the website's status shows, from 0 to
+                       100 (default 12)
+  KEEL_ADDRESS_KEY     the key a new sailor's address is kept under, as an
+                       HMAC, for the day it counts: base64 of 32 bytes or
+                       more (default: one made at start, so counts start
+                       again with every start)
+  KEEL_TURNSTILE_SITEKEY
+  KEEL_TURNSTILE_SECRET
+                       the Cloudflare Turnstile widget's site key and secret
+                       key, both or neither: with them every new sailor
+                       passes the human check (default none: no check)
+  KEEL_TURNSTILE_VERIFY_URL
+                       Turnstile's siteverify (default Cloudflare's), https,
+                       or http on a loopback address for a test's stand-in
+  KEEL_TURNSTILE_SCRIPT
+                       the widget's script the page loads (default
+                       Cloudflare's), https or a path on the page's origin
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (a steady wind),
                        POST /debug/chart?all|subject=island:…|place:…|feature:…
@@ -132,7 +160,8 @@ Configured from the environment:
                        or &at=boat (a group of the sea's life of that kind
                        there) and POST /debug/sailed (everyone aboard
                        together now counted as having sailed together five
-                       minutes) (default 0)
+                       minutes) and GET /debug/races (the races under way:
+                       their courses and boats, as JSON) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -189,12 +218,14 @@ type database interface {
 	JobRuns(ctx context.Context, limit int) ([]store.JobRun, error)
 	jobs.Store
 	Chartings(ctx context.Context, world [16]byte) ([]store.Charting, error)
-	News(ctx context.Context, world [16]byte, before *[16]byte, limit int) ([]store.News, error)
+	// The news: its candidates, editions and figures.
+	newsDB
 	api.Notices
 	owner.Accounts
 	watch.Store
 	fleet.Store
 	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
+	WatchTargetByID(ctx context.Context, id store.AccountID) (store.WatchTarget, error)
 	// Sailing together: a month of birth and the Rules of the sea,
 	// skippers' links, a knock's look at its knocker, and the owner's
 	// switches.
@@ -206,6 +237,19 @@ type database interface {
 	// Chat aboard: the owner's switches, mutes and blocks, players'
 	// switches, reports and statements of reasons.
 	chatStore
+	// The sailors' log.
+	logs
+	// Races ashore, and their limits and timetable on the owner's page.
+	race.Store
+	RaceRecordsOf(ctx context.Context, id store.AccountID, most int) ([]store.RaceRecord, error)
+	owner.RacingSettings
+	// New sailors: how many from each address, and the owner's settings
+	// for them and the human check.
+	newSailorStore
+	// Certificates: what a sailor holds and has sailed toward the next,
+	// and the owner's every boat.
+	Exam() *store.Exam
+	SetEveryBoat(ctx context.Context, id store.AccountID, on bool) error
 	Stats() store.PoolStats
 	Close()
 }
@@ -257,6 +301,9 @@ type serveOptions struct {
 	stopping func()
 	// generate makes a world's terrain; the catalog's generator unless set.
 	generate generator
+	// access, if not nil, checks the website's status's requests in place
+	// of Cloudflare Access, which the settings name: for tests.
+	access api.Access
 }
 
 // runServer runs the game until ctx ends, then stops it in order.
@@ -460,7 +507,9 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
-	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Log: log})
+	p.access = accessOf(cfg, opt, log)
+	p.ladder = certs.New(cat)
+	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Ladder: p.ladder, Log: log})
 	// The owner's switches for sailing together, as the database has
 	// them: one set in memory for the routes, the owner's page and the
 	// game connection.
@@ -475,6 +524,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 			return stopEarly(side, flight, nil)
 		}
 		return stopEarly(side, flight, fmt.Errorf("the settings for chat, mutes and blocks: %w", err))
+	}
+	if err := loadNewSailors(ctx, db, p.switches); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the settings for new sailors: %w", err))
+	}
+	if p.newSailors, err = newSailors(cfg, db, log); err != nil {
+		return stopEarly(side, flight, err)
 	}
 	p.registerWorldMetrics()
 	// The accounts stopped, before anyone is let in.
@@ -495,6 +553,13 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
 		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Book: p.looks, Stopped: stopped, Log: log, Metrics: metrics,
 		Fleet: p.fleet,
+		Certificates: func(ctx context.Context, id store.AccountID) (string, error) {
+			st, err := p.ladder.Of(ctx, db.Exam(), id)
+			if err != nil {
+				return "", err
+			}
+			return st.Line(), nil
+		},
 		Young: db.MakeYoungReport,
 		Forget: func(ids ...store.AccountID) {
 			for _, id := range ids {
@@ -543,12 +608,12 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.current.Store(first)
 	if weatherHandler != nil {
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed, and GET /debug/races, on the internal listener")
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)
 	agents := newServer(p.agents.handler, log)
-	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(p.lifecycleJobs(), p.oauthJob()), Log: log, Metrics: metrics})
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob(), p.harbourJob(), p.newSailorsJob()), p.newsJobs()...), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
 	flightCtx, stopFlight := context.WithCancel(context.Background())
@@ -699,6 +764,10 @@ type ownerConfig struct {
 	agents *agents
 	// hand is the owner's hand on accounts.
 	hand *accounts.Accounts
+	// logs are the sailors' logs, and news the world's news; nil for the
+	// next world.
+	logs owner.Logs
+	news owner.News
 	// aiCap and aiReserve are the world's most boats for machine sailors
 	// and the places kept for them; 0 for the next world.
 	aiCap, aiReserve int
@@ -721,13 +790,20 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		prepared = c.timeline.Prepared()
 	}
 	cfg := owner.Config{
-		Switches: c.switches, Sail: c.db, ChatSettings: c.chat, Reports: c.reports,
+		Switches: c.switches, Sail: c.db, ChatSettings: c.chat, Reports: c.reports, NewSailors: c.db,
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
 		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat), SeaLife: c.life,
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
 		Life: c.lifecycle, From: c.from, Hand: c.hand,
+		Racing: c.db, RaceBoats: raceBoats(c.cat),
+	}
+	if c.news != nil {
+		cfg.News = c.news
+	}
+	if c.logs != nil {
+		cfg.Logs = c.logs
 	}
 	if a := c.agents; a != nil {
 		cfg.Machines, cfg.Lifetime, cfg.LifetimeChanged = c.db, a.lifetime, a.grants.ForgetAll

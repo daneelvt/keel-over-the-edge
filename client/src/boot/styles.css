@@ -2,7 +2,7 @@
 
 @font-face {
   font-family: "IM Fell English SC";
-  src: url("../fonts/IMFellEnglishSC-Regular.ttf") format("truetype");
+  src: url("../fonts/IMFellEnglishSC-Regular.woff2") format("woff2");
   font-display: swap;
 }
 

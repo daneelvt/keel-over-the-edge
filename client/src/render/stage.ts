@@ -77,6 +77,11 @@ export class Stage {
    * test draws only what a test asks for (renderOnce) until it is thawed.
    */
   loopDraws = true;
+  /**
+   * What counts each drawn frame's work on the GPU and the main thread,
+   * while a test asks (the test hooks); null on a player's page.
+   */
+  counter: { frame(gfx: Gfx, work: number): void } | null = null;
 
   readonly #container: HTMLElement;
   readonly #wanted: Wanted;
@@ -140,10 +145,19 @@ export class Stage {
     await gfx.renderer.setAnimationLoop((now: number) => this.#frame(now));
   }
 
-  /** Stops the frame loop (tests drive frames with renderOnce). */
-  freeze(frozen: boolean): void {
+  /** Whether the frame loop is stopped (freeze). */
+  get frozen(): boolean {
+    return this.#frozen;
+  }
+
+  /**
+   * Stops the frame loop (tests drive frames with renderOnce). Let go, the
+   * next frame's time step starts from now; with keep, from the last frame,
+   * as a hidden tab's does.
+   */
+  freeze(frozen: boolean, keep = false): void {
     this.#frozen = frozen;
-    if (!frozen) {
+    if (!frozen && !keep) {
       this.#last = performance.now();
     }
   }
@@ -152,6 +166,11 @@ export class Stage {
   resumed(): void {
     this.cap.restart();
     this.#hooks.resumed?.();
+  }
+
+  /** The next frame's time step starts from now, not from the last frame: the world starts again where it is. */
+  restartFrames(): void {
+    this.#last = performance.now();
   }
 
   /** Updates and draws one frame now, at time now; updates it alone without a renderer. */
@@ -311,7 +330,9 @@ export class Stage {
     if (this.#captures.length > 0) {
       this.#copy(g.canvas);
     }
-    this.#hooks.drawn?.(g, performance.now() - start);
+    const work = performance.now() - start;
+    this.#hooks.drawn?.(g, work);
+    this.counter?.frame(g, work);
   }
 
   async #recover(reason: string): Promise<void> {

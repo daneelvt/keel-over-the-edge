@@ -186,13 +186,16 @@ export const SEA_LOOK = {
   crestFloor: 0.03,
 };
 
-interface WaterInput {
+export interface WaterInput {
   /** The surface's normal. */
   normal: Node<'vec3'>;
   /** How far the crest lightens the water, 0 to 1 (lightening). */
   crest: Node<'float'>;
   /** How much of the sun's sharp glint shows, 0 to 1. */
   glint: Node<'float'> | number;
+  /** Whether the light's glint and its wide highlight are drawn, and the sky mirrored; both unless false. */
+  glints?: boolean;
+  reflection?: boolean;
 }
 
 /**
@@ -227,8 +230,8 @@ const lightening = (crest: Node<'float'>, detail: Node<'float'>): Node<'float'> 
     1,
   ) as unknown as Node<'float'>;
 
-/** The water's colour (display values), before the tile style and the haze. */
-const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
+/** The water's colour (display values), before the tile style and the haze: the sea's, and the falls'. */
+export const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const N = input.normal;
   const L = look.light;
   const R = reflect(V.negate(), N);
@@ -243,7 +246,11 @@ const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const fresnel = pow(float(1).sub(max(dot(N, V), 0)), 5)
     .mul(0.98)
     .add(0.02);
-  const col = mix(body, skyColour(R), clamp(fresnel.mul(0.9), 0, 1));
+  const sky = input.reflection === false ? look.skyHorizon : skyColour(R);
+  const col = mix(body, sky, clamp(fresnel.mul(0.9), 0, 1));
+  if (input.glints === false) {
+    return col as unknown as Node<'vec3'>;
+  }
   const rl = max(dot(R, L), 0);
   return col.add(
     look.lightColour.mul(
@@ -257,13 +264,80 @@ const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
  * the edge of the world (its depth along the ray, from the vertex), and
  * converts to linear light.
  */
-const finish = (col: Node<'vec3'>, dist: Node<'float'>, mist: Node<'float'>): Node<'vec4'> => {
+const finish = (
+  col: Node<'vec3'>,
+  dist: Node<'float'>,
+  mist: Node<'float'>,
+  haze = true,
+): Node<'vec4'> => {
+  if (!haze) {
+    return vec4(toLinear(col), 1);
+  }
   const hazed = mix(col, look.skyHorizon, smoothstep(look.hazeNear, look.hazeFar, dist));
   return vec4(toLinear(mix(edgeLook.colour, hazed, exp(mist.negate()))), 1);
 };
 
+/**
+ * The layers of the sea's look that a look can be built without: the hulls'
+ * cut, the reads of the detail band at the fragment (its second patch, the
+ * shimmer), the streaks, the foam map (the boats' white water and the
+ * track), the wake's waves, the rain and its pocks, the surf and the
+ * drains' lines, the bed in the shallows, the foam, the light's glints, the
+ * sky mirrored, the tiles' seams, bevel and tint, the gusts' shading, the
+ * developer panel's overlay, and the haze and the band's mist. Left out,
+ * a layer costs nothing: its code is not in the shader.
+ */
+export const SEA_LAYERS = [
+  'cut',
+  'detail',
+  'ripple',
+  'shimmer',
+  'streaks',
+  'wakes',
+  'wakeWaves',
+  'rain',
+  'pocks',
+  'surf',
+  'drains',
+  'shallows',
+  'foam',
+  'glints',
+  'reflection',
+  'tile',
+  'gust',
+  'overlay',
+  'haze',
+] as const;
+export type SeaLayer = (typeof SEA_LAYERS)[number];
+
+/** No layer left out: the whole look. */
+export const NO_LAYERS: ReadonlySet<SeaLayer> = new Set();
+
+/**
+ * The plain look's layers left out: those that show least for what they
+ * cost a pixel. The developer panel's overlay; the rain's pocks, which show
+ * only near the eye in rain (its greying and flattening stay); the
+ * shimmer, the finest ripples near the eye; and the wake's waves' ripples,
+ * which the boats' white water and the track keep in sight.
+ */
+export const PLAIN_SEA: ReadonlySet<SeaLayer> = new Set<SeaLayer>([
+  'overlay',
+  'pocks',
+  'shimmer',
+  'wakeWaves',
+]);
+
 /** What the sea's look is made from, beside the tiles themselves. */
 export interface SeaParts {
+  /** The layers left out. */
+  omit: ReadonlySet<SeaLayer>;
+  /**
+   * Whether the tiles' surf and the rain's share are taken from their
+   * vertices (TileVaryings' surf and rain) rather than worked out at each
+   * fragment: the surf is the same over a tile, and the rain changes over
+   * hundreds of metres.
+   */
+  byVertex: boolean;
   /** The detail band, or null to draw the boat band alone. */
   detail: DetailNodes | null;
   /** Whether the shimmer stands in for the ripples the detail band leaves out. */
@@ -288,7 +362,7 @@ export const RAIN_LOOK = { flat: 0.55, grey: 0.35, pock: 0.05, pockReach: 60, po
 
 /** The rain's share at a scene point, or none. */
 const rainHere = (parts: SeaParts, p: Node<'vec2'>): Node<'float'> =>
-  (parts.rain === null ? float(0) : parts.rain(p)) as Node<'float'>;
+  (parts.rain === null || parts.omit.has('rain') ? float(0) : parts.rain(p)) as Node<'float'>;
 
 /** A colour gone toward its own grey by share. */
 const greyed = (c: Node<'vec3'>, share: Node<'float'>): Node<'vec3'> =>
@@ -336,11 +410,14 @@ export type Probe = 'detail' | 'foam' | 'crest' | 'gust' | 'ground' | 'wake';
  */
 export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<'vec4'> {
   const detail = parts.detail;
+  const has = (layer: SeaLayer): boolean => !parts.omit.has(layer);
   // Once a tile, in the vertex stage: the same for every fragment of it.
   const whole = detail === null ? null : (varying(detail.coarse(v.centre)) as Node<'vec4'>);
   return Fn(() => {
     // No water inside a hull.
-    hulls.cut(positionWorld, v.nearHull);
+    if (has('cut')) {
+      hulls.cut(positionWorld, v.nearHull);
+    }
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const V = normalize(toEye);
@@ -369,18 +446,20 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       .toVar();
 
     // Every texture is read here, before anything branches.
-    const pattern = texture(parts.pattern, patternAt(own, tileIdentity)).toVar();
+    const pattern = (
+      has('foam') || has('wakes') ? texture(parts.pattern, patternAt(own, tileIdentity)) : vec4(0)
+    ).toVar();
     const tilt = vec2(0).toVar();
     const ripple = vec2(0).toVar();
     const lift = float(0).toVar();
     const folding = float(0).toVar();
     if (detail !== null && whole !== null) {
-      const d = detail.fine(own).toVar();
+      const d = (has('detail') ? detail.fine(own) : vec4(0)).toVar();
       const [from, to] = SEA_LOOK.unfiltered as [number, number];
       const kept = detail.filtered ? float(1) : float(1).sub(smoothstep(from, to, dist));
       tilt.assign(whole.xy.mul(SEA_LOOK.tilt).mul(detailOn));
       ripple.assign(d.xy.mul(SEA_LOOK.ripple).mul(inner).mul(kept).mul(detailOn));
-      if (detail.ripple !== null) {
+      if (detail.ripple !== null && has('ripple')) {
         ripple.addAssign(detail.ripple(own).mul(SEA_LOOK.ripple).mul(inner).mul(detailOn));
       }
       const [tile, fragment] = SEA_LOOK.lift as [number, number];
@@ -391,7 +470,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
           .mul(detailOn),
       );
     }
-    if (parts.shimmer) {
+    if (parts.shimmer && has('shimmer')) {
       // The shimmer: the pattern's two fine noises as slopes, drifting.
       const [dx, dy] = SEA_LOOK.shimmerDrift as [number, number];
       const at = patternAt(own, tileIdentity).add(vec2(dx / 1000, dy / 1000).mul(seaTime));
@@ -399,10 +478,14 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       ripple.addAssign(vec2(noise.y, noise.w).sub(0.5).mul(SEA_LOOK.shimmer).mul(inner).mul(near));
     }
     const streak = float(0).toVar();
-    If(streaksOn.greaterThan(0.5), () => {
-      streak.assign(texture(parts.pattern, streakAt(own)).y);
-    });
-    const map = (parts.wakes === null ? vec2(0) : parts.wakes(positionWorld.xz)).toVar();
+    if (has('streaks')) {
+      If(streaksOn.greaterThan(0.5), () => {
+        streak.assign(texture(parts.pattern, streakAt(own)).y);
+      });
+    }
+    const map = (
+      parts.wakes === null || !has('wakes') ? vec2(0) : parts.wakes(positionWorld.xz)
+    ).toVar();
     const white = map.x;
     const churn = map.y;
 
@@ -415,23 +498,34 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     // Glossary of Meteorology, "cat's paw"). So under a gust the tile's own
     // ripples are steeper, and in a lull flatter, and the water's own
     // shading does the rest, by day and by night.
-    const gust = v.gust.toVar();
+    const gust = (has('gust') ? v.gust : float(0)).toVar();
     const gusty = max(gust, 0);
     const lull = max(gust.negate(), 0);
-    ripple.mulAssign(gusty.mul(GUST_LOOK.rough).sub(lull.mul(GUST_LOOK.smooth)).add(1));
+    if (has('gust')) {
+      ripple.mulAssign(gusty.mul(GUST_LOOK.rough).sub(lull.mul(GUST_LOOK.smooth)).add(1));
+    }
     // The track is smooth: the wind's ripples flattened in it.
     ripple.mulAssign(float(1).sub(churn.mul(TRACK.smooth)));
     // Rain flattens the ripples and pocks the water near the eye.
-    const rain = rainHere(parts, positionWorld.xz).toVar();
+    // A look that takes the surf and the rain from the vertices reads the
+    // period and the mist from the same varying.
+    const tile = parts.byVertex ? v.withSurf() : null;
+    const rain = (
+      tile !== null && parts.rain !== null && has('rain')
+        ? tile.rain
+        : rainHere(parts, positionWorld.xz)
+    ).toVar();
     ripple.mulAssign(float(1).sub(rain.mul(RAIN_LOOK.flat)));
-    const pockNear = float(1).sub(
-      smoothstep(
-        RAIN_LOOK.pockReach * 0.5,
-        RAIN_LOOK.pockReach,
-        length(cameraPosition.sub(positionWorld)),
-      ),
-    );
-    ripple.addAssign(pocks(parts, positionWorld.xz).mul(rain.mul(pockNear).mul(RAIN_LOOK.pock)));
+    if (has('rain') && has('pocks')) {
+      const pockNear = float(1).sub(
+        smoothstep(
+          RAIN_LOOK.pockReach * 0.5,
+          RAIN_LOOK.pockReach,
+          length(cameraPosition.sub(positionWorld)),
+        ),
+      );
+      ripple.addAssign(pocks(parts, positionWorld.xz).mul(rain.mul(pockNear).mul(RAIN_LOOK.pock)));
+    }
     // In the lee the wind raises less: smaller ripples, fewer whitecaps.
     const lee = clamp(v.lee, 0, 1.3);
     ripple.mulAssign(lee);
@@ -442,7 +536,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const ww = parts.wakeWaves;
     const wakeHeight = float(0).toVar();
     const wakeSlope = float(0).toVar();
-    if (ww !== null) {
+    if (ww !== null && has('wakeWaves')) {
       const centre = positionWorld.xz.sub(e);
       If(ww.covers(centre, TILE_APOTHEM * 1.2), () => {
         const whole = ww.coarse(centre);
@@ -463,7 +557,13 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       });
     }
     const ground = v.ground;
-    const breaking = surf(ground.x, ground.y, ground.w, v.area.w, v.period, lee).toVar();
+    const breaking = (
+      !has('surf')
+        ? float(0)
+        : tile !== null
+          ? tile.surf
+          : surf(ground.x, ground.y, ground.w, v.area.w, v.period, lee)
+    ).toVar();
     const slope = v.plane.yz.add(tilt).add(ripple);
     const N = normalize(vec3(slope.x.negate(), 1, slope.y.negate())).toVar();
     const top = v.side.greaterThan(-0.5);
@@ -481,11 +581,17 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       folding,
       pattern,
       streak,
-      boats: breaking.add(drainLines(positionWorld.xz)) as unknown as Node<'float'>,
+      boats: (has('drains')
+        ? breaking.add(drainLines(positionWorld.xz))
+        : breaking) as unknown as Node<'float'>,
     };
-    const amount = foamAmount(foam).toVar();
-    const cover = foamCover(amount, pattern).mul(foamMargin(fade)).toVar();
-    const whiteCover = wakeCover(white, pattern).mul(foamMargin(fade)).toVar();
+    const amount = (has('foam') ? foamAmount(foam) : float(0)).toVar();
+    const cover = (
+      has('foam') ? foamCover(amount, pattern).mul(foamMargin(fade)) : float(0)
+    ).toVar();
+    const whiteCover = (
+      has('wakes') ? wakeCover(white, pattern).mul(foamMargin(fade)) : float(0)
+    ).toVar();
     if (probe === 'detail') {
       return vec4(tilt, ripple);
     }
@@ -508,50 +614,64 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     // itself it would mirror it, and every tile toward the sun would wear a
     // bright ring.
     const glint = float(1).sub(fade.mul(SEA_LOOK.rimGlint));
-    const col = shallows(
-      water({ normal: N, crest: lightened, glint }, V),
-      ground.x,
-      ground.w,
-    ).toVar();
+    const clear = water(
+      { normal: N, crest: lightened, glint, glints: has('glints'), reflection: has('reflection') },
+      V,
+    );
+    const col = (has('shallows') ? shallows(clear, ground.x, ground.w) : clear).toVar();
     If(top, () => {
       // And darker, as the whole patch reads from a distance.
-      col.mulAssign(float(1).sub(gusty.mul(GUST_LOOK.dark)));
+      if (has('gust')) {
+        col.mulAssign(float(1).sub(gusty.mul(GUST_LOOK.dark)));
+      }
       // The bubbles under the track lighten it toward the water's scattering
       // colour; in glowing water toward the glow's, the bubbles alight.
       const glow = seaGlow.xyz;
       const glowing = seaGlow.w;
-      col.assign(mix(col, mix(look.scatter, glow, glowing), churn.mul(TRACK.bubbles)));
-      col.assign(greyed(col, rain.mul(RAIN_LOOK.grey)));
-      col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
+      if (has('wakes')) {
+        col.assign(mix(col, mix(look.scatter, glow, glowing), churn.mul(TRACK.bubbles)));
+      }
+      if (has('rain')) {
+        col.assign(greyed(col, rain.mul(RAIN_LOOK.grey)));
+      }
+      if (has('foam')) {
+        col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
+      }
       // The boats' white water, foam; or in glowing water, light.
-      col.assign(mix(col, mix(wakeColour(N, white), glow, glowing), whiteCover.mul(FOAM.cover)));
+      if (has('wakes')) {
+        col.assign(mix(col, mix(wakeColour(N, white), glow, glowing), whiteCover.mul(FOAM.cover)));
+      }
       // The panel's overlay, where asked for.
-      const up = clamp(wakeHeight.mul(20), -1, 1);
-      const shown = select(
-        wakeOverlay.lessThan(1.5),
-        vec3(max(up, 0), 0, max(up.negate(), 0)),
-        vec3(0, churn, 0),
-      );
-      col.assign(mix(col, shown, select(wakeOverlay.greaterThan(0.5), float(0.7), float(0))));
-      const [s0, s1, sk] = SEA_LOOK.seam as [number, number, number];
-      const [b0, b1, b2, bk] = SEA_LOOK.bevel as [number, number, number, number];
-      col.mulAssign(
-        unit
-          .sub(0.5)
-          .mul(2 * SEA_LOOK.tint)
-          .mul(near)
-          .mul(tileIdentity)
-          .add(1),
-      );
-      col.mulAssign(float(1).sub(smoothstep(s0, s1, rim).mul(sk).mul(near)));
-      col.addAssign(
-        look.scatter.mul(
-          smoothstep(b0, b1, rim)
-            .mul(float(1).sub(smoothstep(b1, b2, rim)))
-            .mul(bk)
-            .mul(near),
-        ),
-      );
+      if (has('overlay')) {
+        const up = clamp(wakeHeight.mul(20), -1, 1);
+        const shown = select(
+          wakeOverlay.lessThan(1.5),
+          vec3(max(up, 0), 0, max(up.negate(), 0)),
+          vec3(0, churn, 0),
+        );
+        col.assign(mix(col, shown, select(wakeOverlay.greaterThan(0.5), float(0.7), float(0))));
+      }
+      if (has('tile')) {
+        const [s0, s1, sk] = SEA_LOOK.seam as [number, number, number];
+        const [b0, b1, b2, bk] = SEA_LOOK.bevel as [number, number, number, number];
+        col.mulAssign(
+          unit
+            .sub(0.5)
+            .mul(2 * SEA_LOOK.tint)
+            .mul(near)
+            .mul(tileIdentity)
+            .add(1),
+        );
+        col.mulAssign(float(1).sub(smoothstep(s0, s1, rim).mul(sk).mul(near)));
+        col.addAssign(
+          look.scatter.mul(
+            smoothstep(b0, b1, rim)
+              .mul(float(1).sub(smoothstep(b1, b2, rim)))
+              .mul(bk)
+              .mul(near),
+          ),
+        );
+      }
     }).Else(() => {
       // The skirt: the dark wall of a step.
       col.assign(
@@ -560,7 +680,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
         ),
       );
     });
-    return finish(col, dist, v.mist);
+    return finish(col, dist, tile?.mist ?? v.mist, has('haze'));
   })() as unknown as Node<'vec4'>;
 }
 
@@ -584,19 +704,22 @@ export interface FarVaryings {
 export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'vec4'> {
   const { plane, area, nearHull } = v;
   const detail = parts.detail;
+  const has = (layer: SeaLayer): boolean => !parts.omit.has(layer);
   return Fn(() => {
-    hulls.cut(positionWorld, nearHull);
+    if (has('cut')) {
+      hulls.cut(positionWorld, nearHull);
+    }
     cutAtLip(positionWorld);
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const at = positionWorld.xz;
-    const pattern = texture(parts.pattern, patternAt(at)).toVar();
+    const pattern = (has('foam') ? texture(parts.pattern, patternAt(at)) : vec4(0)).toVar();
     const ripple = vec2(0).toVar();
     const lift = float(0).toVar();
     const folding = float(0).toVar();
     if (detail !== null) {
       // The band as it is: no tile to hold it in.
-      const d = detail.fine(at).toVar();
+      const d = (has('detail') ? detail.fine(at) : vec4(0)).toVar();
       const [from, to] = SEA_LOOK.unfiltered as [number, number];
       const kept = detail.filtered ? float(1) : float(1).sub(smoothstep(from, to, dist));
       ripple.assign(d.xy.mul(kept).mul(detailOn));
@@ -604,9 +727,11 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
       folding.assign(d.z.mul(detailOn));
     }
     const streak = float(0).toVar();
-    If(streaksOn.greaterThan(0.5), () => {
-      streak.assign(texture(parts.pattern, streakAt(at)).y);
-    });
+    if (has('streaks')) {
+      If(streaksOn.greaterThan(0.5), () => {
+        streak.assign(texture(parts.pattern, streakAt(at)).y);
+      });
+    }
     if (probe) {
       return vec4(ripple, 0, 0);
     }
@@ -626,19 +751,25 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
       folding,
       pattern,
       streak,
-      boats: surf(g.x, g.y, g.w, area.w, v.period, lee).add(
-        drainLines(at),
+      boats: (has('surf') ? surf(g.x, g.y, g.w, area.w, v.period, lee) : float(0)).add(
+        has('drains') ? drainLines(at) : float(0),
       ) as unknown as Node<'float'>,
     };
-    const cover = foamCover(foamAmount(foam), pattern);
-    const col = mix(
-      greyed(
-        shallows(water({ normal: N, crest: lightened, glint: 1 }, normalize(toEye)), g.x, g.w),
-        rain.mul(RAIN_LOOK.grey),
-      ),
-      foamColour(N),
-      cover.mul(FOAM.cover),
+    const clear = water(
+      {
+        normal: N,
+        crest: lightened,
+        glint: 1,
+        glints: has('glints'),
+        reflection: has('reflection'),
+      },
+      normalize(toEye),
     );
-    return finish(col, dist, v.mist);
+    const shallow = has('shallows') ? shallows(clear, g.x, g.w) : clear;
+    const grey = has('rain') ? greyed(shallow, rain.mul(RAIN_LOOK.grey)) : shallow;
+    const col = has('foam')
+      ? mix(grey, foamColour(N), foamCover(foamAmount(foam), pattern).mul(FOAM.cover))
+      : grey;
+    return finish(col, dist, v.mist, has('haze'));
   })() as unknown as Node<'vec4'>;
 }

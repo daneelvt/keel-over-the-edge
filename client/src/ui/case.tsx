@@ -3,7 +3,9 @@
 // The instruments' case, top left at sea, one panel as a watch is one
 // case, as big as its dial and no bigger: the heading-up compass card (the
 // true wind's mark on its rim, the heading's figures in a window at its
-// lubber line) and beside it its readouts, each a slot as wide as its
+// lubber line; with a course set on the chart, a brass chevron outside the
+// ticks pointing to it and its distance in a window at the card's foot)
+// and beside it its readouts, each a slot as wide as its
 // longest words, so the case keeps one size whatever they say: the speed
 // over ground, the wind, and a last line that says what nothing else on
 // the screen does, there only where it can say something: on a boat
@@ -35,6 +37,7 @@
 import type { ReadonlySignal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { windowParts } from '../chart/coursewords';
 import type { LampState } from '../net/messages';
 import type { Barometer } from './barometer';
 import { BarometerDial, type DialWord } from './barometerdial';
@@ -168,6 +171,7 @@ function CompassCard({ model }: { model: HudModel }) {
       <text class="compass-figures" x="1.5" y="-35.5" data-readout="figures">
         {model.figures}
       </text>
+      <CourseWindow model={model} />
       <g ref={(el) => model.windMark.attach(el)}>
         <path
           class="compass-wind"
@@ -175,12 +179,53 @@ function CompassCard({ model }: { model: HudModel }) {
           transform="translate(0 16)"
         />
       </g>
+      <CourseMark model={model} />
       <path
         class="compass-boat"
         d="M 0 -10 C 3.5 -4.5 4.2 3.5 2.8 10 L -2.8 10 C -4.2 3.5 -3.5 -4.5 0 -10 Z"
         transform="translate(0 6)"
       />
     </svg>
+  );
+}
+
+/**
+ * The course's window at the card's foot, while one is shown, as the
+ * heading's is at its top: its distance read through it, the unit smaller.
+ * The rose and the wind's mark pass over it as they pass over the top's.
+ */
+export function CourseWindow({ model }: { model: HudModel }) {
+  const distance = model.courseDistance.value;
+  if (distance === '') {
+    return null;
+  }
+  const { figures, unit } = windowParts(distance);
+  return (
+    <>
+      <rect class="compass-window" x="-19" y="25" width="38" height="21" rx="3" />
+      <text class="compass-distance" x="0" y="35.5" data-readout="course-distance">
+        {figures}
+        <tspan class="compass-unit" dx="1.5">
+          {unit}
+        </tspan>
+      </text>
+    </>
+  );
+}
+
+/**
+ * The course's mark, while one is shown: a brass chevron on the rim,
+ * outside the ticks, pointing in, turned to the course's bearing from the
+ * boat as the wind's mark is turned to the wind.
+ */
+function CourseMark({ model }: { model: HudModel }) {
+  if (model.courseDistance.value === '') {
+    return null;
+  }
+  return (
+    <g ref={(el) => model.courseMark.attach(el)} data-readout="course-mark">
+      <path class="compass-course" d="M -6.5 -49.5 L 0 -43 L 6.5 -49.5" />
+    </g>
   );
 }
 
@@ -255,6 +300,9 @@ function Readouts({
       </p>
       <p class="visually-hidden">
         Heading <span data-readout="heading">{model.heading}</span>
+      </p>
+      <p class="visually-hidden" data-readout="course">
+        {model.courseWords}
       </p>
       <p>
         <Slot sizes={WIND_SIZES}>
@@ -550,9 +598,7 @@ export function Case({
         aria-label="Instruments"
         data-case=""
       >
-        {light === '' ? null : (
-          <span class={`lamp ${light}`} data-lamp={light} aria-hidden="true" />
-        )}
+        {light === '' ? null : <span class="lamp" data-lamp={light} aria-hidden="true" />}
         <p class="visually-hidden" role="status">
           {LAMP_WORDS[light]}
         </p>

@@ -5,12 +5,35 @@
 // one skeleton, the far level one rigid figure with the place it sits in,
 // one material whose base colour is the atlas and whose occlusion texture
 // is the mask, both KTX2; and the clips with a place each, those at a
-// wheel, those on a trapeze's wire and those on a rail (with the crouch) in
-// files of their own; and the trapeze harness, skinned to the same
-// skeleton, with its hook.
+// wheel, those on a trapeze's wire, those on a rail (with the crouch) and
+// the ship's company's (about her decks, and her work and aloft), a beach
+// cat's people's, a cruising yacht's and a cruising catamaran's in files of
+// their own; and the trapeze harness, skinned to the same skeleton, with
+// its hook.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { BRIDGE_FILE, BRIDGE_NOT_FOR_MACHINES, bridgeAnchor, inBridgeFile } from './bridgedeck';
+import { CAT_CLIPS, catAnchor, catSide, inCatFile } from './cat';
+import { ALOFT_CLIPS, DECK_CLIPS, NOT_FOR_MACHINES, shipAnchor } from './ship';
+import { inYachtFile, YACHT_FILE, YACHT_NOT_FOR_MACHINES, yachtAnchor, yachtSide } from './yacht';
+
+/** Every clip of the beach cat's file, and those a machine has not. */
+const CAT_FILE = [
+  ...[
+    CAT_CLIPS.helm,
+    CAT_CLIPS.hike,
+    CAT_CLIPS.wire,
+    CAT_CLIPS.wireLow,
+    CAT_CLIPS.crew,
+    CAT_CLIPS.crewWire,
+  ].flatMap((c) => [c, `${c}-port`]),
+  CAT_CLIPS.righting,
+  ...CAT_CLIPS.crouch,
+  ...CAT_CLIPS.crawl,
+];
+const CAT_NOT_FOR_MACHINES: readonly string[] = [];
+const WIRES: readonly string[] = [CAT_CLIPS.wire, CAT_CLIPS.wireLow, CAT_CLIPS.crewWire];
 
 interface Gltf {
   extensionsUsed?: string[];
@@ -157,6 +180,150 @@ describe.each(looks)('%s', (look) => {
         expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
         const side = name.endsWith('-port') ? -1 : 1;
         expect(side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+      }
+    });
+
+    test('its clips about the ship’s decks and of her work and aloft, two files of their own on its skeleton: those set on her placed upright from their place, the rest not placed', () => {
+      if (look === 'test') {
+        return;
+      }
+      const deck = readGltf(`${look}/${version}.ship.glb`);
+      const aloft = readGltf(`${look}/${version}.aloft.glb`);
+      const names = (g: Gltf) => (g.animations ?? []).map((a) => a.name).sort();
+      expect(names(deck)).toEqual(
+        [...DECK_CLIPS.idles, ...DECK_CLIPS.leaning, ...DECK_CLIPS.seated, DECK_CLIPS.walk]
+          .filter((c) => look !== 'machine' || !NOT_FOR_MACHINES.includes(c))
+          .sort(),
+      );
+      expect(names(aloft)).toEqual(
+        Object.values(ALOFT_CLIPS)
+          .flatMap((c) => [c, `${c}-port`])
+          .filter((c) => look !== 'machine' || !NOT_FOR_MACHINES.includes(c))
+          .sort(),
+      );
+      for (const g of [deck, aloft]) {
+        expect(joints(g)).toEqual(joints(clips));
+        for (const name of names(g)) {
+          const m = g.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+          if (shipAnchor(name) === null) {
+            expect(m, name).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+            continue;
+          }
+          // Upright, near its place on the ship (in the top, out from her
+          // middle toward the shrouds).
+          expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+          expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(2);
+        }
+      }
+      // Leaning on the starboard rail facing outboard (+x); sat on the hatch
+      // and in the top and on the yard facing forward (−z); hauling facing
+      // aft along the fall (+z).
+      const facing = (g: Gltf, n: string) =>
+        g.nodes.find((x) => x.name === `place-${n}`)?.matrix ?? [];
+      if (look !== 'machine') {
+        expect(facing(deck, 'leaning')[8]).toBeGreaterThan(0.99);
+      }
+      expect(facing(deck, 'hatch-sit')[10]).toBeLessThan(-0.99);
+      expect(facing(aloft, 'aloft')[10]).toBeLessThan(-0.99);
+      expect(facing(aloft, 'yard-port')[10]).toBeLessThan(-0.99);
+      if (look !== 'machine') {
+        expect(facing(aloft, 'haul')[10]).toBeGreaterThan(0.95);
+      }
+    });
+
+    test('its clips aboard a beach cat, a file of its own on its skeleton: each placed upright from its place, those on the hull facing inboard, those crossing the net forward', () => {
+      if (look === 'test') {
+        return;
+      }
+      const cat = readGltf(`${look}/${version}.cat.glb`);
+      const names = (cat.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(
+        CAT_FILE.filter((c) => look !== 'machine' || !CAT_NOT_FOR_MACHINES.includes(c)).sort(),
+      );
+      expect(joints(cat)).toEqual(joints(clips));
+      for (const name of names) {
+        expect(inCatFile(name), name).toBe(true);
+        const m = cat.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Near its place on her; upright, but lying out on the wire.
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.6);
+        if (WIRES.includes(name.replace(/-port$/, ''))) {
+          continue;
+        }
+        expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+        const side = catSide(name);
+        if (catAnchor(name) === 'net') {
+          // Facing forward (−z).
+          expect(m[10] ?? 0, name).toBeLessThan(-0.99);
+        } else if (catAnchor(name) !== 'stand') {
+          // On the starboard hull facing inboard (−x), on the port one +x.
+          expect(-side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+        }
+      }
+    });
+
+    test('its clips aboard a cruising yacht, a file of its own on its skeleton: each placed upright from its place, at the wheel facing forward, on the bench inboard, on the rail outboard, crossing her cockpit and her coachroof across her', () => {
+      if (look === 'test') {
+        return;
+      }
+      const cruiser = readGltf(`${look}/${version}.cruiser.glb`);
+      const names = (cruiser.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(
+        YACHT_FILE.filter((c) => look !== 'machine' || !YACHT_NOT_FOR_MACHINES.includes(c)).sort(),
+      );
+      expect(joints(cruiser)).toEqual(joints(clips));
+      for (const name of names) {
+        expect(inYachtFile(name), name).toBe(true);
+        const m = cruiser.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Near its place on her, upright.
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.2);
+        expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+        const side = yachtSide(name);
+        switch (yachtAnchor(name)) {
+          case 'stance':
+            // Facing forward (−z); sat by the wheel, turned toward it.
+            expect(m[10] ?? 0, name).toBeLessThan(-0.8);
+            expect(-side * (m[8] ?? 0), name).toBeGreaterThan(-0.01);
+            break;
+          case 'bench':
+            // On the starboard bench facing inboard (−x), on the port one +x.
+            expect(-side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+            break;
+          case 'rail':
+            // On the starboard rail facing outboard (+x), on the port one −x.
+            expect(side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+            break;
+          case 'sole':
+          case 'roof':
+            // Facing across her, to port.
+            expect(m[8] ?? 0, name).toBeLessThan(-0.99);
+            break;
+          default:
+            throw new Error(`${name} has no place`);
+        }
+      }
+    });
+
+    test('its clips aboard a cruising catamaran, a file of its own on its skeleton: each placed upright from its place, facing the way it faces', () => {
+      if (look === 'test') {
+        return;
+      }
+      const bridge = readGltf(`${look}/${version}.bridgedeck.glb`);
+      const names = (bridge.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(
+        BRIDGE_FILE.filter(
+          (c) => look !== 'machine' || !BRIDGE_NOT_FOR_MACHINES.includes(c),
+        ).sort(),
+      );
+      expect(joints(bridge)).toEqual(joints(clips));
+      for (const name of names) {
+        expect(inBridgeFile(name), name).toBe(true);
+        expect(bridgeAnchor(name), name).not.toBeNull();
+        const m = bridge.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Near its place on her, upright, facing as the place faces (ahead,
+        // −z, in the place's own frame).
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.2);
+        expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+        expect(m[10] ?? 0, name).toBeLessThan(-0.99);
       }
     });
 

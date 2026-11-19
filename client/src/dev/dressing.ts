@@ -21,7 +21,8 @@
 // and hair (#RRGGBB without the #), black (the silhouettes in black), mask
 // (the mask in place of the colours: red main, green skin, blue hair), phone
 // (the stage at a phone's 360 × 640), t (the clips held at that many
-// seconds, for pictures), who, look (only that look's versions), boat (the
+// seconds, for pictures), who, near (aboard a cruising yacht, the camera
+// close on the who'th figure), look (only that look's versions), boat (the
 // boat the sailors sit in, by its place in the catalog's boats: 0 the
 // first; the clips moved to its seat as the game moves them). A clip at a
 // wheel stands each sailor at the wheel of a boat that has one, as the game
@@ -55,6 +56,7 @@ import {
   type Object3D,
   PlaneGeometry,
   Raycaster,
+  SkinnedMesh,
   TorusGeometry,
   Vector2,
   Vector3,
@@ -71,8 +73,34 @@ import { Boat } from '../render/boat';
 import { basicMaterial, checkScene, domeCentre, domeDrop, litMaterial } from '../render/materials';
 import { TIERS } from '../render/quality';
 import { chooseBackend, wantsCompat } from '../render/renderer';
+import {
+  BRIDGE_CLIPS,
+  BRIDGE_WALK_SPEED,
+  bridgeAnchor,
+  bridgeOf,
+  bridgePlace,
+  inBridgeFile,
+  namesBridgeClips,
+} from '../render/sailors/bridgedeck';
+import {
+  aboard,
+  CAT_CLIPS,
+  CROSS_SPEED,
+  catAnchor,
+  catPlace,
+  catPoint,
+  catSide,
+  inCatFile,
+  namesCatClips,
+} from '../render/sailors/cat';
 import { readSailorLight, type SailorColours, sailorColours } from '../render/sailors/material';
-import { loadClips, loadSailor, type SailorClips, type SailorModel } from '../render/sailors/model';
+import {
+  cockadeOf,
+  loadClips,
+  loadSailor,
+  type SailorClips,
+  type SailorModel,
+} from '../render/sailors/model';
 import {
   boneNames,
   type Harness,
@@ -81,6 +109,7 @@ import {
   wireColour,
   wireMesh,
 } from '../render/sailors/onboat';
+import { pendantFiles, pendantsReady, WornPendant } from '../render/sailors/pendant';
 import {
   CROUCH_CLIPS,
   CROUCH_SPEED,
@@ -95,6 +124,18 @@ import { restageAnimation, restageOf, restagePlace } from '../render/sailors/res
 import { Rig } from '../render/sailors/rig';
 import { atWheel, CLIPS } from '../render/sailors/runtime';
 import {
+  company,
+  DECK_CLIPS,
+  inAloftFile,
+  inShipFile,
+  STAGED,
+  shipAnchor,
+  shipPlace,
+  shipPoint,
+  shipSide,
+  WALK_SPEED,
+} from '../render/sailors/ship';
+import {
   onPelvis,
   onWire,
   TRAPEZE_CLIPS,
@@ -104,6 +145,15 @@ import {
   wireSide,
 } from '../render/sailors/trapeze';
 import { frameIn, wheelOf } from '../render/sailors/wheel';
+import {
+  inYachtFile,
+  namesYachtClips,
+  YACHT_CROSS_SPEED,
+  yachtAnchor,
+  yachtOf,
+  yachtPlace,
+  yachtSide,
+} from '../render/sailors/yacht';
 import { Shadows } from '../render/shadows';
 import { Sky, look as skyLook, toLinear } from '../render/sky';
 import { Stage } from '../render/stage';
@@ -112,6 +162,13 @@ import { Stage } from '../render/stage';
 const MACHINE_LOOK = 'machine';
 /** A machine's lamps' light. */
 const LAMP = '#ffb347';
+
+/** The pendants' model, by its path under art/. */
+const PENDANTS = import.meta.glob<string>('../../../art/pendants/*.glb', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+});
 
 /** The built looks' files, by their path under art/sailors/. */
 const FILES = import.meta.glob<string>(
@@ -135,6 +192,11 @@ export interface LookFiles {
       trapeze?: string;
       harness?: string;
       rail?: string;
+      ship?: string;
+      aloft?: string;
+      cat?: string;
+      cruiser?: string;
+      bridgedeck?: string;
     }
   >;
 }
@@ -144,7 +206,7 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
   const looks = new Map<string, LookFiles>();
   for (const [path, url] of Object.entries(files)) {
     const m =
-      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail))?\.glb$/.exec(
+      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail|ship|aloft|cat|cruiser|bridgedeck))?\.glb$/.exec(
         path,
       );
     if (m === null) {
@@ -165,6 +227,16 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
       v.harness = url;
     } else if (kind === 'rail') {
       v.rail = url;
+    } else if (kind === 'ship') {
+      v.ship = url;
+    } else if (kind === 'aloft') {
+      v.aloft = url;
+    } else if (kind === 'cat') {
+      v.cat = url;
+    } else if (kind === 'cruiser') {
+      v.cruiser = url;
+    } else if (kind === 'bridgedeck') {
+      v.bridgedeck = url;
     } else {
       v.levels[(kind ?? 'close') as Level] = url;
     }
@@ -189,9 +261,15 @@ export interface Room {
   /** The mask drawn in place of the sailors' colours: red main, green skin, blue hair. */
   mask: boolean;
   phone: boolean;
+  /** The winner's cockade worn, where each look's art pins it. */
+  cockade: boolean;
+  /** The certificate's pendant worn at the neck: 0 none, else the certificate's place and one. */
+  pendant: number;
   /** The clips held at this time, in seconds; null to play. */
   t: number | null;
   who: number;
+  /** Aboard a cruising yacht, the camera close on one figure (who), not on them all. */
+  near: boolean;
   /** Only this look's versions, or every look's (''). */
   look: string;
   /** The boat they sit in: its place in the catalog's boats. */
@@ -212,8 +290,11 @@ const DEFAULTS: Room = {
   black: false,
   mask: false,
   phone: false,
+  cockade: false,
+  pendant: 0,
   t: null,
   who: 0,
+  near: false,
   look: '',
   boat: 0,
 };
@@ -266,8 +347,14 @@ export function readRoom(hash: string): Room {
     black: q.get('black') === '1',
     mask: q.get('mask') === '1',
     phone: q.get('phone') === '1',
+    cockade: q.get('cockade') === '1',
+    pendant: Math.min(
+      catalog.certificates?.length ?? 0,
+      Math.max(0, Math.floor(Number(q.get('pendant')) || 0)),
+    ),
     t: q.has('t') && Number.isFinite(t) ? t : null,
     who: Math.max(0, Math.floor(Number(q.get('who')) || 0)),
+    near: q.get('near') === '1',
     look: /^[a-z][a-z0-9-]*$/.test(q.get('look') ?? '') ? (q.get('look') as string) : '',
     boat: Math.min(catalog.boats.length - 1, Math.max(0, Math.floor(Number(q.get('boat')) || 0))),
   };
@@ -287,8 +374,11 @@ export function writeRoom(r: Room): string {
   if (r.black) q.set('black', '1');
   if (r.mask) q.set('mask', '1');
   if (r.phone) q.set('phone', '1');
+  if (r.cockade) q.set('cockade', '1');
+  if (r.pendant !== 0) q.set('pendant', String(r.pendant));
   if (r.t !== null) q.set('t', String(r.t));
   if (r.who !== 0) q.set('who', String(r.who));
+  if (r.near) q.set('near', '1');
   if (r.look !== '') q.set('look', r.look);
   if (r.boat !== 0) q.set('boat', String(r.boat));
   return `#sailors&${q.toString()}`;
@@ -349,7 +439,9 @@ interface Figure {
   harness: { root: Object3D; mixer: AnimationMixer; meshes: Mesh[]; hook: Vector3 | null } | null;
   wire: { mesh: Mesh; side: number; hounds: Vector3; hook: Vector3 } | null;
   /** Walking at a crouch along a side deck: where it starts, and how far it goes before it starts again. */
-  walk: { from: Vector3; length: number } | null;
+  walk: { from: Vector3; length: number; speed: number; way?: Vector3 } | null;
+  /** The certificate's pendant at its neck; null at the far level, which wears none. */
+  pendant: WornPendant | null;
 }
 
 /** The wheel stood at on the quay: its hub ahead of and above the helmsman's place, its rim, spokes and their handles beyond it, as the ships' models are built. */
@@ -372,6 +464,26 @@ const DISC_TOP = 0.4;
 const SIDE_DECK_IN = 0.3;
 const WALK_FROM = 0.75;
 const WALK = 0.9;
+/** Aboard the ship, standing about this far inboard of her rail, and walking this far forward. */
+const SHIP_STAND_IN = 1.1;
+const SHIP_WALK = 2.4;
+
+/** Crossing a beach cat's net, the loops go this far across it, and back. */
+const CROSS = 1.0;
+/** Righting her: stood on her lower hull's top this far toward her deck from the hull's middle, as the build stands it. */
+const CAT_STAND_OUT = 0.05;
+
+/** Whether a clip on a beach cat hangs from the trapeze's wire. */
+function catWired(clip: string): boolean {
+  const base = clip.replace(/-port$/, '');
+  return base === CAT_CLIPS.wire || base === CAT_CLIPS.wireLow || base === CAT_CLIPS.crewWire;
+}
+
+/** Whether a clip is the ship's company's: about her decks, or her work and aloft. */
+function onShip(clip: string): boolean {
+  return inShipFile(clip) || inAloftFile(clip);
+}
+
 /** What the camera looks at, seated on the rail boat moored: this high, and this far out from her middle toward the quay. */
 const RAIL_LOOK = { y: 1.0, out: 1.0 };
 
@@ -454,6 +566,10 @@ export interface DressingHooks {
   }[];
   /** Where a figure's bone is drawn, dropped by the dome, in CSS pixels from the stage's top left. */
   project(figure: number, bone: string): { x: number; y: number };
+  /** Where a figure's bone is in the room, m (x, y, z), as last drawn; null for none. */
+  bone(figure: number, bone: string): [number, number, number] | null;
+  /** The pendants worn on the figures, as drawn: each figure's (0 none, or at the far level). */
+  pendants(): number[];
   /** Moves the dome's centre (scene x and z, m): the room drops away from it. */
   dome(x: number, z: number): void;
   /** The scene against the material factory: an empty list is a pass. */
@@ -486,6 +602,14 @@ export class DressingRoom {
   #wireBoat: number | null = null;
   /** The catalog's boat whose model has a rail, once found; −1 if none has. */
   #railBoat: number | null = null;
+  /** The catalog's beach cat, once looked for: its index, or −1 if none. */
+  #cat: number | null = null;
+  /** The catalog's cruising yacht, once looked for: its index, or −1 if none. */
+  #yacht: number | null = null;
+  /** The catalog's cruising catamaran, once looked for: its index, or −1 if none. */
+  #bridge: number | null = null;
+  /** The catalog's boat whose model marks her company's places (the tall ship), once found; −1 if none does. */
+  #ship: number | null = null;
   /** The boats made, by the catalog's boat and the place in the room, and their models' loads. */
   readonly #boats = new Map<string, { boat: Boat; loaded: Promise<void> }>();
   readonly #props = new Group();
@@ -585,6 +709,16 @@ export class DressingRoom {
           inBoat: f.boat !== null,
         })),
       project: (figure, bone) => this.#project(figure, bone),
+      bone: (figure, bone) => {
+        const f = this.#figures[figure];
+        const b = f?.root.getObjectByName(bone);
+        if (f === undefined || b === undefined) {
+          return null;
+        }
+        f.root.updateWorldMatrix(true, true);
+        return b.getWorldPosition(new Vector3()).toArray();
+      },
+      pendants: () => this.#figures.map((f) => (f.pendant?.drawn === true ? f.pendant.worn : 0)),
       dome: (x, z) => {
         this.#dome.set(x, z);
       },
@@ -726,6 +860,18 @@ export class DressingRoom {
     if (inRailFile(r.clip)) {
       await this.#findRailBoat();
     }
+    if (onShip(r.clip)) {
+      await this.#findShip();
+    }
+    if (inCatFile(r.clip)) {
+      await this.#findCat();
+    }
+    if (inYachtFile(r.clip) && this.#yacht === null) {
+      this.#yacht = catalog.boats.findIndex((b) => namesYachtClips(b.art));
+    }
+    if (inBridgeFile(r.clip) && this.#bridge === null) {
+      this.#bridge = catalog.boats.findIndex((b) => namesBridgeClips(b.art));
+    }
     const made = await Promise.all(
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
     );
@@ -759,24 +905,51 @@ export class DressingRoom {
       throw new Error(`no ${level} level of ${look} ${version}`);
     }
     const machine = look === MACHINE_LOOK;
+    const pendants = PENDANTS[`../../../art/${catalog.pendants?.art.model ?? ''}`];
+    if (pendants !== undefined) {
+      pendantFiles(
+        () => Promise.resolve(pendants),
+        renderer,
+        (catalog.certificates ?? []).map((c) => c.pendantNode),
+      );
+    }
     if (machine) {
       colours = sailorColours(`#${colours.main.getHexString()}`, `#${this.room.finish}`, LAMP);
     }
     let proto = this.#protos.get(url);
     if (proto === undefined) {
-      proto = loadSailor(url, renderer, colours, machine);
+      const art = (
+        machine ? catalog.machine.versions : catalog.sailors.find((l) => l.id === look)?.versions
+      )?.find((v) => v.id === version)?.art;
+      proto = loadSailor(
+        url,
+        renderer,
+        colours,
+        machine,
+        art === undefined ? null : cockadeOf(art),
+      );
       this.#protos.set(url, proto);
     }
     let clips: Promise<SailorClips> | null = null;
     // The clips at a wheel, those on a trapeze's wire and those on a rail
     // (and the crouch) are files of their own.
-    const clipsUrl = onWire(this.room.clip)
-      ? files?.trapeze
-      : inRailFile(this.room.clip)
-        ? files?.rail
-        : atWheel(this.room.clip)
-          ? files?.wheel
-          : files?.clips;
+    const clipsUrl = inBridgeFile(this.room.clip)
+      ? files?.bridgedeck
+      : inYachtFile(this.room.clip)
+        ? files?.cruiser
+        : inCatFile(this.room.clip)
+          ? files?.cat
+          : onWire(this.room.clip)
+            ? files?.trapeze
+            : inRailFile(this.room.clip)
+              ? files?.rail
+              : inShipFile(this.room.clip)
+                ? files?.ship
+                : inAloftFile(this.room.clip)
+                  ? files?.aloft
+                  : atWheel(this.room.clip)
+                    ? files?.wheel
+                    : files?.clips;
     if (clipsUrl !== undefined) {
       clips = this.#clips.get(clipsUrl) ?? loadClips(clipsUrl, renderer);
       this.#clips.set(clipsUrl, clips);
@@ -791,6 +964,7 @@ export class DressingRoom {
         o.userData.skin = colours.skin;
         o.userData.hair = colours.hair;
         o.userData.glow = 1;
+        o.userData.cockade = this.room.cockade ? 1 : 0;
         o.castShadow = true;
         o.receiveShadow = true;
         meshes.push(o);
@@ -813,13 +987,26 @@ export class DressingRoom {
       harness: null,
       wire: null,
       walk: null,
+      pendant: null,
     };
+    const skinned = meshes.find((m): m is SkinnedMesh => m instanceof SkinnedMesh);
+    const art = (
+      machine ? catalog.machine.versions : catalog.sailors.find((l) => l.id === look)?.versions
+    )?.find((v) => v.id === version)?.art;
+    if (f.level !== 'far' && skinned !== undefined && art !== undefined) {
+      f.pendant = new WornPendant(skinned.skeleton, art.pendant);
+      f.pendant.shadows = true;
+      if (this.room.pendant > 0) {
+        await pendantsReady();
+        f.pendant.wear(this.room.pendant);
+      }
+    }
     const clip = c?.clips.find((k) => k.name === this.room.clip);
     if (model.skeleton !== null && clip !== undefined) {
       f.mixer = new AnimationMixer(root);
       f.action = f.mixer.clipAction(clip);
       f.action.play();
-      if (onWire(clip.name) && files?.harness !== undefined) {
+      if ((onWire(clip.name) || catWired(clip.name)) && files?.harness !== undefined) {
         f.harness = await this.#harness(files.harness, root, clip);
       }
     }
@@ -874,6 +1061,347 @@ export class DressingRoom {
     this.#wireBoat = -1;
   }
 
+  /** Finds the catalog's boat whose model marks her company's places, loading the boats' models in turn. */
+  async #findShip(): Promise<void> {
+    if (this.#ship !== null) {
+      return;
+    }
+    for (let k = 0; k < catalog.boats.length; k++) {
+      const { boat, loaded } = this.#boatAt(k, 0);
+      await loaded;
+      if (company(boat.parts) !== null) {
+        this.#ship = k;
+        return;
+      }
+    }
+    this.#ship = -1;
+  }
+
+  /**
+   * A figure aboard the ship: a clip placed on her at her place of its
+   * kind, on its side (the yard's under the yard's node); standing about
+   * on her quarterdeck inboard of her rail, facing outboard; walking along
+   * it, forward, at the walk's speed. Her square sails are left out, so a
+   * figure aloft is seen. The ship is turned so the figure faces the front.
+   * False if the room has no ship or the figure no clip.
+   */
+  async #onShip(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!onShip(r.clip) || f.action === null || this.#ship === null || this.#ship < 0) {
+      return false;
+    }
+    // Every figure aboard the one ship, each a little apart from the last.
+    const { boat, loaded } = this.#boatAt(this.#ship, 0);
+    await loaded;
+    const c = company(boat.parts);
+    if (c === null) {
+      return false;
+    }
+    const n = this.#figuresWanted();
+    const anchor = shipAnchor(r.clip);
+    let parent: Object3D = boat.model;
+    let seat: Matrix4;
+    // Which way the figure faces on her: outboard (+x), forward (−z) or aft (+z).
+    let facing = Math.PI / 2;
+    // Apart: forward along her rail and deck, along the hatch's edge, to
+    // the next topmast shroud forward, out along the yard.
+    const apart =
+      anchor === 'hatch'
+        ? new Vector3((i - (n - 1) / 2) * 0.55, 0, 0)
+        : anchor === 'top'
+          ? new Vector3(0, 0, -0.5 * i)
+          : anchor === 'yard'
+            ? new Vector3(0.9 * i, 0, 0)
+            : new Vector3(0, 0, -1.4 * i);
+    if (anchor === null) {
+      const at = new Vector3(c.rail.x - SHIP_STAND_IN, 0, c.rail.z).add(apart);
+      at.y = this.#deckAt(boat, at.x, at.z);
+      if (r.clip === DECK_CLIPS.walk) {
+        facing = Math.PI;
+        f.walk = { from: at, length: SHIP_WALK, speed: WALK_SPEED };
+        seat = new Matrix4()
+          .makeTranslation(at.x, at.y, at.z)
+          .multiply(new Matrix4().makeRotationY(Math.PI));
+      } else {
+        seat = new Matrix4()
+          .makeTranslation(at.x, at.y, at.z)
+          .multiply(new Matrix4().makeRotationY(facing));
+      }
+    } else {
+      const place = f.clips?.places.get(`place-${r.clip}`);
+      if (place === undefined) {
+        return false;
+      }
+      const p = shipPoint(c, anchor);
+      if (p.node !== null) {
+        parent = boat.parts.get(p.node) ?? boat.model;
+      }
+      seat = shipPlace(place, p.at.add(apart), shipSide(r.clip));
+      if (anchor === 'brace' && i === 0) {
+        // The fall, which her model does not draw: from its lead along the
+        // deck past the haulers.
+        const side = shipSide(r.clip);
+        const lead = c.brace.lead.clone().setX(side * c.brace.lead.x);
+        lead.y += STAGED.braceUp;
+        const fall = c.brace.fall.clone().setX(side * c.brace.fall.x);
+        fall.y += STAGED.braceUp;
+        const along = fall.clone().sub(lead).normalize();
+        const end = lead.clone().addScaledVector(along, STAGED.braceAt + 1.4 * n);
+        const rope = new Mesh(
+          new CylinderGeometry(0.014, 0.014, end.distanceTo(lead), 6),
+          litMaterial({ color: 0x33261a, roughness: 0.9, metalness: 0 }),
+        );
+        rope.position.copy(lead).add(end).multiplyScalar(0.5);
+        rope.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), along);
+        boat.model.add(rope);
+        f.wheel = rope;
+      }
+      facing = anchor === 'brace' ? 0 : anchor === 'rail' ? Math.PI / 2 : Math.PI;
+    }
+    boat.model.traverse((o) => {
+      if (o instanceof Mesh && (o.material as Material).name === 'flax') {
+        o.visible = false;
+      }
+    });
+    f.boat = boat;
+    parent.add(f.root);
+    f.root.matrixAutoUpdate = true;
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    this.stage.scene.add(boat.root);
+    boat.root.position.set(0, 0, MOORED_Z);
+    // Turned so the figure faces +z, the front.
+    boat.root.rotation.set(0, -facing * shipSide(r.clip), 0);
+    return true;
+  }
+
+  /** Finds the catalog's boat whose kind's people are drawn with the beach cat's clips. */
+  async #findCat(): Promise<void> {
+    if (this.#cat === null) {
+      this.#cat = catalog.boats.findIndex((b) => namesCatClips(b.art));
+    }
+  }
+
+  /**
+   * A figure aboard a beach cat, each on her own, moored before the quay:
+   * on her starboard hull (or port, for a -port clip) from her station's
+   * deck edge, turned so the figure faces the front; crossing her net from
+   * its middle, facing forward, the loops going to their side at their
+   * speed; or, righting her, standing on her lower hull as she lies on her
+   * side, facing her. Her sails are left out, so the people are seen.
+   * False if the room has no beach cat or the figure no clip.
+   */
+  async #onCat(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!inCatFile(r.clip) || f.action === null || this.#cat === null || this.#cat < 0) {
+      return false;
+    }
+    const { boat, loaded } = this.#boat(i);
+    await loaded;
+    const a = aboard(boat.parts);
+    const place = f.clips?.places.get(`place-${r.clip}`);
+    const anchor = catAnchor(r.clip);
+    if (a === null || place === undefined || anchor === null) {
+      return false;
+    }
+    boat.model.traverse((o) => {
+      if (o instanceof Mesh && (o.material as Material).name === 'flax') {
+        o.visible = false;
+      }
+    });
+    const n = this.#figuresWanted();
+    const x = (i - (n - 1) / 2) * this.#boatSpacing();
+    this.stage.scene.add(boat.root);
+    boat.root.position.set(x, 0, MOORED_Z);
+    f.boat = boat;
+    f.walk = null;
+    f.root.matrixAutoUpdate = true;
+    const side = catSide(r.clip);
+    if (anchor === 'stand') {
+      // Lying on her side, her mast to port, turned so the figure faces
+      // the front; it stands upright on her lower hull, where a ray down
+      // over its middle meets it, as the build stood it.
+      boat.root.rotation.set(0, Math.PI / 2, 0);
+      // Her lower hull afloat, as she lies.
+      boat.root.position.y = boat.parts.get('board-root')?.position.x ?? 1;
+      // As the room draws her (the pose's heel), now, to find her hull.
+      boat.heel.rotation.set(0, 0, Math.PI / 2);
+      boat.root.updateMatrixWorld(true);
+      const keel = boat.parts.get('board-root')?.position.x ?? 1;
+      const from = new Vector3(-keel, CAT_STAND_OUT, a.crew.inner.z).applyMatrix4(
+        boat.model.matrixWorld,
+      );
+      const hull = boat.parts.get('hull');
+      const hit =
+        hull === undefined
+          ? undefined
+          : new Raycaster(from.clone().setY(from.y + 0.6), new Vector3(0, -1, 0)).intersectObject(
+              hull,
+              true,
+            )[0];
+      const stand = hit?.point ?? from;
+      this.stage.scene.add(f.root);
+      new Matrix4()
+        .makeTranslation(stand.x, stand.y, stand.z)
+        .multiply(new Matrix4().makeRotationY(Math.PI / 2))
+        .multiply(place)
+        .decompose(f.root.position, f.root.quaternion, f.root.scale);
+      return true;
+    }
+    boat.heel.rotation.set(0, 0, 0);
+    boat.root.rotation.set(0, anchor === 'net' ? Math.PI : (side * Math.PI) / 2, 0);
+    const at = catPoint(a, anchor) ?? new Vector3();
+    const seat = catPlace(place, at, side);
+    boat.model.add(f.root);
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    const speed = CROSS_SPEED[r.clip];
+    if (speed !== undefined) {
+      // To the clip's side, from half the way to the other.
+      const way = new Vector3(r.clip.endsWith('left') ? -1 : 1, 0, 0);
+      const from = f.root.position.clone().addScaledVector(way, -CROSS / 2);
+      f.walk = { from, length: CROSS, speed, way };
+    }
+    if (f.harness !== null) {
+      boat.model.add(f.harness.root);
+      seat.decompose(f.harness.root.position, f.harness.root.quaternion, f.harness.root.scale);
+      const trapeze = trapezeData(boat.parts.get('trapeze')?.userData);
+      if (trapeze !== null) {
+        const mesh = wireMesh(wireColour(wireNode(boat.parts, side)));
+        mesh.castShadow = true;
+        boat.model.add(mesh);
+        f.wire = { mesh, side, hounds: trapeze.hounds, hook: new Vector3() };
+      }
+    }
+    return true;
+  }
+
+  /**
+   * A figure aboard a cruising yacht, each on her own, moored before the
+   * quay, her sails and boom left out so her people are seen, turned so the figure
+   * faces the front: at her starboard wheel (or port, for a -port clip),
+   * standing aft of it or sat outboard of it; on her bench facing inboard;
+   * on her rail facing outboard; or crossing her cockpit or her coachroof
+   * facing across her, going to port at the walk's speed. False if the room has no yacht or
+   * the figure no clip.
+   */
+  async #onYacht(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!inYachtFile(r.clip) || f.action === null || this.#yacht === null || this.#yacht < 0) {
+      return false;
+    }
+    const { boat, loaded } = this.#boat(i);
+    await loaded;
+    const places = yachtOf(boat.parts);
+    const place = f.clips?.places.get(`place-${r.clip}`);
+    const anchor = yachtAnchor(r.clip);
+    if (places === null || place === undefined || anchor === null) {
+      return false;
+    }
+    boat.model.traverse((o) => {
+      if (o instanceof Mesh && (o.material as Material).name === 'flax') {
+        o.visible = false;
+      }
+    });
+    // Her boom too: swung over her cockpit, it stands between the camera
+    // and her people.
+    const boom = boat.parts.get('boom');
+    if (boom !== undefined) {
+      boom.visible = false;
+    }
+    const n = this.#figuresWanted();
+    const x = (i - (n - 1) / 2) * this.#boatSpacing();
+    this.stage.scene.add(boat.root);
+    boat.root.position.set(x, 0, MOORED_Z);
+    f.boat = boat;
+    f.walk = null;
+    f.root.matrixAutoUpdate = true;
+    const side = yachtSide(r.clip);
+    boat.heel.rotation.set(0, 0, 0);
+    // Facing the front: forward at the wheel; inboard on the bench;
+    // outboard on the rail; to port crossing the cockpit and the roof.
+    boat.root.rotation.set(
+      0,
+      anchor === 'stance'
+        ? Math.PI
+        : anchor === 'bench'
+          ? (side * Math.PI) / 2
+          : anchor === 'rail'
+            ? (-side * Math.PI) / 2
+            : Math.PI / 2,
+      0,
+    );
+    // The coachroof's top where it is crossed: over its scuttle, as a ray
+    // down meets it.
+    const at =
+      anchor === 'roof'
+        ? places.roof.clone().setY(this.#deckAt(boat, places.roof.x, places.roof.z))
+        : places[anchor];
+    const seat = yachtPlace(place, at, side);
+    boat.model.add(f.root);
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    const speed = YACHT_CROSS_SPEED[r.clip];
+    if (speed !== undefined) {
+      // To port, as it faces, from half the way to the other side.
+      const way = new Vector3(-1, 0, 0);
+      const from = f.root.position.clone().addScaledVector(way, -CROSS / 2);
+      f.walk = { from, length: CROSS, speed, way };
+    }
+    return true;
+  }
+
+  /**
+   * A figure aboard a cruising catamaran, each on her own, moored before
+   * the quay, her sails, boom and roof left out so her people are seen from
+   * above, turned so the figure faces the front: at her wheel, standing or
+   * sat on the settle behind it; on one of her seats, facing as it faces;
+   * walking or turning on her sole; on her ladder. False if the room has no
+   * catamaran or the figure no clip.
+   */
+  async #onBridge(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!inBridgeFile(r.clip) || f.action === null || this.#bridge === null || this.#bridge < 0) {
+      return false;
+    }
+    const { boat, loaded } = this.#boat(i);
+    await loaded;
+    const places = bridgeOf(boat.parts);
+    const place = f.clips?.places.get(`place-${r.clip}`);
+    const anchor = bridgeAnchor(r.clip);
+    if (places === null || place === undefined || anchor === null) {
+      return false;
+    }
+    boat.model.traverse((o) => {
+      const name = o instanceof Mesh ? (o.material as Material).name : '';
+      if (name === 'flax' || name === 'roof') {
+        o.visible = false;
+      }
+    });
+    const boom = boat.parts.get('boom');
+    if (boom !== undefined) {
+      boom.visible = false;
+    }
+    const n = this.#figuresWanted();
+    const x = (i - (n - 1) / 2) * this.#boatSpacing();
+    this.stage.scene.add(boat.root);
+    boat.root.position.set(x, 0, MOORED_Z);
+    f.boat = boat;
+    f.walk = null;
+    f.root.matrixAutoUpdate = true;
+    boat.heel.rotation.set(0, 0, 0);
+    // Facing the front: turned as the place faces.
+    const a = places[anchor];
+    boat.root.rotation.set(0, Math.PI + (a.facing * Math.PI) / 180, 0);
+    const seat = bridgePlace(place, a);
+    boat.model.add(f.root);
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    if (anchor === 'sole' && r.clip === 'cockpit-walk') {
+      // Forward along her sole, from half the way back.
+      const way = new Vector3(0, 0, -1);
+      const from = f.root.position.clone().addScaledVector(way, -CROSS / 2);
+      f.walk = { from, length: CROSS, speed: BRIDGE_WALK_SPEED, way };
+    }
+    return true;
+  }
+
   /** Finds the catalog's boat whose model has a rail, loading the boats' models in turn. */
   async #findRailBoat(): Promise<void> {
     if (this.#railBoat !== null) {
@@ -923,7 +1451,7 @@ export class DressingRoom {
       seat = new Matrix4()
         .makeTranslation(from.x, from.y, from.z)
         .multiply(new Matrix4().makeRotationY(Math.PI));
-      f.walk = r.clip === CROUCH_CLIPS.walk ? { from, length: WALK } : null;
+      f.walk = r.clip === CROUCH_CLIPS.walk ? { from, length: WALK, speed: CROUCH_SPEED } : null;
     }
     f.boat = boat;
     boat.model.add(f.root);
@@ -965,7 +1493,13 @@ export class DressingRoom {
   /** Where a figure stands, or sits: on the quay or the disc, or in its boat. */
   async #place(f: Figure, i: number): Promise<void> {
     const r = this.room;
-    if (await this.#onRailBoat(f, i)) {
+    if (
+      (await this.#onRailBoat(f, i)) ||
+      (await this.#onShip(f, i)) ||
+      (await this.#onCat(f, i)) ||
+      (await this.#onYacht(f, i)) ||
+      (await this.#onBridge(f, i))
+    ) {
       return;
     }
     let seat = this.#seat(f);
@@ -1130,6 +1664,18 @@ export class DressingRoom {
     if (inRailFile(this.room.clip) && rail !== null && rail >= 0) {
       return rail;
     }
+    if (onShip(this.room.clip) && this.#ship !== null && this.#ship >= 0) {
+      return this.#ship;
+    }
+    if (inCatFile(this.room.clip) && this.#cat !== null && this.#cat >= 0) {
+      return this.#cat;
+    }
+    if (inYachtFile(this.room.clip) && this.#yacht !== null && this.#yacht >= 0) {
+      return this.#yacht;
+    }
+    if (inBridgeFile(this.room.clip) && this.#bridge !== null && this.#bridge >= 0) {
+      return this.#bridge;
+    }
     return onWire(this.room.clip) && wire !== null && wire >= 0 ? wire : this.room.boat;
   }
 
@@ -1207,6 +1753,74 @@ export class DressingRoom {
         ) ?? new Vector3();
       // On a rail boat, the crew are on her side nearest the quay.
       const railed = seated && inRailFile(r.clip);
+      const aboard =
+        seated &&
+        (onShip(r.clip) || inCatFile(r.clip) || inYachtFile(r.clip) || inBridgeFile(r.clip));
+      if (aboard) {
+        // Aboard the ship: among the figures, wherever on her they are.
+        o.target.set(0, 0, 0);
+        const p = new Vector3();
+        for (const f of this.#figures) {
+          f.root.updateWorldMatrix(true, false);
+          o.target.add(f.root.getWorldPosition(p));
+        }
+        o.target.divideScalar(Math.max(1, this.#figures.length));
+        // Aboard a cruising yacht, close on one of them (near).
+        const one = this.#figures[Math.min(r.who, this.#figures.length - 1)];
+        if (r.near && (inYachtFile(r.clip) || inBridgeFile(r.clip)) && one !== undefined) {
+          one.root.getWorldPosition(o.target);
+        }
+        o.target.y += 0.85;
+        if (reset) {
+          // Hauling, from the side, the hands along the fall seen; sat on
+          // the hatch, from above and a little forward of abeam, inboard of
+          // her shrouds, clear of the foremast and with neither figure
+          // behind the other; else from the front, a little above.
+          const anchor = shipAnchor(r.clip);
+          if (inBridgeFile(r.clip)) {
+            // Aboard a cruising catamaran, from the front and above, her
+            // roof left out: sat or on her sole, from higher and a little to
+            // one side, over her table.
+            const a = bridgeAnchor(r.clip);
+            const sat =
+              (a !== 'stance' && a !== 'foot' && a !== 'landing') ||
+              r.clip.startsWith(BRIDGE_CLIPS.seated);
+            o.azimuth = back + (sat ? 0.5 : 0);
+            o.elevation = a === 'stance' ? 0.4 : sat ? 0.85 : 0.35;
+            o.distance = r.near ? (sat ? 3.6 : 4.4) : 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
+            return;
+          }
+          if (inYachtFile(r.clip)) {
+            // Aboard a cruising yacht, from the front and above: at her
+            // wheel, from higher, over the binnacle and the wheel's rim; on
+            // her bench, higher again, over her table.
+            // Each figure on a yacht of its own, a yacht's length apart; or
+            // close on one of them (near).
+            const a = yachtAnchor(r.clip);
+            o.azimuth = back;
+            o.elevation = a === 'stance' ? 0.42 : a === 'rail' ? 0.18 : a === 'bench' ? 0.6 : 0.3;
+            o.distance = r.near ? 4.4 : 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
+            return;
+          }
+          if (inCatFile(r.clip)) {
+            // Aboard a beach cat, from above her boom: crossing her net,
+            // from ahead.
+            const net = catAnchor(r.clip) === 'net';
+            const lying = catAnchor(r.clip) === 'stand';
+            // Righting her, from behind the figure and to one side: her
+            // bottom beyond it.
+            o.azimuth = back + (lying ? 2.4 : 0);
+            o.elevation = net ? 0.3 : lying ? 0.25 : 0.42;
+            o.distance = (lying ? 4.0 : 3.0) + 1.4 * n;
+            return;
+          }
+          o.azimuth =
+            back + (anchor === 'brace' ? Math.PI / 2 : anchor === 'hatch' ? Math.PI / 2 + 0.6 : 0);
+          o.elevation = anchor === 'hatch' ? 0.5 : 0.2;
+          o.distance = 3.2 + 1.2 * n;
+        }
+        return;
+      }
       o.target.set(
         0,
         railed ? RAIL_LOOK.y : seated ? 0.9 + by.y : QUAY_TOP + 0.95,
@@ -1255,9 +1869,14 @@ export class DressingRoom {
           // Forward along the side deck at the walk's speed, and again.
           const along =
             r.t !== null
-              ? r.t * CROUCH_SPEED
-              : ((this.#time + f.offset) * CROUCH_SPEED) % f.walk.length;
-          f.root.position.copy(f.walk.from).setZ(f.walk.from.z - (along % f.walk.length));
+              ? r.t * f.walk.speed
+              : ((this.#time + f.offset) * f.walk.speed) % f.walk.length;
+          const d = along % f.walk.length;
+          if (f.walk.way === undefined) {
+            f.root.position.copy(f.walk.from).setZ(f.walk.from.z - d);
+          } else {
+            f.root.position.copy(f.walk.from).addScaledVector(f.walk.way, d);
+          }
         }
       }
     }
@@ -1271,12 +1890,23 @@ export class DressingRoom {
     const lever =
       (this.#boats.get(`${this.#boatIndex()}:0`)?.boat.parts.get('sailor')?.position.z ?? 0) +
       kind.physics.rig.mastPosition;
-    pose.boom = inRailFile(r.clip)
-      ? // Off to leeward of the crew on the rail.
-        -railSide(r.clip) * 0.35
-      : r.view === 'deck'
-        ? -0.35
-        : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
+    pose.boom = inYachtFile(r.clip)
+      ? // Aboard a cruising yacht: off to leeward of her people to windward.
+        -yachtSide(r.clip) * 0.35
+      : inCatFile(r.clip)
+        ? // Aboard a beach cat: amidships at its lowest over the net, or off
+          // to leeward of those on her hull and the wire.
+          catAnchor(r.clip) === 'net'
+          ? 0
+          : -catSide(r.clip) * 0.35
+        : inRailFile(r.clip)
+          ? // Off to leeward of the crew on the rail.
+            -railSide(r.clip) * 0.35
+          : r.view === 'deck'
+            ? -0.35
+            : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
+    // Righting a beach cat: she lies on her side, her mast to port.
+    pose.heel = inCatFile(r.clip) && catAnchor(r.clip) === 'stand' ? -Math.PI / 2 : 0;
     for (const f of this.#figures) {
       const b = f.boat;
       if (b !== null) {
@@ -1525,10 +2155,18 @@ export class DressingRoom {
       ['front', r.side === 'front', () => this.#side('front')],
       ['back', r.side === 'back', () => this.#side('back')],
     ]);
+    group('Pendant', [
+      ['none', r.pendant === 0, () => this.#wear(0)],
+      ...(catalog.certificates ?? []).map(
+        (c, i) =>
+          [c.name, r.pendant === i + 1, () => this.#wear(i + 1)] as [string, boolean, () => void],
+      ),
+    ]);
     group('Show', [
       ['black', r.black, () => this.#toggle('black')],
       ['mask', r.mask, () => this.#toggle('mask')],
       ['phone', r.phone, () => this.#toggle('phone')],
+      ['cockade', r.cockade, () => this.#toggle('cockade')],
       ['held', r.t !== null, () => void this.set({ t: r.t === null ? 1 : null })],
     ]);
     swatches('Skin', 'skin');
@@ -1543,10 +2181,28 @@ export class DressingRoom {
     this.#panelFor();
   }
 
-  #toggle(what: 'black' | 'mask' | 'phone'): void {
+  /** Wears the pendant of the certificate in place n−1 on every figure (0 none). */
+  #wear(n: number): void {
+    this.room = { ...this.room, pendant: n };
+    history.replaceState(null, '', writeRoom(this.room));
+    void pendantsReady().then(() => {
+      for (const f of this.#figures) {
+        f.pendant?.wear(n);
+      }
+      this.#panelFor();
+    });
+  }
+
+  #toggle(what: 'black' | 'mask' | 'phone' | 'cockade'): void {
     this.room = { ...this.room, [what]: !this.room[what] };
     history.replaceState(null, '', writeRoom(this.room));
-    if (what !== 'phone') {
+    if (what === 'cockade') {
+      for (const f of this.#figures) {
+        for (const m of f.meshes) {
+          m.userData.cockade = this.room.cockade ? 1 : 0;
+        }
+      }
+    } else if (what !== 'phone') {
       this.#materials();
     } else {
       this.#container.classList.toggle('phone', this.room.phone);

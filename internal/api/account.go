@@ -30,6 +30,9 @@ type sailorRequest struct {
 	lookRequest
 	// Born is when its player was born: {"year", "month"}.
 	Born jsontext.Value `json:"born"`
+	// Check is the token of the page's human check (Cloudflare
+	// Turnstile), at most humancheck.MaxToken characters.
+	Check string `json:"check"`
 }
 
 // lookRequest is a person's look as a request gives it, by the catalog's
@@ -86,7 +89,10 @@ type sailorResponse struct {
 //
 // The player's month of birth is asked first: under 13, nothing is made
 // or kept, not even in the log, and the browser is given a cookie that
-// answers the same for 30 days, before anything else.
+// answers the same for 30 days, before anything else. Then the look and
+// the name's rules; then the new sailors from the request's address in the
+// last day, and the human check (letIn), so that refusals that cost
+// nothing come first; and only then whether the name is free.
 //
 //	200 options             {"publicKey": …} for navigator.credentials.create()
 //	400 {"error"}           malformed, an unknown member, or a look not made
@@ -97,6 +103,11 @@ type sailorResponse struct {
 //	415                     not application/json
 //	422 {"error": reason}   the name is refused: short, long, characters,
 //	                        scripts, words or taken
+//	429 {"error":"often"}   too many new sailors from the address today,
+//	                        with Retry-After
+//	403 {"error":"check"}   the human check is not passed: no token, or
+//	                        one refused or spent
+//	503 {"error":"check-unavailable"}  the human check could not be made
 //	503                     the database could not be asked
 func (a *api) beginAccount(w http.ResponseWriter, r *http.Request) {
 	if young(r) {
@@ -127,6 +138,9 @@ func (a *api) beginAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	name, ok := a.checkName(w, req.Name)
 	if !ok {
+		return
+	}
+	if !a.letIn(w, r, req.Check) {
 		return
 	}
 	free, err := a.cfg.Accounts.NameFree(r.Context(), name.Key)
@@ -165,7 +179,9 @@ func (a *api) checkName(w http.ResponseWriter, typed string) (moderation.Name, b
 // finishAccount answers POST /account/finish: the passkey the browser made
 // is checked and, in one transaction, the account is made with its sailor,
 // that passkey, a recovery code and a session, whose cookie the answer
-// sets. The recovery code is in the answer, and nowhere else ever again.
+// sets, with the mark that the browser has had a sailor (auth.SailedCookie).
+// The account counts toward its address's new sailors for a day. The
+// recovery code is in the answer, and nowhere else ever again.
 //
 //	201 {"name", look…, "recoveryCode"}
 //	400 {"error":"refused"}  the browser's answer is not accepted
@@ -205,6 +221,7 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 		id, err = a.cfg.Accounts.CreateAccount(r.Context(), store.NewAccount{
 			Name: c.Name, NameKey: c.NameKey, Look: chosen(c.Look), UserHandle: c.UserHandle,
 			Passkey: key, RecoveryHash: recovery, TokenHash: d.Hash, Boat: a.cfg.Boat, Shared: a.cfg.SharedBoats, Born: c.Born,
+			From: a.from(r),
 		})
 		return err
 	})
@@ -227,6 +244,7 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 	obs.SetAccount(r.Context(), id.String())
 	a.cfg.Sessions.Add(hash, store.Session{Account: store.Account{ID: id, Kind: store.Human, Name: c.Name, Look: chosen(c.Look), NoticesOff: []string{}, Born: c.Born}})
 	http.SetCookie(w, auth.SessionCookie(token))
+	http.SetCookie(w, auth.SailedCookie())
 	writeJSON(w, http.StatusCreated, sailorResponse{Name: c.Name, lookShown: a.shown(id, chosen(c.Look)), RecoveryCode: code})
 }
 
@@ -601,5 +619,6 @@ func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		unknown[i] = a.unknownCredential(k.CredentialID)
 	}
 	http.SetCookie(w, auth.ClearedSessionCookie())
+	http.SetCookie(w, auth.ClearedSailedCookie())
 	writeJSON(w, http.StatusOK, map[string]any{"unknown": unknown})
 }

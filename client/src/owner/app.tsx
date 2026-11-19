@@ -131,6 +131,7 @@ import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
 import { machinesWords } from './machines';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
+import { NewsTab } from './news';
 import { ReportsTab } from './reports';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
 import { fromNow, WEATHER_COLOURS, whereFrom } from './weather';
@@ -528,7 +529,7 @@ function BoatRow({
         <td>{b.boat}</td>
         <td>
           {b.sailor || '—'}
-          {b.machine ? ' (AI)' : ''}
+          {b.machine ? ' ⚙' : ''}
           {b.machine ? (
             <div class="small agent" data-field="agent">
               {agentWords(b.agent)}
@@ -1376,7 +1377,7 @@ function App() {
   const [now, setNow] = useState<WorldNow | null>(null);
   const [life, setLife] = useState<Life | null>(null);
   const [lifeError, setLifeError] = useState('');
-  const [tab, setTab] = useState<'world' | 'next' | 'accounts' | 'reports'>('world');
+  const [tab, setTab] = useState<'world' | 'next' | 'accounts' | 'reports' | 'news'>('world');
   // The account whose card is open on the Accounts tab.
   const [card, setCard] = useState<string | null>(null);
   // The name the Reports tab's queue is narrowed to, or "" for every report.
@@ -1425,7 +1426,8 @@ function App() {
   const onNext = tab === 'next' && next !== null;
   const onAccounts = tab === 'accounts';
   const onReports = tab === 'reports';
-  const onWorld = !onNext && !onAccounts && !onReports;
+  const onNews = tab === 'news';
+  const onWorld = !onNext && !onAccounts && !onReports && !onNews;
 
   // What was picked of a world ended means nothing in the next.
   useEffect(() => {
@@ -1959,7 +1961,7 @@ function App() {
                   </button>{' '}
                   <span class="small">
                     {c.by === '' ? 'known' : <bdi>{c.by}</bdi>}
-                    {c.ai ? ' (AI)' : ''}, {new Date(c.at).toLocaleString()}, worth{' '}
+                    {c.ai ? ' ⚙' : ''}, {new Date(c.at).toLocaleString()}, worth{' '}
                     {c.worth.toFixed(1)}
                   </span>
                 </li>
@@ -2060,6 +2062,14 @@ function App() {
           >
             Reports
           </button>
+          <button
+            type="button"
+            name="tab-news"
+            aria-pressed={onNews}
+            onClick={() => setTab('news')}
+          >
+            News
+          </button>
         </nav>
       </header>
       <AccountsTab
@@ -2078,7 +2088,8 @@ function App() {
         openAccount={openAccount}
         act={act}
       />
-      {onAccounts || onReports ? null : (
+      <NewsTab shown={onNews} act={act} />
+      {onAccounts || onReports || onNews ? null : (
         <main>
           <div class="map-box">
             {onNext ? (

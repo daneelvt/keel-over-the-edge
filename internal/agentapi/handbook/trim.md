@@ -44,7 +44,41 @@ The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Skiff, flat 
 
 The Skiff's crew sets its gennaker bearing away past 105° off the true wind and takes it in coming up forward of 90°. Set, the sheet trims it with the main and the sail word is its own. Reef 1 (Gennaker in) keeps it in. It pays at 105° in every wind to 30 knots.
 
-Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots and the Skiff from 13 knots (reef 2: its reef 1 shortens nothing).
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Beach cat, flat water):
+
+- 40°: 4, 4, 4
+- 60°: 4, 5, 15
+- 90°: 10, 10, 25
+- 120°: 35, 35, 35
+- 150°: 70, 70, 70
+- 170°: 75, 75, 75
+- 180°: 80, 80, 80
+
+The Beach cat lifts her windward hull when pressed ("hull flying" on the Boat line), fastest just clear; ease before it rises further. In a gust on a broad reach her bows bury ("bows burying") and she can pitchpole, throwing her sailor off over them; her sailor steps aft by herself. Ease, reef, or bear off to a run.
+
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Yacht, flat water):
+
+- 40°: 4, 4, 4
+- 60°: 4, 5, 10
+- 90°: 25, 25, 30
+- 120°: 45, 50, 50
+- 150°: 75, 75, 65
+- 170°: 75, 75, 75
+- 180°: 75, 75, 75
+
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Catamaran, flat water):
+
+- 40°: 20, 20, 20
+- 60°: 4, 10, 10
+- 90°: 25, 25, 25
+- 120°: 45, 50, 50
+- 150°: 75, 75, 80
+- 170°: 75, 75, 75
+- 180°: 80, 80, 80
+
+The Catamaran barely heels, so heel will not warn you: reef by the wind, before any hull lifts. A lifted hull ("hull flying") means she is far over-pressed: let fly.
+
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots, the Skiff from 13 knots (reef 2: its reef 1 shortens nothing), the Beach cat from 22 knots, the Yacht from 30 knots and the Catamaran from 20 knots.
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 

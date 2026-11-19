@@ -364,6 +364,129 @@ describe('a machine sailor’s boat', () => {
   });
 });
 
+describe('a snap, after a while hidden', () => {
+  /**
+   * A fleet fed every two ticks, boat 0 sailing east at 3 m/s and boat 1
+   * entered beside it, the lateness 100 ms and 200 ms by turns, for 10 s;
+   * then nothing for two minutes, as a hidden page reads nothing.
+   */
+  function hidden() {
+    const fleet = new Fleet();
+    let world = 0;
+    let tick = 0;
+    const late = (t: number) => (t % 4 === 0 ? 100_000 : 200_000);
+    const at = (t: number) => (3 * t) / TICKS_PER_SECOND;
+    const feed = (t: number) =>
+      fleet.add(
+        record(t, [
+          { slot: 0, change: t === 2 ? CHANGE.entered : CHANGE.none, x: at(t) },
+          { slot: 1, change: t === 2 ? CHANGE.entered : CHANGE.none, x: at(t), y: 20 },
+        ]),
+        t * TICK_US + late(t),
+      );
+    const run = (until: number) => {
+      while (world < until) {
+        world += FRAME * 1e6;
+        while ((tick + 2) * TICK_US + late(tick + 2) <= world) {
+          tick += 2;
+          feed(tick);
+        }
+        fleet.update(world, FRAME);
+      }
+    };
+    run(10e6);
+    const before = fleet.near.delay;
+    // Two minutes on, the newest snapshot only: boat 0 sailed on, boat 1
+    // gone and another boat in slot 2.
+    tick += 2 * 15 * 120;
+    world = tick * TICK_US + 150_000;
+    return { fleet, before, tick, world, at, late, run: (w: number) => (world = w) };
+  }
+
+  test('each boat drawn where the newest snapshot has it, at once, with no speed from the jump and nothing fading where it was', () => {
+    const h = hidden();
+    const f = h.fleet;
+    f.snap();
+    f.add(
+      record(h.tick, [
+        { slot: 0, x: h.at(h.tick) },
+        { slot: 1, change: CHANGE.left },
+        { slot: 2, change: CHANGE.entered, x: 5, y: 5 },
+      ]),
+      h.world - 50_000,
+    );
+    f.update(h.world, FRAME);
+    expect(f.count).toBe(2);
+    const own = f.drawn.find((b) => b.slot === 0);
+    expect(own?.east).toBeCloseTo(h.at(h.tick), 9);
+    expect(own?.speed).toBe(0);
+    expect(own?.opacity).toBe(1);
+    expect(f.stats.fading).toBe(0);
+    // Its speed eases up to its own, never past it.
+    let world = h.world;
+    for (let k = 1; k <= 120; k++) {
+      world += FRAME * 1e6;
+      if (k % 4 === 0) {
+        const t = h.tick + k / 2;
+        f.add(
+          record(t, [
+            { slot: 0, x: h.at(t) },
+            { slot: 2, x: 5, y: 5 },
+          ]),
+          t * TICK_US + h.late(t),
+        );
+      }
+      f.update(world, FRAME);
+      expect(f.drawn.find((b) => b.slot === 0)?.speed ?? 0).toBeLessThan(3.05);
+    }
+  });
+
+  test('the render tick set at once from the newest data, then at real time: the lateness and the delay as they were', () => {
+    const h = hidden();
+    const f = h.fleet;
+    expect(h.before).toBeGreaterThan(NEAR_DELAY);
+    f.snap();
+    let world = h.world;
+    let tick = h.tick;
+    let last = Number.NaN;
+    for (let k = 0; k < 5 * 60; k++) {
+      while ((tick + 2) * TICK_US + h.late(tick + 2) <= world) {
+        tick += 2;
+        f.add(record(tick, [{ slot: 0, x: h.at(tick) }]), tick * TICK_US + h.late(tick));
+      }
+      if (k === 0) {
+        f.add(record(tick, [{ slot: 0, x: h.at(tick) }]), world);
+      }
+      f.update(world, FRAME);
+      if (k === 0) {
+        // Where the newest data, the least lateness and the delay before
+        // the page was hidden put it, at once.
+        expect(f.near.tick).toBeCloseTo((world - 100_000) / TICK_US - h.before, 6);
+      } else {
+        // At real time: a frame's ticks each frame, no slew either way.
+        expect(f.near.tick - last).toBeCloseTo(FRAME * TICKS_PER_SECOND, 6);
+      }
+      expect(f.near.delay).toBeCloseTo(h.before, 9);
+      last = f.near.tick;
+      world += FRAME * 1e6;
+    }
+  });
+
+  test('a new connection forgets the render ticks, their delays and the lateness', () => {
+    const h = hidden();
+    const f = h.fleet;
+    f.clear();
+    expect(f.near.tick).toBeNaN();
+    expect(f.far.tick).toBeNaN();
+    expect(f.near.delay).toBe(NEAR_DELAY);
+    expect(f.far.delay).toBe(FAR_DELAY);
+    f.add(record(h.tick, [{ slot: 0, change: CHANGE.entered }]), h.world);
+    f.update(h.world, FRAME);
+    expect(f.stats.spread).toBe(0);
+    expect(f.near.delay).toBe(NEAR_DELAY);
+  });
+});
+
 describe('another boat’s speed', () => {
   test('is how fast its drawn position moves, smoothed over half a second', () => {
     let v = 0;

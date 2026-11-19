@@ -122,12 +122,13 @@ func TestJoinKeepsWhatTheRoleKeeps(t *testing.T) {
 	if strings.Join(lines, "\n")+"\n" != string(role) {
 		t.Errorf("join.sh's sources:\n%s\nthe role's:\n%s", strings.Join(lines, "\n"), role)
 	}
-	var defaults map[string]string
+	var defaults map[string]any
 	data, _ := os.ReadFile(filepath.Join(roleDir, "defaults", "main.yaml"))
 	if err := yaml.Unmarshal(data, &defaults); err != nil {
 		t.Fatal(err)
 	}
-	for key, want := range map[string]string{"keyring_url": defaults["access_tailscale_keyring_url"], "keyring_sha256": defaults["access_tailscale_keyring_sha256"], "keyring": defaults["access_tailscale_keyring"]} {
+	str := func(k string) string { s, _ := defaults[k].(string); return s }
+	for key, want := range map[string]string{"keyring_url": str("access_tailscale_keyring_url"), "keyring_sha256": str("access_tailscale_keyring_sha256"), "keyring": str("access_tailscale_keyring")} {
 		if !strings.Contains(string(script), "readonly "+key+"="+want+"\n") {
 			t.Errorf("join.sh's %s is not the role's %s", key, want)
 		}

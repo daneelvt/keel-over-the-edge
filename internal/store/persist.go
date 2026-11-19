@@ -74,16 +74,23 @@ type Checkpoint struct {
 }
 
 // Batch is what a fenced transaction writes: events in order, then the
-// chartings and the news they make, then the checkpoint, if any. A
-// charting's news is folded into its sailor's item about its island
-// written within FoldWithin.
+// chartings and the stories they make, then the log's rows and their
+// stories, then the checkpoint, if any. Stories are written by News's
+// rules, none without them; an entry of the log about a charting is
+// written only if the charting is.
 type Batch struct {
 	World      [16]byte
 	Epoch      int64 // the writer's lease epoch
 	Events     []Event
 	Charting   []Charting
-	FoldWithin time.Duration
+	News       *NewsRules
+	Log        LogRows
 	Checkpoint *Checkpoint
+	// Examiner, if not nil, judges the certificates of the sailors whose
+	// log's rows sailed alone; Told is told what it told, once the batch
+	// has committed.
+	Examiner Examiner
+	Told     func([]Certified)
 }
 
 // ErrFenced is a batch refused because the lease's epoch is no longer the
@@ -133,8 +140,10 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 	ctx, cancel := context.WithTimeout(ctx, WriteLimit)
 	defer cancel()
 	world := pgtype.UUID{Bytes: b.World, Valid: true}
-	return pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
+	var told []Certified
+	err := pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
 		q := p.q.WithTx(tx)
+		told = nil
 		epoch, err := q.LeaseEpochForShare(ctx)
 		if err != nil {
 			return err
@@ -174,6 +183,28 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 		if err := writeChartings(ctx, q, world, &b); err != nil {
 			return err
 		}
+		if !b.Log.Empty() {
+			var written map[ChartKey]bool
+			for _, c := range b.Charting {
+				if c.Written {
+					if written == nil {
+						written = map[ChartKey]bool{}
+					}
+					written[ChartKey{Subject: c.Subject, Number: c.Number}] = true
+				}
+			}
+			var nw *newsWrite
+			if b.News != nil {
+				nw = &newsWrite{world: world, rules: b.News}
+			}
+			j := newJudging(b.Examiner, q, nw)
+			if err := writeLog(ctx, q, &b.Log, written, nw, j); err != nil {
+				return err
+			}
+			if j != nil {
+				told = j.told
+			}
+		}
 		if c := b.Checkpoint; c != nil {
 			err := q.UpsertCheckpoint(ctx, db.UpsertCheckpointParams{
 				WorldID: world, Tick: c.Tick, Format: int16(c.Format), Build: c.Build, Catalog: c.Catalog,
@@ -185,6 +216,10 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 		}
 		return nil
 	})
+	if err == nil && len(told) > 0 && b.Told != nil {
+		b.Told(told)
+	}
+	return err
 }
 
 // LatestCheckpoint is the world's checkpoint, or ErrNotFound.

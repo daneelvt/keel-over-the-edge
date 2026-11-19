@@ -39,25 +39,34 @@ import {
 import { dot, float, mix, saturate, uniform, uv, vec3, vec4 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind } from '../../catalog';
+import type { PendantPlace } from '../../catalog/types.gen';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
+import { bridgeOf, namesBridgeClips } from './bridgedeck';
+import { aboard, CREW_BESIDE, namesCatClips, standOf } from './cat';
 import { Clip } from './clips';
+import type { CockadePlace } from './cockade';
 import { type SailorColours, sailorColours, sailorLight } from './material';
 import {
   gltfLoader,
   loadClips,
   loadSailor,
+  oneMesh,
   placesOf,
   type SailorClips,
   type SailorModel,
+  wearCockade,
 } from './model';
+import { WornPendant } from './pendant';
 import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
-import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
+import { type CatBoat, type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
 import { type HullSolid, hullSolid } from './solid';
+import { stillNow } from './still';
 import { trapezeOf, wireNode } from './trapeze';
-import { turnIn, wheelOf, wheelTurnOf } from './wheel';
+import { turnIn, wheelNodes, wheelOf, wheelTurnOf } from './wheel';
+import { namesYachtClips, yachtOf } from './yacht';
 
 /** Nearer than this to the camera the close level is drawn, metres; back to the deck level beyond the second. */
 export const CLOSE_IN = 6;
@@ -79,7 +88,17 @@ export interface SailorUrls {
   /** The clips on a trapeze's wire and the harness's URLs, fetched for a boat with a trapeze. */
   trapeze?: () => Promise<string>;
   harness?: () => Promise<string>;
+  /** The clips aboard a beach cat's URL, fetched for a kind whose art names them. */
+  cat?: () => Promise<string>;
+  /** The clips aboard a cruising yacht's URL, fetched for a kind whose art names them. */
+  cruiser?: () => Promise<string>;
+  /** The clips aboard a cruising catamaran's URL, fetched for a kind whose art names them. */
+  bridgedeck?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
+  /** Where the look wears the winner's cockade; none drawn without. */
+  cockade?: CockadePlace;
+  /** Where the look's certificate's pendant hangs; none drawn without. */
+  pendant?: PendantPlace;
 }
 
 const v = new Vector3();
@@ -114,7 +133,10 @@ export class BoatSailor {
   readonly #moment: SailorMoment;
   readonly #rope: Mesh;
   readonly #ropePoints = [new Vector3(), new Vector3(), new Vector3()];
-  readonly #still: boolean;
+  /** Under reduced motion, read every frame: a change while playing is followed. */
+  get #still(): boolean {
+    return stillNow();
+  }
   readonly #machine: boolean;
   /** A machine's lantern's glow, where its file puts the lantern; and the lantern at rest against its bone. */
   readonly #glow: Mesh | null = null;
@@ -152,11 +174,15 @@ export class BoatSailor {
     this.#urls = urls;
     this.#renderer = renderer;
     this.runtime = new SailorRuntime(rig, clips, boat, seed, machine);
-    this.#wheelNode = boat.wheel ? (parts.get('wheel') ?? null) : null;
+    // The wheel whose turn the hands follow: of two, the starboard one, as
+    // both turn alike.
+    this.#wheelNode = boat.wheel ? (wheelNodes(parts).at(-1) ?? null) : null;
     if (this.#wheelNode !== null) {
       turnIn(this.#wheelNode, model, this.#wheelRest);
     }
     this.#deckBones = bonesFor(rig, deck.root);
+    this.#deckPendant =
+      urls.pendant === undefined ? null : new WornPendant(deck.skeleton, urls.pendant);
     deck.root.name = 'sailor figure';
     deck.root.matrixAutoUpdate = false;
     model.add(deck.root);
@@ -188,8 +214,6 @@ export class BoatSailor {
       this.#glow = lanternGlow(deck.meshes[0]?.userData.hair as Color, this.#glowStrength);
       model.add(this.#glow);
     }
-    this.#still =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.#moment = {
       dt: 0,
       time: 0,
@@ -221,10 +245,12 @@ export class BoatSailor {
   ): Promise<BoatSailor> {
     const c = urls.colours;
     const colours = sailorColours(c.main, c.skin, c.hair);
-    const [deck, clipFile] = await Promise.all([
-      loadSailor(urls.model, renderer, colours, machine),
+    const [loaded, clipFile] = await Promise.all([
+      loadSailor(urls.model, renderer, colours, machine, urls.cockade ?? null),
       loadClips(urls.clips, renderer),
     ]);
+    // One draw a pass for the figure, not one a part.
+    const deck = oneMesh(loaded);
     const rig = Rig.from(deck.root, boneNames(deck.root));
     const clips = new Map<string, Clip>();
     const identity = new Matrix4();
@@ -239,6 +265,21 @@ export class BoatSailor {
     const wire = trapeze !== null ? await onTheWire(urls, renderer) : null;
     if (wire !== null) {
       files.push(wire.clips);
+    }
+    // Aboard a beach cat, her people's clips too.
+    const cat = namesCatClips(kind.art) ? await aboardCat(urls, renderer) : null;
+    if (cat !== null) {
+      files.push(cat);
+    }
+    // Aboard a cruising yacht, her people's clips too.
+    const cruiser = namesYachtClips(kind.art) ? await aboardYacht(urls, renderer) : null;
+    if (cruiser !== null) {
+      files.push(cruiser);
+    }
+    // Aboard a cruising catamaran, her people's clips too.
+    const bridgedeck = namesBridgeClips(kind.art) ? await aboardBridge(urls, renderer) : null;
+    if (bridgedeck !== null) {
+      files.push(bridgedeck);
     }
     for (const file of files) {
       for (const a of file.clips) {
@@ -258,6 +299,7 @@ export class BoatSailor {
       chord: foils.boardChord,
     });
     const seat = at('sailor');
+    const catBoat = cat === null ? null : catOf(model, parts, kind.physics.rig.foot);
     if (wheel !== null && seat !== null) {
       // At the wheel: what the seat and the tiller would be is the
       // helmsman's place; the hull's solid only if the model has it.
@@ -273,6 +315,10 @@ export class BoatSailor {
         solid: solid ?? NO_SOLID,
         climbTime: sailor.climbTime,
         wheel,
+        // Aboard a cruising yacht, at her wheel on her own clips.
+        yacht: cruiser === null ? null : yachtOf(parts),
+        // Aboard a cruising catamaran, at her wheel on her own clips.
+        bridge: bridgedeck === null ? null : bridgeOf(parts),
       };
       return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
     }
@@ -295,6 +341,7 @@ export class BoatSailor {
       climbTime: sailor.climbTime,
       ...seating(parts, sailor.hikeReach),
       trapeze: wire !== null ? trapeze : null,
+      cat: catBoat,
     };
     return new BoatSailor(
       model,
@@ -312,6 +359,38 @@ export class BoatSailor {
   }
 
   /** Takes new colours, #RRGGBB: its main colour, skin or metal, and hair or lamps' light. */
+  /** Whether the sailor wears the winner's cockade. */
+  #cockade = false;
+  /** The pendant the sailor wears, on each level: 0 none, else the certificate's place and one. */
+  #pendant = 0;
+  readonly #deckPendant: WornPendant | null;
+  #closePendant: WornPendant | null = null;
+
+  /** Puts on the pendant of the certificate in place n−1, or takes it off (0): on every level. */
+  wearPendant(n: number): void {
+    this.#pendant = n;
+    this.#deckPendant?.wear(n);
+    this.#closePendant?.wear(n);
+  }
+
+  /** The pendant worn and whether it is drawn on the deck level (its model loaded). */
+  get pendant(): { worn: number; drawn: boolean } {
+    return { worn: this.#pendant, drawn: this.#deckPendant?.drawn === true };
+  }
+
+  /** Puts the winner's cockade on, or takes it off: on every level. */
+  wearCockade(on: boolean): void {
+    this.#cockade = on;
+    wearCockade(this.#deck, on);
+    if (this.#close !== null) {
+      wearCockade(this.#close, on);
+    }
+  }
+
+  get cockade(): boolean {
+    return this.#cockade;
+  }
+
   colour(c: { main: string; skin: string; hair: string }): void {
     const shared = (this.#deck.meshes[0]?.userData ?? {}) as Partial<SailorColours>;
     shared.main?.set(c.main);
@@ -362,6 +441,9 @@ export class BoatSailor {
     this.#levels();
   }
 
+  /** On a beach cat, whether someone of her crew crossing her net is in the sailor's way: told by the crew each frame. */
+  wayHeld = false;
+
   /** Whether the sailor is away from the helm, drawn by the crew as they change places: not drawn here meanwhile. */
   get away(): boolean {
     return this.#away;
@@ -388,7 +470,21 @@ export class BoatSailor {
   async #loadClose(): Promise<void> {
     const deckMesh = this.#deck.meshes[0];
     const shared = (deckMesh?.userData ?? {}) as { main: Color; skin: Color; hair: Color };
-    const close = await loadSailor(await this.#urls.close(), this.#renderer, shared, this.#machine);
+    const close = oneMesh(
+      await loadSailor(
+        await this.#urls.close(),
+        this.#renderer,
+        shared,
+        this.#machine,
+        this.#urls.cockade ?? null,
+      ),
+    );
+    wearCockade(close, this.#cockade);
+    if (this.#urls.pendant !== undefined) {
+      this.#closePendant = new WornPendant(close.skeleton, this.#urls.pendant);
+      this.#closePendant.shadows = deckMesh?.castShadow ?? false;
+      this.#closePendant.wear(this.#pendant);
+    }
     close.root.matrixAutoUpdate = false;
     for (const mesh of close.meshes) {
       mesh.castShadow = deckMesh?.castShadow ?? false;
@@ -418,8 +514,10 @@ export class BoatSailor {
     }
     const mo = this.#moment;
     mo.dt = dt;
+    mo.still = this.#still;
     mo.time = this.#time;
     mo.offset = pose.sailor;
+    mo.aft = pose.sailorAft;
     mo.mode = pose.sailorMode;
     mo.timer = pose.sailorTimer;
     mo.heel = pose.heel;
@@ -428,6 +526,9 @@ export class BoatSailor {
     mo.rollRate = pose.rollRate;
     mo.windSpeed = out[RECORDS.out.apparentWindSpeed] ?? 0;
     mo.windAngle = out[RECORDS.out.apparentWindAngle] ?? 0;
+    mo.boom = pose.boom;
+    mo.trim = out[RECORDS.out.trim] ?? 0;
+    mo.wayHeld = this.wayHeld;
     const rt = this.runtime;
     rt.update(mo);
     if (this.#machine) {
@@ -521,6 +622,90 @@ export class BoatSailor {
 }
 
 /**
+ * What a beach cat's sailor needs of her, from her model: its `aboard`
+ * node's places, her boom's gooseneck and length, and where her sailor
+ * stands to right her; null for a model without the places.
+ */
+export function catOf(
+  model: Object3D,
+  parts: Map<string, Object3D>,
+  boomLength: number,
+): CatBoat | null {
+  const a = aboard(parts);
+  const boom = parts.get('boom');
+  const keel = parts.get('board-root');
+  if (a === null || boom === undefined) {
+    return null;
+  }
+  const g = modelPosition(boom, model, new Vector3());
+  const k = keel === undefined ? 1 : Math.abs(modelPosition(keel, model, new Vector3()).x);
+  const t = parts.get('trapeze')?.userData as { crewRings?: unknown; hounds?: unknown } | undefined;
+  const rings = Array.isArray(t?.crewRings) ? (t.crewRings as unknown[]).map(pointOf) : [];
+  const [starboard, port] = rings;
+  const hounds = pointOf(t?.hounds);
+  return {
+    aboard: a,
+    boom: { y: g.y, z: g.z, length: boomLength },
+    stand: standOf(model, k, a.crew.inner.z),
+    crewStand: standOf(model, k, a.crew.inner.z + CREW_BESIDE),
+    crewRings: starboard != null && port != null ? [starboard, port] : null,
+    hounds,
+  };
+}
+
+/** A point from a node's data, or null. */
+function pointOf(a: unknown): Vector3 | null {
+  return Array.isArray(a) && a.length === 3 && a.every((x) => typeof x === 'number')
+    ? new Vector3(a[0] as number, a[1] as number, a[2] as number)
+    : null;
+}
+
+/** A look's clips aboard a beach cat, from their URL; null (warned) if they did not load. */
+async function aboardCat(urls: SailorUrls, renderer: WebGPURenderer): Promise<SailorClips | null> {
+  if (urls.cat === undefined) {
+    return null;
+  }
+  try {
+    return await loadClips(await urls.cat(), renderer);
+  } catch (e) {
+    console.warn('the sailor’s clips aboard the beach cat did not load', e);
+    return null;
+  }
+}
+
+/** A look's clips aboard a cruising yacht, from their URL; null (warned) if they did not load. */
+async function aboardYacht(
+  urls: SailorUrls,
+  renderer: WebGPURenderer,
+): Promise<SailorClips | null> {
+  if (urls.cruiser === undefined) {
+    return null;
+  }
+  try {
+    return await loadClips(await urls.cruiser(), renderer);
+  } catch (e) {
+    console.warn('the sailor’s clips aboard the yacht did not load', e);
+    return null;
+  }
+}
+
+/** A look's clips aboard a cruising catamaran, from their URL; null (warned) if they did not load. */
+async function aboardBridge(
+  urls: SailorUrls,
+  renderer: WebGPURenderer,
+): Promise<SailorClips | null> {
+  if (urls.bridgedeck === undefined) {
+    return null;
+  }
+  try {
+    return await loadClips(await urls.bridgedeck(), renderer);
+  } catch (e) {
+    console.warn('the sailor’s clips aboard the catamaran did not load', e);
+    return null;
+  }
+}
+
+/**
  * A look's clips on a trapeze's wire and its harness, from their URLs;
  * null if it has none (the sailor then sits out on the rail only).
  */
@@ -548,7 +733,7 @@ export const NO_SOLID: HullSolid = {
   stations: [],
   exponent: 2,
   cockpit: { fore: 0, aft: 0, halfWidth: 0, floor: 0 },
-  board: { y: 0, z: 0, span: 0, chord: 0, thickness: 0 },
+  board: { x: 0, y: 0, z: 0, span: 0, chord: 0, thickness: 0 },
 };
 
 /**

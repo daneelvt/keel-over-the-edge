@@ -10,11 +10,13 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
+	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -69,11 +71,10 @@ type Sea struct {
 	Biomes       map[string]string
 	PlaceKinds   []string
 	FeatureKinds []string
-	// News is the world's news sheet, newest first: up to n items before
-	// the item before, nil for the newest; Columns name its columns by
-	// their ids.
-	News    func(ctx context.Context, before *[16]byte, n int) ([]store.News, error)
-	Columns map[string]string
+	// News is the world's news, a day's edition as a machine sailor reads
+	// it; Log a machine sailor's own log. Nil for none.
+	News News
+	Log  func(ctx context.Context, account store.AccountID) (logbook.Log, error)
 	// SystemKinds are each kind of weather system's name, by the catalog's
 	// index, as a chart's key gives it: "Squall line", "Low".
 	SystemKinds []string
@@ -102,6 +103,17 @@ type Sea struct {
 	// Deck, if not nil, is the game's own side of sailing together, which
 	// a skipper's agent puts someone ashore through.
 	Deck Deck
+	// Races are the world's races ashore, which a machine sailor lists,
+	// enters and makes; OwnerOf is a machine sailor's owner's account, for
+	// the blocks a race is entered by. Nil for none.
+	Races   Races
+	OwnerOf func(ctx context.Context, id store.AccountID) (store.AccountID, error)
+	// RaceRecords are a machine sailor's lasting race records, the newest
+	// first, at most MostRaceRecords, for its log; nil for none.
+	RaceRecords func(ctx context.Context, id store.AccountID) ([]store.RaceRecord, error)
+	// Certificates, if not nil, is where a machine sailor stands toward
+	// its next certificate.
+	Certificates func(ctx context.Context, id store.AccountID) (certs.Standing, error)
 
 	overlays overlays
 
