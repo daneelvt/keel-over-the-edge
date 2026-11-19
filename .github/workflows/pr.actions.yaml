@@ -22,15 +22,18 @@ jobs:
     outputs:
       ready: ${{ steps.ready.outputs.ready }}
     steps:
-      # Whether the pull request is a draft now: an event's own flag is as
-      # it was when the event was made, and a push just before "ready for
-      # review" can arrive after it and cancel the run that was ready.
+      # Whether the pull request is ready now, and this event is for its
+      # head: an event's draft flag is as it was when the event was made,
+      # and events can arrive out of order. A push just before "ready for
+      # review" can arrive after it and cancel the run that was ready, and
+      # a late event for an older commit need not be tested.
       - id: ready
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number }}
-        run: echo "ready=$(gh api "repos/$REPO/pulls/$NUMBER" --jq '.draft | not')" >> "$GITHUB_OUTPUT"
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: echo "ready=$(gh api "repos/$REPO/pulls/$NUMBER" --jq '(.draft | not) and .head.sha == env.HEAD')" >> "$GITHUB_OUTPUT"
 
   pr-actions:
     name: pr-actions
