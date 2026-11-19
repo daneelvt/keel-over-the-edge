@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Racing, on the world page's Accounts tab: the limits every sailor
+// Racing, on the world page's Settings tab: the limits every sailor
 // races by (races entered ahead, races started a day, races made a day,
 // races owned not yet finished), how long before the world's end the last
 // race may start, how often the Harbourmaster's races are run and in which

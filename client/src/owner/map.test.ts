@@ -8,6 +8,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
   pan,
+  pinch,
   rectOf,
   toScreen,
   toWorld,
@@ -60,6 +61,23 @@ describe('the map', () => {
     const v = fitView(800, 600);
     const p = pan(v, 10, 20);
     expect(toScreen(p, 0, 0)).toEqual([410, 320]);
+  });
+
+  test('two fingers keep what they hold: apart zooms in, together moves the map', () => {
+    const v = fitView(360, 400);
+    const a = toWorld(v, 100, 200);
+    const b = toWorld(v, 200, 200);
+    // The right finger goes right, the left holds.
+    const z = pinch(v, [200, 200], [100, 200], [300, 200], [100, 200]);
+    expect(z.scale).toBeCloseTo(v.scale / 2, 9);
+    expect(toScreen(z, a[0], a[1])[0]).toBeCloseTo(100, 6);
+    expect(toScreen(z, b[0], b[1])[0]).toBeCloseTo(300, 6);
+    // Both go down by the same: no zoom, the map follows.
+    const m = pinch(v, [100, 200], [200, 200], [100, 240], [200, 240]);
+    expect(m.scale).toBe(v.scale);
+    expect(toScreen(m, a[0], a[1])).toEqual([100, 240]);
+    // Fingers on one spot: nothing to divide by.
+    expect(pinch(v, [50, 50], [50, 50], [50, 50], [50, 50])).toEqual(v);
   });
 
   test('a world rectangle, and bearings, on the canvas', () => {

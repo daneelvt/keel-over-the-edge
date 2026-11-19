@@ -4471,8 +4471,8 @@ browser tests: it moves any boat and marks nothing.
 **The Accounts tab**, always shown beside "World N" (and "Next: world N+1"
 while there is one), is the owner's hand on every account, at sea or
 ashore. At its head: the counts (`accounts.json`: humans, made this week,
-seen today; machine sailors; grants live; accounts stopped) and the grant
-lifetime. **The search** takes one box: an account's ID; an AI app's
+seen today; machine sailors; grants live; accounts stopped). **The
+search**, next under them, takes one box: an account's ID; an AI app's
 access, refresh or connection token, or a session's cookie, found by its
 hash (a token comes only in the POST's body, is never logged and never
 echoed back, and the answer says when it has ended, and when nothing is
@@ -4575,7 +4575,7 @@ they would do. The command's actions are recorded as `command` (the
 
 ### Links to come aboard
 
-The owner's switches for everyone, on the Accounts tab and in `keel
+The owner's switches for everyone, on the Settings tab and in `keel
 admin`: how long a skipper's link lasts from when it is made (24 hours to
 start, 5 minutes to 7 days), whether links work, and whether anyone may
 come aboard. They live in the `setting` row and, loaded as keel starts, in
@@ -6197,7 +6197,7 @@ for programs that take a header and run no OAuth; one at a time, a new one
 ending the old. Every grant ends at its making plus **the grant lifetime**
 (`setting.grant_lifetime`, 90 days, from a minute to 400 days), reckoned at
 each use from the lifetime as it is now, so shortening it on the world
-page's Accounts tab ends older grants at once. The account page lists each machine sailor's
+page's Settings tab ends older grants at once. The account page lists each machine sailor's
 apps and token with when each ends, and revokes them.
 
 **The door at the MCP address** (`internal/agentapi`) checks, in order: a

@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
-/* The world page: the game's fonts and colours, the map beside the lists,
-   at a laptop's width. */
+/* The world page: the game's fonts and colours, the map beside the lists
+   at a laptop's width, and above them on a narrower screen, down to a
+   phone's. */
 
 @font-face {
   font-family: "Alegreya Sans";
@@ -177,6 +178,11 @@ main {
 }
 
 /* Clear of the point's panel at the map's foot: on a short map it scrolls. */
+/* The key that folds the layers' box: on a narrow screen alone. */
+.layers-key {
+  display: none;
+}
+
 .layers {
   position: absolute;
   top: 8px;
@@ -284,6 +290,17 @@ button:disabled {
   cursor: default;
 }
 
+/* Every field as the keys are, whichever card it is in. */
+input:not([type="checkbox"], [type="radio"]) {
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}
+
 .islands,
 .places,
 .lights {
@@ -303,18 +320,213 @@ button:disabled {
   text-align: left;
 }
 
+/* A narrow screen: the page itself scrolls, the map above the lists at a
+   height that leaves the first of them in sight, nothing wider than the
+   screen. */
 @media (width < 1100px) {
+  html,
+  body,
+  #app,
+  .page {
+    height: auto;
+    min-height: 100%;
+  }
+
   main {
+    flex: none;
     flex-direction: column;
   }
 
   .map-box {
-    min-height: 60vh;
+    flex: none;
+    height: 64dvh;
+    min-height: 300px;
   }
 
-  aside,
-  .accounts-tab aside {
+  .settings-tab {
+    display: flex;
+    flex-direction: column;
+    overflow-y: visible;
+  }
+
+  main aside,
+  main.accounts-tab aside {
     width: auto;
+    overflow-y: visible;
+  }
+
+  /* The long lists scroll in their cards, so the next card is near. */
+  .islands,
+  .towns,
+  .features {
+    max-height: 24em;
+    overflow-y: auto;
+  }
+
+  .accounts-list {
+    flex: none;
+    overflow-y: visible;
+  }
+
+  /* A wide table scrolls in its card, not the page. */
+  .card {
+    overflow-x: auto;
+  }
+
+  input,
+  select {
+    max-width: 100%;
+  }
+}
+
+/* A phone: the head in a few lines, the layers folded behind their key,
+   the point's panel across the map's foot. */
+@media (width < 700px) {
+  header {
+    padding: 6px 12px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  header .note {
+    margin: 0;
+  }
+
+  .switch {
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .switch .note {
+    font-size: 12px;
+  }
+
+  .countdown {
+    font-size: 17px;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+    margin: 4px 0 0;
+  }
+
+  main {
+    gap: 8px;
+    padding: 0 8px 8px;
+  }
+
+  .layers-key {
+    display: block;
+    margin: 0;
+  }
+
+  .layers[data-open="0"] {
+    padding: 4px;
+  }
+
+  .layers[data-open="0"] > :not(.layers-key) {
+    display: none;
+  }
+
+  .layers[data-open="1"] {
+    max-height: calc(100% - 16px);
+  }
+
+  /* The map at its own height, and what was picked under it, not over
+     it: on a phone the panels would cover most of the map. */
+  .map-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: auto;
+    min-height: 0;
+  }
+
+  .map {
+    position: relative;
+    inset: auto;
+    flex: none;
+    height: 64dvh;
+    min-height: 300px;
+  }
+
+  .point,
+  .place-box {
+    position: static;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    font-size: 13px;
+  }
+
+  /* A found account's row on one line: the table scrolls in its card. */
+  table.accounts th,
+  table.accounts td {
+    white-space: nowrap;
+  }
+
+  .racing-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* A switch's name and state on a line, its key under them. */
+  .chat-switches {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .chat-switches .switch-row > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .islands {
+    columns: auto;
+  }
+
+  .search input,
+  .hand input,
+  .sail-with input[type="text"],
+  form.position input {
+    width: 100%;
+  }
+
+  form.position {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
+/* Fingers: keys and fields tall enough to hit, and text a phone's browser
+   does not zoom in on. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input:not([type="checkbox"], [type="radio"]) {
+    min-height: 36px;
+    font-size: 16px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    vertical-align: middle;
+  }
+
+  .layers label {
+    padding: 4px 0;
+  }
+
+  .islands button,
+  .places button,
+  .lights button,
+  .systems button,
+  button.link {
+    min-height: 32px;
+    font-size: inherit;
   }
 }
 
@@ -353,9 +565,10 @@ button:disabled {
   color: #56b4e9;
 }
 
+/* Not columns: a list of columns with a height grows sideways. */
 .places,
 .lights {
-  columns: 1;
+  columns: auto;
   max-height: 24em;
   overflow-y: auto;
 }
@@ -498,6 +711,33 @@ main[hidden] {
 
 .accounts-tab aside {
   width: 600px;
+}
+
+/* The Settings tab: the owner's settings for everyone, their cards side
+   by side where there is room, each no wider than reads well. */
+.settings-tab {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 560px));
+  align-items: start;
+  align-content: start;
+  overflow-y: auto;
+}
+
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* A card's parts, set off from each other. */
+.settings-tab .card h3 {
+  margin: 18px 0 6px;
+  color: var(--gold);
+}
+
+.settings-tab .card form {
+  margin-top: 6px;
 }
 
 .accounts-tab h3 {

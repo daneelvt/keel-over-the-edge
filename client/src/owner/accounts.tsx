@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The world page's Accounts tab: the players' accounts counted, searched
+// The world page's Accounts and Settings tabs: the players' accounts counted, searched
 // by a name or part of one, an account's id, or a token or session pasted
 // in, which goes to keel in a POST's body alone and is never kept; the
 // accounts found a page at a time, in the order asked for; and an
@@ -903,8 +903,8 @@ function Card({
 }
 
 /**
- * The Accounts tab: the counts, the token lifetime and the search beside
- * the card of the account opened, if one is.
+ * The Accounts tab: the counts and the search beside the card of the
+ * account opened, if one is.
  */
 export function AccountsTab({
   accounts,
@@ -938,9 +938,6 @@ export function AccountsTab({
           <h2>Accounts</h2>
           <p data-field="account-counts">{accounts === null ? '—' : countsWords(accounts)}</p>
         </section>
-        {accounts !== null ? <AISignIn accounts={accounts} act={act} /> : null}
-        {accounts !== null ? <SailWithSettings act={act} /> : null}
-        {accounts !== null ? <RacingSettings act={act} /> : null}
         <Search open={open} chosen={chosen} again={again} />
       </div>
       <aside>
@@ -961,6 +958,44 @@ export function AccountsTab({
           </section>
         )}
       </aside>
+    </main>
+  );
+}
+
+/**
+ * The Settings tab: the owner's settings for everyone, a card each: sign-in
+ * for AI apps, links to come aboard with chat and new sailors, and racing.
+ */
+export function SettingsTab({
+  accounts,
+  shown,
+  act,
+}: {
+  accounts: AccountsData | null;
+  shown: boolean;
+  act: Act;
+}) {
+  // Nothing is read before the tab is first shown.
+  const seen = useRef(false);
+  seen.current ||= shown;
+  if (!seen.current) {
+    return <main class="settings-tab" hidden />;
+  }
+  return (
+    <main class="settings-tab" hidden={!shown}>
+      {accounts === null ? (
+        <section class="card">
+          <p class="small">Reading the settings.</p>
+        </section>
+      ) : (
+        <>
+          <SailWithSettings act={act} />
+          <div class="settings-column">
+            <AISignIn accounts={accounts} act={act} />
+            <RacingSettings act={act} />
+          </div>
+        </>
+      )}
     </main>
   );
 }

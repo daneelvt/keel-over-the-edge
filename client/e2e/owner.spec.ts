@@ -190,7 +190,7 @@ test('the internal listener refuses a page that is not this computer’s', async
   expect(res.status()).toBe(403);
 });
 
-// Chat's switches, together on the Accounts tab: chat for everyone,
+// Chat's switches, together on the Settings tab: chat for everyone,
 // shipmates' messages, spectators reading machine sailors' chat, then the
 // countries; each its state and its key, the keys as tall as the page's
 // others. Spectators' reading off is checked, confirmed and kept, and on
@@ -203,7 +203,7 @@ test('the owner’s chat switches stand together, each its state and its key @wo
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(owner);
   await expect(page.locator('[data-field="tick"]')).toHaveText(/^\d+$/, { timeout: 30_000 });
-  await page.locator('button[name="tab-accounts"]').click();
+  await page.locator('button[name="tab-settings"]').click();
   const group = page.locator('[data-field="chat-switches"]');
   await expect(group).toBeVisible({ timeout: 15_000 });
   const rows = group.locator('.switch-row');
