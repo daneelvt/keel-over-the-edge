@@ -32,6 +32,7 @@ import { actionName, DISMISS, MORE, moreFor, plain, type Words } from './deckwor
 import { openLog, THEIR_LOG } from './loglazy';
 import { PlayerText } from './player';
 import { sailTo } from './sailto';
+import { SheetHead } from './sheet';
 import type { ThreadNote } from './shipmatelog';
 import { nameOf, REFRESH_EVERY, type ShipmateAsk, type ShipmatesView } from './shipmatesview';
 import {
@@ -492,11 +493,11 @@ export function ShipmatesPanel({ deck, view }: { deck: DeckView; view: Shipmates
 
   return (
     <section
-      class="panel deck-window deck-list shipmates-panel"
+      class="panel deck-window deck-list shipmates-panel at-side"
       aria-labelledby="shipmates-title"
       data-panel="shipmates"
     >
-      <h2 id="shipmates-title">{SHIPMATES}</h2>
+      <SheetHead title={SHIPMATES} id="shipmates-title" close={close} />
       {list === null ? (
         <p class="deck-faint" aria-live="polite">
           {view.failed.value ? UNREADABLE : READING}

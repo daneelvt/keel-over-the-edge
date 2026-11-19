@@ -61,11 +61,13 @@
 import './policy';
 import './game.css';
 import { effect, signal } from '@preact/signals';
+import { markChangeBoat, takeChangeBoat } from '../account/boatchooser';
 import { sailFromQuery } from '../account/comeaboardwords';
 import { NOT_WATCHED, watchRefused } from '../account/letwatch';
 import { forgetParams } from '../account/links';
 import { type Me, resolveSailor } from '../account/me';
 import { openLink } from '../account/openlink';
+import { call } from '../account/passkeys';
 import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../account/start';
 import { SETTING_SAIL } from '../account/yoursailor';
 import { CATALOG_VERSION, catalog } from '../catalog';
@@ -1200,6 +1202,7 @@ async function start(): Promise<void> {
   const homeward = (ask: boolean): Promise<void> => underCover.home(ask);
   online.onLift = () => void homeward(false);
   const homeAsking = signal(false);
+  const homeChanging = signal(false);
   // Watching, as the screens see it.
   const watchView: WatchView = {
     watching: online.watching,
@@ -1404,6 +1407,20 @@ async function start(): Promise<void> {
       },
       shipmates: () => online.crew.value !== null,
       go: () => void homeward(true),
+      changing: homeChanging,
+      change: async () => {
+        // Out of the water at once, and the page back at the start screen,
+        // on the boats to choose from.
+        // Marked first: the game connection closes as the boat leaves.
+        markChangeBoat();
+        const res = await call((input, init) => fetch(input, init), '/api/me/ashore');
+        if (res.status !== 200) {
+          takeChangeBoat();
+          return false;
+        }
+        location.reload();
+        return true;
+      },
     },
   });
   // A name tapped anywhere opens its log on the chart screen's Log tab, and

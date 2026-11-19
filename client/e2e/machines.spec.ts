@@ -221,7 +221,9 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   // The menu's panel shows it too.
   await page.getByRole('button', { name: 'Machine sailors' }).click();
   await expect(page.locator('.machines .machine-list li', { hasText: name })).toBeVisible();
-  await page.getByRole('button', { name: 'Close' }).click();
+  // Its close at the top, as every page of the menu has, puts it away.
+  await page.getByRole('button', { name: 'Close this window' }).click();
+  await expect(page.locator('.machines')).toHaveCount(0);
 });
 
 test('every entry shows the machine sailors before the sea, the boat still in the water', async ({

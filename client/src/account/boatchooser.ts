@@ -39,6 +39,29 @@ export type BoatField = '' | 'number' | 'name';
 
 const NAME_REASONS = new Set(['short', 'long', 'characters', 'scripts', 'words']);
 
+/** Where the page keeps, across the reload, that Change boat at sea sent it to the start screen. */
+const CHANGING = 'keel.changeBoat';
+
+/** Marks the next start screen of this tab to open on the boats to choose from. */
+export function markChangeBoat(): void {
+  try {
+    sessionStorage.setItem(CHANGING, '1');
+  } catch {
+    // Storage refused: the start screen opens as ever, Change boat a tap away.
+  }
+}
+
+/** Whether Change boat at sea sent the page here; read once. */
+export function takeChangeBoat(): boolean {
+  try {
+    const marked = sessionStorage.getItem(CHANGING) !== null;
+    sessionStorage.removeItem(CHANGING);
+    return marked;
+  } catch {
+    return false;
+  }
+}
+
 export class BoatChooser {
   /** The fleet as last read; null until it is. */
   readonly fleet: Signal<Fleet | null> = signal(null);

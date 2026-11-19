@@ -12,9 +12,28 @@
 
 .account-sailor-words {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+}
+
+/* Within the page's width, whatever the name's length: the portrait
+   gives way before the words do, and the inked one is no wider than its
+   column. */
+.account-sailor > :first-child {
+  flex: 0 1 96px;
+  min-width: 64px;
+  height: auto;
+}
+
+.account-sailor :is(canvas, img, svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+.account-sailor .menu-sailor {
+  overflow-wrap: anywhere;
 }
 
 .account .account-sailor .menu-sailor {
