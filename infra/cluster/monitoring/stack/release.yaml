@@ -205,6 +205,10 @@ spec:
           news_feed_enabled: false
         users:
           allow_sign_up: false
+        # The Overview opens first: the built-in home lists only the
+        # dashboards this browser opened lately, so a new device sees none.
+        dashboards:
+          default_home_dashboard_path: /var/lib/grafana/dashboards/default/Keel/overview.json
         server:
           root_url: http://localhost:3000
         plugins:
@@ -272,12 +276,14 @@ spec:
           folderAnnotation: grafana_folder
           provider:
             foldersFromFilesStructure: true
+      # At 512Mi it sat at its limit: the kernel reclaimed its page cache
+      # over and over, which cost several cores and slowed every page.
       resources:
         requests:
           cpu: 50m
-          memory: 256Mi
-        limits:
           memory: 512Mi
+        limits:
+          memory: 1Gi
       # The chart's scrape of Grafana's own metrics is kept.
 
     # node-exporter in monitoring-node, privileged: it reads the host's
