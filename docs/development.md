@@ -8183,8 +8183,14 @@ The policy: two tags, each owned by `autogroup:admin` (the owner; no
 person's login is in the file). `tag:ci-prod` reaches `tag:keel-prod` on
 TCP 22 alone, and logs in there as root; the owner's devices reach it on
 22 too, and log in as root after a fresh sign-in every 12 hours
-(`check`). Nothing else: no rule for `*`. `go run ./tools/tailnet -check`
-keeps that shape, offline.
+(`check`). The machine also advertises three routes, approved for it
+alone: the fixed addresses of Grafana, VictoriaMetrics' and VictoriaLogs'
+pages in the cluster (each a /32; see [Opening it](#opening-it)). The
+owner's devices reach each on its one port, and `tag:ci-prod` none of
+them, nor the database's or keel's internal listener's, which have no
+route. Nothing else: no rule for `*`. `go run ./tools/tailnet -check`
+keeps that shape, offline, the routes and grants the same as
+`tools/internal/manifests`' `Forwards`.
 
 ### The playbook
 
@@ -8205,7 +8211,8 @@ infra/ansible/
                                 purged; UTC; the journal; names resolved through
                                 systemd-resolved; k3s's kernel settings; no swap
     hardening/                  the CIS benchmark, below
-    access/                     Tailscale from its own repository; OpenSSH gone
+    access/                     Tailscale from its own repository; the
+                                monitoring pages' routes; OpenSSH gone
     firewall/                   the table hostfw, and its unit
     updates/                    security updates every day, Tailscale's too; no reboot
     observe/                    the journal uploaded to the cluster's logs; the
@@ -9309,6 +9316,25 @@ manifests and the list the same.
 | localhost:9090 | keel's internal listener: `go tool pprof http://localhost:9090/debug/pprof/profile`, the flight recorder, the input log, and the world page at http://localhost:9090/owner/ |
 
 `-tunnel -print` prints the command and runs nothing.
+
+From a phone, or any of the owner's devices on the tailnet, the three
+pages open with no tunnel, at their own addresses:
+
+| On the tailnet | What |
+|---|---|
+| http://10.43.0.51 | Grafana, the same sign-in |
+| http://10.43.0.52:8428 | VictoriaMetrics' own page |
+| http://10.43.0.50:9428 | VictoriaLogs' own page |
+
+The machine advertises them as routes (the access role,
+`access_tailscale_routes`), the tailnet policy approves them and lets the
+tailnet's admins alone reach them, each on its port, and each page's
+NetworkPolicy lets the tailnet's range (100.64.0.0/10) in on that port:
+the packets still come from the device's tailnet address when the
+cluster's policies see them, as Tailscale masquerades only afterwards.
+The device must use the tailnet's subnets (Tailscale's app on Android and
+iOS does by default; on a Mac, its "Use Tailscale subnets"). The database
+and keel's internal listener stay behind the tunnel.
 
 ### The dashboards
 
@@ -10636,7 +10662,7 @@ keel's own count of new sailors groups by /56, where it matters.
 |---|---|---|
 | Traffic floods | Cloudflare in front; no inbound web port, the tunnel alone | online "a PUT is blocked at the edge", "another host is not served", "one address is limited…"; verify "Check the firewall drops what is not let in, and lets the tailnet in" |
 | Finding and attacking the machine | its address in no DNS record; no open port: web traffic by the tunnel, administration over Tailscale | verify "Check the firewall drops…"; the tailnet policy (`go run ./tools/tailnet -check`, `TestRepositoryPolicyKeepsItsRules`); `TestCloseOpenSSHOnlyFromTheTailnet`; rule "no address range but the internet" |
-| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants port 22 alone, its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
+| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants the machine's port 22 alone (and the owner's devices the three monitoring pages' routes, each on its port), its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
 | A node port or host port | ServiceLB off; no NodePort service; the forward chain drops new connections from outside | rules "nothing exposed on production's node", "fixed addresses for the forwards alone"; `TestProductionTraefik`; verify "Check the firewall drops…" |
 | Secrets in the repository or GitHub | none kept there: Infisical and Tailscale reached with GitHub's short-lived tokens, External Secrets brings the rest | rules "no Secret in the manifests", "production's Secrets from Infisical", "every Secret a workload needs is made"; `TestNoSecretInInfra`; gitleaks (`pr.secrets`); push protection (`tools/github -check`); `TestPlanGivesTheCredentialsOnlyToTofu`, `TestPlanShowsNoValue` |
 | A stolen GitHub session changing production | production's jobs in the `production` environment, approved by the owner, `main` only; Infisical and Tailscale trust that environment's identity alone | `TestLoadRepositorySettings`, `TestEnvironmentDrift`; `TestPromoteRefuses`. The identities' bindings are set by hand (infra/MANUAL-STEPS.md) |
