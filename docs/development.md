@@ -9983,9 +9983,12 @@ would keep the page's policy, and the transcoder (Emscripten's embind)
 makes its functions from strings, so every sailor's texture would fail.
 `client/src/render/sailors/transcoder.ts` has the loader start each worker
 from a file of the page's own instead, `transcoderworker.js`, which runs
-that `blob:` (only a `blob:` of this origin, named after the `#` of its
-address) under no policy, as every worker started from a file of the
-page's is. The approval page (`internal/oauth`), the world page
+that `blob:` (only a `blob:` of this origin, named in the page's first
+message to it) under no policy, as every worker started from a file of the
+page's is. The `blob:` is not named in the `#` of the worker's address: a
+worker whose file the service worker answers from its cache has the kept
+answer's address, without the `#`, and that is every visit after the
+first. The approval page (`internal/oauth`), the world page
 (`internal/owner`) and the agreement page (`internal/agreement`) keep
 policies of their own; `Page.Serve`, which serves the first two, sends
 none. The page's other files (assets, icons, `sw.js`) send none either: a
