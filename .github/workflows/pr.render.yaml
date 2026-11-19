@@ -46,15 +46,24 @@ jobs:
   # it.
   changes:
     name: changes
-    if: github.event.pull_request.draft == false
     runs-on: ubuntu-slim
     permissions:
-      pull-requests: read # list the pull request's changed files
+      pull-requests: read # list the pull request's changed files, read whether it is a draft
     outputs:
       page: ${{ steps.both.outputs.page == 'true' || steps.client.outputs.page == 'true' }}
       scene: ${{ steps.both.outputs.scene == 'true' || steps.client.outputs.scene == 'true' }}
     steps:
+      # Whether the pull request is a draft now: an event's own flag is as
+      # it was when the event was made, and a push just before "ready for
+      # review" can arrive after it and cancel the run that was ready.
+      - id: ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "ready=$(gh api "repos/$REPO/pulls/$NUMBER" --jq '.draft | not')" >> "$GITHUB_OUTPUT"
       - id: both
+        if: steps.ready.outputs.ready == 'true'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
@@ -89,6 +98,7 @@ jobs:
               - 'internal/chart/**'
       # Within client/src, folder by folder.
       - id: client
+        if: steps.ready.outputs.ready == 'true'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           predicate-quantifier: every
