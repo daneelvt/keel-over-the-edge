@@ -4185,7 +4185,7 @@ own log each opens to its tasks, the next from the start. Another's shows
 which are held and opens nothing.
 
 How a task is done is a plain line by its measure or its courses, with the
-task's own numbers (`howTo` in `ui/certwords.ts`, and in
+task's own numbers (`howTo` in `ui/certtasks.ts`, and in
 `internal/agentapi/certs.go` for the machine sailors' handbook): words in
 code, not in the catalog, so changing them does not begin a new world. Both
 are held to one file, `internal/agentapi/testdata/certificates_howto.golden.txt`

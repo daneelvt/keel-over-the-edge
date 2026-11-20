@@ -661,9 +661,9 @@ export function nextLine(t: { done: number; needs: number }): string {
   return `Next · ${Math.min(t.done, t.needs)} of ${t.needs}`;
 }
 
-/** A later certificate: "After Helm". */
+/** A later certificate: "After Helm"; "" with none before it. */
 export function afterLine(before: string): string {
-  return `After ${before}`;
+  return before === '' ? '' : `After ${before}`;
 }
 
 /** A certificate another sailor does not hold. */

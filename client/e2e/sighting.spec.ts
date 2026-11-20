@@ -9,7 +9,7 @@
 // way they twist; the pocket chart says how far the edge is and opens it;
 // its list puts the nearest first, and lists its island courses; a notice
 // is a status, dismissed by its button; what a sailor's certificates came
-// to raises its notices, See opening the log's Ribbons; and charted by sight, an island the boat sails up to is charted,
+// to raises its notices, See opening the log's Certificates; and charted by sight, an island the boat sails up to is charted,
 // the sailor's, with a notice. A course set on a charted place from its
 // box puts its distance in the compass's window once the chart is shut; a
 // tap on open water drops a pin whose box sets the course, and past the

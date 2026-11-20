@@ -227,7 +227,7 @@ func courseHowTo(t *catalog.CertificateTask) string {
 
 // howTo is how a task is done, in a plain line, by its measure or its
 // courses and with its own numbers: the line a person reads under the
-// task in the log (the page's certwords.ts; one file of both's lines
+// task in the log (the page's certtasks.ts; one file of both's lines
 // holds them the same). "" for a measure it has no words for. Each says
 // what the judge counts, no more: a night is half an hour under way after
 // dark, a gale counts once it is ridden out, a place seen is one charted

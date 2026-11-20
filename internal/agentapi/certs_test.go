@@ -116,7 +116,7 @@ func TestCertificatesHeldAndProgress(t *testing.T) {
 
 // howToGolden holds how every task of the catalog's is done, a line
 // each: the certificate, the task and its line. The page's own lines are
-// held to the same file (client/src/ui/certwords.test.ts), so a person
+// held to the same file (client/src/ui/certtasks.test.ts), so a person
 // and a machine sailor read the same.
 const howToGolden = "testdata/certificates_howto.golden.txt"
 

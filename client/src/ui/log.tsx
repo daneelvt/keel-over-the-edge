@@ -23,13 +23,13 @@ import type { LogWho } from '../chart/chart';
 import {
   asksMedal,
   BY_HAND_MEANS,
-  type CertTask,
   howFar,
   howTo,
   isCourse,
   MEDALS_MEAN,
   opensLine,
-} from './certwords';
+} from './certtasks';
+import type { CertTask } from './certwords';
 import {
   type Log,
   type LogAnswer,
@@ -628,6 +628,7 @@ function TaskLine({
       <span class="log-task-words">
         <span class="log-task-name">
           {name}
+          {done ? <span class="log-unseen">, done</span> : null}
           {after !== '' ? <span class="log-task-after"> · {after}</span> : null}
         </span>
         {far !== '' ? <span class="log-task-far">{far}</span> : null}
@@ -641,7 +642,6 @@ function TaskLine({
         <a
           class="log-task-course"
           href={raceLink(code)}
-          aria-label={`${name}${done ? ', done' : ''}: ${SAIL_IT}`}
           data-race={code}
           onClick={(e) => {
             if (openRaceCard(code)) {
@@ -650,6 +650,7 @@ function TaskLine({
           }}
         >
           {words}
+          <span class="log-unseen"> {SAIL_IT}</span>
           <span class="log-task-go" aria-hidden="true">
             ›
           </span>

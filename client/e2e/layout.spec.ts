@@ -3870,7 +3870,7 @@ for (const text of TEXT_SIZES) {
       await expect(certs.first().locator('.log-task.done')).toHaveCount(3);
       await expect(certs.first().locator('.log-task.unneeded')).toHaveCount(1);
       await expect(certs.first().locator('.log-task').first()).toContainText(
-        'The Short Course · by hand',
+        'The Short Course, done · by hand',
       );
       await check(`${s.name}, a certificate held, opened`);
       // After the last certificate: five held, the last open; no next.

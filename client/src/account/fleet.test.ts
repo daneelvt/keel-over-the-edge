@@ -619,10 +619,13 @@ describe('the player’s panel and the board', () => {
       const rows = findAll(v, (n) => n.props['data-needs'] === 'Helm');
       expect(rows).toHaveLength(1);
       const row = rows[0];
+      if (row === undefined) {
+        throw new Error('no boat that needs a certificate');
+      }
       expect(text(row)).toContain('needs Helm ›');
-      expect(row?.props.disabled).toBe(false);
-      expect(String(row?.props['aria-label'])).toContain(`needs Helm: ${SEE_CERTIFICATES}`);
-      (row?.props.onClick as () => void)();
+      expect(row.props.disabled).toBe(false);
+      expect(String(row.props['aria-label'])).toContain(`needs Helm: ${SEE_CERTIFICATES}`);
+      (row.props.onClick as () => void)();
     }
     expect(seen).toBe(2);
     // She is not chosen: nothing was asked of the server but the fleet.
