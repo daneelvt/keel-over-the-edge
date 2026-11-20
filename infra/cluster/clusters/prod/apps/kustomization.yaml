@@ -33,6 +33,10 @@ configMapGenerator:
       # The pages' Content Security Policy as a report only, until a week
       # of reports leaves nothing unexplained; then enforce, the default.
       - KEEL_PAGE_POLICY=report
+      # The owner's world page answers the machine's name on the tailnet,
+      # where the machine serves it over HTTPS, and its forward's address,
+      # and no other Host (tools/internal/manifests keeps both).
+      - KEEL_OWNER_HOST=keel-prod-1.tail2bec2e.ts.net:9090,10.43.0.54:9090
   # The contributor agreement keeper's GitHub App, by its ID and client
   # ID, neither secret (infra/MANUAL-STEPS.md, section 15). With them the
   # keeper needs the App's four values in its Secret too, or it does not

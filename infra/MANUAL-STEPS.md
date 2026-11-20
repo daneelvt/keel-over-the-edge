@@ -22,7 +22,11 @@ else does.
 1. Sign up at tailscale.com with the owner's GitHub account (the Personal
    plan). The owner is the tailnet's admin: `autogroup:admin` in the policy.
 2. **DNS**: MagicDNS on. Note the tailnet's DNS name (`tail1234.ts.net`)
-   as `tailnet` in `infra/production.yaml`.
+   as `tailnet` in `infra/production.yaml`. **HTTPS Certificates**:
+   Enable, so the machine can serve the owner's pages over HTTPS at its
+   own name. Every certificate is written to the public certificate
+   logs: the machine's name and the tailnet's become public, as they are
+   in this repository already; neither is an address.
 3. **Access controls**: replace the policy with `infra/tailnet/policy.hujson`,
    whole, and save. Its tags must exist before an identity can carry them.
    From now on the `tailnet` workflow writes it; a change made here is

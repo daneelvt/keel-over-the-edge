@@ -41,7 +41,8 @@ configMapGenerator:
       # to it.
       - KEEL_INTERNAL_ADDR=0.0.0.0:9090
       # The owner's world page answers that address, beside localhost, and
-      # no other Host (tools/internal/manifests keeps it the forward's).
+      # no other Host; production's also answers the machine's name on the
+      # tailnet (tools/internal/manifests keeps both).
       - KEEL_OWNER_HOST=10.43.0.54:9090
       # The metrics alone, for the scraper, which may reach nothing else.
       - KEEL_METRICS_ADDR=0.0.0.0:9091

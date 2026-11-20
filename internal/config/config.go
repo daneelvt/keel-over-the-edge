@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -46,11 +47,12 @@ type Config struct {
 	// InternalAddr is the address of the internal HTTP server: probes,
 	// metrics, profiles. It must not be reachable from outside.
 	InternalAddr string
-	// OwnerHost, if not "", is one more Host the owner's world page
-	// answers, beside this computer's own names: the address and port it
-	// is routed to the owner's devices at, as 10.43.0.54:9090. An IP
-	// address, never a name.
-	OwnerHost string
+	// OwnerHosts are the Hosts the owner's world page answers beside this
+	// computer's own names: where it is served to the owner's devices, a
+	// host name or an address with its port, as
+	// keel-prod-1.tail1234.ts.net:9090. Two at most, while the page moves
+	// from one to the other.
+	OwnerHosts []string
 	// MetricsAddr, if not "", is the address of a listener that serves the
 	// metrics and nothing else, for a scraper that must not reach the
 	// internal listener's profiles and input log.
@@ -193,7 +195,7 @@ func Load(getenv func(string) string) (Config, error) {
 		AgentsAddr:     or(getenv("KEEL_AGENTS_ADDR"), DefaultAgentsAddr),
 		InternalAddr:   or(getenv("KEEL_INTERNAL_ADDR"), DefaultInternalAddr),
 		MetricsAddr:    getenv("KEEL_METRICS_ADDR"),
-		OwnerHost:      getenv("KEEL_OWNER_HOST"),
+		OwnerHosts:     list(getenv("KEEL_OWNER_HOST")),
 		TraceDir:       getenv("KEEL_TRACE_DIR"),
 		ReplayDir:      getenv("KEEL_REPLAY_DIR"),
 		ClientDir:      getenv("KEEL_CLIENT_DIR"),
@@ -336,16 +338,19 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		c.WorldKeep = d
 	}
-	if c.OwnerHost != "" {
-		host, _, err := net.SplitHostPort(c.OwnerHost)
+	if len(c.OwnerHosts) > 2 {
+		errs = append(errs, fmt.Errorf("KEEL_OWNER_HOST: %d hosts, two at most", len(c.OwnerHosts)))
+	}
+	for _, h := range c.OwnerHosts {
+		host, _, err := net.SplitHostPort(h)
 		if err == nil {
-			err = checkAddr(c.OwnerHost)
+			err = checkAddr(h)
 		}
-		if err == nil && net.ParseIP(host) == nil {
-			err = errors.New("its host is not an IP address")
+		if err == nil && net.ParseIP(host) == nil && !hostName.MatchString(host) {
+			err = errors.New("its host is not a full host name, in lower case, or an IP address")
 		}
 		if err != nil {
-			errs = append(errs, fmt.Errorf("KEEL_OWNER_HOST: %q is not an address and a port, as 10.43.0.54:9090: %w", c.OwnerHost, err))
+			errs = append(errs, fmt.Errorf("KEEL_OWNER_HOST: %q is not a host and a port, as keel-prod-1.tail1234.ts.net:9090: %w", h, err))
 		}
 	}
 	if c.AccessTeam != "" && !accessTeam(c.AccessTeam) {
@@ -510,6 +515,22 @@ func CheckRPID(rpID, origin string) error {
 		return fmt.Errorf("%q is a top-level domain, which no site may claim", rpID)
 	}
 	return nil
+}
+
+// hostName is a full host name as a browser sends it in Host: two labels
+// or more of lower-case letters, digits and hyphens.
+var hostName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
+
+// list is a comma-separated value's parts, trimmed; nil for none.
+func list(v string) []string {
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
 }
 
 func checkAddr(addr string) error {

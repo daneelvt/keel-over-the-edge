@@ -209,6 +209,8 @@ spec:
         # dashboards this browser opened lately, so a new device sees none.
         dashboards:
           default_home_dashboard_path: /var/lib/grafana/dashboards/default/Keel/overview.json
+        # Where the owner opens it: through the forward here; production
+        # has the address the machine serves it at.
         server:
           root_url: http://localhost:3000
         plugins:
