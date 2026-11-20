@@ -44,12 +44,17 @@
 // The chart screen's Log tab, the strip still one row with its four tabs,
 // where the boat is and the way back to sea, holds a sailor's log on its
 // paper within the screen under the strip: a long log's days, its
-// collection (three kinds a row upright, five sideways) and its ribbons, the
-// next certificate's block at their head (its name alone after the last),
-// who may read it, another sailor's (their certificate at its head), a
-// machine sailor's, an empty one and one not there;
-// its keys the head keys' size, its day rows and kinds a 44 px touch, no
-// words under 13 px, nothing wider than the sheet.
+// collection (three kinds a row upright, five sideways), its ribbons and
+// its certificates (all five in order, the next open to its tasks; a
+// Master's, a new sailor's, another's, which open nothing, and a machine
+// sailor's), who may read it, another sailor's (their certificate at its
+// head), a machine sailor's, an empty one and one not there;
+// its keys the head keys' size, its four parts' keys on one line at the
+// browser's own text size, its day rows, kinds, certificates and the
+// lines that open a course a 44 px touch, no words under 13 px, nothing
+// wider than the sheet. A boat the player may not take yet, in the
+// fleet's boats on the start screen, opens the log's Certificates on its
+// own over the screen.
 //
 // The chart screen's News tab, its dot over the tab's corner with the
 // strip no wider, holds the day's edition on its paper under the strip: a
@@ -122,7 +127,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
-import { emptyLog, LONG_NAME, longLog, masterLog, standInLogs } from './logs';
+import { deckhandLog, emptyLog, LONG_NAME, longLog, masterLog, standInLogs } from './logs';
 import { firstEdition, fullDay, quietDay, standInNews } from './news';
 import { OTHERS, REFUSED, standInRaces } from './races';
 import { GONE, RACED, standInReplays } from './replays';
@@ -2722,6 +2727,83 @@ for (const text of TEXT_SIZES) {
   });
 }
 
+test('a boat the player may not take yet says which certificate she needs, and opens the log’s Certificates on its own over the start screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  const o = data.sailorOptions;
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (r) =>
+      r.fulfill({
+        json: {
+          name: LONG,
+          look: data.sailors[0]?.id,
+          version: data.sailors[0]?.versions[0]?.id,
+          skin: o.skins[0]?.id,
+          hair: o.hairs[0]?.id,
+          colour: o.colours[0]?.id,
+          lookChosen: true,
+          kind: data.boats[0]?.id,
+          spectators: 'no',
+          atSea: false,
+        },
+      }),
+  );
+  // The fleet's third boat needs the second certificate.
+  const helm = data.certificates?.[1]?.name ?? '';
+  const fleet = longFleet();
+  await page.route(
+    (url) => url.pathname === '/api/fleet',
+    (r) =>
+      r.fulfill({
+        json: { ...fleet, boats: fleet.boats.map((b, i) => (i === 2 ? { ...b, needs: helm } : b)) },
+      }),
+  );
+  await standInLogs(page, deckhandLog);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const found: string[] = [];
+  for (const s of [SCREENS[1], SCREENS[5]]) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.goto(GAME);
+    await expect(page.locator('.your-sailor [data-readout=boat]')).toBeVisible({ timeout: 90_000 });
+    await page.getByRole('button', { name: 'Change boat', exact: true }).click();
+    const row = page.locator('.change-boat-choice.closed');
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(`needs ${helm} ›`);
+    await expect(row).toBeEnabled();
+    const box = await row.boundingBox();
+    if (box === null || box.height < 43.5 || box.x < -0.5 || box.x + box.width > s.width + 0.5) {
+      found.push(`${s.name}: the boat that needs a certificate is ${JSON.stringify(box)}`);
+    }
+    await row.click();
+    // The log alone over the start screen, on its Certificates: the one
+    // she needs is the next, open to its tasks.
+    const sheet = page.locator('.log-alone-screen .log-sheet');
+    await expect(sheet.getByRole('tab', { name: 'Certificates' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const next = sheet.locator(`.log-cert-item[data-cert="${helm}"]`);
+    await expect(next).toHaveAttribute('data-state', 'next');
+    await expect(next.locator('.log-task')).toHaveCount(data.certificates?.[1]?.tasks.length ?? 0);
+    const over = await sheet.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.left < -0.5 || r.right > innerWidth + 0.5 || r.bottom > innerHeight + 0.5
+        ? `${Math.round(r.left)}, ${Math.round(r.top)}, ${Math.round(r.right)}, ${Math.round(r.bottom)}`
+        : '';
+    });
+    if (over !== '') {
+      found.push(`${s.name}: the log is off the screen: ${over}`);
+    }
+    // Closed, the fleet's boats are there again.
+    await sheet.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.locator('.log-alone-screen')).toHaveCount(0);
+    await expect(row).toBeVisible();
+  }
+  expect(found).toEqual([]);
+});
+
 /** A window's faults: off the screen, its keys out of it or of the screen, or a key under 40 px tall or a 44 px touch wide. */
 async function windowFaults(page: Page, where: string, sel: string): Promise<string[]> {
   const out = await page.evaluate((sel) => {
@@ -3622,8 +3704,20 @@ async function logFaults(page: Page, collection: boolean): Promise<string[]> {
         );
       }
     }
+    // The log's four parts' keys on one line, at the browser's own text size.
+    const parts = [...sheet.querySelectorAll('.log-switch button.log-key')];
+    if (
+      scale === 1 &&
+      parts.length > 0 &&
+      (parts.length !== 4 ||
+        new Set(parts.map((k) => Math.round(k.getBoundingClientRect().top))).size !== 1)
+    ) {
+      out.push(
+        `the log’s parts are ${parts.map((k) => k.textContent).join(', ')}, not on one line`,
+      );
+    }
     for (const k of sheet.querySelectorAll(
-      '.log-day:not(.log-day-heads), .log-cell, .log-toward-line, .log-toward-course',
+      '.log-day:not(.log-day-heads), .log-cell, .log-cert-key, button.log-cert-row, .log-task-course',
     )) {
       const r = k.getBoundingClientRect();
       if (shown(k) && r.height < 43.5) {
@@ -3668,7 +3762,7 @@ async function logFaults(page: Page, collection: boolean): Promise<string[]> {
 }
 
 for (const text of TEXT_SIZES) {
-  test(`the chart screen’s Log tab holds a long log, its collection, who may read it, another’s, a machine’s, an empty one and one not there, on paper, on every screen${atText(text)}`, async ({
+  test(`the chart screen’s Log tab holds a long log, its collection, its ribbons, its certificates, who may read it, another’s, a machine’s, an empty one and one not there, on paper, on every screen${atText(text)}`, async ({
     page,
   }) => {
     test.skip(test.info().project.name === 'webgpu', 'the log is the same on either back end');
@@ -3729,32 +3823,113 @@ for (const text of TEXT_SIZES) {
       await check(`${s.name}, the collection`, true);
       await page.getByRole('tab', { name: 'Ribbons' }).click();
       await expect(page.locator('.log-ribbon').first()).toBeVisible();
-      // The next certificate heads one's own Ribbons, every task listed.
-      await expect(page.locator('.log-toward-task')).toHaveCount(7);
+      // Ribbons are the races' prizes alone: no certificate's tasks.
+      await expect(page.locator('.log-ribbons-part .log-task')).toHaveCount(0);
       await check(`${s.name}, the ribbons`);
       await page.locator('[data-key=older-ribbons]').click();
       await expect(page.locator('.log-ribbon')).toHaveCount(45);
       await check(`${s.name}, the older ribbons`);
-      // After the last certificate, its name alone.
+      // The certificate at the head of one's own log is a key to its
+      // Certificates: all five in order, four held, the last, the next,
+      // open to every task with how far it has come and how it is done.
+      const certs = page.locator('.log-cert-item');
+      await expect(page.locator('[data-readout=log-certificate]')).toHaveText(
+        /^Captain by hand · toward Master 3\sof\s5\s*›$/,
+      );
+      await page.locator('[data-readout=log-certificate]').click();
+      await expect(page.getByRole('tab', { name: 'Certificates' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await expect(certs).toHaveCount(5);
+      await expect(page.locator('.log-cert-item[data-state=earned]')).toHaveCount(4);
+      await expect(certs.first().locator('.log-cert-stand')).toHaveText(
+        /^Earned \d+ \w+ \d{4} · world 10 · by hand$/,
+      );
+      await expect(certs.first().locator('.log-cert-opens')).toHaveText(
+        'Opens the skiff and the keelboat',
+      );
+      const master = page.locator('.log-cert-item[data-cert=Master]');
+      await expect(master).toHaveAttribute('data-state', 'next');
+      await expect(master.locator('.log-cert-stand')).toHaveText('Next · 3 of 5');
+      await expect(master.locator('.log-cert-row')).toHaveAttribute('aria-expanded', 'true');
+      await expect(master.locator('.log-task')).toHaveCount(7);
+      await expect(master.locator('.log-task.done')).toHaveCount(3);
+      // Every task not yet done says how it is done; and how far it has come.
+      await expect(master.locator('.log-task-how')).toHaveCount(4);
+      await expect(master.locator('.log-task-far')).toHaveText([
+        'the autopilot way, 2 of 3',
+        'closest so far 150 m',
+        'gale ✓ · storm · fog · night ✓',
+      ]);
+      await expect(master.locator('.log-task-course')).toHaveCount(2);
+      await check(`${s.name}, the certificates`);
+      // One held opens to the tasks that counted, each with its way.
+      await certs.first().locator('.log-cert-row').click();
+      await expect(master.locator('.log-task')).toHaveCount(0);
+      await expect(certs.first().locator('.log-task.done')).toHaveCount(3);
+      await expect(certs.first().locator('.log-task.unneeded')).toHaveCount(1);
+      await expect(certs.first().locator('.log-task').first()).toContainText(
+        'The Short Course · by hand',
+      );
+      await check(`${s.name}, a certificate held, opened`);
+      // After the last certificate: five held, the last open; no next.
       own = masterLog;
-      await page.evaluate(() => globalThis.keel.openLog({ kind: 'own', tab: 'ribbons' }));
-      await expect(page.locator('.log-toward-head')).toHaveText('Master');
-      await check(`${s.name}, the ribbons after the last certificate`);
+      await page.evaluate(() => globalThis.keel.openLog({ kind: 'own', tab: 'certificates' }));
+      await expect(page.locator('.log-cert-item[data-state=earned]')).toHaveCount(5);
+      await expect(master.locator('.log-cert-row')).toHaveAttribute('aria-expanded', 'true');
+      await expect(master.locator('.log-task.done')).toHaveCount(5);
+      await expect(page.locator('[data-readout=log-certificate]')).toHaveText(
+        /^Master by hand\s*›$/,
+      );
+      await check(`${s.name}, the certificates after the last`);
       own = longLog;
       await page.evaluate((name) => globalThis.keel.openLog({ kind: 'sailor', name }), LONG_NAME);
       await expect(page.locator('.log-back')).toBeVisible();
-      // Their certificate at the head; never their way toward the next.
-      await expect(page.locator('[data-readout=log-certificate]')).toHaveText('Captain by hand');
+      // Their certificate at the head, no key; never their way toward the next.
+      await expect(page.locator('p[data-readout=log-certificate]')).toHaveText('Captain by hand');
       await check(`${s.name}, another’s log`);
+      // Their certificates: which are held, when and how; nothing opens.
+      await page.getByRole('tab', { name: 'Certificates' }).click();
+      await expect(page.locator('.log-cert-item[data-state=earned]')).toHaveCount(4);
+      await expect(master.locator('.log-cert-stand')).toHaveText('Not yet');
+      await expect(page.locator('button.log-cert-row')).toHaveCount(0);
+      await expect(page.locator('.log-task')).toHaveCount(0);
+      await check(`${s.name}, another’s certificates`);
       await page.evaluate(() =>
         globalThis.keel.openLog({ kind: 'machine', id: '0', name: 'Clockwork Kestrel' }),
       );
       await expect(page.locator('.log-name')).toContainText('Machine sailor');
       await check(`${s.name}, a machine sailor’s log`);
+      // Its player reads its certificates as their own.
+      await page.getByRole('tab', { name: 'Certificates' }).click();
+      await expect(master.locator('.log-task')).toHaveCount(7);
+      await expect(page.locator('.log-cert-rules')).toContainText('Only what it sails alone');
+      await check(`${s.name}, a machine sailor’s certificates`);
       own = emptyLog;
       await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
       await expect(page.locator('.log-sheet .log-empty')).toBeVisible();
       await check(`${s.name}, an empty log`);
+      // A new sailor's: none held, the first open, a way to do every task.
+      await expect(page.locator('[data-readout=log-certificate]')).toHaveText(
+        /^Toward Deckhand 0\sof\s3\s*›$/,
+      );
+      await page.locator('[data-readout=log-certificate]').click();
+      await expect(page.locator('.log-cert-item[data-state=earned]')).toHaveCount(0);
+      const deckhand = page.locator('.log-cert-item[data-cert=Deckhand]');
+      await expect(deckhand.locator('.log-cert-stand')).toHaveText('Next · 0 of 3');
+      await expect(deckhand.locator('.log-task-how')).toHaveCount(4);
+      await expect(deckhand.locator('.log-task-far').first()).toHaveText('0 of 1 NM');
+      await expect(page.locator('.log-cert-item[data-cert=Helm] .log-cert-stand')).toHaveText(
+        'After Deckhand',
+      );
+      // A later one opens to its tasks, which do not count yet.
+      await page.locator('.log-cert-item[data-cert=Helm] .log-cert-row').click();
+      await expect(page.locator('.log-cert-item[data-cert=Helm] .log-cert-tasks')).toContainText(
+        'Counts once you’re a Deckhand.',
+      );
+      await expect(page.locator('.log-cert-item[data-cert=Helm] .log-task-how')).toHaveCount(6);
+      await check(`${s.name}, a new sailor’s certificates`);
     }
     await page.evaluate(() => globalThis.keel.openChart(null));
     expect(found).toEqual([]);

@@ -8,6 +8,7 @@
 // task in a plain line, how it is done and how far it has come, with no
 // task of the catalog's left without one; and the line on going to sea.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import type { CertifiedIn } from '../net/messages';
@@ -192,6 +193,15 @@ describe('how a task is done, in a plain line', () => {
       expect(line, `${cert}: ${t.name}`).not.toMatch(/undefined|NaN|\{|\}| {2}/);
       expect(line, `${cert}: ${t.name}`).toMatch(/\.$/);
     }
+  });
+
+  test('a person and a machine sailor read the same lines: the file the machine sailors’ handbook is held to', () => {
+    const lines = tasks.map(({ cert, t }) => `${cert}\t${t.name}\t${howTo(t)}\n`).join('');
+    const held = readFileSync(
+      new URL('../../../internal/agentapi/testdata/certificates_howto.golden.txt', import.meta.url),
+      'utf8',
+    );
+    expect(lines).toBe(held);
   });
 
   test('every measure and every kind of course the catalog’s tasks use has words of its own', () => {

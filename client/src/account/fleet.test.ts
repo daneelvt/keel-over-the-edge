@@ -18,6 +18,7 @@ import {
   CHANGE_BOAT,
   ChangeBoat,
   READING_FLEET,
+  SEE_CERTIFICATES,
   YOUR_BOAT,
   YourBoat,
 } from './boats';
@@ -595,7 +596,40 @@ describe('the player’s panel and the board', () => {
     expect(text(yours)).toContain('Saltpeter');
   });
 
-  test('on the board, in a port, the available boats only', async () => {
+  test('a boat that needs a certificate says which, and its row opens the certificates', async () => {
+    const shut = fleet();
+    const boat = shut.boats.find((b) => b.id !== shut.boat && !b.atSea);
+    if (boat === undefined) {
+      throw new Error('no available boat in the fleet');
+    }
+    boat.needs = 'Helm';
+    const { c } = await loaded(() => answer(200, shut));
+    await c.load();
+    let seen = 0;
+    for (const board of [false, true]) {
+      const v = expand(
+        ChangeBoat({
+          chooser: c,
+          board,
+          certificates: () => {
+            seen++;
+          },
+        }),
+      );
+      const rows = findAll(v, (n) => n.props['data-needs'] === 'Helm');
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+      expect(text(row)).toContain('needs Helm ›');
+      expect(row?.props.disabled).toBe(false);
+      expect(String(row?.props['aria-label'])).toContain(`needs Helm: ${SEE_CERTIFICATES}`);
+      (row?.props.onClick as () => void)();
+    }
+    expect(seen).toBe(2);
+    // She is not chosen: nothing was asked of the server but the fleet.
+    expect(c.busy.value).toBe(false);
+  });
+
+  test('on the board, in a port, the boats taken are left out', async () => {
     const { c } = await loaded();
     const v = expand(ChangeBoat({ chooser: c, board: true }));
     expect(text(v)).toContain(CHANGE_AT_SEA);

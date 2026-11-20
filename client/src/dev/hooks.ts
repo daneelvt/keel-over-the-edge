@@ -141,7 +141,7 @@ import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
-import { certifiedTold } from '../ui/certwords';
+import { certifiedTold, type TowardCount, towardAtSea } from '../ui/certwords';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
@@ -2314,7 +2314,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           line: p.racing.certified,
           shown: () => p.racing.finishOpen.peek() || p.racing.resultsOpen.peek(),
           raise: (on, fill, action) => p.notices.raise(on, fill, performance.now(), action),
-          see: () => p.chart.showLog({ kind: 'own', tab: 'ribbons' }),
+          see: () => p.chart.showLog({ kind: 'own', tab: 'certificates' }),
           bell: (n) => game.bell(n),
         },
         {
@@ -2331,6 +2331,17 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         },
       );
       return game.bellsRung;
+    },
+    /**
+     * Says how far the next certificate has come, as the page online does
+     * once on going to sea, the sailor's standing given.
+     */
+    towardAtSea(t: TowardCount): Promise<void> {
+      const p = chartParts();
+      return towardAtSea(
+        async () => t,
+        (on, text) => p.notices.say(on, text, performance.now()),
+      );
     },
     /** The crowd's cheers gathered for a boat, as the server tells them. */
     raceCheered(c: Partial<RaceCheeredIn>): void {

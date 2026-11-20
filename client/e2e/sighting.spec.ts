@@ -248,12 +248,16 @@ test.describe('the chart', () => {
     await expect(status).toBeEmpty();
   });
 
-  test('what a sailor’s certificates came to raises its notices: a task done passing, a certificate earned staying with See, which opens the log’s Ribbons, and the bell rung twice', async ({
+  test('what a sailor’s certificates came to raises its notices: how far the next has come on going to sea and a task done passing, a certificate earned staying with See, which opens the log’s Certificates, and the bell rung twice', async ({
     page,
   }) => {
     await standInLogs(page);
     await openScene(page, 'world=1', true);
     const status = page.locator('.notice-line[role="status"]');
+    // On going to sea, how far the next one has come: a passing line, which
+    // a task done takes the place of, never folded with it.
+    await page.evaluate(() => globalThis.keel.towardAtSea({ name: 'Helm', done: 1, needs: 4 }));
+    await expect(page.locator('.notice-passive')).toHaveText(/^Toward Helm · 1 of 4/);
     // A task of the log done: a passing notice, its words the catalog's.
     const rung = await page.evaluate(() =>
       globalThis.keel.certified({ certificate: 1, task: 3, done: 2, of: 4, way: 'log' }),
@@ -286,9 +290,13 @@ test.describe('the chart', () => {
       /You're a Helm! The beach cat is yours to take/,
     );
     await page.locator('.notice-act').click();
-    // See: the log, on its Ribbons, the next certificate at their head.
-    await expect(page.locator('.log-sheet [role=tab][aria-selected=true]')).toHaveText('Ribbons');
-    await expect(page.locator('.log-toward-head')).toBeVisible();
+    // See: the log, on its Certificates, every one in order and the next
+    // open to its tasks.
+    await expect(page.locator('.log-sheet [role=tab][aria-selected=true]')).toHaveText(
+      'Certificates',
+    );
+    await expect(page.locator('.log-cert-item')).toHaveCount(5);
+    await expect(page.locator('.log-cert-item[data-state=next] .log-task').first()).toBeVisible();
     await expect(status).toBeEmpty();
     await page.evaluate(() => globalThis.keel.openChart(null));
   });

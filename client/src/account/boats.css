@@ -135,6 +135,18 @@
   opacity: 0.6;
   cursor: default;
 }
+/* One the player may not take yet: dimmed as one not to be chosen, but
+   for the certificate she needs, which opens the log's Certificates. */
+.change-boat-choice.closed .boat-picture,
+.change-boat-choice.closed .change-boat-name {
+  opacity: 0.6;
+}
+.change-boat-needs {
+  color: #f2efe7;
+  text-decoration: underline;
+  text-decoration-color: rgb(242 239 231 / 45%);
+  text-underline-offset: 3px;
+}
 .change-boat-choice[aria-current="true"],
 .hud .board .change-boat-choice[aria-current="true"] {
   box-shadow: inset 0 0 0 2px #e8b450;

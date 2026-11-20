@@ -818,8 +818,24 @@ function CertRows({ log, page }: { log: Log; page: LogCertificates }) {
  * nothing. If the page of them cannot be had, the log's own word of the
  * certificate held and the next one's tasks stands in.
  */
-function Certificates({ log, who, source }: { log: Log; who: LogWho; source: LogSource }) {
+function Certificates({
+  log,
+  who,
+  source,
+  read,
+}: {
+  log: Log;
+  who: LogWho;
+  source: LogSource;
+  /** Told once the certificates are read and drawn. */
+  read: () => void;
+}) {
   const [page, setPage] = useState<LogCertificates | null>(null);
+  useEffect(() => {
+    if (page !== null) {
+      read();
+    }
+  }, [page !== null]);
   useEffect(() => {
     let live = true;
     void source.certificates(who).then((got) => {
@@ -1065,6 +1081,25 @@ export function LogSheet({
   const back = who.kind === 'own' ? null : () => setWho({ kind: 'own' });
   const answer = reading.kind === 'read' ? reading.answer : null;
   const log = answer !== null && 'log' in answer ? answer.log : null;
+  // Brings the log's switch to the top of the sheet, where the sheet is
+  // one column that scrolls: the part under it is what was asked for.
+  const toSwitch = () => {
+    const el = sheet.current;
+    const sw = el?.querySelector('.log-switch');
+    if (el == null || sw == null || getComputedStyle(el).overflowY !== 'auto') {
+      return;
+    }
+    el.scrollTop += sw.getBoundingClientRect().top - el.getBoundingClientRect().top - 8;
+  };
+  // Opened on a part asked for: that part in view once the log is read,
+  // and again once the part itself is, if it is read apart.
+  const wanted = useRef(false);
+  useEffect(() => {
+    if (asked !== undefined && log !== null) {
+      wanted.current = true;
+      toSwitch();
+    }
+  }, [log === null, who]);
   const setShown = (s: LogShown) => {
     if (log === null) {
       return;
@@ -1137,7 +1172,8 @@ export function LogSheet({
               close={close}
               certificates={() => {
                 setTab('certificates');
-                sheet.current?.querySelector('.log-switch')?.scrollIntoView?.({ block: 'nearest' });
+                wanted.current = true;
+                toSwitch();
               }}
             />
             {more ? <WhoReads log={log} set={setShown} close={() => setMore(false)} /> : null}
@@ -1165,7 +1201,18 @@ export function LogSheet({
             ) : tab === 'ribbons' ? (
               <Ribbons key={`${key}-${again}`} log={log} who={who} source={source} />
             ) : (
-              <Certificates key={`${key}-${again}`} log={log} who={who} source={source} />
+              <Certificates
+                key={`${key}-${again}`}
+                log={log}
+                who={who}
+                source={source}
+                read={() => {
+                  if (wanted.current) {
+                    wanted.current = false;
+                    toSwitch();
+                  }
+                }}
+              />
             )}
           </div>
         </>
