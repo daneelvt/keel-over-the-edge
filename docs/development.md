@@ -2842,6 +2842,16 @@ input log records a Lift as its boat (format 23). Machine sailors have no
 `home`: `boat` with `action: "leave"`, then any call that sails, starts
 them again at the start.
 
+**Change boat**, under Back to Port Royal in the menu while the player
+sails their own boat, asks first ("Your boat comes out of the water and
+this voyage ends…", and what else racing or with shipmates aboard), then
+takes the boat out by `POST /api/me/ashore`, marks the tab
+(`sessionStorage`'s `keel.changeBoat`, read once: `markChangeBoat`,
+`takeChangeBoat` in `account/boatchooser.ts`) and reloads: the start
+screen opens on the fleet's boats to choose from, and Set sail starts the
+one chosen afresh off Port Royal. A boat that could not be taken out is
+said in the question, which stays.
+
 **`POST /api/me/ashore`** (`internal/api/me.go`, the edge's `TakeOut`),
 behind a session, human accounts only (403 `ai-account`), takes the
 account's boat out of the water at once, with no grace, as a watch does:
@@ -4365,8 +4375,11 @@ owner's flag**.
 ### The world page
 
 On keel's internal listener at `/owner/`, which has no route to the
-internet. Reach it through the tunnel to production, or a port forward on
-the local cluster, or keel's own address in the inner loop:
+internet. From a phone, or any of the owner's devices on the tailnet,
+production's opens with no tunnel at **http://10.43.0.54:9090/owner/**
+(see [Opening it](#opening-it)). Or reach it through the tunnel to
+production, or a port forward on the local cluster, or keel's own address
+in the inner loop:
 
 ```sh
 go run ./tools/ops -tunnel          # production: http://localhost:9090/owner/
@@ -4391,7 +4404,14 @@ the map: **the world** (its number, ID, seed and generator, when it was
 made, its epoch, the tick, world time, the sky's hour at the centre),
 **the weather** (the spell's regime, wind at mid-disk, drift, gust factor,
 the next change), **the boats at sea and in the queue**, and **the
-islands**, by number and name, each taking the map to itself.
+islands**, by number and name, each taking the map to itself. Each card
+folds to its head at a click (`fold.tsx`; what was folded is kept in the
+browser).
+
+**On a phone** (under 700 px) the page scrolls, the map above the cards,
+which start folded but the world's, the boats' and the queue's; the layers
+fold behind a key, what was picked is under the map, and two fingers zoom
+it.
 
 The page (`client/src/owner/`, Preact and Canvas 2D, no map library) is
 built apart from the game into `dist/owner/` (`vite.owner.config.ts`;
@@ -4405,9 +4425,12 @@ frame), `gusts.bin` (168 × 168 signed bytes, 0.1 m/s a step), `islands.json`,
 `land.png`, `coasts.svg`, `island/{n}.svg` and `point?east=…&north=…`.
 
 **The guard** (`internal/owner/guard.go`): every request whose `Host` is not
-`localhost` or a loopback address, on any port, is refused, so a page the
-owner has open elsewhere cannot read the map or work a control by
-re-pointing a name of its own at this computer (DNS rebinding); a control
+`localhost` or a loopback address, on any port, or the one address the
+page is routed to the owner's devices at, port and all
+(`KEEL_OWNER_HOST`, `10.43.0.54:9090` in the cluster; an IP address, never
+a name), is refused, so a page the owner has open elsewhere cannot read
+the map or work a control by re-pointing a name of its own at this
+computer or at that address (DNS rebinding); a control
 must also pass `net/http`'s cross-origin protection (`Sec-Fetch-Site`,
 `Origin`), be JSON and at most 4 KB. Responses carry no CORS header, forbid
 framing and a strict Content Security Policy. The probes and the metrics
@@ -4465,8 +4488,8 @@ browser tests: it moves any boat and marks nothing.
 **The Accounts tab**, always shown beside "World N" (and "Next: world N+1"
 while there is one), is the owner's hand on every account, at sea or
 ashore. At its head: the counts (`accounts.json`: humans, made this week,
-seen today; machine sailors; grants live; accounts stopped) and the grant
-lifetime. **The search** takes one box: an account's ID; an AI app's
+seen today; machine sailors; grants live; accounts stopped). **The
+search**, next under them, takes one box: an account's ID; an AI app's
 access, refresh or connection token, or a session's cookie, found by its
 hash (a token comes only in the POST's body, is never logged and never
 echoed back, and the answer says when it has ended, and when nothing is
@@ -4569,7 +4592,7 @@ they would do. The command's actions are recorded as `command` (the
 
 ### Links to come aboard
 
-The owner's switches for everyone, on the Accounts tab and in `keel
+The owner's switches for everyone, on the Settings tab and in `keel
 admin`: how long a skipper's link lasts from when it is made (24 hours to
 start, 5 minutes to 7 days), whether links work, and whether anyone may
 come aboard. They live in the `setting` row and, loaded as keel starts, in
@@ -5457,8 +5480,9 @@ Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
 | internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, the owner's world page and its controls under `/owner/` (see [The owner's tools](#the-owners-tools)), and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` and `/debug/weather` |
 | metrics | `KEEL_METRICS_ADDR`, none | `GET /metrics` and nothing else; not opened unless set |
 
-The internal listener must never be reachable from outside. The addresses
-must differ. The metrics listener is for the cluster's scraper: a
+The internal listener must never be reachable from outside: in
+production the tailnet's admins alone reach it, at its forward's address
+(see [Opening it](#opening-it)). The addresses must differ. The metrics listener is for the cluster's scraper: a
 NetworkPolicy lets it in to a port, not to a path, so on the internal
 listener it could read the profiles and the input log too; on a port of its
 own (9091 in the cluster) it reads the metrics alone. The other variables:
@@ -5469,6 +5493,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_PASSKEY_RP_ID` | the play origin's host | The domain players' passkeys are made for (WebAuthn's relying party ID): the play origin's host or a parent of it, never an IP address. Production's is `keelovertheedge.com` |
 | `KEEL_PASSKEY_ORIGINS` | none | More origins of that domain whose pages may make and use passkeys, comma-separated: the browser tests' lagged and WebKit servers |
 | `KEEL_DATABASE_URL` | required | The database: a `postgres://` URL or `key=value` pairs, as pgx reads them. It holds the password and is never logged |
+| `KEEL_OWNER_HOST` | none | One more `Host` the owner's world page answers, beside `localhost` and the loopback addresses: the address and port it is routed to the owner's devices at, an IP address with its port (`10.43.0.54:9090` in the cluster). Unset, the page answers this computer alone (see [The world page](#the-world-page)) |
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
@@ -5920,7 +5945,22 @@ Facebook, TikTok… by the marks in its user agent, kept in that one module)
 is asked to open the game in the phone's browser, with "Try here anyway"; a
 browser without WebAuthn is told so; one that offers neither a passkey of
 its own nor a phone by QR code is warned, never stopped. The account page
-is a panel from the menu, "Account".
+is a page from the menu, "Account".
+
+**The menu's pages** (`client/src/ui/sheet.tsx`). Every page and window
+the menu opens stands where the menu stood: at the right beside its
+button held sideways, across the top held upright, never over the middle
+of the screen, where the boat is. Each has its name and a close (✕,
+"Close this window") at its top, which stay put while the rest scrolls,
+and the menu's margin round what it holds; Escape and a tap beside a page
+close it. `Sheet` draws a whole page so (the account, the machine sailors,
+Invite friends); `SheetHead` and the class `at-side` put a window that
+keeps its own frame there (the shipmates, who is aboard, the sailors to
+watch, a machine sailor's link), and `at-side` alone the questions the
+menu asks (Back to Port Royal, Change boat). A new page of the menu uses
+one of the two. The race's windows and the chart are screens of their
+own. `e2e/menu.spec.ts` holds each page to the menu's place, its close and
+its margin on a phone held either way and a desktop.
 
 **Tests and tools** make their sailors through the same routes with a
 software authenticator: `internal/auth/softkey` in Go (the API's tests,
@@ -6189,7 +6229,7 @@ for programs that take a header and run no OAuth; one at a time, a new one
 ending the old. Every grant ends at its making plus **the grant lifetime**
 (`setting.grant_lifetime`, 90 days, from a minute to 400 days), reckoned at
 each use from the lifetime as it is now, so shortening it on the world
-page's Accounts tab ends older grants at once. The account page lists each machine sailor's
+page's Settings tab ends older grants at once. The account page lists each machine sailor's
 apps and token with when each ends, and revokes them.
 
 **The door at the MCP address** (`internal/agentapi`) checks, in order: a
@@ -6874,8 +6914,10 @@ reload just sails (`listFromQuery`, `listLink` in `watchwords.ts`).
 On the phone (`client/src/account/yourlink.tsx`, `ui/sharelink.tsx`),
 "Share a link to watch me" sits under Set sail on "Your sailor" (with "Your
 link shows your boat only on voyages you let others watch." while the box
-is unticked) and under the spectators switch in the menu; the machine
-sailors' panel shares each one's and the fleet's. Each goes through
+is unticked) and, at sea, on the menu's **Invite friends** page
+(`ui/invite.tsx`), under "Watch me sail" with the spectators switch and
+"Share with a picture"; the machine sailors' panel shares each one's and
+the fleet's. Each goes through
 `navigator.share` with the link at the end of its text, or is copied
 ("Copied"); "Make a new link" asks first. A visitor opening a link with no
 session is told "Make a sailor, and you will be watching." on the start
@@ -6917,8 +6959,9 @@ second).
 
 ### Sailing together
 
-A skipper shares a **link** ("Sail with me" in the menu: share, copy, a new
-link, links off, closed to knocks); whoever opens it, signed in or after
+A skipper shares a **link** ("Sail with me" on the menu's Invite friends
+page, under the link to watch: Get a link, then share, copy, a new link,
+links off, closed to knocks); whoever opens it, signed in or after
 making a sailor, **knocks** on the game connection, and the skipper lets
 each arrival aboard, every time. Aboard, one person **holds the boat's
 controls**, all of them: the skipper unless they hand them on.
@@ -8183,12 +8226,12 @@ The policy: two tags, each owned by `autogroup:admin` (the owner; no
 person's login is in the file). `tag:ci-prod` reaches `tag:keel-prod` on
 TCP 22 alone, and logs in there as root; the owner's devices reach it on
 22 too, and log in as root after a fresh sign-in every 12 hours
-(`check`). The machine also advertises three routes, approved for it
+(`check`). The machine also advertises four routes, approved for it
 alone: the fixed addresses of Grafana, VictoriaMetrics' and VictoriaLogs'
-pages in the cluster (each a /32; see [Opening it](#opening-it)). The
-owner's devices reach each on its one port, and `tag:ci-prod` none of
-them, nor the database's or keel's internal listener's, which have no
-route. Nothing else: no rule for `*`. `go run ./tools/tailnet -check`
+pages in the cluster, and of keel's internal listener, where the owner's
+world page is (each a /32; see [Opening it](#opening-it)). The owner's
+devices reach each on its one port, and `tag:ci-prod` none of them, nor
+the database's, which has no route. Nothing else: no rule for `*`. `go run ./tools/tailnet -check`
 keeps that shape, offline, the routes and grants the same as
 `tools/internal/manifests`' `Forwards`.
 
@@ -8212,7 +8255,7 @@ infra/ansible/
                                 systemd-resolved; k3s's kernel settings; no swap
     hardening/                  the CIS benchmark, below
     access/                     Tailscale from its own repository; the
-                                monitoring pages' routes; OpenSSH gone
+                                owner's pages' routes; OpenSSH gone
     firewall/                   the table hostfw, and its unit
     updates/                    security updates every day, Tailscale's too; no reboot
     observe/                    the journal uploaded to the cluster's logs; the
@@ -9318,13 +9361,15 @@ manifests and the list the same.
 `-tunnel -print` prints the command and runs nothing.
 
 From a phone, or any of the owner's devices on the tailnet, the three
-pages open with no tunnel, at their own addresses:
+pages and the owner's world page open with no tunnel, at their own
+addresses:
 
 | On the tailnet | What |
 |---|---|
 | http://10.43.0.51 | Grafana, the same sign-in |
 | http://10.43.0.52:8428 | VictoriaMetrics' own page |
 | http://10.43.0.50:9428 | VictoriaLogs' own page |
+| http://10.43.0.54:9090/owner/ | The owner's world page and its controls (see [The owner's tools](#the-owners-tools)); the rest of keel's internal listener is on the same port |
 
 The machine advertises them as routes (the access role,
 `access_tailscale_routes`), the tailnet policy approves them and lets the
@@ -9334,7 +9379,16 @@ the packets still come from the device's tailnet address when the
 cluster's policies see them, as Tailscale masquerades only afterwards.
 The device must use the tailnet's subnets (Tailscale's app on Android and
 iOS does by default; on a Mac, its "Use Tailscale subnets"). The database
-and keel's internal listener stay behind the tunnel.
+stays behind the tunnel.
+
+The world page has no sign-in of its own: who may work its controls is
+who the tailnet policy lets reach that address, the tailnet's admins,
+which is the owner. Through the tunnel that took a Tailscale sign-in
+within the last 12 hours (SSH's `check`); routed, a device of the owner's
+on the tailnet is enough, so such a device is kept locked. The page
+answers that address as its `Host` and no other (keel's `KEEL_OWNER_HOST`,
+which `TestForwards` keeps the forward's address), so its guard still
+refuses a name re-pointed there.
 
 ### The dashboards
 
@@ -9983,9 +10037,12 @@ would keep the page's policy, and the transcoder (Emscripten's embind)
 makes its functions from strings, so every sailor's texture would fail.
 `client/src/render/sailors/transcoder.ts` has the loader start each worker
 from a file of the page's own instead, `transcoderworker.js`, which runs
-that `blob:` (only a `blob:` of this origin, named after the `#` of its
-address) under no policy, as every worker started from a file of the
-page's is. The approval page (`internal/oauth`), the world page
+that `blob:` (only a `blob:` of this origin, named in the page's first
+message to it) under no policy, as every worker started from a file of the
+page's is. The `blob:` is not named in the `#` of the worker's address: a
+worker whose file the service worker answers from its cache has the kept
+answer's address, without the `#`, and that is every visit after the
+first. The approval page (`internal/oauth`), the world page
 (`internal/owner`) and the agreement page (`internal/agreement`) keep
 policies of their own; `Page.Serve`, which serves the first two, sends
 none. The page's other files (assets, icons, `sw.js`) send none either: a
@@ -10662,7 +10719,7 @@ keel's own count of new sailors groups by /56, where it matters.
 |---|---|---|
 | Traffic floods | Cloudflare in front; no inbound web port, the tunnel alone | online "a PUT is blocked at the edge", "another host is not served", "one address is limited…"; verify "Check the firewall drops what is not let in, and lets the tailnet in" |
 | Finding and attacking the machine | its address in no DNS record; no open port: web traffic by the tunnel, administration over Tailscale | verify "Check the firewall drops…"; the tailnet policy (`go run ./tools/tailnet -check`, `TestRepositoryPolicyKeepsItsRules`); `TestCloseOpenSSHOnlyFromTheTailnet`; rule "no address range but the internet" |
-| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants the machine's port 22 alone (and the owner's devices the three monitoring pages' routes, each on its port), its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
+| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants the machine's port 22 alone (and the owner's devices the three monitoring pages' and the world page's routes, each on its port), its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
 | A node port or host port | ServiceLB off; no NodePort service; the forward chain drops new connections from outside | rules "nothing exposed on production's node", "fixed addresses for the forwards alone"; `TestProductionTraefik`; verify "Check the firewall drops…" |
 | Secrets in the repository or GitHub | none kept there: Infisical and Tailscale reached with GitHub's short-lived tokens, External Secrets brings the rest | rules "no Secret in the manifests", "production's Secrets from Infisical", "every Secret a workload needs is made"; `TestNoSecretInInfra`; gitleaks (`pr.secrets`); push protection (`tools/github -check`); `TestPlanGivesTheCredentialsOnlyToTofu`, `TestPlanShowsNoValue` |
 | A stolen GitHub session changing production | production's jobs in the `production` environment, approved by the owner, `main` only; Infisical and Tailscale trust that environment's identity alone | `TestLoadRepositorySettings`, `TestEnvironmentDrift`; `TestPromoteRefuses`. The identities' bindings are set by hand (infra/MANUAL-STEPS.md) |

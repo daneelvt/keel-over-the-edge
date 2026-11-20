@@ -7,7 +7,7 @@ import {
   boatWords,
   cardBoatWords,
   checked,
-  countsWords,
+  countsTiles,
   dayWords,
   doneWords,
   type Flow,
@@ -29,24 +29,25 @@ const DAY = Date.UTC(2026, 9, 26, 12);
 describe('the Accounts tab’s head', () => {
   test('counts the humans, the machine sailors and the grants live, and those stopped', () => {
     expect(
-      countsWords({
+      countsTiles({
         total: 12,
         week: 3,
         today: 5,
         stopped: { human: 1, ai: 2 },
         machines: { total: 4, week: 1, grants: { app: 2 }, lifetime: 60 },
       }),
-    ).toBe(
-      '12 humans: 3 made this week, 5 seen today; ' +
-        '4 machine sailors, 1 made this week; grants live: 2 apps, 0 connection tokens; ' +
-        'stopped: 1 human, 2 machine sailors',
-    );
+    ).toEqual([
+      { label: 'Humans', value: '12', note: '3 made this week · 5 seen today' },
+      { label: 'Machine sailors', value: '4', note: '1 made this week' },
+      { label: 'Grants live', value: '2', note: '2 apps · 0 connection tokens' },
+      { label: 'Stopped', value: '3', note: '1 human · 2 machine sailors' },
+    ]);
   });
 
   test('leaves out what keel does not count', () => {
-    expect(countsWords({ total: 1, week: 0, today: 1 })).toBe(
-      '1 human: 0 made this week, 1 seen today',
-    );
+    expect(countsTiles({ total: 1, week: 0, today: 1 })).toEqual([
+      { label: 'Humans', value: '1', note: '0 made this week · 1 seen today' },
+    ]);
   });
 });
 

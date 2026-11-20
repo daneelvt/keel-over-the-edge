@@ -3050,8 +3050,9 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
         name: scene.name,
         sailor: LONG,
       });
+      // The skipper's own link is a part of Invite friends, a page of the menu's.
       const sel =
-        '.deck-knock, .deck-knocking, .deck-line, .deck-plate, .deck-handed, .deck-window';
+        '.deck-knock, .deck-knocking, .deck-line, .deck-plate, .deck-handed, .deck-window, .menu-page';
       await expect(page.locator(sel).first()).toBeVisible();
       // Two frames for the screen to settle at its new size (a slow
       // runner lays out a resized screen a frame late), then drawn.
@@ -3095,7 +3096,7 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
               }
             }
             // A window stands over the rest while it is open.
-            if (e.classList.contains('deck-window')) {
+            if (e.classList.contains('deck-window') || e.classList.contains('menu-page')) {
               continue;
             }
             for (const o of others) {
@@ -3432,7 +3433,8 @@ test('shipmates’ panel, threads and notices stand clear of the instruments, ab
             }
             for (const b of e.querySelectorAll('button')) {
               const k = b.getBoundingClientRect();
-              if (k.width === 0) {
+              // The close at the panel's head is the menu's own, 44 px.
+              if (k.width === 0 || b.classList.contains('menu-x')) {
                 continue;
               }
               // The instruments' head keys: 38 to 40 px tall, a touch 3 px beyond.

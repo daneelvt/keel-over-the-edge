@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Sign-in for AI apps on the world page's Accounts tab: the token
+// Sign-in for AI apps on the world page's Settings tab: the token
 // lifetime, which every app's grant and every connection token ends after,
 // set in days, hours or minutes; first counted, then confirmed in the card
 // with how many grants it ends at once, so that no stray click cuts every

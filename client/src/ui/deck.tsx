@@ -82,7 +82,7 @@ import { MachineCrew, MachineLink } from './machinelink';
 import { machineAsksWords, machineKnockingWords } from './machinewords';
 import { useModal } from './modal';
 import { PlayerText } from './player';
-import { SailWithMe } from './sailwithme';
+import { SheetHead } from './sheet';
 import { ShipmateNotices, ShipmatesWindows, Star } from './shipmates';
 import { BE_SHIPMATES, endWords, KEEP, NO_LONGER } from './shipmatewords';
 
@@ -626,8 +626,8 @@ export function AboardList({ deck }: { deck: DeckView }) {
   const people = crew?.people ?? [];
   const self = selfOf(crew);
   return (
-    <section class="panel deck-window deck-list" aria-labelledby="deck-list-title">
-      <h2 id="deck-list-title">{WHO_IS_ABOARD}</h2>
+    <section class="panel deck-window deck-list at-side" aria-labelledby="deck-list-title">
+      <SheetHead title={WHO_IS_ABOARD} id="deck-list-title" close={close} />
       <ul class="deck-rows">
         {people.map((p) =>
           putting?.seat === p.seat && crew !== null ? (
@@ -743,7 +743,11 @@ export function DeckFoot({ deck }: { deck: DeckView }) {
   );
 }
 
-/** The windows over the sea: chat's, going ashore's question, shipmates', who is aboard, the skipper's link. */
+/**
+ * The windows over the sea: chat's, going ashore's question, shipmates', who
+ * is aboard, a machine sailor's link. Shipmates, who is aboard and the link
+ * stand in the menu's place, beside the boat.
+ */
 export function DeckWindows({ deck, sailor }: { deck: DeckView; sailor: string | null }) {
   if (deck.chat.ask.value !== null || deck.chat.sheet.value !== null) {
     return <ChatWindows deck={deck} sailor={sailor} />;
@@ -765,9 +769,6 @@ export function DeckWindows({ deck, sailor }: { deck: DeckView; sailor: string |
   }
   if (machine !== null && deck.link.value) {
     return <MachineLink machine={machine} deck={deck} close={() => (deck.link.value = false)} />;
-  }
-  if (deck.link.value) {
-    return <SailWithMe deck={deck} sailor={sailor} close={() => (deck.link.value = false)} />;
   }
   return null;
 }

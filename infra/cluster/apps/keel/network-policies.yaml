@@ -11,8 +11,12 @@ spec:
   policyTypes: [Ingress]
 ---
 # keel: players' and AI apps' requests from Traefik, on the game's and
-# the agents' listeners alone, and the scraper, on the metrics listener
-# alone. Out, it reaches DNS, its database, and the internet on 443, where
+# the agents' listeners alone, the scraper, on the metrics listener
+# alone, and the owner's devices, on the internal listener alone: the
+# machine routes its forward's address to the tailnet, for the tailnet's
+# admins alone (the tailnet policy says so), and those packets still come
+# from the tailnet's range when this policy sees them. Nothing on the
+# internet reaches that range. Out, it reaches DNS, its database, and the internet on 443, where
 # AI apps publish their metadata documents (keel refuses private addresses
 # itself too) and Cloudflare Access its team's keys, and nothing else: it
 # never calls the Kubernetes API (it mounts no token).
@@ -47,6 +51,12 @@ spec:
               app.kubernetes.io/name: vmagent
       ports:
         - port: 9091
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+      ports:
+        - port: 9090
           protocol: TCP
   egress:
     - to:

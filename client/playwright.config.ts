@@ -64,6 +64,7 @@ export const pageFiles = [
   'lifecycle',
   'looks',
   'machines',
+  'menu',
   'oauth-approve',
   'over',
   'owner',

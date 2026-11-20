@@ -382,7 +382,9 @@
    case's height, 14 px words, its bulk in its width and the space about
    it, never its height. Each answers a touch 3 px beyond its face, above
    and below, so a finger's 44 px lands on it all the same. */
-.hud :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate) button {
+.hud
+  :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate, .deck-part)
+  button {
   position: relative;
   min-width: 44px;
   min-height: 0;
@@ -395,7 +397,7 @@
 }
 
 .hud
-  :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate)
+  :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate, .deck-part)
   button::after {
   content: "";
   position: absolute;
@@ -409,4 +411,23 @@
 
 .hud .deck-window h2 {
   font-size: 1.125rem;
+}
+
+/* The skipper's link as a part of Invite friends: its lines and keys one
+   under another, as in a window. */
+.deck-part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deck-part.deck-link .deck-url {
+  width: 100%;
+  font-size: 0.875rem;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.deck-part > p {
+  margin: 0;
 }

@@ -978,7 +978,9 @@
    at the right, beside its button; held upright across the screen from
    its top edge down, leaving the boat's sea in sight below it, so the
    night light can be judged as it is set. Its head stays at the top while
-   the rest scrolls. */
+   the rest scrolls. Every page and window opened from it (.menu-page, and
+   .at-side on a window that keeps its own frame) stands in the same
+   place, beside the boat and never over it. */
 .menu-scrim {
   position: absolute;
   inset: 0;
@@ -987,11 +989,14 @@
   pointer-events: auto;
 }
 
-.menu {
+.menu,
+.hud :is(.panel, .deck-asks).at-side {
   position: absolute;
   z-index: 11;
   right: calc(var(--edge-right) + 56px);
+  left: auto;
   top: 50%;
+  translate: none;
   transform: translateY(-50%);
   box-sizing: border-box;
   width: min(300px, calc(100vw - var(--edge-right) - var(--edge-left) - 56px));
@@ -999,15 +1004,37 @@
   max-height: calc(100dvh - var(--edge-top) - var(--edge-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0;
   outline: none;
+  pointer-events: auto;
   /* A screen for reading: its words follow the browser's text size. */
   --text: 0.0625rem;
   font-size: 0.9375rem;
 }
 
+.menu {
+  padding: 0;
+}
+
+/* A window in the menu's place keeps its own frame: the menu's margin at
+   its sides, and none above its head, which reaches its edges. */
+.hud .panel.at-side {
+  padding-top: 0;
+  padding-inline: 16px;
+}
+
+.hud .at-side > .page-head {
+  flex: none;
+  margin: 0 -16px;
+}
+
+/* A question in the menu's place has no head: its own margin above. */
+.hud .panel.home-question.at-side {
+  padding-top: 12px;
+}
+
 @media (orientation: portrait) {
-  .menu {
+  .menu,
+  .hud :is(.panel, .deck-asks).at-side {
     top: var(--edge-top);
     left: var(--edge-left);
     right: var(--edge-right);
@@ -1024,9 +1051,35 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
   padding: 0 4px 0 16px;
   border-bottom: 1px solid var(--plate-line);
   background: var(--panel);
+}
+
+/* Every head's name alike, whichever window it heads; a long one wraps
+   under itself, the close beside it. */
+.hud .menu-head h2 {
+  min-width: 0;
+  margin: 0;
+  font:
+    1.25rem "IM Fell English SC",
+    Georgia,
+    serif;
+  color: var(--gold);
+  overflow-wrap: anywhere;
+}
+
+/* The close a touch's size in every head, whatever its window makes of
+   its other keys. */
+.hud .menu-head button.menu-x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.125rem;
 }
 
 .hud .menu-x {

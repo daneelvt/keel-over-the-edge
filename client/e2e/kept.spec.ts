@@ -9,6 +9,9 @@
 //   and under 100 KB came over the wire before the reveal, the game's
 //   connection and the land's chunks (the mesh worker keeps those it has
 //   fetched) apart. Both visits' bytes and times go to the job's summary.
+//   Neither visit throws an error: a worker started from a file the
+//   service worker answers is not as one started from the network (the
+//   sailors' texture transcoder once threw there, and no sailor was drawn).
 // - A deploy: keel restarted on the next build (e2e/nextbuild.ts: none of
 //   the first build's files), the page still running the first opens the
 //   log and the news, from the worker's copy; reloaded, it runs the next
@@ -72,6 +75,12 @@ test.beforeAll(async ({ browser }, info) => {
   );
   page = await context.newPage();
   await markPage(page);
+  // Every error a visit throws, its workers' too: they reach the window.
+  await page.addInitScript(() => {
+    const thrown: string[] = [];
+    Reflect.set(globalThis, 'keptErrors', thrown);
+    addEventListener('error', (e) => thrown.push(e.message));
+  });
   await sailor(context, 'Kept');
 });
 
@@ -98,6 +107,11 @@ async function restartOn(request: APIRequestContext, dir: string): Promise<void>
 async function setSail(): Promise<void> {
   await page.getByRole('button', { name: /^Set sail/ }).click({ timeout: 90_000 });
   await revealed(page);
+}
+
+/** The errors the visit has thrown, its workers' too. */
+function thrown(): Promise<string[]> {
+  return page.evaluate(() => (Reflect.get(globalThis, 'keptErrors') as string[] | undefined) ?? []);
 }
 
 /** The worker's caches, by name, with the paths each holds. */
@@ -194,6 +208,7 @@ test('a return visit comes from the phone: under 100 KB on the wire before the r
   await page.goto('/');
   await setSail();
   const first = await visit(`The first visit of a sailor already made, ${network.name}`);
+  expect(await thrown(), 'errors thrown on the first visit').toEqual([]);
   // Registered at the reveal: installed, it takes the page over.
   const build = await workerBuild();
   expect(build).not.toBe('');
@@ -205,6 +220,8 @@ test('a return visit comes from the phone: under 100 KB on the wire before the r
   await page.reload();
   await setSail();
   const again = await visit(`Its return visit, ${network.name}`);
+  // Under the worker, the page's own workers started as on the first visit.
+  expect(await thrown(), 'errors thrown on the return visit').toEqual([]);
   // The page came through the worker, and was its build's.
   expect(
     await page.evaluate(

@@ -42,8 +42,9 @@ import type { ClearView } from './clearview';
 import type { ShipsClock } from './clock';
 import { Helm, Reef, type ReefActions, Sheet } from './controls';
 import type { Countdown } from './countdown';
-import { type DeckView, deckPlate, deckShown, useDeck } from './decklazy';
-import { HomeQuestion, type HomeView } from './home';
+import { type DeckView, deckPlate, deckShown, machineShared, useDeck } from './decklazy';
+import { ChangeQuestion, HomeQuestion, type HomeView } from './home';
+import { canInvite, InvitePanel } from './invite';
 import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
@@ -315,7 +316,7 @@ export interface FlyView {
 function Screen(props: ScreenProps) {
   const { model, settings } = props;
   const [menu, setMenu] = useState(false);
-  const [account, setAccount] = useState<'' | 'account' | 'machines'>('');
+  const [account, setAccount] = useState<'' | 'account' | 'machines' | 'invite'>('');
   const s = settings.value.value;
   const fly = props.fly ?? null;
   const sea = props.sea ?? null;
@@ -326,6 +327,10 @@ function Screen(props: ScreenProps) {
   // Aboard without the controls, or the skipper while another holds
   // them: the plate of sailing together stands where the watch plate would.
   const decked = deck !== null && deckPlate(deck);
+  // Invite friends, opened from the menu, or by the player's own link asked for.
+  const inviting =
+    account === 'invite' ||
+    (account === '' && deck !== null && deck.link.value && machineShared(deck) === null);
   const full = props.fullScreen ?? null;
   const camera = props.camera ?? null;
   const clear = props.clear ?? null;
@@ -442,6 +447,17 @@ function Screen(props: ScreenProps) {
             press: () => {
               if (!menu) {
                 full?.menuOpened();
+                // The menu takes its place back from a window it opened.
+                if (deck !== null) {
+                  deck.list.value = false;
+                  deck.link.value = false;
+                  if (deck.shipmates !== null) {
+                    deck.shipmates.panel.value = false;
+                  }
+                }
+                if (watch !== null) {
+                  watch.list.value = false;
+                }
               }
               setMenu(!menu);
             },
@@ -453,6 +469,19 @@ function Screen(props: ScreenProps) {
       </div>
       {account === 'account' ? <AccountPanel close={() => setAccount('')} /> : null}
       {account === 'machines' ? <MachinesPanel close={() => setAccount('')} /> : null}
+      {inviting ? (
+        <InvitePanel
+          watch={watch}
+          deck={deck}
+          sailor={props.sailor}
+          close={() => {
+            setAccount('');
+            if (deck !== null && machineShared(deck) === null) {
+              deck.link.value = false;
+            }
+          }}
+        />
+      ) : null}
       {menu && account === '' ? (
         <Menu
           settings={settings}
@@ -474,6 +503,14 @@ function Screen(props: ScreenProps) {
                   setMenu(false);
                   setAccount('machines');
                 }
+          }
+          invite={
+            props.sailor !== null && canInvite(watch, deck)
+              ? () => {
+                  setMenu(false);
+                  setAccount('invite');
+                }
+              : null
           }
           notices={notices}
           end={end}
@@ -505,6 +542,7 @@ function Screen(props: ScreenProps) {
         />
       ) : null}
       {props.home?.asking.value === true ? <HomeQuestion home={props.home} /> : null}
+      {props.home?.changing.value === true ? <ChangeQuestion home={props.home} /> : null}
       {barred && racing !== null ? <LazyRaceLine src={racing} part="bar" /> : null}
       {barred && racing !== null && !cleared ? <LazyRaceLine src={racing} part="crier" /> : null}
       {watch !== null && !decked && !barred ? <LazyWatch watch={watch} part="plate" /> : null}
