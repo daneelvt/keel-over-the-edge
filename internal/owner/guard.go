@@ -6,12 +6,14 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 )
 
 // The guard. The owner's browser reaches the internal listener at
-// http://localhost through a forward, and any web page the owner has open
-// can send a request there too:
+// http://localhost through a forward, or, where the listener is routed to
+// the owner's devices, at that one address, and any web page the owner
+// has open can send a request there too:
 //
 //   - A cross-site request: the Fetch standard's Sec-Fetch-Site header says
 //     where it comes from, and the Origin header (RFC 6454) whose page sent
@@ -23,15 +25,21 @@ import (
 //     the browser, the same origin as itself, so its requests pass the
 //     check above, and its GETs would read the whole map. Every such
 //     request carries the site's own name as its Host, so a request whose
-//     Host is not localhost or a loopback address is refused, whatever its
-//     method (NCC Group, "Preventing DNS Rebinding Attacks"; the MCP SDKs'
-//     host header validation does the same).
+//     Host is not localhost, a loopback address or the routed address
+//     itself, with its port, is refused, whatever its method (NCC Group,
+//     "Preventing DNS Rebinding Attacks"; the MCP SDKs' host header
+//     validation does the same). The routed address is an IP address, so
+//     no name of a site's own is ever it.
 //
 // A control's body is JSON alone, which a form cannot send, and at most
 // MaxBody bytes. No response carries a CORS header, so no other origin's
 // script reads one; each forbids framing and carries a strict Content
 // Security Policy. http://localhost is a secure context in every browser
-// (W3C, Secure Contexts), so the page needs no certificate.
+// (W3C, Secure Contexts), so the page needs no certificate. The routed
+// address is not one, so a browser sends it no Sec-Fetch-Site: the Origin
+// check is the one that holds there, and a cross-origin page's JSON is
+// stopped before it is sent besides, by a preflight no response answers.
+// The page uses nothing that needs a secure context.
 
 // MaxBody is the most a control's body may be, bytes.
 const MaxBody = 4 << 10
@@ -42,8 +50,9 @@ const csp = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 's
 	"font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
 // Guard refuses what the guard refuses, calling refused, if not nil, for
-// each, and passes the rest to next.
-func Guard(next http.Handler, refused func()) http.Handler {
+// each, and passes the rest to next. routed are the Hosts answered beside
+// this computer's own: each an address and a port, matched whole.
+func Guard(next http.Handler, refused func(), routed ...string) http.Handler {
 	cross := http.NewCrossOriginProtection()
 	refuse := func(w http.ResponseWriter, status int, why string) {
 		if refused != nil {
@@ -61,7 +70,7 @@ func Guard(next http.Handler, refused func()) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
-		if !LocalHost(r.Host) {
+		if !LocalHost(r.Host) && (r.Host == "" || !slices.Contains(routed, r.Host)) {
 			refuse(w, http.StatusForbidden, "this page is served to this computer alone")
 			return
 		}

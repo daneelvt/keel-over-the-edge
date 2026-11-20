@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // The tailnet's access policy: who may reach production's machine, and how;
-// and the monitoring pages the machine routes to the tailnet.
+// and the pages the machine routes to the tailnet: monitoring's, and the
+// owner's world page.
 // The tailnet workflow writes this file to Tailscale after the owner
 // approves the run (go run ./tools/tailnet -apply); a change made in
 // Tailscale's admin page is replaced by it, and the run shows what was
@@ -21,27 +22,32 @@
 	// The routes the machine may advertise, approved as it advertises them
 	// (the access role sets them): the fixed addresses of three monitoring
 	// pages in the cluster, Grafana, VictoriaMetrics' and VictoriaLogs',
+	// and of keel's internal listener, where the owner's world page is,
 	// each a /32. tools/internal/manifests' Forwards say which.
 	"autoApprovers": {
 		"routes": {
 			"10.43.0.50/32": ["tag:keel-prod"],
 			"10.43.0.51/32": ["tag:keel-prod"],
 			"10.43.0.52/32": ["tag:keel-prod"],
+			"10.43.0.54/32": ["tag:keel-prod"],
 		},
 	},
 
 	// What may connect to what, at the network layer. SSH is the only way
 	// in to the machine: the Kubernetes API and everything else stay on its
 	// loopback, reached over an SSH session when needed. The owner's devices
-	// also reach the three monitoring pages through the routes, each on its
-	// one port, with no tunnel (from a phone, say); the pages keep their own
-	// logins, and the database and keel's internal listener have no route.
+	// also reach the three monitoring pages and the owner's world page
+	// through the routes, each on its one port, with no tunnel (from a
+	// phone, say). The monitoring pages keep their own logins; the world
+	// page has none, so this grant is who may work it. The database has no
+	// route.
 	"grants": [
 		{"src": ["tag:ci-prod"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
 		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
 		{"src": ["autogroup:admin"], "dst": ["10.43.0.51"], "ip": ["tcp:80"]},
 		{"src": ["autogroup:admin"], "dst": ["10.43.0.52"], "ip": ["tcp:8428"]},
 		{"src": ["autogroup:admin"], "dst": ["10.43.0.50"], "ip": ["tcp:9428"]},
+		{"src": ["autogroup:admin"], "dst": ["10.43.0.54"], "ip": ["tcp:9090"]},
 	],
 
 	// Tailscale SSH. The machine workflow logs in as root to run Ansible,
