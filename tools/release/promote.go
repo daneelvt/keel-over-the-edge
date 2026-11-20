@@ -97,6 +97,8 @@ func (p *promoter) logf(format string, a ...any) { fmt.Fprintf(p.out, "release: 
 // release is a release in the registry.
 type release struct {
 	build, commit, digest string
+	// annotations are its manifest's.
+	annotations map[string]string
 }
 
 func (r release) String() string {
@@ -115,7 +117,7 @@ func (p *promoter) find(ctx context.Context, tag string) (r release, found bool,
 	if !ok || branch != mainBranch || len(commit) != 40 || !manifests.BuildID.MatchString(commit[:12]) {
 		return r, false, fmt.Errorf("%s:%s does not say it was made from a commit on %s (%s is %q)", manifests.ManifestsRepo, tag, mainBranch, revisionAnnotation, revision)
 	}
-	return release{build: commit[:12], commit: commit, digest: a.Digest}, true, nil
+	return release{build: commit[:12], commit: commit, digest: a.Digest, annotations: a.Annotations}, true, nil
 }
 
 // verify checks a release's signature as Flux will: cosign, keyless,
@@ -230,6 +232,118 @@ func (p *promoter) released(ctx context.Context, build string) (bool, error) {
 	return true, nil
 }
 
+// promotion is how a build is to be promoted: what the boxes of the
+// promote workflow ask.
+type promotion struct {
+	// rollback allows a build older than the one production follows.
+	rollback bool
+	// hotfix allows a build that passed only the hotfix checks, before
+	// the full suite after it has passed.
+	hotfix bool
+	// check says what promoting would do and moves nothing.
+	check bool
+}
+
+// releaseWorkflow is the workflow that makes releases, and afterJob the
+// job of its run that runs the full suite after a hotfix's short checks:
+// ci.yaml's own ci job, called as after.
+const (
+	releaseWorkflow = "release.yaml"
+	afterJob        = "after / ci"
+)
+
+// The states of the full suite after a hotfix.
+const (
+	suitePassed  = "passed"
+	suiteFailed  = "failed"
+	suiteRunning = "running"
+	suiteMissing = "not found"
+)
+
+// suite is the full suite run after a hotfix's short checks, in the
+// release run of its commit.
+type suite struct {
+	state string
+	// url is the release run's page, if there is one.
+	url string
+}
+
+// said is the suite's state in a sentence: "the full suite after them …".
+func (s suite) said() string {
+	switch s.state {
+	case suiteRunning:
+		return "is still running"
+	case suiteMissing:
+		return "was not found"
+	}
+	return s.state
+}
+
+func (s suite) link() string {
+	if s.url == "" {
+		return s.state
+	}
+	return fmt.Sprintf("%s ([the release run](%s))", s.state, s.url)
+}
+
+// after finds the full suite run after a hotfix: the after job of the
+// newest release run of commit, in its latest attempt.
+func (p *promoter) after(ctx context.Context, commit string) (suite, error) {
+	var runs struct {
+		WorkflowRuns []struct {
+			ID      int64  `json:"id"`
+			Status  string `json:"status"`
+			HTMLURL string `json:"html_url"`
+		} `json:"workflow_runs"`
+	}
+	status, err := p.github(ctx, "actions/workflows/"+releaseWorkflow+"/runs?event=push&head_sha="+commit+"&per_page=1", &runs)
+	if err != nil {
+		return suite{}, err
+	}
+	if status != http.StatusOK {
+		return suite{}, fmt.Errorf("GitHub answered %d for the release runs of %s", status, commit)
+	}
+	if len(runs.WorkflowRuns) == 0 {
+		return suite{state: suiteMissing}, nil
+	}
+	run := runs.WorkflowRuns[0]
+	var jobs struct {
+		Jobs []struct {
+			Name       string `json:"name"`
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+		} `json:"jobs"`
+	}
+	status, err = p.github(ctx, fmt.Sprintf("actions/runs/%d/jobs?filter=latest&per_page=100", run.ID), &jobs)
+	if err != nil {
+		return suite{}, err
+	}
+	if status != http.StatusOK {
+		return suite{}, fmt.Errorf("GitHub answered %d for the jobs of the release run %d", status, run.ID)
+	}
+	s := suite{url: run.HTMLURL, state: suiteRunning}
+	for _, j := range jobs.Jobs {
+		if j.Name != afterJob {
+			continue
+		}
+		switch {
+		case j.Status != "completed":
+			s.state = suiteRunning
+		case j.Conclusion == "success":
+			s.state = suitePassed
+		default:
+			s.state = suiteFailed
+		}
+		return s, nil
+	}
+	// The suite's jobs appear as they start; once the run has ended
+	// without them, they never ran.
+	if run.Status == "completed" {
+		s.state = suiteMissing
+	}
+	return s, nil
+}
+
 // latest is the newest build with a release: the first of main's commits,
 // from its head back, whose build has a tag in the registry. A commit just
 // merged has none until its release is published, and is passed over, as
@@ -272,10 +386,12 @@ func (p *promoter) latest(ctx context.Context) (string, error) {
 // promote makes build the release production follows: the tag prod is
 // moved to it, once a promotion is seen to need approval, the release's
 // signature is checked as Flux will check it, its commit is found on main,
-// and it is not older than what production follows now, unless rollback
-// says that is meant. The build may be latestBuild, for the newest one
+// it is not older than what production follows now unless a rollback is
+// meant, and, if it passed only the hotfix checks, the full suite after
+// them has passed or a hotfix is meant. With check, it says what it would
+// do and moves nothing. The build may be latestBuild, for the newest one
 // released.
-func (p *promoter) promote(ctx context.Context, build string, rollback bool) error {
+func (p *promoter) promote(ctx context.Context, build string, o promotion) error {
 	chosen := build == latestBuild
 	if chosen {
 		var err error
@@ -311,6 +427,18 @@ func (p *promoter) promote(ctx context.Context, build string, rollback bool) err
 		return fmt.Errorf("the commit of build %s, %s, is not on %s (it is %s): not promoted", build, next.commit, mainBranch, status)
 	}
 
+	// A build released before the gate was recorded passed every check.
+	hotfixBuild := next.annotations[gateAnnotation] == gateHotfix
+	var full suite
+	if hotfixBuild {
+		if full, err = p.after(ctx, next.commit); err != nil {
+			return err
+		}
+		if !o.hotfix && full.state != suitePassed {
+			return fmt.Errorf("build %s passed only the hotfix checks, and the full suite after them %s: not promoted. To promote it before that suite passes, run again with hotfix ticked", build, full.said())
+		}
+	}
+
 	now, following, err := p.find(ctx, manifests.ProdTag)
 	if err != nil {
 		return err
@@ -328,13 +456,49 @@ func (p *promoter) promote(ctx context.Context, build string, rollback bool) err
 		case err != nil:
 			return err
 		case status == "ahead":
-		case status == "behind" && rollback:
+		case status == "behind" && o.rollback:
 			p.logf("rolling back: build %s is older than build %s, which production follows", next.build, now.build)
 		case status == "behind":
 			return fmt.Errorf("build %s is older than build %s, which production follows: not promoted. To roll back, run again with rollback ticked", next.build, now.build)
 		default:
 			return fmt.Errorf("the commit of build %s is %s the commit of build %s, which production follows: not promoted", next.build, status, now.build)
 		}
+	}
+
+	world := worldLine(now, next, following)
+	p.logf("%s", strings.NewReplacer("**", "", "`", "").Replace(world))
+	notes := func() {
+		if following && o.rollback {
+			fmt.Fprintf(p.summary, "\nA rollback, asked for.\n")
+		}
+		if chosen {
+			fmt.Fprintf(p.summary, "\nNo build was given: this is the latest release.\n")
+		}
+		switch {
+		case hotfixBuild && o.hotfix:
+			fmt.Fprintf(p.summary, "\nA hotfix, asked for: build `%s` passed only the hotfix checks. The full suite after them: %s.\n", next.build, full.link())
+		case hotfixBuild:
+			fmt.Fprintf(p.summary, "\nA hotfix's build, whose full suite after its checks %s.\n", full.link())
+		case o.hotfix:
+			fmt.Fprintf(p.summary, "\nHotfix was ticked, and build `%s` passed every check: the box changed nothing.\n", next.build)
+		}
+	}
+	table := func(heading string) {
+		fmt.Fprintf(p.summary, "%s\n\n%s\n\n| | Build | Commit | Manifests |\n|---|---|---|---|\n", world, heading)
+		if following {
+			fmt.Fprintf(p.summary, "| Before | `%s` | %s | `%s` |\n", now.build, now.commit, now.digest)
+		} else {
+			fmt.Fprintf(p.summary, "| Before | none | | |\n")
+		}
+	}
+
+	if o.check {
+		p.logf("promoting %s would pass every check; nothing was moved", next)
+		table(fmt.Sprintf("### Promoting build `%s` would pass every check", next.build))
+		fmt.Fprintf(p.summary, "| After | `%s` | %s | `%s` |\n", next.build, next.commit, next.digest)
+		notes()
+		fmt.Fprintf(p.summary, "\nNothing was moved here: the promote job moves it once approved, and checks it all again first.\n")
+		return nil
 	}
 
 	if _, err := p.run(ctx, "flux", "tag", "artifact", "oci://"+manifests.ManifestsRepo+"@"+next.digest, "--tag", manifests.ProdTag); err != nil {
@@ -352,18 +516,8 @@ func (p *promoter) promote(ctx context.Context, build string, rollback bool) err
 		was = now.String()
 	}
 	p.logf("production now follows %s; before, %s", next, was)
-	fmt.Fprintf(p.summary, "### Production follows build `%s`\n\n| | Build | Commit | Manifests |\n|---|---|---|---|\n", next.build)
-	if following {
-		fmt.Fprintf(p.summary, "| Before | `%s` | %s | `%s` |\n", now.build, now.commit, now.digest)
-	} else {
-		fmt.Fprintf(p.summary, "| Before | none | | |\n")
-	}
+	table(fmt.Sprintf("### Production follows build `%s`", next.build))
 	fmt.Fprintf(p.summary, "| Now | `%s` | %s | `%s` |\n", next.build, next.commit, next.digest)
-	if following && rollback {
-		fmt.Fprintf(p.summary, "\nA rollback, asked for.\n")
-	}
-	if chosen {
-		fmt.Fprintf(p.summary, "\nNo build was given: this is the latest release.\n")
-	}
+	notes()
 	return nil
 }
