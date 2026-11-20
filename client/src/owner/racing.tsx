@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Racing, on the world page's Accounts tab: the limits every sailor
+// Racing, on the world page's Settings tab: the limits every sailor
 // races by (races entered ahead, races started a day, races made a day,
 // races owned not yet finished), how long before the world's end the last
 // race may start, how often the Harbourmaster's races are run and in which
@@ -8,7 +8,6 @@
 // US. A change is first checked, keel saying in words what it would do,
 // then set, as the page's other settings are.
 
-import { Fragment } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { control, getJSON } from './api';
@@ -154,26 +153,46 @@ export function RacingSettings({ act }: { act: Act }) {
     );
   }
   const change = changeOf(settings, fields);
+  const saved = fieldsOf(settings);
+  const changes = change === null ? 0 : Object.keys(change).length;
   const set = (f: Partial<RaceFields>) => {
     setFields({ ...fields, ...f });
     setAsked(null);
   };
-  const number = (k: keyof Omit<RaceFields, 'boats' | 'every'>, label: string, step = 1) => (
-    <label class="racing-field" key={k}>
+  /** A field's label, marked while it differs from what is set. */
+  const field = (k: keyof RaceFields): string =>
+    `racing-field${fields[k] !== saved[k] ? ' changed' : ''}`;
+  const number = (
+    k: keyof Omit<RaceFields, 'boats' | 'every'>,
+    label: string,
+    unit: string,
+    step = 1,
+  ) => (
+    <label class={field(k)} key={k}>
       <span>{label}</span>
-      <input
-        type="number"
-        name={`racing-${k}`}
-        min={0}
-        step={step}
-        value={fields[k]}
-        onInput={(e) => set({ [k]: e.currentTarget.value })}
-      />
+      <span class="with-unit">
+        <input
+          type="number"
+          inputmode="decimal"
+          name={`racing-${k}`}
+          min={0}
+          step={step}
+          value={fields[k]}
+          onInput={(e) => set({ [k]: e.currentTarget.value })}
+        />
+        <span class="unit">{unit}</span>
+      </span>
     </label>
   );
+  // The harbour's boats in their turn, as the field holds them.
+  const turn = fields.boats
+    .split(',')
+    .map((b) => b.trim())
+    .filter((b) => b !== '');
+  const setTurn = (boats: string[]): void => set({ boats: boats.join(', ') });
 
   const check = (): void => {
-    if (change === null || Object.keys(change).length === 0) {
+    if (change === null || changes === 0) {
       return;
     }
     setBusy(true);
@@ -193,27 +212,23 @@ export function RacingSettings({ act }: { act: Act }) {
   return (
     <section class="card racing" aria-label="Racing">
       <h2>Racing</h2>
-      <dl data-field="racing">
-        {racingWords(settings).map(([k, v]) => (
-          <Fragment key={k}>
-            <dt>{k}</dt>
-            <dd>{v}</dd>
-          </Fragment>
-        ))}
-      </dl>
       <form
         class="racing-form"
+        data-field="racing"
         onSubmit={(e) => {
           e.preventDefault();
           check();
         }}
       >
-        {number('ahead', 'Entered ahead')}
-        {number('daily', 'Started a day')}
-        {number('made', 'Made a day')}
-        {number('owned', 'Owned not finished')}
-        {number('cutoff', 'Hours before the end', 0.25)}
-        <label class="racing-field">
+        <h3>A sailor's limits</h3>
+        {number('ahead', 'Entered ahead', 'races')}
+        {number('daily', 'Started a day', 'races')}
+        {number('made', 'Made a day', 'races')}
+        {number('owned', 'Owned, not finished', 'races')}
+        <h3>The world's races</h3>
+        {number('cutoff', 'Last start before the end', 'hours', 0.25)}
+        {number('greenhornUS', 'Greenhorn Cups at US hours', '%')}
+        <label class={field('every')}>
           <span>Harbour races every</span>
           <select
             name="racing-every"
@@ -227,31 +242,63 @@ export function RacingSettings({ act }: { act: Act }) {
             ))}
           </select>
         </label>
-        {number('greenhornUS', 'Greenhorn Cups at US hours, %')}
-        <label class="racing-field racing-boats">
-          <span>
-            Harbour boats in their turn, by id: {catalog.boats.map((b) => b.id).join(', ')}
-          </span>
-          <input
-            type="text"
-            name="racing-boats"
-            autocomplete="off"
-            spellcheck={false}
-            value={fields.boats}
-            onInput={(e) => set({ boats: e.currentTarget.value })}
-          />
-        </label>
-        <button
-          type="submit"
-          name="racing-check"
-          disabled={busy || change === null || Object.keys(change).length === 0}
-        >
-          Check
-        </button>
+        <div class={`${field('boats')} racing-boats`}>
+          <span>Harbour boats, in their turn</span>
+          <ol class="turn" data-field="racing-boats">
+            {turn.map((b, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: a boat may come twice; its place is what it is.
+              <li key={i}>
+                {boatName(b)}
+                <button
+                  type="button"
+                  class="drop"
+                  aria-label={`Take ${boatName(b)} out of place ${i + 1}`}
+                  onClick={() => setTurn(turn.filter((_, j) => j !== i))}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+            <li class="add">
+              <select
+                name="racing-add-boat"
+                aria-label="Add a boat to the turn"
+                value=""
+                onChange={(e) => {
+                  if (e.currentTarget.value !== '') {
+                    setTurn([...turn, e.currentTarget.value]);
+                  }
+                }}
+              >
+                <option value="">Add a boat…</option>
+                {catalog.boats.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </li>
+          </ol>
+        </div>
+        <p class="racing-keys">
+          <button
+            type="submit"
+            name="racing-check"
+            class={changes === 0 ? '' : 'primary'}
+            disabled={busy || changes === 0}
+          >
+            {changes === 0 ? 'Nothing changed' : `Check ${plural(changes, 'change')}`}
+          </button>
+          {fields.boats !== saved.boats || changes > 0 || change === null ? (
+            <button type="button" name="racing-reset" onClick={() => set(saved)}>
+              Put back
+            </button>
+          ) : null}
+        </p>
       </form>
       {change === null ? (
         <p class="small" data-field="racing-why">
-          Whole numbers of races, hours, a percentage from 0 to 100, and the catalog's boats by id.
+          Whole numbers of races, hours, a percentage from 0 to 100, and a boat or more in the turn.
         </p>
       ) : null}
       {why !== '' ? <p class="small error">{why}</p> : null}
@@ -261,6 +308,7 @@ export function RacingSettings({ act }: { act: Act }) {
           <button
             type="button"
             name="racing-set"
+            class="primary"
             disabled={busy}
             onClick={() => {
               setBusy(true);

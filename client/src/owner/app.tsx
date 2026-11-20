@@ -45,7 +45,7 @@ import {
 } from 'preact/hooks';
 import { formatPosition } from '../chart/position';
 import { lightOn } from '../lights/character';
-import { AccountBoxes, AccountsTab } from './accounts';
+import { AccountBoxes, AccountsTab, SettingsTab } from './accounts';
 import { boatWords } from './accountwords';
 import { agentWords, machinesLine, rulesLine, spectatorsLine, watchersWords } from './admission';
 import {
@@ -126,11 +126,12 @@ import {
   visibilityRanges,
   visibilityWords,
 } from './fog';
+import { Cards } from './fold';
 import { busyRows, FORECAST_COLOURS, spellAt, trackAt, warningSpan } from './forecast';
 import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
 import { machinesWords } from './machines';
-import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
+import { centreOn, fitView, pan, pinch, type Spot, toWorld, type View, zoomAt } from './map';
 import { NewsTab } from './news';
 import { ReportsTab } from './reports';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
@@ -174,7 +175,7 @@ function worldUsAt(c: WorldClock, now: number): number {
 /** How often the lights' marks beside their rows are looked at, ms. */
 const FLASH_EVERY = 100;
 
-/** The map: a canvas filling its box, panned by a drag, zoomed by the wheel, a click picking a point. */
+/** The map: a canvas filling its box, panned by a drag, zoomed by the wheel or two fingers, a click picking a point. */
 function MapCanvas({
   data,
   layers,
@@ -190,7 +191,10 @@ function MapCanvas({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
 
-  const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
+  // The pointers down on the map, where each last was, and how far the
+  // first has gone: a pointer that hardly moved picks a point.
+  const touches = useRef(new Map<number, Spot>());
+  const moved = useRef(0);
   // Fits the canvas to its box, and the view to the canvas.
   useEffect(() => {
     const c = canvas.current;
@@ -229,30 +233,53 @@ function MapCanvas({
       data-testid="map"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
+        const r = e.currentTarget.getBoundingClientRect();
+        touches.current.set(e.pointerId, [e.clientX - r.left, e.clientY - r.top]);
+        if (touches.current.size === 1) {
+          moved.current = 0;
+        } else {
+          // A second finger: a pinch, never a pick.
+          moved.current = Number.POSITIVE_INFINITY;
+        }
       }}
       onPointerMove={(e) => {
-        const d = drag.current;
-        if (d === null || view === null) {
+        const was = touches.current.get(e.pointerId);
+        if (was === undefined) {
           return;
         }
-        const dx = e.clientX - d.x;
-        const dy = e.clientY - d.y;
-        d.x = e.clientX;
-        d.y = e.clientY;
-        d.moved += Math.hypot(dx, dy);
-        if (d.moved > 3) {
-          setView(pan(view, dx, dy));
+        const r = e.currentTarget.getBoundingClientRect();
+        const now: Spot = [e.clientX - r.left, e.clientY - r.top];
+        touches.current.set(e.pointerId, now);
+        let other: Spot | undefined;
+        for (const [id, spot] of touches.current) {
+          if (id !== e.pointerId) {
+            other = spot;
+            break;
+          }
+        }
+        if (other !== undefined) {
+          const held = other;
+          setView((v) => (v === null ? v : pinch(v, was, held, now, held)));
+          return;
+        }
+        const dx = now[0] - was[0];
+        const dy = now[1] - was[1];
+        moved.current += Math.hypot(dx, dy);
+        if (moved.current > 3) {
+          setView((v) => (v === null ? v : pan(v, dx, dy)));
         }
       }}
       onPointerUp={(e) => {
-        const d = drag.current;
-        drag.current = null;
-        if (d !== null && d.moved <= 3 && view !== null) {
+        const held = touches.current.delete(e.pointerId);
+        if (held && touches.current.size === 0 && moved.current <= 3 && view !== null) {
           const r = e.currentTarget.getBoundingClientRect();
           const [east, north] = toWorld(view, e.clientX - r.left, e.clientY - r.top);
           pick(east, north);
         }
+      }}
+      onPointerCancel={(e) => {
+        touches.current.delete(e.pointerId);
+        moved.current = Number.POSITIVE_INFINITY;
       }}
       onWheel={(e) => {
         e.preventDefault();
@@ -1377,7 +1404,9 @@ function App() {
   const [now, setNow] = useState<WorldNow | null>(null);
   const [life, setLife] = useState<Life | null>(null);
   const [lifeError, setLifeError] = useState('');
-  const [tab, setTab] = useState<'world' | 'next' | 'accounts' | 'reports' | 'news'>('world');
+  const [tab, setTab] = useState<'world' | 'next' | 'accounts' | 'reports' | 'news' | 'settings'>(
+    'world',
+  );
   // The account whose card is open on the Accounts tab.
   const [card, setCard] = useState<string | null>(null);
   // The name the Reports tab's queue is narrowed to, or "" for every report.
@@ -1386,6 +1415,8 @@ function App() {
   const [view, setView] = useState<View | null>(null);
   const [nextView, setNextView] = useState<View | null>(null);
   const [layers, setLayers] = useState<Layers>(allLayers());
+  // The layers' box folded on a narrow screen, where it would cover the map.
+  const [layersOpen, setLayersOpen] = useState(false);
   const [picked, setPicked] = useState<[number, number] | null>(null);
   const [pickedOf, setPickedOf] = useState<PlaceOf>(null);
   const [point, setPoint] = useState<Point | null>(null);
@@ -1427,7 +1458,8 @@ function App() {
   const onAccounts = tab === 'accounts';
   const onReports = tab === 'reports';
   const onNews = tab === 'news';
-  const onWorld = !onNext && !onAccounts && !onReports && !onNews;
+  const onSettings = tab === 'settings';
+  const onWorld = !onNext && !onAccounts && !onReports && !onNews && !onSettings;
 
   // What was picked of a world ended means nothing in the next.
   useEffect(() => {
@@ -2015,7 +2047,7 @@ function App() {
     <div class="page">
       <header>
         <h1>The world</h1>
-        <p class="note">The owner's page: reached from this computer alone.</p>
+        <p class="note">The owner's page.</p>
         {error !== '' ? <p class="error">{error}</p> : null}
         {message !== '' ? (
           <p class="message" role="status">
@@ -2070,6 +2102,14 @@ function App() {
           >
             News
           </button>
+          <button
+            type="button"
+            name="tab-settings"
+            aria-pressed={onSettings}
+            onClick={() => setTab('settings')}
+          >
+            Settings
+          </button>
         </nav>
       </header>
       <AccountsTab
@@ -2089,7 +2129,8 @@ function App() {
         act={act}
       />
       <NewsTab shown={onNews} act={act} />
-      {onAccounts || onReports || onNews ? null : (
+      <SettingsTab accounts={accounts} shown={onSettings} act={act} />
+      {onAccounts || onReports || onNews || onSettings ? null : (
         <main>
           <div class="map-box">
             {onNext ? (
@@ -2117,7 +2158,15 @@ function App() {
                 pick={pick}
               />
             )}
-            <fieldset class="layers">
+            <fieldset class="layers" data-open={layersOpen ? '1' : '0'}>
+              <button
+                type="button"
+                class="layers-key"
+                aria-expanded={layersOpen}
+                onClick={() => setLayersOpen(!layersOpen)}
+              >
+                Layers
+              </button>
               {(Object.keys(LAYER_NAMES) as (keyof Layers)[])
                 .filter((k) => !onNext || !LIVE.has(k))
                 .map((k) => (
@@ -2178,7 +2227,7 @@ function App() {
             {!onNext && placeWeather !== null ? <PlaceBox p={placeWeather} /> : null}
           </div>
           {onNext ? (
-            <aside>
+            <Cards>
               {life !== null ? <LifecycleCard life={life} /> : null}
               {life !== null ? (
                 <WorldByHand life={life} charted={charted} act={act} hands={['make']} />
@@ -2193,9 +2242,9 @@ function App() {
                 />
               ) : null}
               {next.stored ? nextLists : null}
-            </aside>
+            </Cards>
           ) : (
-            <aside>
+            <Cards>
               {now !== null ? <Clock now={now} accounts={accounts} /> : null}
               {now !== null ? <WeatherCard now={now} /> : null}
               <WeekCard
@@ -2284,7 +2333,7 @@ function App() {
                 />
               </section>
               {lists}
-            </aside>
+            </Cards>
           )}
         </main>
       )}

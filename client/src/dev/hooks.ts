@@ -1824,11 +1824,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return [...deckCalls];
     },
     /**
-     * The sandbox's screen with the way home offered in its menu, and its
-     * question asked, racing and with shipmates aboard as given; null as it
-     * is offline, with neither.
+     * The sandbox's screen with the way home and Change boat offered in its
+     * menu, and the question of one asked (changing: Change boat's), racing
+     * and with shipmates aboard as given; null as it is offline, with neither.
      */
-    homeScene(home: { asking: boolean; racing: boolean; shipmates: boolean } | null): void {
+    homeScene(
+      home: { asking: boolean; racing: boolean; shipmates: boolean; changing?: boolean } | null,
+    ): void {
       if (home === null) {
         sailing.remount?.(null, null);
         return;
@@ -1839,6 +1841,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         racing: () => home.racing,
         shipmates: () => home.shipmates,
         go: () => {},
+        changing: signal(home.changing === true),
+        change: () => Promise.resolve(false),
       });
     },
     /**

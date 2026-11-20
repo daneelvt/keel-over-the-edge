@@ -82,6 +82,13 @@ func TestEachRuleFails(t *testing.T) {
 		{"the database granted", `{"src": ["autogroup:admin"], "dst": ["10.43.0.50"], "ip": ["tcp:9428"]},`,
 			`{"src": ["autogroup:admin"], "dst": ["10.43.0.53"], "ip": ["tcp:5432"]},`, "SSH is the only way in"},
 		{"no test of a fixed address", `"10.43.0.53:5432", `, ``, "denied 10.43.0.53:5432"},
+		{"the world page for the CI node", `{"src": ["autogroup:admin"], "dst": ["10.43.0.54"], "ip": ["tcp:9090"]},`,
+			`{"src": ["autogroup:admin", "tag:ci-prod"], "dst": ["10.43.0.54"], "ip": ["tcp:9090"]},`, "want autogroup:admin alone on tcp:9090"},
+		{"the world page on the metrics' port too", `"dst": ["10.43.0.54"], "ip": ["tcp:9090"]`,
+			`"dst": ["10.43.0.54"], "ip": ["tcp:9090", "tcp:9091"]`, "want autogroup:admin alone on tcp:9090"},
+		{"the world page with no grant", `{"src": ["autogroup:admin"], "dst": ["10.43.0.54"], "ip": ["tcp:9090"]},`,
+			``, "none lets autogroup:admin reach 10.43.0.54"},
+		{"no test of the world page's address", `, "10.43.0.54:9090"`, ``, "denied 10.43.0.54:9090"},
 		{"another section", `"tagOwners": {`, `"acls": [{"action": "accept", "src": ["*"], "dst": ["*:*"]}], "tagOwners": {`, "unknown field"},
 		{"not HuJSON", `"grants": [`, `"grants": [[`, "invalid"},
 	}

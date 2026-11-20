@@ -34,7 +34,7 @@ import { MAKE_TO_RACE, SIGN_IN_TO_RACE } from '../ui/racewords';
 import { UpdateLine } from '../ui/updateline';
 import { useWatch } from '../ui/watchlazy';
 import { type ListLink, MAKE_TO_WATCH, SIGN_IN_TO_WATCH } from '../ui/watchwords';
-import { BoatChooser } from './boatchooser';
+import { BoatChooser, takeChangeBoat } from './boatchooser';
 import { LookChooser } from './chooser';
 import { AgeQuestion, BornFields } from './firstasks';
 import { bornOf, CANT_BE_MADE, youngCookie } from './firstwords';
@@ -794,7 +794,13 @@ function Sailor({
   );
   useEffect(() => () => stage?.hide(), []);
   const boats = useMemo(() => (cat === undefined ? undefined : new BoatChooser(cat, fetcher)), []);
-  useEffect(() => void boats?.load(), []);
+  useEffect(() => {
+    void boats?.load();
+    // Sent here by Change boat at sea: the boats to choose from, at once.
+    if (takeChangeBoat()) {
+      boats?.openBoats();
+    }
+  }, []);
   // The boat still in the water: taken out, the box is for a new voyage,
   // and the fleet says where the boats are now.
   const out = useMemo(() => {

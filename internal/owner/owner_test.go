@@ -538,6 +538,66 @@ func TestLand(t *testing.T) {
 // TestGuard: a request whose Host is not this computer's is refused,
 // whatever its method; a control from another origin is refused; a
 // control's body is JSON of at most 4 KB; every response forbids framing.
+// TestGuardRouted: the page answers the one address it is routed to the
+// owner's devices at, port and all, and still no name, no other address
+// and no other origin's control.
+func TestGuardRouted(t *testing.T) {
+	const routed = "10.43.0.54:9090"
+	var refused int
+	h := Guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }), func() { refused++ }, routed)
+	do := func(method, host string, mod func(*http.Request)) int {
+		req := httptest.NewRequest(method, "http://x/owner/api/flag", strings.NewReader(`{"on":true}`))
+		req.Host = host
+		req.Header.Set("Content-Type", "application/json")
+		if mod != nil {
+			mod(req)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	// A browser sends an address that is no secure context no
+	// Sec-Fetch-Site: its own page's control carries its Origin.
+	own := func(q *http.Request) { q.Header.Set("Origin", "http://"+routed) }
+	for _, host := range []string{routed, "localhost:9090", "127.0.0.1:9090"} {
+		if code := do("GET", host, nil); code != http.StatusNoContent {
+			t.Errorf("GET with Host %q: %d", host, code)
+		}
+	}
+	if code := do("POST", routed, own); code != http.StatusNoContent {
+		t.Errorf("the page's own control: %d", code)
+	}
+	for _, host := range []string{"10.43.0.54", "10.43.0.54:9091", "10.43.0.53:9090", "evil.example:9090", "10.43.0.54.nip.io:9090", "10.43.0.54:9090.evil.example", ""} {
+		for _, method := range []string{"GET", "POST"} {
+			if code := do(method, host, own); code != http.StatusForbidden {
+				t.Errorf("%s with Host %q: %d", method, host, code)
+			}
+		}
+	}
+	for name, mod := range map[string]func(*http.Request){
+		"a foreign Origin": func(q *http.Request) { q.Header.Set("Origin", "https://evil.example") },
+		"another port's":   func(q *http.Request) { q.Header.Set("Origin", "http://10.43.0.54:8080") },
+		"cross-site":       func(q *http.Request) { q.Header.Set("Sec-Fetch-Site", "cross-site") },
+		"a form's body":    func(q *http.Request) { own(q); q.Header.Set("Content-Type", "text/plain") },
+	} {
+		if code := do("POST", routed, mod); code < 400 {
+			t.Errorf("a control with %s: %d", name, code)
+		}
+	}
+	if refused == 0 {
+		t.Error("no refusal counted")
+	}
+	// With no routed address, that Host is refused as any other.
+	plain := Guard(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil)
+	req := httptest.NewRequest("GET", "http://x/owner/", nil)
+	req.Host = routed
+	rec := httptest.NewRecorder()
+	plain.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("unrouted, Host %q: %d", routed, rec.Code)
+	}
+}
+
 func TestGuard(t *testing.T) {
 	r := newRig(t, 0)
 	r.o.Build(context.Background())

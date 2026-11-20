@@ -36,9 +36,13 @@ configMapGenerator:
     literals:
       - KEEL_PLAY_ADDR=0.0.0.0:8080
       - KEEL_AGENTS_ADDR=0.0.0.0:8081
-      # Reached by the kubelet's probes, through the Service by nothing
-      # outside the cluster: no route leads to it.
+      # Reached by the kubelet's probes, and by the owner's devices at its
+      # forward's address (forward.yaml): nothing on the internet routes
+      # to it.
       - KEEL_INTERNAL_ADDR=0.0.0.0:9090
+      # The owner's world page answers that address, beside localhost, and
+      # no other Host (tools/internal/manifests keeps it the forward's).
+      - KEEL_OWNER_HOST=10.43.0.54:9090
       # The metrics alone, for the scraper, which may reach nothing else.
       - KEEL_METRICS_ADDR=0.0.0.0:9091
       - KEEL_LOG_LEVEL=info

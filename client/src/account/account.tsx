@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The account page, a panel from the menu: the sailor, by name, in their
+// The account page, a page from the menu, in its place, its name and
+// its close at the top: the sailor, by name, in their
 // portrait and as the log draws them; the account's passkeys, where
 // each was made and when it was last used, with one more added on this
 // device or another, or one removed while another stays; the recovery code,
@@ -18,6 +19,7 @@ import './start.css';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { lookFrom } from '../catalog/looks';
+import { Sheet } from '../ui/sheet';
 import { useWatch } from '../ui/watchlazy';
 import { useChatAccount } from './chatlazy';
 import { RULES_PAGE, RULES_TITLE, SAFETY_PAGE, STAYING_SAFE } from './firstwords';
@@ -64,12 +66,12 @@ export function MachinesPanel({ close }: { close: () => void }) {
     return <m.MachinesPanel close={close} />;
   }
   return (
-    <section class="panel menu account" aria-label="Machine sailors">
+    <Sheet name="machines" title="Machine sailors" cls="account machines" close={close}>
       <p class="account-status">Reading your machine sailors…</p>
       <button type="button" class="menu-close" onClick={close}>
         Close
       </button>
-    </section>
+    </Sheet>
   );
 }
 
@@ -150,22 +152,28 @@ export function AccountPanel({
 
   if (shown.kind === 'code') {
     return (
-      <section class="panel menu account">
+      <Sheet name="account" title="Account" cls="account" close={close} x={false}>
         <RecoveryCode
           code={shown.code}
           name={data?.name ?? ''}
           title="Your new recovery code"
           done={() => setShown({ kind: 'page' })}
         />
-      </section>
+      </Sheet>
     );
   }
   if (shown.kind === 'delete' && data !== null) {
     return (
-      <section class="panel menu account" aria-labelledby="delete-title">
-        <h2 id="delete-title">
-          Delete <bdi>{data.name}</bdi> for good?
-        </h2>
+      <Sheet
+        name="account"
+        title={
+          <>
+            Delete <bdi>{data.name}</bdi> for good?
+          </>
+        }
+        cls="account"
+        close={close}
+      >
         <p>
           The sailor, its passkeys and its recovery code go, and its name is free for anyone. What
           it charted stays on the chart, as a former sailor’s. This cannot be undone.
@@ -202,13 +210,12 @@ export function AccountPanel({
         >
           Keep it
         </button>
-      </section>
+      </Sheet>
     );
   }
 
   return (
-    <section class="panel menu account" aria-label="Account">
-      <h2>Account</h2>
+    <Sheet name="account" title="Account" cls="account" close={close}>
       {data === null ? (
         <p class="account-status" aria-live="polite">
           {status || 'Reading the account…'}
@@ -335,6 +342,6 @@ export function AccountPanel({
       <button type="button" class="menu-close" onClick={close}>
         Close
       </button>
-    </section>
+    </Sheet>
   );
 }

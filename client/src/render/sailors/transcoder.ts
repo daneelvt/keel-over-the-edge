@@ -8,6 +8,11 @@
 // is started from a file of the page's own instead (transcoderworker.js),
 // which runs the same blob and is not under the page's policy, and is told
 // what three.js tells its own: the transcoder's settings and WebAssembly.
+//
+// The blob is named to the worker in a first message, before those. The
+// worker's address cannot carry it: the service worker answers the file
+// from its cache on every visit after the first, and a worker so answered
+// has the kept answer's address, without what followed its #.
 
 import transcoderWorker from './transcoderworker.js?url&no-inline';
 
@@ -19,9 +24,9 @@ export interface Transcoding {
   workerConfig: unknown;
 }
 
-/** The worker's address for a blob: the file, the blob after its #. */
-export function workerAddress(file: string, blob: string): string {
-  return `${file}#${encodeURIComponent(blob)}`;
+/** The first message to a worker: the blob it is to run. */
+export function startMessage(blob: string): { type: 'start'; source: string } {
+  return { type: 'start', source: blob };
 }
 
 /**
@@ -31,13 +36,14 @@ export function workerAddress(file: string, blob: string): string {
 export function transcodeFromFile(
   loader: Transcoding,
   file: string = transcoderWorker,
-  make: (address: string) => Worker = (address) => new Worker(address),
+  make: (file: string) => Worker = (f) => new Worker(f),
 ): void {
   const pool = loader.workerPool;
   const set = pool.setWorkerCreator.bind(pool);
   pool.setWorkerCreator = () => {
     set(() => {
-      const worker = make(workerAddress(file, loader.workerSourceURL));
+      const worker = make(file);
+      worker.postMessage(startMessage(loader.workerSourceURL));
       const binary = (loader.transcoderBinary ?? new ArrayBuffer(0)).slice(0);
       worker.postMessage({ type: 'init', config: loader.workerConfig, transcoderBinary: binary }, [
         binary,

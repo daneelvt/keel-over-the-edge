@@ -32,12 +32,18 @@ function boatOf(skipper: string, boat: string, kind: string): Words {
 /** A link ended, or a knock by one. */
 const ENDED = 'This link has ended.';
 
+/** The menu's one page of links to share, and its two parts. */
+export const INVITE_FRIENDS = 'Invite friends';
+export const WATCH_ME = 'Watch me sail';
+export const WATCH_ME_DETAIL = 'Whoever opens your link can watch your boat.';
 export const SAIL_WITH_ME = 'Sail with me';
 export const SAIL_WITH_ME_DETAIL =
-  'Share a link. Whoever opens it can ask to come aboard, and you choose who comes.';
+  'Whoever opens your link can ask to come aboard, and you choose who comes.';
 export const SHARE = 'Share';
 export const COPY = 'Copy';
 export const COPIED = 'Copied';
+/** The key that makes the first link, and the one that replaces a link that is out. */
+export const GET_LINK = 'Get a link';
 export const NEW_LINK = 'New link';
 export const LINKS_OFF = 'Links off';
 export const CLOSE = 'Close';

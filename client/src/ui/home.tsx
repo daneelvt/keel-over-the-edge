@@ -6,12 +6,24 @@
 // lifted to the start off Port Royal, the voyage ended; and, racing, that
 // the boat retires, and with shipmates aboard, that they come too. Back
 // to Port Royal lifts it, under the page's cover; Stay, or Escape, puts
-// the question away.
+// the question away. Change boat, under it in the menu, asks the same
+// way: the boat taken out of the water, the voyage ended, and the page
+// back at the start screen with the boats to choose from. Both questions
+// stand in the menu's place, beside the boat.
 
 import './home.css';
-import type { Signal } from '@preact/signals';
+import { type Signal, signal } from '@preact/signals';
 import type { Ref } from 'preact';
-import { BACK_TO_PORT_ROYAL, HOME_QUESTION, HOME_STAY, homeLines } from './homewords';
+import {
+  BACK_TO_PORT_ROYAL,
+  CHANGE_BOAT,
+  CHANGE_FAILED,
+  CHANGE_QUESTION,
+  changeLines,
+  HOME_QUESTION,
+  HOME_STAY,
+  homeLines,
+} from './homewords';
 import { useModal } from './modal';
 
 /** The way home, as the menu and its question see it. */
@@ -26,6 +38,13 @@ export interface HomeView {
   shipmates: () => boolean;
   /** Lifts the boat home. */
   go: () => void;
+  /** Whether Change boat's question is asked. */
+  changing: Signal<boolean>;
+  /**
+   * Takes the boat out of the water and opens the start screen on the
+   * boats to choose from; false if the boat could not be taken out.
+   */
+  change: () => Promise<boolean>;
 }
 
 /**
@@ -49,7 +68,7 @@ export function HomeWindow({ home, win }: { home: HomeView; win?: Ref<HTMLElemen
   };
   return (
     <section
-      class="panel home-question"
+      class="panel home-question at-side"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="home-title"
@@ -69,6 +88,74 @@ export function HomeWindow({ home, win }: { home: HomeView; win?: Ref<HTMLElemen
           }}
         >
           {BACK_TO_PORT_ROYAL}
+        </button>
+        <button type="button" class="plate-key" data-stay onClick={stay}>
+          {HOME_STAY}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** Change boat's question, asked as the way home's is. */
+export function ChangeQuestion({ home }: { home: HomeView }) {
+  const ref = useModal(
+    () => {
+      home.changing.value = false;
+    },
+    { inert: true, focus: '[data-stay]', back: '.menu-button' },
+  );
+  return <ChangeWindow home={home} win={ref} />;
+}
+
+/** What the question shows of the change: under way, and why it failed. */
+const changeBusy = signal(false);
+const changeProblem = signal('');
+
+/** The question's window: its head, its lines, Change boat and Stay. */
+export function ChangeWindow({ home, win }: { home: HomeView; win?: Ref<HTMLElement> }) {
+  const stay = () => {
+    changeProblem.value = '';
+    home.changing.value = false;
+  };
+  const go = async () => {
+    if (changeBusy.value) {
+      return;
+    }
+    changeBusy.value = true;
+    changeProblem.value = '';
+    const out = await home.change();
+    changeBusy.value = false;
+    if (!out) {
+      changeProblem.value = CHANGE_FAILED;
+    }
+  };
+  return (
+    <section
+      class="panel home-question at-side"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="change-title"
+      data-question="change-boat"
+      ref={win ?? null}
+    >
+      <h2 id="change-title">{CHANGE_QUESTION}</h2>
+      {changeLines(home.racing(), home.shipmates()).map((l) => (
+        <p key={l}>{l}</p>
+      ))}
+      {changeProblem.value !== '' ? (
+        <p class="home-problem" aria-live="polite">
+          {changeProblem.value}
+        </p>
+      ) : null}
+      <div class="home-keys">
+        <button
+          type="button"
+          class="plate-key key-main"
+          disabled={changeBusy.value}
+          onClick={() => void go()}
+        >
+          {CHANGE_BOAT}
         </button>
         <button type="button" class="plate-key" data-stay onClick={stay}>
           {HOME_STAY}

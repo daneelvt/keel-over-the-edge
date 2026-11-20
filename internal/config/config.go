@@ -46,6 +46,11 @@ type Config struct {
 	// InternalAddr is the address of the internal HTTP server: probes,
 	// metrics, profiles. It must not be reachable from outside.
 	InternalAddr string
+	// OwnerHost, if not "", is one more Host the owner's world page
+	// answers, beside this computer's own names: the address and port it
+	// is routed to the owner's devices at, as 10.43.0.54:9090. An IP
+	// address, never a name.
+	OwnerHost string
 	// MetricsAddr, if not "", is the address of a listener that serves the
 	// metrics and nothing else, for a scraper that must not reach the
 	// internal listener's profiles and input log.
@@ -188,6 +193,7 @@ func Load(getenv func(string) string) (Config, error) {
 		AgentsAddr:     or(getenv("KEEL_AGENTS_ADDR"), DefaultAgentsAddr),
 		InternalAddr:   or(getenv("KEEL_INTERNAL_ADDR"), DefaultInternalAddr),
 		MetricsAddr:    getenv("KEEL_METRICS_ADDR"),
+		OwnerHost:      getenv("KEEL_OWNER_HOST"),
 		TraceDir:       getenv("KEEL_TRACE_DIR"),
 		ReplayDir:      getenv("KEEL_REPLAY_DIR"),
 		ClientDir:      getenv("KEEL_CLIENT_DIR"),
@@ -329,6 +335,18 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_WORLD_KEEP: %q is not a duration of an hour or more", v))
 		}
 		c.WorldKeep = d
+	}
+	if c.OwnerHost != "" {
+		host, _, err := net.SplitHostPort(c.OwnerHost)
+		if err == nil {
+			err = checkAddr(c.OwnerHost)
+		}
+		if err == nil && net.ParseIP(host) == nil {
+			err = errors.New("its host is not an IP address")
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("KEEL_OWNER_HOST: %q is not an address and a port, as 10.43.0.54:9090: %w", c.OwnerHost, err))
+		}
 	}
 	if c.AccessTeam != "" && !accessTeam(c.AccessTeam) {
 		errs = append(errs, fmt.Errorf("KEEL_ACCESS_TEAM: %q is not a team's domain, as keel.cloudflareaccess.com", c.AccessTeam))

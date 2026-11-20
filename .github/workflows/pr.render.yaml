@@ -24,6 +24,11 @@
 # Each job writes its runner's CPU and speed, its tests' outcomes, its
 # slowest tests and each file's time to its summary on the run's page
 # (e2e/runner.ts, e2e/summary.ts).
+#
+# A pull request from this repository labelled hotfix runs only the built
+# page: the game as players load it. The page's, the scene's and WebKit's
+# tests run every night on main in render-nightly, five times over. The
+# label is read when the run starts, as ci.yaml reads it.
 name: pr.render
 
 on:
@@ -48,10 +53,11 @@ jobs:
     name: changes
     runs-on: ubuntu-slim
     permissions:
-      pull-requests: read # list the pull request's changed files, read whether it is a draft
+      pull-requests: read # list the pull request's changed files, read its labels and whether it is a draft
     outputs:
       page: ${{ steps.both.outputs.page == 'true' || steps.client.outputs.page == 'true' }}
       scene: ${{ steps.both.outputs.scene == 'true' || steps.client.outputs.scene == 'true' }}
+      mode: ${{ steps.mode.outputs.mode }}
     steps:
       # Whether the pull request is ready now, and this event is for its
       # head: an event's draft flag is as it was when the event was made,
@@ -65,6 +71,22 @@ jobs:
           NUMBER: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: echo "ready=$(gh api "repos/$REPO/pulls/$NUMBER" --jq '(.draft | not) and .head.sha == env.HEAD')" >> "$GITHUB_OUTPUT"
+      # hotfix only for a pull request from this repository, never a
+      # fork's, and only while it carries the label now.
+      - id: mode
+        name: The full checks, or the short form of a hotfix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          mode=full
+          if gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
+            --jq '.head.repo.full_name == env.GITHUB_REPOSITORY and any(.labels[]; .name == "hotfix")' | grep -qx true; then
+            mode=hotfix
+            echo "### The short form of a hotfix: the built page only" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
       - id: both
         if: steps.ready.outputs.ready == 'true'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -116,7 +138,7 @@ jobs:
   page:
     name: browser (the page, no drawing)
     needs: [changes]
-    if: needs.changes.outputs.page == 'true'
+    if: needs.changes.outputs.page == 'true' && needs.changes.outputs.mode == 'full'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -185,7 +207,7 @@ jobs:
   scene:
     name: browser (${{ matrix.project }}, the scene, ${{ matrix.shard }} of ${{ matrix.shards }})
     needs: [changes]
-    if: needs.changes.outputs.scene == 'true'
+    if: needs.changes.outputs.scene == 'true' && needs.changes.outputs.mode == 'full'
     strategy:
       fail-fast: false
       # Split over runners by spec file: the files of each shard but the
@@ -344,7 +366,7 @@ jobs:
   webkit:
     name: browser (webkit, the net worker)
     needs: [changes]
-    if: needs.changes.outputs.page == 'true'
+    if: needs.changes.outputs.page == 'true' && needs.changes.outputs.mode == 'full'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -412,3 +434,11 @@ jobs:
           for r in $RESULTS; do
             case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
           done
+      # GitHub counts a skipped job as passed: a short form that ran
+      # nothing must not pass.
+      - name: The short form ran the built page, if its files changed
+        if: needs.changes.outputs.mode == 'hotfix' && (needs.changes.outputs.page == 'true' || needs.changes.outputs.scene == 'true')
+        env:
+          BUILT: ${{ needs.built.result }}
+        run: |
+          if [ "$BUILT" != success ]; then echo "the built page: $BUILT, though its files changed"; exit 1; fi

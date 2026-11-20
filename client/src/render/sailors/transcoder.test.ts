@@ -1,18 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
-import { type Transcoding, transcodeFromFile, workerAddress } from './transcoder';
+import { startMessage, type Transcoding, transcodeFromFile } from './transcoder';
 
 const BLOB = 'blob:https://play.keelovertheedge.com/0b9e8c1d-1f5e-4b8a-9d1c-2e3f4a5b6c7d';
 
 describe('the transcoder’s workers', () => {
-  test('started from the page’s own file, the blob after its #', () => {
-    const address = workerAddress('/assets/transcoderworker-Bq2.js', BLOB);
-    expect(address).toBe(`/assets/transcoderworker-Bq2.js#${encodeURIComponent(BLOB)}`);
-    expect(decodeURIComponent(new URL(address, 'https://x.example').hash.slice(1))).toBe(BLOB);
-  });
-
-  test('made so whenever the loader sets how, and told what three.js tells its own', () => {
+  test('made from the page’s own file whenever the loader sets how, told the blob first, then what three.js tells its own', () => {
     let creator: (() => Worker) | null = null;
     const binary = new Uint8Array([0, 97, 115, 109]).buffer;
     const loader: Transcoding = {
@@ -30,9 +24,9 @@ describe('the transcoder’s workers', () => {
       const w = { address, sent: [] as unknown[], moved: [] as unknown[] };
       made.push(w);
       return {
-        postMessage: (m: unknown, t: unknown[]) => {
+        postMessage: (m: unknown, t?: unknown[]) => {
           w.sent.push(m);
-          w.moved.push(...t);
+          w.moved.push(...(t ?? []));
         },
       } as unknown as Worker;
     });
@@ -45,11 +39,14 @@ describe('the transcoder’s workers', () => {
     expect(creator).not.toBeNull();
     (creator as unknown as () => Worker)();
     (creator as unknown as () => Worker)();
+    // The file alone: an address the service worker's answer keeps whole.
     expect(made.map((w) => w.address)).toEqual([
-      workerAddress('/assets/transcoderworker-Bq2.js', BLOB),
-      workerAddress('/assets/transcoderworker-Bq2.js', BLOB),
+      '/assets/transcoderworker-Bq2.js',
+      '/assets/transcoderworker-Bq2.js',
     ]);
-    const first = made[0]?.sent[0] as {
+    expect(made.map((w) => w.sent[0])).toEqual([startMessage(BLOB), startMessage(BLOB)]);
+    expect(made[0]?.sent).toHaveLength(2);
+    const first = made[0]?.sent[1] as {
       type: string;
       config: unknown;
       transcoderBinary: ArrayBuffer;

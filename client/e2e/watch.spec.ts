@@ -180,6 +180,8 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   await page.getByRole('button', { name: 'Menu' }).click();
   await expect(page.getByRole('button', { name: /Free camera/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Stop watching' })).toBeVisible();
+  // Their own link to watch, and who may: on Invite friends, a tap from the menu.
+  await page.getByRole('button', { name: 'Invite friends' }).click();
   await expect(
     page.getByRole('checkbox', { name: 'Let others watch me sail (this voyage)' }),
   ).toBeVisible();
