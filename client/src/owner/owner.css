@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
-/* The world page: the game's fonts and colours, the map beside the lists,
-   at a laptop's width. */
+/* The world page: the game's fonts and colours, the map beside the lists
+   at a laptop's width, and above them on a narrower screen, down to a
+   phone's. */
 
 @font-face {
   font-family: "Alegreya Sans";
@@ -177,6 +178,11 @@ main {
 }
 
 /* Clear of the point's panel at the map's foot: on a short map it scrolls. */
+/* The key that folds the layers' box: on a narrow screen alone. */
+.layers-key {
+  display: none;
+}
+
 .layers {
   position: absolute;
   top: 8px;
@@ -217,6 +223,11 @@ aside {
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--panel);
+}
+
+/* A wide table scrolls in its card, not out of it. */
+.card {
+  overflow-x: auto;
 }
 
 .card p {
@@ -284,6 +295,17 @@ button:disabled {
   cursor: default;
 }
 
+/* Every field as the keys are, whichever card it is in. */
+input:not([type="checkbox"], [type="radio"]) {
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}
+
 .islands,
 .places,
 .lights {
@@ -303,18 +325,211 @@ button:disabled {
   text-align: left;
 }
 
+/* A narrow screen: the page itself scrolls, the map above the lists at a
+   height that leaves the first of them in sight, nothing wider than the
+   screen. */
 @media (width < 1100px) {
+  html,
+  body,
+  #app,
+  .page {
+    height: auto;
+    min-height: 100%;
+  }
+
   main {
+    flex: none;
     flex-direction: column;
   }
 
   .map-box {
-    min-height: 60vh;
+    flex: none;
+    height: 64dvh;
+    min-height: 300px;
   }
 
-  aside,
-  .accounts-tab aside {
+  .settings-tab {
+    display: flex;
+    flex-direction: column;
+    overflow-y: visible;
+  }
+
+  main aside,
+  main.accounts-tab aside {
     width: auto;
+    overflow-y: visible;
+  }
+
+  /* The long lists scroll in their cards, so the next card is near. */
+  .islands,
+  .towns,
+  .features {
+    max-height: 24em;
+    overflow-y: auto;
+  }
+
+  .accounts-list {
+    flex: none;
+    overflow-y: visible;
+  }
+
+  input,
+  select {
+    max-width: 100%;
+  }
+}
+
+/* A phone: the head in a few lines, the layers folded behind their key,
+   the point's panel across the map's foot. */
+@media (width < 700px) {
+  header {
+    padding: 6px 12px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  header .note {
+    margin: 0;
+  }
+
+  .switch {
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .switch .note {
+    font-size: 12px;
+  }
+
+  .countdown {
+    font-size: 17px;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+    margin: 4px 0 0;
+  }
+
+  main {
+    gap: 8px;
+    padding: 0 8px 8px;
+  }
+
+  .layers-key {
+    display: block;
+    margin: 0;
+  }
+
+  .layers[data-open="0"] {
+    padding: 4px;
+  }
+
+  .layers[data-open="0"] > :not(.layers-key) {
+    display: none;
+  }
+
+  .layers[data-open="1"] {
+    max-height: calc(100% - 16px);
+  }
+
+  /* The map at its own height, and what was picked under it, not over
+     it: on a phone the panels would cover most of the map. */
+  .map-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: auto;
+    min-height: 0;
+  }
+
+  .map {
+    position: relative;
+    inset: auto;
+    flex: none;
+    height: 64dvh;
+    min-height: 300px;
+  }
+
+  .point,
+  .place-box {
+    position: static;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    font-size: 13px;
+  }
+
+  /* A found account's row in what a phone shows: who, now, last active. */
+  table.accounts .more {
+    display: none;
+  }
+
+  .tiles {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .racing-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* A switch's name and state on a line, its key under them. */
+  .chat-switches {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .chat-switches .switch-row > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .islands {
+    columns: auto;
+  }
+
+  .search input,
+  .hand input,
+  .sail-with input[type="text"],
+  form.position input {
+    width: 100%;
+  }
+
+  form.position {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
+/* Fingers: keys and fields tall enough to hit, and text a phone's browser
+   does not zoom in on. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input:not([type="checkbox"], [type="radio"]) {
+    min-height: 36px;
+    font-size: 16px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    vertical-align: middle;
+  }
+
+  .layers label {
+    padding: 4px 0;
+  }
+
+  .islands button,
+  .places button,
+  .lights button,
+  .systems button,
+  button.link {
+    min-height: 32px;
+    font-size: inherit;
   }
 }
 
@@ -353,9 +568,10 @@ button:disabled {
   color: #56b4e9;
 }
 
+/* Not columns: a list of columns with a height grows sideways. */
 .places,
 .lights {
-  columns: 1;
+  columns: auto;
   max-height: 24em;
   overflow-y: auto;
 }
@@ -498,6 +714,33 @@ main[hidden] {
 
 .accounts-tab aside {
   width: 600px;
+}
+
+/* The Settings tab: the owner's settings for everyone, their cards side
+   by side where there is room, each no wider than reads well. */
+.settings-tab {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 560px));
+  align-items: start;
+  align-content: start;
+  overflow-y: auto;
+}
+
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* A card's parts, set off from each other. */
+.settings-tab .card h3 {
+  margin: 18px 0 6px;
+  color: var(--gold);
+}
+
+.settings-tab .card form {
+  margin-top: 6px;
 }
 
 .accounts-tab h3 {
@@ -760,4 +1003,286 @@ table.lines tr.reported {
 
 .racing-form .racing-boats {
   grid-column: 1 / -1;
+}
+
+/* The key a form is sent by. */
+button.primary {
+  background: var(--gold);
+  color: #1a1408;
+  font-weight: 500;
+}
+
+/* The world's cards fold at their heads (fold.tsx). */
+aside > section.card > h2[role="button"] {
+  position: relative;
+  padding-right: 24px;
+  cursor: pointer;
+  user-select: none;
+}
+
+aside > section.card > h2[role="button"]::after {
+  content: "▾";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  color: var(--faint);
+  font:
+    14px system-ui,
+    sans-serif;
+}
+
+aside > section.card > h2[role="button"]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+aside > section.card[data-folded="1"] > h2 {
+  margin-bottom: 0;
+}
+
+aside > section.card[data-folded="1"] > h2::after {
+  content: "▸";
+}
+
+aside > section.card[data-folded="1"] > :not(h2) {
+  display: none;
+}
+
+/* The Accounts tab's counts, a tile each. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.tile-label,
+table.accounts th {
+  color: var(--faint);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tile-value {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-note {
+  color: var(--faint);
+  font-size: 13px;
+}
+
+/* The search: one wide field and its key, the sailors found under it. */
+.finder .search {
+  display: flex;
+  gap: 8px;
+}
+
+.finder .search input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 16px;
+}
+
+.finder .search button {
+  margin: 0;
+  padding: 8px 18px;
+}
+
+.found-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 10px 0 2px;
+}
+
+.found-head p,
+.found-head select {
+  margin: 0;
+}
+
+table.accounts th {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+table.accounts td {
+  padding: 9px 8px;
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
+}
+
+table.accounts tbody tr:hover {
+  background: rgb(255 255 255 / 5%);
+}
+
+table.accounts tr.chosen {
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+.who {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.who bdi {
+  font-weight: 500;
+}
+
+.theirs {
+  display: block;
+  margin-top: 2px;
+}
+
+.chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chip.gold {
+  background: rgb(232 180 80 / 25%);
+  color: var(--gold);
+}
+
+.chip.sea {
+  background: rgb(86 180 233 / 22%);
+  color: #9fd4f5;
+}
+
+.chip.danger {
+  background: rgb(181 80 42 / 60%);
+}
+
+.faint {
+  color: var(--faint);
+}
+
+.empty {
+  padding: 16px 0;
+  color: var(--faint);
+  text-align: center;
+}
+
+.empty-card {
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.pages {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Racing: each figure with its unit, a changed one marked, the harbour's
+   boats in their turn as a row of marks. */
+.racing-form h3 {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+}
+
+.with-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.racing-form .with-unit input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.racing-form .racing-field > select {
+  margin: 0;
+}
+
+.unit {
+  min-width: 2.6em;
+  color: var(--faint);
+}
+
+.racing-field.changed > span:first-child {
+  color: var(--gold);
+}
+
+.racing-field.changed .with-unit input,
+.racing-field.changed > select,
+.racing-field.changed .turn {
+  box-shadow: inset 0 0 0 1px var(--gold);
+  border-radius: 6px;
+}
+
+.turn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  counter-reset: turn;
+}
+
+.turn li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  font-size: 14px;
+  counter-increment: turn;
+}
+
+.turn li:not(.add)::before {
+  content: counter(turn);
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.turn .drop {
+  min-width: 26px;
+  min-height: 26px;
+  margin: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+}
+
+.turn li.add {
+  padding: 0;
+  background: none;
+}
+
+.racing-form .turn li.add select {
+  width: auto;
+  margin: 0;
+}
+
+.racing-keys {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 8px;
+  margin: 8px 0 0;
 }

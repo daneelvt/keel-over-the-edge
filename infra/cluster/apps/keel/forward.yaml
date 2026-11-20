@@ -1,11 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Fixed addresses the owner's Mac forwards to over Tailscale SSH (go run
 # ./tools/ops -tunnel): the database's primary, for psql as reader, and
-# keel's internal listener, for its profiles and flight recorder. Each is
-# chosen from the lower part of k3s's Service range, which Kubernetes keeps
-# for addresses chosen by hand (KEP-3070). The forward is dialled from the
-# node, which kube-router always lets through; nothing else in the cluster
-# may reach either port (network-policies.yaml). No route leads to them.
+# keel's internal listener, for the owner's world page, its profiles and
+# flight recorder. Each is chosen from the lower part of k3s's Service
+# range, which Kubernetes keeps for addresses chosen by hand (KEP-3070).
+# The forward is dialled from the node, which kube-router always lets
+# through; nothing else in the cluster may reach either port
+# (network-policies.yaml). The machine also routes keel's internal
+# listener to the tailnet, for the tailnet's admins alone, so the owner's
+# phone opens the world page with no tunnel (http://10.43.0.54:9090/owner/);
+# no route leads to the database, and nothing on the internet routes to
+# either.
 apiVersion: v1
 kind: Service
 metadata:

@@ -4,7 +4,7 @@
 // centre, onto the canvas, CSS pixels from its top left, north up. A view
 // is the world point at the canvas's centre and the metres a pixel; it
 // pans by a drag, and zooms about the point under the pointer, which stays
-// under it. No map library: the disk is a square of 16.8 km drawn on one
+// under it, or between two fingers, which keep what they hold. No map library: the disk is a square of 16.8 km drawn on one
 // canvas.
 
 /** Half the side of the square the land's chart covers, m: the disk and a little past its lip. */
@@ -56,6 +56,22 @@ export function zoomAt(v: View, x: number, y: number, factor: number): View {
   const z = { ...v, scale };
   const [e2, n2] = toWorld(z, x, y);
   return { ...z, east: z.east + e - e2, north: z.north + n - n2 };
+}
+
+/** A point on the canvas, CSS pixels from its top left. */
+export type Spot = readonly [number, number];
+
+/**
+ * The view after two fingers moved from a0 and b0 to a1 and b1: zoomed by
+ * how far apart they went, and moved with the point between them.
+ */
+export function pinch(v: View, a0: Spot, b0: Spot, a1: Spot, b1: Spot): View {
+  const from = Math.hypot(a0[0] - b0[0], a0[1] - b0[1]);
+  const to = Math.hypot(a1[0] - b1[0], a1[1] - b1[1]);
+  const mx = (a1[0] + b1[0]) / 2;
+  const my = (a1[1] + b1[1]) / 2;
+  const moved = pan(v, mx - (a0[0] + b0[0]) / 2, my - (a0[1] + b0[1]) / 2);
+  return from < 1 || to < 1 ? moved : zoomAt(moved, mx, my, to / from);
 }
 
 /** The view centred on a world point at a scale. */

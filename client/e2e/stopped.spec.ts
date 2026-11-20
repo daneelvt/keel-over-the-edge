@@ -117,7 +117,9 @@ test('on the Accounts tab: found by part of its name, stopped, started again, de
   await page.locator('button[name="find"]').click();
   const row = page.locator('table.accounts tr[data-account]', { hasText: made.name });
   await expect(row).toBeVisible();
-  await expect(row).toContainText('human');
+  // A human's row: ashore, and no machine sailor's mark.
+  await expect(row).toContainText('ashore');
+  await expect(row).not.toContainText('machine sailor');
   await row.click();
   const card = page.locator('section.account-card');
   await expect(card.locator('[data-field="card-name"]')).toHaveText(made.name);
