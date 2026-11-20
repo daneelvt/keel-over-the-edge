@@ -170,9 +170,11 @@ type Log struct {
 	Cockade bool `json:"cockade,omitempty"`
 	// Certificate is the certificate the sailor holds, nil for none; and
 	// Toward, in one's own log only, where it stands toward the next, nil
-	// after the last.
-	Certificate *Certificate `json:"certificate,omitempty"`
-	Toward      *Toward      `json:"toward,omitempty"`
+	// after the last. Certificates are all it holds, in the catalog's
+	// order, each with the tasks that counted in one's own log only.
+	Certificate  *Certificate `json:"certificate,omitempty"`
+	Toward       *Toward      `json:"toward,omitempty"`
+	Certificates []Earned     `json:"certificates,omitempty"`
 }
 
 // A Figure of the abstract: Kind is distance (m), voyages, charted,

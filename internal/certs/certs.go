@@ -22,6 +22,7 @@ package certs
 import (
 	"context"
 	"fmt"
+	"math/bits"
 	"slices"
 	"strings"
 	"time"
@@ -148,6 +149,38 @@ type Task struct {
 	// Runs and Of are a course task's venture's runs that count so far,
 	// of those it asks.
 	Runs, Of int
+	// Measure is a log task's measure, "" for a course task; Have how far
+	// the log has come on it and At the mark it asks, in the measure's
+	// own unit: nautical miles for distance, a count for the rest (the
+	// weather met of four, for every weather). The lip's are apart:
+	// Closest is the closest approach survived so far, m, if Survived,
+	// and At the distance to come within.
+	Measure  string
+	Have, At float64
+	Closest  float64
+	Survived bool
+	// Met is the weather met of what every weather asks, the log's
+	// LogMet… flags.
+	Met int
+}
+
+// Earned is a certificate a sailor holds: its place in the catalog's
+// list, when and in which world it was earned, whether by hand, and the
+// tasks that counted, each by its place among the certificate's tasks,
+// with its way. A task the catalog no longer has is left out.
+type Earned struct {
+	Place  int
+	At     time.Time
+	World  int
+	ByHand bool
+	Tasks  []EarnedTask
+}
+
+// EarnedTask is a task that counted toward a certificate held: its place
+// among the certificate's tasks, and its way.
+type EarnedTask struct {
+	Task int
+	Way  string
 }
 
 // Standing is where a sailor stands on the ladder.
@@ -158,6 +191,8 @@ type Standing struct {
 	HeldName string
 	ByHand   bool
 	Since    time.Time
+	// Earned are the certificates held, in the catalog's order.
+	Earned []Earned
 	// Next is the place of the next certificate, −1 after the last, and
 	// Name its name; Needs how many of its tasks it needs, and Done how
 	// many are.
@@ -186,7 +221,11 @@ func (l *Ladder) Of(ctx context.Context, x *store.Exam, account store.AccountID)
 		if c.Earned.After(st.Since) {
 			st.Since = c.Earned
 		}
+		if e, ok := l.earned(&c); ok {
+			st.Earned = append(st.Earned, e)
+		}
 	}
+	slices.SortStableFunc(st.Earned, func(a, b Earned) int { return a.Place - b.Place })
 	st.HeldName = l.Name(st.Held)
 	st.Next = st.Held + 1
 	if st.Next >= len(l.certs) {
@@ -214,6 +253,23 @@ func (l *Ladder) Of(ctx context.Context, x *store.Exam, account store.AccountID)
 	return st, nil
 }
 
+// earned is a certificate held as the ladder knows it: false for one the
+// catalog no longer has.
+func (l *Ladder) earned(c *store.Certificate) (Earned, bool) {
+	i := l.Place(c.ID)
+	if i < 0 {
+		return Earned{}, false
+	}
+	e := Earned{Place: i, At: c.Earned, World: c.World, ByHand: c.ByHand}
+	for _, k := range c.Tasks {
+		if j := slices.IndexFunc(l.certs[i].Tasks, func(t catalog.CertificateTask) bool { return string(t.ID) == k.Task }); j >= 0 {
+			e.Tasks = append(e.Tasks, EarnedTask{Task: j, Way: k.Way})
+		}
+	}
+	slices.SortStableFunc(e.Tasks, func(a, b EarnedTask) int { return a.Task - b.Task })
+	return e, true
+}
+
 // taskOf is where a sailor stands on a task, from its runs and its log
 // sailed alone since its last certificate.
 func taskOf(t *catalog.CertificateTask, runs []store.TrialRun, solo *store.SoloLog) Task {
@@ -233,10 +289,52 @@ func taskOf(t *catalog.CertificateTask, runs []store.TrialRun, solo *store.SoloL
 		}
 		return out
 	}
-	if t.Measure != nil && t.At != nil && reached(*t.Measure, *t.At, solo) {
+	if t.Measure == nil || t.At == nil {
+		return out
+	}
+	out.Measure, out.At = string(*t.Measure), *t.At
+	out.Have = have(*t.Measure, solo)
+	switch *t.Measure {
+	case catalog.MeasureLip:
+		out.Closest, out.Survived = solo.Least, solo.Survived
+	case catalog.MeasureEveryWeather:
+		out.Met = solo.Weather & everyWeather
+		out.At = float64(bits.OnesCount(uint(everyWeather)))
+	}
+	if reached(*t.Measure, *t.At, solo) {
 		out.Done, out.Way = true, store.WayLog
 	}
 	return out
+}
+
+// have is how far a sailor's log sailed alone has come on a measure, in
+// the measure's own unit: nautical miles for distance, a count for the
+// rest; for every weather, how many of the four are met; nothing for the
+// lip, whose closest approach is no count.
+func have(m catalog.Measure, s *store.SoloLog) float64 {
+	switch m {
+	case catalog.MeasureDistance:
+		return s.Distance / 1852
+	case catalog.MeasurePlacesSeen:
+		return float64(s.Places)
+	case catalog.MeasurePlacesCharted:
+		return float64(s.Charted)
+	case catalog.MeasureLifeKinds:
+		return float64(s.LifeKinds)
+	case catalog.MeasureNights:
+		return float64(s.Nights)
+	case catalog.MeasureGales:
+		return float64(s.Gales)
+	case catalog.MeasureStormsOrFogs:
+		return float64(s.StormsOrFogs)
+	case catalog.MeasureWorlds:
+		return float64(s.Worlds)
+	case catalog.MeasureFalls:
+		return float64(s.Falls)
+	case catalog.MeasureEveryWeather:
+		return float64(bits.OnesCount(uint(s.Weather & everyWeather)))
+	}
+	return 0
 }
 
 // runsOf is how many runs a way asks.

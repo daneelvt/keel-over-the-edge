@@ -11,6 +11,8 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/certs"
+	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
+	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
@@ -297,6 +299,98 @@ func TestThreeTasksEarnDeckhand(t *testing.T) {
 	}
 	if needs := w.ex.L.Needs(&r, "beach-cat"); needs != "Helm" {
 		t.Errorf("a Deckhand's beach cat needs %q", needs)
+	}
+}
+
+// TestTheLogReadsCertificates: a sailor's own log reads each certificate
+// held, in order, with when and in which world it was earned, whether by
+// hand and the tasks that counted; and each task of the next not yet done
+// with how far a voyage since has brought it. Another reads which are
+// held, when and how, never the tasks nor the way toward the next.
+func TestTheLogReadsCertificates(t *testing.T) {
+	ctx := context.Background()
+	w := newJudgeWorld(t)
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann, tom := w.sailor("Ann Bonny", "annbonny"), w.sailor("Tom Bowline", "tornbowline")
+	logs := logbook.NewService(logbook.ServiceConfig{Store: w.s, Catalog: cat, Key: moderation.Key, Zone: time.UTC,
+		World: func() int { return w.world.Number },
+		Standing: func(ctx context.Context, id store.AccountID) (certs.Standing, error) {
+			return w.ex.L.Of(ctx, w.s.Exam(), id)
+		}})
+	// Nothing sailed: no certificates, and Deckhand's miles at nothing.
+	own, err := logs.Own(ctx, ann, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if own.Certificates != nil || own.Toward == nil || own.Toward.Tasks[1].Have != 0 || own.Toward.Tasks[1].At != 1 {
+		t.Fatalf("a new sailor's log: %+v, %+v", own.Certificates, own.Toward)
+	}
+	// Deckhand by hand: the course, a mile and a creature.
+	w.run(ann, store.CourseShort, "", false, true)
+	w.voyage(ann, 2000, 0, store.AccountID{})
+	w.met(ann, "dolphin", false)
+	deckhand := w.at
+	// Toward Helm: 1.4 NM alone, and a second kind of the sea's life.
+	w.voyage(ann, 1.4*1852+1, 0, store.AccountID{})
+	w.met(ann, "gannet", false)
+	w.met(ann, "dolphin", false)
+	if own, err = logs.Own(ctx, ann, 0); err != nil {
+		t.Fatal(err)
+	}
+	if c := own.Certificates; len(c) != 1 || c[0].Place != 0 || c[0].At != deckhand.UnixMilli() || c[0].World != w.world.Number || !c[0].ByHand ||
+		!slices.Equal(c[0].Tasks, []logbook.EarnedTask{{Task: 0, Way: store.WayHand}, {Task: 1, Way: store.WayLog}, {Task: 3, Way: store.WayLog}}) {
+		t.Errorf("Ann's Deckhand: %+v", c)
+	}
+	tw := own.Toward
+	if tw == nil || tw.Name != "Helm" || tw.Done != 1 || len(tw.Tasks) != 6 {
+		t.Fatalf("toward Helm: %+v", tw)
+	}
+	if k := tw.Tasks[2]; k.Done || k.Have != 1.4 || k.At != 3 {
+		t.Errorf("three miles, 1.4 sailed since Deckhand: %+v", k)
+	}
+	if k := tw.Tasks[4]; k.Done || k.Closest != nil || k.At != 500 {
+		t.Errorf("the lip, never approached: %+v", k)
+	}
+	if k := tw.Tasks[5]; !k.Done || k.Have != 0 {
+		t.Errorf("two kinds of life, both met: %+v", k)
+	}
+	// Helm, the autopilot on for one of its courses: not by hand.
+	w.run(ann, store.CourseTriangle, "bronze", false, true)
+	w.run(ann, store.CourseLong, "silver", true, true)
+	w.run(ann, store.CourseLong, "bronze", true, true)
+	w.voyage(ann, 2*1852, store.LogMetNight, store.AccountID{})
+	helm := w.at
+	// And a voyage toward Skipper since.
+	w.voyage(ann, 0.5*1852+1, 0, store.AccountID{})
+	if own, err = logs.Own(ctx, ann, 0); err != nil {
+		t.Fatal(err)
+	}
+	c := own.Certificates
+	if len(c) != 2 || c[0].Place != 0 || c[0].At != deckhand.UnixMilli() || c[1].Place != 1 || c[1].At != helm.UnixMilli() || c[1].ByHand ||
+		!slices.Equal(c[1].Tasks, []logbook.EarnedTask{{Task: 0, Way: store.WayHand}, {Task: 1, Way: store.WayPilot},
+			{Task: 2, Way: store.WayLog}, {Task: 3, Way: store.WayLog}, {Task: 5, Way: store.WayLog}}) {
+		t.Errorf("Ann's two certificates: %+v", c)
+	}
+	if own.Certificate == nil || own.Certificate.Name != "Helm" || own.Toward == nil || own.Toward.Name != "Skipper" {
+		t.Fatalf("Ann, a Helm: %+v, %+v", own.Certificate, own.Toward)
+	}
+	if k := own.Toward.Tasks[2]; k.Have != 0.5 || k.At != 8 {
+		t.Errorf("eight miles, half a mile sailed since Helm: %+v", k)
+	}
+	// Tom reads Ann's, which she lets sailors read.
+	if err := logs.SetShown(ctx, ann, store.LogShownSailors); err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := logs.ByName(ctx, tom, "Ann Bonny", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := theirs.Certificates; len(c) != 2 || c[0].Tasks != nil || c[1].Tasks != nil || c[1].At != helm.UnixMilli() ||
+		c[0].World != w.world.Number || !c[0].ByHand || theirs.Toward != nil {
+		t.Errorf("Ann's log as Tom reads it: %+v, %+v", c, theirs.Toward)
 	}
 }
 
