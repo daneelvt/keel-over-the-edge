@@ -43,16 +43,28 @@ concurrency:
 jobs:
   changes:
     name: changes
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-slim
     permissions:
-      pull-requests: read # list the pull request's changed files, and read its labels
+      pull-requests: read # list the pull request's changed files, read its labels and whether it is a draft
     outputs:
       go: ${{ github.event_name != 'pull_request' || steps.filter.outputs.go == 'true' }}
       client: ${{ github.event_name != 'pull_request' || steps.filter.outputs.client == 'true' }}
       image: ${{ github.event_name != 'pull_request' || steps.filter.outputs.image == 'true' }}
       mode: ${{ steps.mode.outputs.mode }}
     steps:
+      # Whether the pull request is ready now, and this event is for its
+      # head: an event's draft flag is as it was when the event was made,
+      # and events can arrive out of order. A push just before "ready for
+      # review" can arrive after it and cancel the run that was ready, and
+      # a late event for an older commit need not be tested.
+      - id: ready
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: echo "ready=$(gh api "repos/$REPO/pulls/$NUMBER" --jq '(.draft | not) and .head.sha == env.HEAD')" >> "$GITHUB_OUTPUT"
       # hotfix only for a pull request from this repository, never a
       # fork's, and only while it carries the label now.
       - id: mode
@@ -79,7 +91,7 @@ jobs:
             echo "The race detector, the full lengths, the timing and the fuzzing run after it, in the release." >> "$GITHUB_STEP_SUMMARY"
           fi
       - id: filter
-        if: github.event_name == 'pull_request'
+        if: steps.ready.outputs.ready == 'true'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
