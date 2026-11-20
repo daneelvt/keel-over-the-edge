@@ -439,6 +439,7 @@ export class SeaScene {
       drain: catalog.weather.current.drain,
     });
     this.edge.on = this.#query.get('edge') !== 'off';
+    this.spray.lip = this.edge.on ? catalog.world.disk.radius : Infinity;
     this.freeCam.lip = catalog.world.disk.radius;
     // The chase camera's arm reads the land in the world: the origin's offset.
     this.camera.origin = this.origin.world;
@@ -2423,6 +2424,11 @@ export class SeaScene {
       speed: number,
       kind: number,
     ) => {
+      // A boat gone over the lip throws none: it is falling, and the sea is
+      // behind it.
+      if (Math.hypot(east, north) >= this.spray.lip) {
+        return;
+      }
       const k = (catalog.boats[kind] ?? this.kind).physics;
       const half = k.hull.waterlineLength / 2;
       // Each hull's bow, but one lifted clear of the water.

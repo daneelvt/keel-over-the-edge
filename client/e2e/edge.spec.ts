@@ -213,14 +213,22 @@ test.describe('going over', () => {
     expect(over.over).toBeGreaterThan(0);
     expect(over.notice).toBe('Over the falls');
     expect(over.held).toBe(true);
-    // Into the third second it fades to the mist.
+    // Into the third second it fades to the mist; and its bow throws no
+    // spray as it falls: none is in the air once the last drops thrown
+    // afloat are gone.
     const fading = await page.evaluate(() => {
       const k = globalThis.keel;
-      k.sailFrames(40, 2);
-      return k.edge();
+      k.sailFrames(24, 2);
+      let spray = 0;
+      for (let i = 0; i < 16; i++) {
+        k.sailFrames(1, 2);
+        spray = Math.max(spray, k.info().spray);
+      }
+      return { ...k.edge(), spray };
     });
     expect(fading.fade).toBeGreaterThan(0.5);
     expect(fading.over).toBe(over.over);
+    expect(fading.spray).toBe(0);
     // Five seconds after going over: back at the start.
     const back = await page.evaluate(() => {
       const k = globalThis.keel;
