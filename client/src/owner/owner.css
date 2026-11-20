@@ -230,6 +230,13 @@ aside {
   overflow-x: auto;
 }
 
+/* A card keeps its own height in a column that scrolls: a card that
+   scrolls sideways may otherwise be squeezed to nothing by the column. */
+aside > *,
+.accounts-list > * {
+  flex-shrink: 0;
+}
+
 .card p {
   margin: 4px 0;
 }
