@@ -133,9 +133,9 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the sizes of its parts loaded apart (the approval page, the log, the news), the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the sizes of its parts loaded apart (the approval page, the log, the news), the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary. A pull request from this repository labelled `hotfix`, and its release, run the short form instead ([Hotfixes](#hotfixes)) | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. The built page's, when either's ran: the page built and served by keel, and a new sailor's first download to the reveal held under 4 MB on the wire (`critical.spec.ts`). Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2`; `npx vite build`, then `npx playwright test -c playwright.built.config.ts` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. The built page's, when either's ran: the page built and served by keel, and a new sailor's first download to the reveal held under 4 MB on the wire (`critical.spec.ts`); on a pull request labelled `hotfix`, this alone ([Hotfixes](#hotfixes)). Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2`; `npx vite build`, then `npx playwright test -c playwright.built.config.ts` |
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
@@ -146,12 +146,13 @@ credentials.
 | `pr.worldgen.yaml` | Pull requests labelled `worldgen` (each push while the label stays), and by hand; not a required check | The world generator over a hundred seeds: each world passes the validator's rules within its attempts; how long they took, their attempts, land and islands, in the log (see [The world](#the-world)) | `go test ./internal/worldgen -run '^TestSeeds$' -seeds 100 -v` |
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
+| `pr.hotfix.yaml` | A pull request from this repository labelled `hotfix`, or marked ready with the label; not a required check | Every other pull request's runs, queued or running, cancelled (never `main`'s), and this one's newest `ci` and `pr.render` runs run again in their short form if they read its labels before it had this one ([Hotfixes](#hotfixes)) | |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures of the client's packages and the website's | `go tool govulncheck ./...`, `npm audit signatures` in `client/` and `website/` |
 | `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game, and the art its pictures are | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the pictures' manifest against the files it names, and the page's colours, words and build, in Node; the page built by Vite and the Worker by `wrangler deploy --dry-run`, nothing uploaded; the page's checks in Chromium through `wrangler dev` (see [The website](#the-website)) | in `website/`, `npm test`, `npm run typecheck`, `npm run build`, `npm run checks` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
-| `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
-| `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
+| `release.yaml` | Every push to `main` | `ci.yaml`, whole (after a hotfix, its short form, with the whole beside the build as `after`); then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
+| `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature, its place on `main` and its gate are checked; whether the world starts empty, said before the approval | |
 | `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`; with **rebuild**, on a machine reinstalled from nothing), or `audit` (see [The machine](#the-machine)) | |
 | `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read, then the website deployed (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
@@ -7913,6 +7914,8 @@ more says so with a label of its own, and three do: `monitoring-node`
 
 Every push to `main` makes a release, by itself. Nothing in it deploys.
 `release.yaml` runs the tests (`ci.yaml`, whole), and only if they pass:
+(after a pull request labelled `hotfix`, the tests' short form, and the
+whole beside the build: [Hotfixes](#hotfixes))
 
 1. **The image.** One `docker buildx build` for `linux/amd64` and
    `linux/arm64`, on a BuildKit pinned by digest, pushed as
@@ -7932,6 +7935,12 @@ Every push to `main` makes a release, by itself. Nothing in it deploys.
    `infra/`](#the-layout-of-infra)), and writes plain YAML. `flux push
    artifact` pushes the folder as
    `ghcr.io/daneelvt/keel-manifests:<build>`, and cosign signs its digest.
+   The artifact is annotated, under the signature, with the **gate** the
+   build passed (`com.keelovertheedge.gate`: `full`, or `hotfix`) and the
+   three versions keel compares with its checkpoint as it starts
+   (`com.keelovertheedge.catalog`, `.snapshot`, `.layout`), which
+   `go run ./tools/release -annotations <gate>` prints from the very
+   constants.
 
 The **build** is the first 12 characters of the commit, as `/api/version`
 reports it. The run's summary names the build and both digests.
@@ -8048,12 +8057,24 @@ moves anything (`go run ./tools/release -promote`):
 - the build must be released, and its signature verify as Flux will
   verify it, so `prod` never names what Flux would refuse;
 - the commit it was made from must be on `main`;
-- it must not be **older** than the build production follows now.
+- it must not be **older** than the build production follows now;
+- if it passed only a hotfix's short checks (its gate is `hotfix`), the
+  full suite after them, the `after` job of its release run, must have
+  passed.
 
 **Rolling back** is promoting an older build with the *rollback* box
-ticked, which lifts only the last check. Promotions never run two at once:
-a second waits for the first. The run's summary shows the build, commit
-and digest before and after. Flux's own controllers, and what they
+ticked, which lifts only the older-build check; the *hotfix* box lifts
+only the last. Promotions never run two at once: a second waits for the
+first.
+
+While the run waits for approval, its **check** job runs the same checks
+and moves nothing (`-promote <build> -check`): its summary, there within a
+minute, says what the promote will do. Both summaries open with **whether
+the world starts empty**: the three versions in the build's annotations
+against production's build's. "This promote starts the world empty" names
+what changed; a build released before the versions were recorded reads
+"unknown". Rollbacks are told the same. Then the build, commit and digest
+before and after. Flux's own controllers, and what they
 follow, are the release's first layer, `prod/flux-system`: once a
 machine's Flux has been given it, Flux applies it itself from then on, and
 so upgrades itself.
@@ -8064,6 +8085,93 @@ removes what a release no longer holds, with two exceptions it never
 removes: the database and the namespace it is in (an annotation on each).
 Deleting one of Flux's `Kustomization` objects deletes nothing it applied
 (`deletionPolicy: Orphan`). Removing the database takes a person.
+
+### Hotfixes
+
+A fault in production: **stop the harm first**, then fix it.
+
+1. **Roll back**, when the last promote brought the fault and going back
+   is safe: the promote's check says "The world carries on" (a rollback
+   across a reset starts the world empty), and it is one build back (a
+   migration is undone safely one release back, not two). About five
+   minutes with the approval, Flux's minute and the deploy's pause:
+
+   ```sh
+   # the build: the Before row of the last promote's summary
+   gh workflow run promote.yaml -f build=0123456789ab -f rollback=true
+   ```
+
+   Then fix it the ordinary way.
+2. **Switch it off**, when one of the owner's switches covers it: chat,
+   shipmates' messages or spectators' chat, the links to come aboard,
+   boarding, the human check (the world page's Accounts tab, or `keel
+   admin`; see [Links to come aboard](#links-to-come-aboard)). Then fix it
+   the ordinary way.
+3. **A hotfix**, when production is harmed now, a rollback cannot help or
+   would start the world empty, and the fix is small. About half an hour
+   from the pull request to production, with no other runs queued.
+
+A hotfix takes the same route as every change: a pull request whose
+required checks pass, `main`, the release, the promote. Its checks run in
+a shorter form: the label **`hotfix`** on a pull request from this
+repository (only the maintainer can label one) makes `ci` and `pr-render`
+run
+
+- the Go tests short and without the race detector, every package on
+  amd64 over three jobs, and on arm64 the physics' golden files and the
+  simulation's committed replay, which hold the two machines together;
+- the smoke test beside them, the client, the image, and the built page;
+- every other check as ever: lint, CodeQL, zizmor, the secrets, the
+  licences, the catalog, the dependencies, infra, physics.
+
+What it leaves out (the race detector, the full lengths, the build for
+fused multiply-add, the tick's timing, the fuzzing) runs in the release
+beside the build, as its `after` job, on the very commit. The page's, the
+scene's and WebKit's browser tests run that night in `render-nightly`. A
+`ci` that skipped a short-form job whose files changed fails: a short form
+never passes by running nothing.
+
+The steps:
+
+```sh
+git fetch && git worktree add -b fix-the-fault ../keel-hotfix origin/main
+cd ../keel-hotfix
+# the smallest change, and a test that fails without it; no catalog,
+# snapshot or migration change unless that is the fix
+git commit -am "Fix the fault"
+git push -u origin HEAD
+gh pr create --label hotfix --fill
+```
+
+Labelling cancels every other pull request's runs, queued or running
+(`pr.hotfix`), so the hotfix waits for no runner; theirs run again on
+their next push. The nights on `main` are not cancelled: at 04:17 UTC
+`render-nightly` holds about a dozen runners, and
+`gh run cancel $(gh run list --workflow render-nightly.yaml --status in_progress --json databaseId --jq '.[0].databaseId')`
+frees them. Labelling a pull request already open runs its checks again in
+the short form. Removing the label sends it back to the full checks on its
+next run.
+
+Merge nothing else meanwhile: a strict merge would ask the hotfix to be
+brought up to date and checked again. Once merged, `release.yaml` finds
+the pull request and its label (the `gate` job), checks the short form
+again, and builds; its summary says **gate: hotfix**. Then:
+
+```sh
+gh workflow run promote.yaml -f build=0123456789ab -f hotfix=true
+```
+
+The promote refuses a hotfix's build without the box until `after` has
+passed; with it, it promotes at once, and its summary gives `after`'s
+state. Watch the game's dashboard, and `after`:
+
+```sh
+gh run watch $(gh run list --workflow release.yaml --commit <commit> --json databaseId --jq '.[0].databaseId')
+```
+
+**Afterwards.** If `after` fails, an ordinary pull request mends it; what
+is promoted stays. The hotfix's pull request says what broke and when, and
+how long each step took.
 
 ### Connecting an AI on the local cluster
 

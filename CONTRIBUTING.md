@@ -107,7 +107,10 @@ date.
 
 A pull request is squash-merged, and its description becomes the commit's
 message: keep it short, say what changes and why. Every workflow run on a
-pull request from a fork waits for the owner's approval, on every push.
+pull request from a fork waits for the owner's approval, on every push. The
+label `hotfix` is the owner's, for a fault in production: it runs the
+owner's own pull request's checks in a shorter form, and does nothing on a
+fork's.
 
 ## Name and art
 
