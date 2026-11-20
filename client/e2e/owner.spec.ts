@@ -85,6 +85,42 @@ test('the world page: the map and its layers, the islands, the world', async ({ 
   await expect(page.locator('[data-field="point"]')).not.toContainText('No boat here');
 });
 
+test('a desktop screen: the cards at their full height in one column that scrolls', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await openWorld(page);
+  await expect(page.locator('.islands button[data-island]').first()).toBeVisible();
+  // The column beside the map scrolls, and the page does not.
+  const column = await page.evaluate(() => {
+    const aside = document.querySelector('aside') as HTMLElement;
+    return {
+      scrolls: aside.scrollHeight > aside.clientHeight,
+      page: document.documentElement.scrollHeight - window.innerHeight,
+      // No card squeezed to a sliver that scrolls on its own.
+      squeezed: [...aside.querySelectorAll<HTMLElement>(':scope > section.card')]
+        .filter((c) => c.scrollHeight > c.clientHeight + 1)
+        .map((c) => c.getAttribute('aria-label')),
+    };
+  });
+  expect(column.squeezed).toEqual([]);
+  expect(column.scrolls).toBe(true);
+  expect(column.page).toBeLessThanOrEqual(0);
+  // A card folds to its head at a click on it, and opens again.
+  const card = page.locator('aside > section.card[aria-label="Islands"]');
+  const head = card.locator('> h2');
+  const open = (await card.boundingBox())?.height ?? 0;
+  await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'false');
+  await expect(card.locator('.islands')).toBeHidden();
+  const folded = (await card.boundingBox())?.height ?? 0;
+  expect(folded).toBeLessThan(60);
+  expect(open).toBeGreaterThan(4 * folded);
+  await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+  await expect(card.locator('.islands')).toBeVisible();
+});
+
 test('the owner flags their account and puts their boat where they click', async ({
   browser,
   page,
