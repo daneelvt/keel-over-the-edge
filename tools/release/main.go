@@ -8,6 +8,7 @@
 //	go run ./tools/release -render <dir> -image <image>  render every cluster's manifests with the game's image by digest, check them, write them under dir
 //	go run ./tools/release -released <build>             say whether the build is released: its manifests published and signed
 //	go run ./tools/release -promote <build> [-rollback]  make the build the release production follows
+//	go run ./tools/release -promote latest               make the newest build released the one production follows
 //
 // A build is the first 12 characters of its commit. A release is the
 // cluster's manifests, rendered with the image built from that commit, as
@@ -48,7 +49,7 @@ func main() {
 	renderDir := flag.String("render", "", "render every cluster's manifests into `dir`, which must be empty or not there")
 	image := flag.String("image", "", "the game's `image` to render with, ghcr.io/daneelvt/keel@sha256:<digest>")
 	releasedBuild := flag.String("released", "", "say whether `build` is released, as released=true or released=false")
-	promoteBuild := flag.String("promote", "", "make `build` the release production follows")
+	promoteBuild := flag.String("promote", "", "make `build` the release production follows; latest, the newest build released")
 	rollback := flag.Bool("rollback", false, "with -promote: allow a build older than the one production follows")
 	flag.Parse()
 
