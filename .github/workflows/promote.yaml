@@ -4,15 +4,17 @@
 # environment, which only main may use). Before it moves anything it checks
 # the release's signature as Flux will, that its commit is on main, that it
 # is not older than what production follows now, and that it passed every
-# check. Rolling back is promoting an older build, with the rollback box
-# ticked to say it is meant; promoting a hotfix's build, which passed only
-# the short checks, before the full suite after them has passed, is the
-# same with the hotfix box.
+# check. With no build given, it is the latest release: the newest commit
+# of main that has one. Rolling back is promoting an older build, with the
+# rollback box ticked to say it is meant; promoting a hotfix's build, which
+# passed only the short checks, before the full suite after them has
+# passed, is the same with the hotfix box.
 #
 # While the run waits for approval, check says on its summary what the
-# promote will do: whether the world starts empty, what production follows
-# now, and for a hotfix the full suite's state. The promote job checks it
-# all again when approved, and says it again on its own summary.
+# promote will do: which build, whether the world starts empty, what
+# production follows now, and for a hotfix the full suite's state. The
+# promote job checks it all again when approved, and says it again on its
+# own summary.
 #
 # go run ./tools/release -promote does the work; see its tests for each
 # refusal.
@@ -22,9 +24,10 @@ on:
   workflow_dispatch:
     inputs:
       build:
-        description: The build to promote, the first 12 characters of its commit
-        required: true
+        description: The build to promote, the first 12 characters of its commit. Empty for the latest release
+        required: false
         type: string
+        default: ""
       rollback:
         description: A rollback (allow a build older than the one production follows)
         type: boolean
@@ -74,7 +77,7 @@ jobs:
           set --
           if [ "$ROLLBACK" = "true" ]; then set -- "$@" -rollback; fi
           if [ "$HOTFIX" = "true" ]; then set -- "$@" -hotfix; fi
-          go run ./tools/release -promote "$BUILD" -check "$@"
+          go run ./tools/release -promote "${BUILD:-latest}" -check "$@"
 
   promote:
     name: promote
@@ -106,4 +109,4 @@ jobs:
           set --
           if [ "$ROLLBACK" = "true" ]; then set -- "$@" -rollback; fi
           if [ "$HOTFIX" = "true" ]; then set -- "$@" -hotfix; fi
-          go run ./tools/release -promote "$BUILD" "$@"
+          go run ./tools/release -promote "${BUILD:-latest}" "$@"

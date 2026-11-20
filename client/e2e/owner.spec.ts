@@ -85,6 +85,42 @@ test('the world page: the map and its layers, the islands, the world', async ({ 
   await expect(page.locator('[data-field="point"]')).not.toContainText('No boat here');
 });
 
+test('a desktop screen: the cards at their full height in one column that scrolls', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await openWorld(page);
+  await expect(page.locator('.islands button[data-island]').first()).toBeVisible();
+  // The column beside the map scrolls, and the page does not.
+  const column = await page.evaluate(() => {
+    const aside = document.querySelector('aside') as HTMLElement;
+    return {
+      scrolls: aside.scrollHeight > aside.clientHeight,
+      page: document.documentElement.scrollHeight - window.innerHeight,
+      // No card squeezed to a sliver that scrolls on its own.
+      squeezed: [...aside.querySelectorAll<HTMLElement>(':scope > section.card')]
+        .filter((c) => c.scrollHeight > c.clientHeight + 1)
+        .map((c) => c.getAttribute('aria-label')),
+    };
+  });
+  expect(column.squeezed).toEqual([]);
+  expect(column.scrolls).toBe(true);
+  expect(column.page).toBeLessThanOrEqual(0);
+  // A card folds to its head at a click on it, and opens again.
+  const card = page.locator('aside > section.card[aria-label="Islands"]');
+  const head = card.locator('> h2');
+  const open = (await card.boundingBox())?.height ?? 0;
+  await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'false');
+  await expect(card.locator('.islands')).toBeHidden();
+  const folded = (await card.boundingBox())?.height ?? 0;
+  expect(folded).toBeLessThan(60);
+  expect(open).toBeGreaterThan(4 * folded);
+  await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+  await expect(card.locator('.islands')).toBeVisible();
+});
+
 test('the owner flags their account and puts their boat where they click', async ({
   browser,
   page,
@@ -190,7 +226,7 @@ test('the internal listener refuses a page that is not this computer’s', async
   expect(res.status()).toBe(403);
 });
 
-// Chat's switches, together on the Accounts tab: chat for everyone,
+// Chat's switches, together on the Settings tab: chat for everyone,
 // shipmates' messages, spectators reading machine sailors' chat, then the
 // countries; each its state and its key, the keys as tall as the page's
 // others. Spectators' reading off is checked, confirmed and kept, and on
@@ -203,7 +239,7 @@ test('the owner’s chat switches stand together, each its state and its key @wo
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(owner);
   await expect(page.locator('[data-field="tick"]')).toHaveText(/^\d+$/, { timeout: 30_000 });
-  await page.locator('button[name="tab-accounts"]').click();
+  await page.locator('button[name="tab-settings"]').click();
   const group = page.locator('[data-field="chat-switches"]');
   await expect(group).toBeVisible({ timeout: 15_000 });
   const rows = group.locator('.switch-row');

@@ -934,6 +934,24 @@ func TestEachRuleFails(t *testing.T) {
 			r["from"] = append(r["from"].([]any), map[string]any{"ipBlock": map[string]any{"cidr": "203.0.113.7/32"}})
 			return objs
 		}},
+		// The tailnet's range: into a routed forward's namespace alone, on
+		// one port: not beside Traefik on the game's and the agents'
+		// listeners, nor out.
+		{"no address range but the internet", inDeploy, func(objs []Object) []Object {
+			r := Get(Find(objs, "NetworkPolicy", "keel"), "spec", "ingress", 0).(map[string]any)
+			r["from"] = append(r["from"].([]any), map[string]any{"ipBlock": map[string]any{"cidr": TailnetRange}})
+			return objs
+		}},
+		{"no address range but the internet", inDeploy, func(objs []Object) []Object {
+			r := Get(Find(objs, "NetworkPolicy", "keel"), "spec", "egress", 0).(map[string]any)
+			r["to"] = append(r["to"].([]any), map[string]any{"ipBlock": map[string]any{"cidr": TailnetRange}})
+			r["ports"] = r["ports"].([]any)[:1]
+			return objs
+		}},
+		{"no address range but the internet", inRelease(prod, "monitoring"), func(objs []Object) []Object {
+			delete(Get(Find(objs, "NetworkPolicy", "grafana"), "spec", "ingress", 0).(map[string]any), "ports")
+			return objs
+		}},
 		{"production's Secrets from Infisical", inRelease(prod, "apps"), func(objs []Object) []Object {
 			Get(Find(objs, "ExternalSecret", "keel-db-app"), "spec", "secretStoreRef").(map[string]any)["name"] = "another"
 			return objs

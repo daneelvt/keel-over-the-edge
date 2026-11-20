@@ -524,12 +524,58 @@ func TestForwards(t *testing.T) {
 	if want := "http://" + Forwards[i].IP + ":9428/insert/journald"; defaults["observe_logs_url"] != want {
 		t.Errorf("the journal is sent to %v, VictoriaLogs is at %s", defaults["observe_logs_url"], want)
 	}
+	// The machine advertises the forwards routed to the tailnet, and no
+	// other (the access role's routes).
+	data, err = os.ReadFile(filepath.Join("..", "..", "..", "infra", "ansible", "roles", "access", "defaults", "main.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var access map[string]any
+	if err := yaml.Unmarshal(data, &access); err != nil {
+		t.Fatal(err)
+	}
+	routes, _ := access["access_tailscale_routes"].([]any)
+	var got []string
+	for _, r := range routes {
+		s, _ := r.(string)
+		got = append(got, s)
+	}
+	want := TailnetRoutes()
+	slices.Sort(got)
+	slices.Sort(want)
+	if len(want) == 0 || !slices.Equal(got, want) {
+		t.Errorf("the machine advertises %v, the forwards routed to the tailnet are %v", got, want)
+	}
+	// The monitoring pages and keel's internal listener, for the owner's
+	// world page: never the database.
+	const worldPage = "keel-internal-forward"
+	for _, f := range Forwards {
+		if f.Tailnet && f.Namespace != "monitoring" && f.Service != worldPage {
+			t.Errorf("%s/%s is routed to the tailnet: the monitoring pages and the owner's world page alone are", f.Namespace, f.Service)
+		}
+	}
 	// The scraper's port on keel is the metrics listener's, and no other.
 	apps := release(t, prod, "apps")
 	keel := Container(PodSpec(Find(apps, "Deployment", Deployment)), "containers", "keel")
 	internal, err := internalPort(apps)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The world page answers the address it is routed at, and no other:
+	// keel's KEEL_OWNER_HOST is its forward's address and port, which is
+	// the internal listener's.
+	i = slices.IndexFunc(Forwards, func(f Forward) bool { return f.Service == worldPage })
+	if i < 0 || !Forwards[i].Tailnet || Forwards[i].Port != internal {
+		t.Fatalf("%s is not routed to the tailnet on the internal listener's port, %d", worldPage, internal)
+	}
+	var host string
+	for _, o := range apps {
+		if o.Kind() == "ConfigMap" && isGameConfig(o) {
+			host = Str(o, "data", "KEEL_OWNER_HOST")
+		}
+	}
+	if want := fmt.Sprintf("%s:%d", Forwards[i].IP, Forwards[i].Port); host != want {
+		t.Errorf("KEEL_OWNER_HOST is %q, the world page is routed at %s", host, want)
 	}
 	if m := containerPort(keel, "metrics"); m == 0 || m == internal || Str(Find(apps, "VMPodScrape", "keel"), "spec", "podMetricsEndpoints", 0, "port") != "metrics" {
 		t.Errorf("keel's metrics are scraped on %d, its internal listener is %d", m, internal)

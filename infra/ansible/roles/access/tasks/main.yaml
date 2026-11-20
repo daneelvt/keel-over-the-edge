@@ -51,6 +51,17 @@
     - not ((access_prefs.stdout | from_json).RunSSH and not (access_prefs.stdout | from_json).CorpDNS)
   changed_when: true
 
+# The monitoring pages' and the owner's world page's fixed addresses,
+# routed to the tailnet. k3s keeps forwarding on; Tailscale masquerades
+# what it forwards.
+- name: Route the owner's pages to the tailnet
+  ansible.builtin.command:
+    cmd: tailscale set --advertise-routes={{ access_tailscale_routes | join(',') }}
+  when:
+    - not (machine_runner | default(false))
+    - ((access_prefs.stdout | from_json).AdvertiseRoutes | default([], true) | sort) != (access_tailscale_routes | sort)
+  changed_when: true
+
 - name: Make OpenSSH's folder of settings
   ansible.builtin.file:
     path: /etc/ssh/sshd_config.d

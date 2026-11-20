@@ -4,3 +4,15 @@
 access_tailscale_keyring_url: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
 access_tailscale_keyring_sha256: 3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39
 access_tailscale_keyring: /usr/share/keyrings/tailscale-archive-keyring.gpg
+# The routes the machine advertises to the tailnet: the fixed addresses of
+# Grafana, VictoriaMetrics' and VictoriaLogs' pages in the cluster, and of
+# keel's internal listener, where the owner's world page is, so the
+# owner's devices open them with no tunnel. The tailnet policy approves
+# these and lets the tailnet's admins alone reach them, each on its port;
+# tools/internal/manifests' Forwards say which, and a test there keeps
+# this list the same.
+access_tailscale_routes:
+  - 10.43.0.50/32
+  - 10.43.0.51/32
+  - 10.43.0.52/32
+  - 10.43.0.54/32

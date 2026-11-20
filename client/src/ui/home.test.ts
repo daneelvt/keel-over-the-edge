@@ -3,9 +3,15 @@
 import { signal } from '@preact/signals';
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
-import { type HomeView, HomeWindow } from './home';
+import { ChangeWindow, type HomeView, HomeWindow } from './home';
 import {
   BACK_TO_PORT_ROYAL,
+  CHANGE_BOAT,
+  CHANGE_DETAIL,
+  CHANGE_FAILED,
+  CHANGE_QUESTION,
+  CHANGE_SHIPMATES,
+  changeLines,
   HOME_DETAIL,
   HOME_QUESTION,
   HOME_RACING,
@@ -54,15 +60,21 @@ const tap = (n: ComponentChildren, words: string) =>
 
 function home(over: Partial<HomeView> = {}) {
   let gone = 0;
+  let changed = 0;
   const h: HomeView = {
     offered: () => true,
     asking: signal(false),
     racing: () => false,
     shipmates: () => false,
     go: () => gone++,
+    changing: signal(false),
+    change: () => {
+      changed++;
+      return Promise.resolve(true);
+    },
     ...over,
   };
-  return { h, gone: () => gone };
+  return { h, gone: () => gone, changed: () => changed };
 }
 
 describe('the way home', () => {
@@ -121,6 +133,47 @@ describe('the way home', () => {
     expect(closed).toBe(1);
     expect(named(menu(home({ offered: () => false }).h), BACK_TO_PORT_ROYAL)).toBeUndefined();
     expect(named(menu(null), BACK_TO_PORT_ROYAL)).toBeUndefined();
+  });
+
+  test('Change boat: its words, and what else it says racing or with shipmates aboard', () => {
+    expect(CHANGE_BOAT).toBe('Change boat');
+    expect(CHANGE_QUESTION).toBe('Change boat?');
+    expect(changeLines(false, false)).toEqual([CHANGE_DETAIL]);
+    expect(changeLines(true, true)).toEqual([CHANGE_DETAIL, HOME_RACING, CHANGE_SHIPMATES]);
+    const both = ChangeWindow({ home: home({ racing: () => true, shipmates: () => true }).h });
+    expect(text(findAll(both, (x) => x.type === 'h2'))).toBe(CHANGE_QUESTION);
+    expect(lines(both)).toEqual([CHANGE_DETAIL, HOME_RACING, CHANGE_SHIPMATES]);
+  });
+
+  test('Change boat is in the menu beside the way home, asking first; its key takes the boat out, Stay does not', async () => {
+    let closed = 0;
+    const menu = (h: HomeView | null) =>
+      Menu({ settings: settingsSignal(null), sailor: 'Ann Bonny', close: () => closed++, home: h });
+    const a = home();
+    tap(menu(a.h), CHANGE_BOAT);
+    expect(a.h.changing.value).toBe(true);
+    expect(a.changed()).toBe(0);
+    expect(closed).toBe(1);
+    expect(named(menu(home({ offered: () => false }).h), CHANGE_BOAT)).toBeUndefined();
+    expect(named(menu(null), CHANGE_BOAT)).toBeUndefined();
+    tap(ChangeWindow({ home: a.h }), HOME_STAY);
+    expect(a.h.changing.value).toBe(false);
+    expect(a.changed()).toBe(0);
+    tap(ChangeWindow({ home: a.h }), CHANGE_BOAT);
+    await new Promise((r) => setTimeout(r));
+    expect(a.changed()).toBe(1);
+    expect(lines(ChangeWindow({ home: a.h }))).toEqual([CHANGE_DETAIL]);
+  });
+
+  test('a boat that could not be taken out is said, the question kept', async () => {
+    const a = home({ change: () => Promise.resolve(false) });
+    a.h.changing.value = true;
+    tap(ChangeWindow({ home: a.h }), CHANGE_BOAT);
+    await new Promise((r) => setTimeout(r));
+    expect(lines(ChangeWindow({ home: a.h }))).toEqual([CHANGE_DETAIL, CHANGE_FAILED]);
+    expect(a.h.changing.value).toBe(true);
+    tap(ChangeWindow({ home: a.h }), HOME_STAY);
+    expect(lines(ChangeWindow({ home: a.h }))).toEqual([CHANGE_DETAIL]);
   });
 
   test('the log says a voyage was lifted home', () => {

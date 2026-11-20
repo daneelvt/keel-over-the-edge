@@ -340,16 +340,40 @@ type Forward struct {
 	Namespace, Service, IP string
 	Port, Local            int
 	What                   string
+	// Tailnet: the machine also routes the address to the tailnet, for
+	// the tailnet's admins alone, on its one port (infra/tailnet/
+	// policy.hujson), so the owner's phone opens it with no tunnel. The
+	// monitoring pages and keel's internal listener, for the owner's world
+	// page: never the database.
+	Tailnet bool
 }
 
 // Forwards are the fixed addresses, each a Service of its own: what the
 // owner reaches from the Mac, and the journal's way to VictoriaLogs.
 var Forwards = []Forward{
-	{"monitoring", "grafana-forward", "10.43.0.51", 80, 3000, "Grafana"},
-	{"monitoring", "vmsingle-forward", "10.43.0.52", 8428, 8428, "VictoriaMetrics' UI (vmui), with vmalert's rules and alerts"},
-	{"monitoring", "victoria-logs", "10.43.0.50", 9428, 9428, "VictoriaLogs' UI"},
-	{"keel", "keel-db-forward", "10.43.0.53", 5432, 15432, "the database, for psql as reader"},
-	{"keel", "keel-internal-forward", "10.43.0.54", 9090, 9090, "keel's internal listener: profiles, the flight recorder"},
+	{"monitoring", "grafana-forward", "10.43.0.51", 80, 3000, "Grafana", true},
+	{"monitoring", "vmsingle-forward", "10.43.0.52", 8428, 8428, "VictoriaMetrics' UI (vmui), with vmalert's rules and alerts", true},
+	{"monitoring", "victoria-logs", "10.43.0.50", 9428, 9428, "VictoriaLogs' UI", true},
+	{"keel", "keel-db-forward", "10.43.0.53", 5432, 15432, "the database, for psql as reader", false},
+	{"keel", "keel-internal-forward", "10.43.0.54", 9090, 9090, "keel's internal listener: the owner's world page, profiles, the flight recorder", true},
+}
+
+// TailnetRange is the tailnet's IPv4 range, which every device on it has
+// its address in. A routed forward's packets reach the pod from there:
+// Tailscale masquerades them only after the cluster's policies have seen
+// them, so the pod's NetworkPolicy lets this range in on the pod's port.
+const TailnetRange = "100.64.0.0/10"
+
+// TailnetRoutes are the routes the machine advertises to the tailnet:
+// each forward routed there, as a /32.
+func TailnetRoutes() []string {
+	var routes []string
+	for _, f := range Forwards {
+		if f.Tailnet {
+			routes = append(routes, f.IP+"/32")
+		}
+	}
+	return routes
 }
 
 // staticBand is the part of k3s's Service range (10.43.0.0/16) Kubernetes

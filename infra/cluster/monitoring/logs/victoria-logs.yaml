@@ -32,7 +32,8 @@ spec:
 # Kubernetes keeps for addresses chosen by hand (KEP-3070): the machine's
 # journal is sent here by systemd-journal-upload, which cannot use the
 # cluster's DNS, and the owner's Mac forwards to it (go run ./tools/ops
-# -tunnel).
+# -tunnel). The machine also routes it to the tailnet, for the tailnet's
+# admins alone.
 apiVersion: v1
 kind: Service
 metadata:

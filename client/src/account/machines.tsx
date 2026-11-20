@@ -32,6 +32,7 @@ import { CLEAR_COURSE, SAIL_TO } from '../chart/coursewords';
 import { ITS_LOG, openLog } from '../ui/loglazy';
 import { sailTo } from '../ui/sailto';
 import { linkState, NewLink, ShareLink } from '../ui/sharelink';
+import { Sheet } from '../ui/sheet';
 import { useWatch } from '../ui/watchlazy';
 import {
   FLEET_DETAIL,
@@ -359,7 +360,7 @@ export function MachineList({
   const host = sailTo();
   return (
     <section aria-labelledby="machines-title">
-      <h2 id="machines-title">{heading}</h2>
+      {heading === null ? null : <h2 id="machines-title">{heading}</h2>}
       {line !== '' ? <p class="start-text start-faint">{line}</p> : null}
       {page.machines.length > 0 && (page.fleetCode ?? '') !== '' ? (
         <FleetWatchLink code={page.fleetCode ?? ''} cls="start-sign-in" />
@@ -663,7 +664,7 @@ export function MachineStart({
 export function MachinesPanel({ close }: { close: () => void }) {
   const { page, setPage, problem, fleet } = usePage();
   return (
-    <section class="panel menu account machines" aria-label="Machine sailors">
+    <Sheet name="machines" title="Machine sailors" cls="account machines" close={close}>
       {page === null ? (
         <p class="account-status" aria-live="polite">
           {problem || 'Reading your machine sailors…'}
@@ -673,7 +674,7 @@ export function MachinesPanel({ close }: { close: () => void }) {
           page={page}
           setPage={setPage}
           first={false}
-          heading="Machine sailors"
+          heading={null}
           fleet={fleet}
           sailed={close}
         />
@@ -681,7 +682,7 @@ export function MachinesPanel({ close }: { close: () => void }) {
       <button type="button" class="menu-close" onClick={close}>
         Close
       </button>
-    </section>
+    </Sheet>
   );
 }
 

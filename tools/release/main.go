@@ -10,6 +10,7 @@
 //	go run ./tools/release -annotations <gate>           print the annotations of a release that passed gate (full or hotfix), one key=value a line
 //	go run ./tools/release -promote <build> [-rollback] [-hotfix] [-check]
 //	                                                     make the build the release production follows; with -check, say what that would do
+//	go run ./tools/release -promote latest               the same, of the newest build released
 //
 // A build is the first 12 characters of its commit. A release is the
 // cluster's manifests, rendered with the image built from that commit, as
@@ -52,7 +53,7 @@ func main() {
 	renderDir := flag.String("render", "", "render every cluster's manifests into `dir`, which must be empty or not there")
 	image := flag.String("image", "", "the game's `image` to render with, ghcr.io/daneelvt/keel@sha256:<digest>")
 	releasedBuild := flag.String("released", "", "say whether `build` is released, as released=true or released=false")
-	promoteBuild := flag.String("promote", "", "make `build` the release production follows")
+	promoteBuild := flag.String("promote", "", "make `build` the release production follows; latest, the newest build released")
 	rollback := flag.Bool("rollback", false, "with -promote: allow a build older than the one production follows")
 	hotfix := flag.Bool("hotfix", false, "with -promote: allow a build that passed only the hotfix checks, before the full suite after them has passed")
 	check := flag.Bool("check", false, "with -promote: say what promoting would do, and move nothing")

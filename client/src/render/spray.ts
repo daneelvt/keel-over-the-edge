@@ -108,6 +108,8 @@ export class SprayDrops {
   capacity: number;
   /** Drops alive: data[0 … count). */
   count = 0;
+  /** The sea ends this far from the world's centre, m: a bow at or beyond it throws nothing. */
+  lip = Infinity;
   readonly data: Float64Array;
   /** Each source's last rise: its sea less its bow, m, by its place among the sources. */
   readonly #last: Float64Array;
@@ -284,6 +286,11 @@ export class SprayDrops {
       const was = this.#last[s] as number;
       this.#last[s] = gap;
       this.#had[s] = 1;
+      if (Math.hypot(src.east, src.north) >= this.lip) {
+        // Over the lip there is no sea to throw.
+        this.#had[s] = 0;
+        continue;
+      }
       if (!had || src.speed < SPRAY.minSpeed) {
         continue;
       }
@@ -318,6 +325,12 @@ export class SprayDrops {
           0.05 + 0.08 * this.#rand(),
         );
       }
+    }
+
+    // A source not given this frame is forgotten: its next rise is not
+    // measured from where another boat's bow was.
+    for (let s = Math.max(sourceCount, 0); s < this.#had.length; s++) {
+      this.#had[s] = 0;
     }
 
     if (weather.crestRate > 0 || weather.spindrift > 0) {

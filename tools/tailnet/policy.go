@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/tailscale/hujson"
+
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
 )
 
 // The tags the policy gives: production's machine, and the node a
@@ -25,11 +27,18 @@ const (
 // (Tailscale's documentation, "Tailnet policy file syntax"). Any other
 // section is refused: what the file allows is only what is read here.
 type policy struct {
-	TagOwners map[string][]string `json:"tagOwners"`
-	Grants    []grant             `json:"grants"`
-	SSH       []sshRule           `json:"ssh"`
-	Tests     []aclTest           `json:"tests"`
-	SSHTests  []sshTest           `json:"sshTests"`
+	TagOwners     map[string][]string `json:"tagOwners"`
+	AutoApprovers autoApprovers       `json:"autoApprovers"`
+	Grants        []grant             `json:"grants"`
+	SSH           []sshRule           `json:"ssh"`
+	Tests         []aclTest           `json:"tests"`
+	SSHTests      []sshTest           `json:"sshTests"`
+}
+
+// autoApprovers approves the routes a machine advertises, as it does.
+// Routes alone: no exit node.
+type autoApprovers struct {
+	Routes map[string][]string `json:"routes"`
 }
 
 type grant struct {
@@ -80,11 +89,24 @@ func parsePolicy(data []byte) (policy, error) {
 // policy's own tests must say: the web, the Kubernetes API, the kubelet.
 var closedPorts = []string{"80", "443", "6443", "10250"}
 
+// routed is the grant that lets the admins reach a forward routed to the
+// tailnet, keyed by its address, on its one port.
+func routed() map[string]string {
+	m := map[string]string{}
+	for _, f := range manifests.Forwards {
+		if f.Tailnet {
+			m[f.IP] = fmt.Sprintf("tcp:%d", f.Port)
+		}
+	}
+	return m
+}
+
 // check keeps the policy's shape: no rule for everyone, tags owned by the
 // admins alone, the workflow's node reaching SSH on the machine and no
-// other port, logging in there without a fresh sign-in only for it, and
-// Tailscale's own tests saying so, so that a change that broke it is
-// refused when it is applied.
+// other port, logging in there without a fresh sign-in only for it; the
+// machine's routes the forwards routed to the tailnet alone, which only
+// the admins reach, each on its port; and Tailscale's own tests saying
+// so, so that a change that broke it is refused when it is applied.
 func (p policy) check(raw []byte) error {
 	var errs []error
 	fail := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
@@ -117,9 +139,31 @@ func (p policy) check(raw []byte) error {
 		}
 	}
 
+	// The routes: each forward routed to the tailnet, approved for the
+	// machine alone, and nothing else.
+	toRoute := routed()
+	want := map[string]bool{}
+	for ip := range toRoute {
+		want[ip+"/32"] = true
+	}
+	for route, approvers := range p.AutoApprovers.Routes {
+		if !want[route] {
+			fail("autoApprovers: %s is no forward routed to the tailnet (tools/internal/manifests' Forwards)", route)
+		}
+		if !slices.Equal(approvers, []string{machineTag}) {
+			fail("autoApprovers: %s approved for %v, want [%s]", route, approvers, machineTag)
+		}
+	}
+	for route := range want {
+		if _, ok := p.AutoApprovers.Routes[route]; !ok {
+			fail("autoApprovers: no route %s, which the machine advertises", route)
+		}
+	}
+
 	if len(p.Grants) == 0 {
 		fail("grants: none")
 	}
+	granted := map[string]bool{}
 	for i, g := range p.Grants {
 		where := fmt.Sprintf("grants[%d]", i)
 		for _, s := range slices.Concat(g.Src, g.Dst, g.IP) {
@@ -130,6 +174,14 @@ func (p policy) check(raw []byte) error {
 		for _, s := range slices.Concat(g.Src, g.Dst) {
 			owned(where, s)
 		}
+		if len(g.Dst) == 1 && toRoute[g.Dst[0]] != "" {
+			// A routed forward: the admins alone, on its port alone.
+			if !slices.Equal(g.Src, []string{admins}) || !slices.Equal(g.IP, []string{toRoute[g.Dst[0]]}) {
+				fail("%s: %v to %s on %v, want %s alone on %s", where, g.Src, g.Dst[0], g.IP, admins, toRoute[g.Dst[0]])
+			}
+			granted[g.Dst[0]] = true
+			continue
+		}
 		if !slices.Equal(g.Dst, []string{machineTag}) || !slices.Equal(g.IP, []string{"tcp:22"}) {
 			fail("%s: to %v on %v, want %s on tcp:22 alone: SSH is the only way in", where, g.Dst, g.IP, machineTag)
 		}
@@ -137,6 +189,11 @@ func (p policy) check(raw []byte) error {
 			if s != ciTag && s != admins {
 				fail("%s: from %s, want %s or %s", where, s, ciTag, admins)
 			}
+		}
+	}
+	for ip, port := range toRoute {
+		if !granted[ip] {
+			fail("grants: none lets %s reach %s on %s, which the machine routes", admins, ip, port)
 		}
 	}
 
@@ -188,6 +245,12 @@ func (p policy) check(raw []byte) error {
 	for _, port := range closedPorts {
 		if !denied[machineTag+":"+port] {
 			fail("tests: none says %s is denied %s:%s", ciTag, machineTag, port)
+		}
+	}
+	// Nor any of the cluster's fixed addresses, routed or not.
+	for _, f := range manifests.Forwards {
+		if d := fmt.Sprintf("%s:%d", f.IP, f.Port); !denied[d] {
+			fail("tests: none says %s is denied %s (%s)", ciTag, d, f.Service)
 		}
 	}
 	sshTested := false

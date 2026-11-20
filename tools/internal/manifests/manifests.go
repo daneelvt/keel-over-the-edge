@@ -1326,8 +1326,16 @@ func namespacesFenced(objs []Object, _ Target) error {
 const internet = "0.0.0.0/0"
 
 // ipBlocks: no NetworkPolicy names an address range but the whole
-// internet, less exceptions.
+// internet, less exceptions; or, letting in a forward routed to the
+// tailnet, the tailnet's range, in that forward's namespace, on one named
+// port alone.
 func ipBlocks(objs []Object, _ Target) error {
+	routed := map[string]bool{}
+	for _, f := range Forwards {
+		if f.Tailnet {
+			routed[f.Namespace] = true
+		}
+	}
 	var errs []error
 	for _, o := range objs {
 		if o.Kind() != "NetworkPolicy" {
@@ -1336,8 +1344,12 @@ func ipBlocks(objs []Object, _ Target) error {
 		for _, dir := range [][2]string{{"ingress", "from"}, {"egress", "to"}} {
 			for _, r := range List(o, "spec", dir[0]) {
 				for _, peer := range List(r, dir[1]) {
-					if b := Get(peer, "ipBlock"); b != nil && Str(b, "cidr") != internet {
-						errs = append(errs, fmt.Errorf("%s names the range %s: only %s, with exceptions, is allowed", o.ID(), Str(b, "cidr"), internet))
+					b := Get(peer, "ipBlock")
+					switch cidr := Str(b, "cidr"); {
+					case b == nil || cidr == internet:
+					case cidr == TailnetRange && dir[0] == "ingress" && routed[Str(o, "metadata", "namespace")] && len(List(r, "ports")) == 1 && Get(b, "except") == nil:
+					default:
+						errs = append(errs, fmt.Errorf("%s names the range %s: only %s, with exceptions, is allowed, or %s in to a forward routed to the tailnet, on its one port", o.ID(), cidr, internet, TailnetRange))
 					}
 				}
 			}

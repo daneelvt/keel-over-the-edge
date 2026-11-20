@@ -12,6 +12,7 @@ import { actionName, CLOSE, MORE, moreFor, PUT_ASHORE, WHO_IS_ABOARD } from './d
 import { COG, SAIL_WITH_MACHINE_DETAIL, sailWithMeFor } from './machinewords';
 import { PlayerText } from './player';
 import { linkServer, SailWithMe } from './sailwithme';
+import { SheetHead } from './sheet';
 
 /** The link of one of the player's machine sailors, named machine. */
 export function MachineLink({
@@ -47,8 +48,8 @@ export function MachineCrew({ deck, machine }: { deck: DeckView; machine: string
   // Only while the machine sailor watched is the boat's skipper.
   const skipper = people[0]?.name === machine;
   return (
-    <section class="panel deck-window deck-list" aria-labelledby="machine-crew-title">
-      <h2 id="machine-crew-title">{WHO_IS_ABOARD}</h2>
+    <section class="panel deck-window deck-list at-side" aria-labelledby="machine-crew-title">
+      <SheetHead title={WHO_IS_ABOARD} id="machine-crew-title" close={close} />
       <ul class="deck-rows">
         {people.map((p) => (
           <li class="deck-row" key={p.seat} data-seat={p.seat}>

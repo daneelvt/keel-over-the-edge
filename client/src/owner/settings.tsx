@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Links to come aboard on the world page's Accounts tab: how long a
+// Links to come aboard on the world page's Settings tab: how long a
 // skipper's link lasts, set in minutes, hours or days, and links and
 // boarding switched on or off for everyone; and chat's switches beside
 // them, as one group: chat for everyone, shipmates' messages, spectators
