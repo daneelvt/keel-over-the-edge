@@ -242,9 +242,14 @@
   margin-top: 8px;
 }
 
-/* The log's switch, Days and Collection. */
+/* The log's switch: Days, Collection, Ribbons and Certificates, the four
+   on one line of a small phone held upright, their words whole. */
 .log-switch {
   margin: 14px 0 4px;
+}
+
+.log-sheet .log-switch button.log-key {
+  padding: 0 10px;
 }
 
 /* The days, a ruled logbook: the day, the remarks, the day's run. */
@@ -646,62 +651,192 @@
   letter-spacing: 0.04em;
 }
 
-/* One's own Ribbons open with the next certificate: its count in the
-   figures' hand, its tasks ruled as the ribbons are, a course's opening
-   the Harbourmaster's course, a 44 px touch. */
-.log-sheet .log-toward-head {
-  margin: 4px 0 2px;
-  font:
-    1.25rem / 1.3 "IM Fell English",
-    Georgia,
-    serif;
+/* In one's own log the certificate is a key to the Certificates, with how
+   far the next has come: the head's words, underlined, a 44 px touch. */
+.log-sheet .log-cert-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 2px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
 }
 
-.log-toward-tasks {
-  margin: 0 0 8px;
+.log-cert-key-words {
+  min-width: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--log-rule);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.log-cert-key:focus-visible,
+.log-cert-row:focus-visible,
+.log-task-course:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: 1px;
+}
+
+/* The certificates: the rules in faint ink, then every certificate a
+   ruled row, as a day is: its pendant, its name in the figures' hand, what
+   it opens and where the sailor stands on it; opened, its tasks. */
+.log-sheet p.log-cert-rules {
+  margin: 10px 0 6px;
+}
+
+.log-certs,
+.log-tasks {
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.log-toward-task {
+.log-certs {
+  border-top: 1px solid var(--chart-ink);
+}
+
+.log-sheet .log-cert-row {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 0 10px;
+  align-items: start;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--log-rule);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.log-sheet button.log-cert-row {
+  cursor: pointer;
+}
+
+.log-cert-row[aria-expanded="true"] {
+  border-bottom-style: dashed;
+}
+
+.log-cert-pendant {
+  display: block;
+  width: 30px;
+  height: 45px;
+}
+
+/* Not yet earned: its pendant faint, as a kind not yet found. */
+.log-cert-item:not([data-state="earned"]) .log-cert-pendant {
+  opacity: 0.38;
+}
+
+.log-cert-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.log-cert-name {
+  font:
+    1.25rem / 1.25 "IM Fell English",
+    Georgia,
+    serif;
+}
+
+.log-cert-stand {
+  color: rgb(59 46 34 / 78%);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.log-cert-item[data-state="next"] .log-cert-stand {
+  color: inherit;
+}
+
+.log-cert-tasks {
+  padding: 6px 0 8px 40px;
   border-bottom: 1px solid var(--log-rule);
 }
 
-.log-toward-line,
-.log-toward-course {
+.log-sheet p.log-cert-note {
+  margin: 8px 0 0;
+}
+
+.log-task + .log-task {
+  border-top: 1px solid var(--log-rule);
+}
+
+.log-task-line,
+.log-task-course {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  min-height: 44px;
   box-sizing: border-box;
-  padding: 10px 0;
+  padding: 8px 0;
   color: inherit;
   text-decoration: none;
   overflow-wrap: anywhere;
 }
 
-.log-toward-mark {
+/* A course's task opens the Harbourmaster's course: a 44 px touch. */
+.log-task-course {
+  min-height: 44px;
+}
+
+.log-task-mark {
   flex: none;
   width: 16px;
   text-align: center;
 }
 
-.log-toward-task.done .log-toward-mark {
+.log-task.done .log-task-mark {
   font-weight: 700;
 }
 
-.log-toward-name {
+.log-task-words {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
 }
 
-.log-toward-course .log-toward-name {
+/* How far a task has come: in the day's date's hand, in full ink. */
+.log-task-far {
+  font-size: 0.875rem;
+  font-style: italic;
+  font-variant-numeric: lining-nums;
+}
+
+.log-task-after,
+.log-task-how {
+  color: rgb(59 46 34 / 78%);
+  font-size: 0.875rem;
+}
+
+/* A task a certificate held did not need. */
+.log-task.unneeded {
+  color: rgb(59 46 34 / 78%);
+}
+
+.log-task-course .log-task-name {
   text-decoration: underline;
   text-decoration-color: var(--log-rule);
   text-underline-offset: 3px;
 }
 
-.log-toward-go {
+.log-task-go {
   flex: none;
   font-size: 1.25rem;
   line-height: 1;

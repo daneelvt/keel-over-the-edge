@@ -2,8 +2,9 @@
 
 // Sailors' logs as the server answers them, stood in for in the browser
 // tests: a long one at its fullest (names at their longest, every kind of
-// day, a week of days and five worlds), an empty one, a machine sailor's
-// and another sailor's, and the routes that answer them.
+// day, a week of days and five worlds, four certificates held and the
+// last under way), a Master's, a Deckhand's toward Helm, an empty one, a
+// machine sailor's and another sailor's, and the routes that answer them.
 
 import type { Page } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -216,25 +217,100 @@ export function ribbonsPage(now: number, from = 0) {
   return { counts: raceCounts(), races, ...(from + n < SAILED ? { more: true } : {}) };
 }
 
+/** A task of the log not yet done, how far it has come, by its measure: part of the way, or nothing yet. */
+function progress(t: { measure?: string; at?: number }, begun: boolean) {
+  const at = t.at ?? 1;
+  switch (t.measure) {
+    case 'distance':
+      return { have: begun ? Math.floor(at * 41) / 100 : 0, at };
+    case 'lip':
+      return begun ? { at, closest: at + 140 } : { at };
+    case 'every-weather':
+      return begun ? { met: ['gale', 'night-at-sea'] } : {};
+    case undefined:
+      return {};
+    default:
+      return { have: begun && at > 1 ? at - 1 : 0, at };
+  }
+}
+
 /**
- * Where the long log's sailor stands toward the last certificate, at its
- * longest: every task, done ones each way, a venture under way, the
- * Harbourmaster's courses' codes on the course tasks.
+ * Where a sailor stands toward the certificate at a place, at its
+ * longest: every task, those in done ticked each way, a venture under
+ * way (if begun), the Harbourmaster's courses' codes on the course tasks.
  */
-function toward() {
-  const master = data.certificates?.at(-1);
-  const tasks = (master?.tasks ?? []).map((t, i) => {
+function toward(place: number, done: number[], begun = true) {
+  const cert = data.certificates?.[place];
+  const tasks = (cert?.tasks ?? []).map((t, i) => {
     const course = 'courses' in t;
+    const ticked = done.includes(i);
     return {
       name: t.name,
-      ...(i === 1 ? { done: true, way: 'hand' } : i === 2 ? { done: true, way: 'log' } : {}),
-      ...(i === 3 ? { done: true, way: 'log' } : {}),
+      ...(ticked ? { done: true, way: course ? 'hand' : 'log' } : {}),
       ...(course
-        ? { course: true, of: 3, ...(i === 0 ? { runs: 2 } : {}), code: `trial${i}abcde` }
+        ? {
+            course: true,
+            of: t.venture?.runs ?? 1,
+            ...(i === 0 && !ticked && begun ? { runs: (t.venture?.runs ?? 2) - 1 } : {}),
+            code: `trial${i}abcde`,
+          }
         : {}),
     };
   });
-  return { name: master?.name ?? 'Master', needs: master?.needs ?? 5, done: 3, tasks };
+  return { name: cert?.name ?? '', needs: cert?.needs ?? 0, done: done.length, tasks };
+}
+
+/** The certificates held up to a place, each earned a week after the last, in its own world, the first and the last by hand, with the tasks that counted. */
+function held(now: number, upTo: number) {
+  return (data.certificates ?? []).slice(0, upTo).map((c, place) => ({
+    place,
+    at: now - (upTo - place) * 7 * DAY,
+    world: 14 - (upTo - place),
+    ...(place === 0 || place === upTo - 1 ? { byHand: true } : {}),
+    tasks: c.tasks.slice(0, c.needs).map((t, task) => ({
+      task,
+      way: 'courses' in t ? (place === 0 || place === upTo - 1 ? 'hand' : 'pilot') : 'log',
+    })),
+  }));
+}
+
+/** A log as these are made, as far as its certificates go. */
+interface Certified {
+  own?: boolean;
+  certificate?: { name: string; byHand?: boolean; last?: boolean; pendant?: number };
+  toward?: ReturnType<typeof toward>;
+  record?: { voyages?: number };
+}
+
+/**
+ * A log's certificates, as its page of them reads them when opened: the
+ * certificate held; every one held up to it, when, where and how; and in
+ * one's own log the tasks that counted and where the sailor stands toward
+ * the next, each task of the log not yet done with how far it has come
+ * (nothing yet, in a log with no voyages).
+ */
+export function certificatesOf(log: object) {
+  const l = log as Certified;
+  const own = l.own === true;
+  const cert = data.certificates?.find((c) => c.name === l.toward?.name);
+  const begun = (l.record?.voyages ?? 0) > 0;
+  return {
+    ...(l.certificate === undefined ? {} : { certificate: l.certificate }),
+    ...(own && l.toward !== undefined
+      ? {
+          toward: {
+            ...l.toward,
+            tasks: l.toward.tasks.map((t, i) => ({
+              ...t,
+              ...('done' in t || 'course' in t ? {} : progress(cert?.tasks[i] ?? {}, begun)),
+            })),
+          },
+        }
+      : {}),
+    certificates: held(Date.now(), l.certificate?.pendant ?? 0).map(({ tasks, ...c }) =>
+      own ? { ...c, tasks } : c,
+    ),
+  };
 }
 
 /** The player's own log at its fullest. */
@@ -270,20 +346,32 @@ export function longLog() {
       byHand: true,
       pendant: (data.certificates?.length ?? 5) - 1,
     },
-    toward: toward(),
+    toward: toward((data.certificates?.length ?? 5) - 1, [1, 2, 3]),
   };
 }
 
-/** The long log after the last certificate: its name alone in the Ribbons. */
+/** The long log after the last certificate: every certificate held. */
 export function masterLog() {
   const { toward: _, ...log } = longLog();
   return {
     ...log,
     certificate: {
       name: data.certificates?.at(-1)?.name ?? 'Master',
+      byHand: true,
       last: true,
       pendant: data.certificates?.length ?? 5,
     },
+  };
+}
+
+/** The long log of a sailor with the first certificate, toward the second: one task done, the rest part of the way. */
+export function deckhandLog() {
+  return {
+    ...longLog(),
+    name: 'Ann Bonny',
+    cockade: false,
+    certificate: { name: data.certificates?.[0]?.name ?? 'Deckhand', byHand: true, pendant: 1 },
+    toward: toward(1, [2]),
   };
 }
 
@@ -307,6 +395,8 @@ export function emptyLog() {
     world: null,
     collection: collection(false),
     zone: 'America/New_York',
+    // No certificate yet: the first under way, nothing done.
+    toward: toward(0, [], false),
   };
 }
 
@@ -333,18 +423,20 @@ export function otherLog() {
  * card that says whether a sailor can be watched.
  */
 export async function standInLogs(page: Page, own: () => object = longLog): Promise<void> {
-  // A log's races, a page at a time, on any log's route.
-  const part = (url: URL) =>
+  // A log's races, a page at a time, and its certificates, on any log's route.
+  const part = (url: URL, log: () => object) =>
     url.searchParams.get('part') === 'ribbons'
       ? ribbonsPage(Date.now(), Number(url.searchParams.get('from') ?? '0'))
-      : null;
+      : url.searchParams.get('part') === 'certificates'
+        ? certificatesOf(log())
+        : null;
   await page.route(
     (url) => url.pathname === '/api/me/log',
     (r) => {
       const url = new URL(r.request().url());
       return r.request().method() === 'PUT'
         ? r.fulfill({ json: JSON.parse(r.request().postData() ?? '{}') })
-        : r.fulfill({ json: part(url) ?? own() });
+        : r.fulfill({ json: part(url, own) ?? own() });
     },
   );
   await page.route(
@@ -353,12 +445,12 @@ export async function standInLogs(page: Page, own: () => object = longLog): Prom
       const url = new URL(r.request().url());
       return url.searchParams.get('name') === 'Nobody'
         ? r.fulfill({ status: 404, json: { error: 'not-found' } })
-        : r.fulfill({ json: part(url) ?? otherLog() });
+        : r.fulfill({ json: part(url, otherLog) ?? otherLog() });
     },
   );
   await page.route(
     (url) => url.pathname === '/api/machines/log',
-    (r) => r.fulfill({ json: part(new URL(r.request().url())) ?? machineLog() }),
+    (r) => r.fulfill({ json: part(new URL(r.request().url()), machineLog) ?? machineLog() }),
   );
   await page.route(
     (url) => url.pathname === '/api/watch/sailor',

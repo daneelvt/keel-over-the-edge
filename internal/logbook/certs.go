@@ -12,13 +12,15 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
-// A log's certificates: the one its sailor holds, at its head, and every
-// one held with when, in which world and whether by hand, read by
-// whoever may read the log; and, in the sailor's own log alone, the tasks
-// that counted toward each held and where it stands toward the next,
-// each task with how far it has come and a course's task with the
-// Harbourmaster's course that counts for it. The certificate earned is a
-// line of its day too: the log's own entry.
+// A log's certificates: the one its sailor holds, at its head, read by
+// whoever may read the log; and, in the sailor's own log alone, where it
+// stands toward the next, each task with a course's task's venture's
+// runs and the Harbourmaster's course that counts for it. The page of
+// them is read apart, when it is opened (Service.Certificates), as the
+// races are: every one held with when, in which world and whether by
+// hand, to whoever may read the log; and to its sailor alone, the tasks
+// that counted toward each and how far each task of the next has come.
+// The certificate earned is a line of its day too: the log's own entry.
 
 // Certificate is the certificate a log's sailor holds: its name, whether
 // earned by hand, and whether it is the last there is; and the pendant it
@@ -81,45 +83,61 @@ type EarnedTask struct {
 	Way  string `json:"way"`
 }
 
-// certificates sets out's certificate held and every one held; in one's
-// own, the tasks that counted and where its sailor stands toward the
-// next.
-func (s *Service) certificates(ctx context.Context, out *Log, id store.AccountID) error {
+// Certificates are a log's certificates, as the page of them reads them:
+// the highest held, nil for none; in one's own log only, where its sailor
+// stands toward the next, nil after the last, each task of the log with
+// how far it has come; and every one held, in the catalog's order, each
+// with the tasks that counted in one's own log only.
+type Certificates struct {
+	Certificate *Certificate `json:"certificate,omitempty"`
+	Toward      *Toward      `json:"toward,omitempty"`
+	Held        []Earned     `json:"certificates"`
+}
+
+// certificates are the certificates of the sailor id: the one held and,
+// in one's own log, where it stands toward the next; in full, every one
+// held too, and in one's own the tasks that counted and each task's
+// progress.
+func (s *Service) certificates(ctx context.Context, own bool, id store.AccountID, full bool) (Certificates, error) {
+	out := Certificates{Held: []Earned{}}
 	if s.cfg.Standing == nil {
-		return nil
+		return out, nil
 	}
 	st, err := s.cfg.Standing(ctx, id)
 	if err != nil {
-		return err
+		return Certificates{}, err
 	}
 	if st.Held >= 0 {
 		out.Certificate = &Certificate{Name: st.HeldName, ByHand: st.ByHand, Last: st.Next < 0, Pendant: st.Held + 1}
 	}
-	for _, e := range st.Earned {
-		c := Earned{Place: e.Place, At: ms(e.At), World: e.World, ByHand: e.ByHand}
-		if out.Own {
-			for _, k := range e.Tasks {
-				c.Tasks = append(c.Tasks, EarnedTask{Task: k.Task, Way: k.Way})
+	if full {
+		for _, e := range st.Earned {
+			c := Earned{Place: e.Place, At: ms(e.At), World: e.World, ByHand: e.ByHand}
+			if own {
+				for _, k := range e.Tasks {
+					c.Tasks = append(c.Tasks, EarnedTask{Task: k.Task, Way: k.Way})
+				}
 			}
+			out.Held = append(out.Held, c)
 		}
-		out.Certificates = append(out.Certificates, c)
 	}
-	if !out.Own || st.Next < 0 {
-		return nil
+	if !own || st.Next < 0 {
+		return out, nil
 	}
 	var codes map[string]string
 	if s.cfg.Trials != nil {
 		if codes, err = s.cfg.Trials(ctx, id); err != nil {
-			return err
+			return Certificates{}, err
 		}
 	}
-	out.Toward = towardOf(&st, codes)
-	return nil
+	out.Toward = towardOf(&st, codes, full)
+	return out, nil
 }
 
 // towardOf is a standing toward its next certificate as the log shows
-// it, each course's task with the first of its courses' codes.
-func towardOf(st *certs.Standing, codes map[string]string) *Toward {
+// it, each course's task with the first of its courses' codes; with far,
+// each task of the log not yet done with how far it has come.
+func towardOf(st *certs.Standing, codes map[string]string, far bool) *Toward {
 	t := &Toward{Name: st.Name, Needs: st.Needs, Done: min(st.Done, st.Needs), Tasks: make([]TowardTask, 0, len(st.Tasks))}
 	for _, k := range st.Tasks {
 		tt := TowardTask{Name: k.Name, Done: k.Done, Way: k.Way, Course: k.Course}
@@ -131,7 +149,9 @@ func towardOf(st *certs.Standing, codes map[string]string) *Toward {
 		}
 		if !k.Done {
 			tt.Way = ""
-			progress(&tt, &k)
+			if far {
+				progress(&tt, &k)
+			}
 		}
 		t.Tasks = append(t.Tasks, tt)
 	}

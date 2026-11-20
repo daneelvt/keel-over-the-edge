@@ -5,7 +5,9 @@ package logbook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,6 +71,22 @@ func TestLogCertificates(t *testing.T) {
 	if k := tw.Tasks[2]; !k.Done || k.Way != store.WayHand || k.Code != "" {
 		t.Errorf("the long course's task, with none open: %+v", k)
 	}
+	// The log itself says nothing of how far a task has come, nor of the
+	// certificates held before the highest: its page of certificates does.
+	if k := tw.Tasks[3]; k.Have != 0 || k.At != 0 {
+		t.Errorf("the log tells a task's progress: %+v", k)
+	}
+	page, err := svc.Certificates(ctx, ann, Who{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := page.Certificate; c == nil || c.Name != "Deckhand" || !c.ByHand || c.Pendant != 1 {
+		t.Errorf("Ann's certificate on its page: %+v", c)
+	}
+	tw = page.Toward
+	if tw == nil || tw.Name != "Helm" || tw.Needs != 4 || tw.Done != 2 || len(tw.Tasks) != 8 || tw.Tasks[0].Code != "tritritrit" {
+		t.Fatalf("Ann's way toward Helm on its page: %+v", tw)
+	}
 	// A task done says no more of how far; one of the log not yet done
 	// does: miles to a hundredth, rounded down; a count; the lip's
 	// closest approach, none before one is survived; the weather met.
@@ -92,7 +110,7 @@ func TestLogCertificates(t *testing.T) {
 	}
 	// Her Deckhand: when, in which world, by hand, and the tasks that
 	// counted.
-	if c := own.Certificates; len(c) != 1 || c[0].Place != 0 || c[0].At != earned.UnixMilli() || c[0].World != 12 || !c[0].ByHand ||
+	if c := page.Held; len(c) != 1 || c[0].Place != 0 || c[0].At != earned.UnixMilli() || c[0].World != 12 || !c[0].ByHand ||
 		!slices.Equal(c[0].Tasks, []EarnedTask{{Task: 0, Way: store.WayHand}, {Task: 1, Way: store.WayLog}, {Task: 3, Way: store.WayLog}}) {
 		t.Errorf("Ann's certificates: %+v", c)
 	}
@@ -105,8 +123,20 @@ func TestLogCertificates(t *testing.T) {
 	if other.Certificate == nil || other.Toward != nil {
 		t.Errorf("Ann's log as Kit reads it: %+v, %+v", other.Certificate, other.Toward)
 	}
-	if c := other.Certificates; len(c) != 1 || c[0].At != earned.UnixMilli() || c[0].World != 12 || !c[0].ByHand || c[0].Tasks != nil {
-		t.Errorf("Ann's certificates as Kit reads them: %+v", c)
+	theirs, err := svc.Certificates(ctx, kit, Who{Name: "Ann"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := theirs.Held; len(c) != 1 || c[0].At != earned.UnixMilli() || c[0].World != 12 || !c[0].ByHand || c[0].Tasks != nil ||
+		theirs.Toward != nil || theirs.Certificate == nil {
+		t.Errorf("Ann's certificates as Kit reads them: %+v", theirs)
+	}
+	if b, _ := json.Marshal(theirs); strings.Contains(string(b), "toward") || strings.Contains(string(b), "tasks") {
+		t.Errorf("another's certificates tell the tasks: %s", b)
+	}
+	// A log the reader may not read keeps its certificates too.
+	if _, err := svc.Certificates(ctx, ann, Who{Name: "Tom"}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("the certificates of a log kept from the reader: %v", err)
 	}
 	b, err := json.Marshal(other)
 	if err != nil {
@@ -130,15 +160,26 @@ func TestLogCertificates(t *testing.T) {
 	if kits.Certificate == nil || !kits.Certificate.Last || kits.Certificate.Pendant != 5 || kits.Toward != nil {
 		t.Errorf("Kit, a Master: %+v, %+v", kits.Certificate, kits.Toward)
 	}
-	if c := kits.Certificates; len(c) != 5 || c[0].Place != 0 || c[4].Place != 4 || !c[4].ByHand || c[4].World != 13 {
-		t.Errorf("Kit's certificates: %+v", c)
+	kitsPage, err := svc.Certificates(ctx, kit, Who{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := kitsPage.Held; len(c) != 5 || c[0].Place != 0 || c[4].Place != 4 || !c[4].ByHand || c[4].World != 13 || kitsPage.Toward != nil {
+		t.Errorf("Kit's certificates: %+v", kitsPage)
 	}
 	// A machine sailor's player sees its way; none held, no certificate.
 	m, err := svc.Machine(ctx, ann, mary, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Certificate != nil || m.Certificates != nil || m.Toward == nil || m.Toward.Name != "Deckhand" {
+	if m.Certificate != nil || m.Toward == nil || m.Toward.Name != "Deckhand" {
 		t.Errorf("Iron Mary's log: %+v, %+v", m.Certificate, m.Toward)
+	}
+	mp, err := svc.Certificates(ctx, ann, Who{Machine: mary})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := json.Marshal(mp); mp.Toward == nil || len(mp.Held) != 0 || !strings.Contains(string(b), `"certificates":[]`) {
+		t.Errorf("Iron Mary's certificates: %s", b)
 	}
 }

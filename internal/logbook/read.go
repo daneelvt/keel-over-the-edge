@@ -170,11 +170,9 @@ type Log struct {
 	Cockade bool `json:"cockade,omitempty"`
 	// Certificate is the certificate the sailor holds, nil for none; and
 	// Toward, in one's own log only, where it stands toward the next, nil
-	// after the last. Certificates are all it holds, in the catalog's
-	// order, each with the tasks that counted in one's own log only.
-	Certificate  *Certificate `json:"certificate,omitempty"`
-	Toward       *Toward      `json:"toward,omitempty"`
-	Certificates []Earned     `json:"certificates,omitempty"`
+	// after the last.
+	Certificate *Certificate `json:"certificate,omitempty"`
+	Toward      *Toward      `json:"toward,omitempty"`
 }
 
 // A Figure of the abstract: Kind is distance (m), voyages, charted,
@@ -404,6 +402,17 @@ func (s *Service) Ribbons(ctx context.Context, reader store.AccountID, who Who, 
 	return s.ribbons(ctx, r, l.ID, max(from, 0))
 }
 
+// Certificates are the certificates of who's log, as reader may read it:
+// every one held, and in one's own the tasks that counted and how far
+// each task of the next has come.
+func (s *Service) Certificates(ctx context.Context, reader store.AccountID, who Who) (Certificates, error) {
+	r, l, err := s.open(ctx, reader, who)
+	if err != nil {
+		return Certificates{}, err
+	}
+	return s.certificates(ctx, s.header(r, &l).Own, l.ID, true)
+}
+
 // readOf reads who's log for reader, world 0 for the newest.
 func (s *Service) readOf(ctx context.Context, reader store.AccountID, who Who, world int) (Log, error) {
 	r, l, err := s.open(ctx, reader, who)
@@ -565,9 +574,11 @@ func (s *Service) read(ctx context.Context, r Reader, l *store.LogSailor, world 
 		}
 		out.Cockade = len(won[l.ID].Wins) > 0
 	}
-	if err := s.certificates(ctx, &out, l.ID); err != nil {
+	c, err := s.certificates(ctx, out.Own, l.ID, false)
+	if err != nil {
 		return Log{}, err
 	}
+	out.Certificate, out.Toward = c.Certificate, c.Toward
 	return out, nil
 }
 

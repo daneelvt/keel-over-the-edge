@@ -302,7 +302,7 @@ func TestThreeTasksEarnDeckhand(t *testing.T) {
 	}
 }
 
-// TestTheLogReadsCertificates: a sailor's own log reads each certificate
+// TestTheLogReadsCertificates: a sailor's own log's certificates read each
 // held, in order, with when and in which world it was earned, whether by
 // hand and the tasks that counted; and each task of the next not yet done
 // with how far a voyage since has brought it. Another reads which are
@@ -321,12 +321,12 @@ func TestTheLogReadsCertificates(t *testing.T) {
 			return w.ex.L.Of(ctx, w.s.Exam(), id)
 		}})
 	// Nothing sailed: no certificates, and Deckhand's miles at nothing.
-	own, err := logs.Own(ctx, ann, 0)
+	own, err := logs.Certificates(ctx, ann, logbook.Who{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if own.Certificates != nil || own.Toward == nil || own.Toward.Tasks[1].Have != 0 || own.Toward.Tasks[1].At != 1 {
-		t.Fatalf("a new sailor's log: %+v, %+v", own.Certificates, own.Toward)
+	if len(own.Held) != 0 || own.Toward == nil || own.Toward.Tasks[1].Have != 0 || own.Toward.Tasks[1].At != 1 {
+		t.Fatalf("a new sailor's certificates: %+v", own)
 	}
 	// Deckhand by hand: the course, a mile and a creature.
 	w.run(ann, store.CourseShort, "", false, true)
@@ -337,10 +337,10 @@ func TestTheLogReadsCertificates(t *testing.T) {
 	w.voyage(ann, 1.4*1852+1, 0, store.AccountID{})
 	w.met(ann, "gannet", false)
 	w.met(ann, "dolphin", false)
-	if own, err = logs.Own(ctx, ann, 0); err != nil {
+	if own, err = logs.Certificates(ctx, ann, logbook.Who{}); err != nil {
 		t.Fatal(err)
 	}
-	if c := own.Certificates; len(c) != 1 || c[0].Place != 0 || c[0].At != deckhand.UnixMilli() || c[0].World != w.world.Number || !c[0].ByHand ||
+	if c := own.Held; len(c) != 1 || c[0].Place != 0 || c[0].At != deckhand.UnixMilli() || c[0].World != w.world.Number || !c[0].ByHand ||
 		!slices.Equal(c[0].Tasks, []logbook.EarnedTask{{Task: 0, Way: store.WayHand}, {Task: 1, Way: store.WayLog}, {Task: 3, Way: store.WayLog}}) {
 		t.Errorf("Ann's Deckhand: %+v", c)
 	}
@@ -365,10 +365,10 @@ func TestTheLogReadsCertificates(t *testing.T) {
 	helm := w.at
 	// And a voyage toward Skipper since.
 	w.voyage(ann, 0.5*1852+1, 0, store.AccountID{})
-	if own, err = logs.Own(ctx, ann, 0); err != nil {
+	if own, err = logs.Certificates(ctx, ann, logbook.Who{}); err != nil {
 		t.Fatal(err)
 	}
-	c := own.Certificates
+	c := own.Held
 	if len(c) != 2 || c[0].Place != 0 || c[0].At != deckhand.UnixMilli() || c[1].Place != 1 || c[1].At != helm.UnixMilli() || c[1].ByHand ||
 		!slices.Equal(c[1].Tasks, []logbook.EarnedTask{{Task: 0, Way: store.WayHand}, {Task: 1, Way: store.WayPilot},
 			{Task: 2, Way: store.WayLog}, {Task: 3, Way: store.WayLog}, {Task: 5, Way: store.WayLog}}) {
@@ -384,11 +384,11 @@ func TestTheLogReadsCertificates(t *testing.T) {
 	if err := logs.SetShown(ctx, ann, store.LogShownSailors); err != nil {
 		t.Fatal(err)
 	}
-	theirs, err := logs.ByName(ctx, tom, "Ann Bonny", 0)
+	theirs, err := logs.Certificates(ctx, tom, logbook.Who{Name: "Ann Bonny"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c := theirs.Certificates; len(c) != 2 || c[0].Tasks != nil || c[1].Tasks != nil || c[1].At != helm.UnixMilli() ||
+	if c := theirs.Held; len(c) != 2 || c[0].Tasks != nil || c[1].Tasks != nil || c[1].At != helm.UnixMilli() ||
 		c[0].World != w.world.Number || !c[0].ByHand || theirs.Toward != nil {
 		t.Errorf("Ann's log as Tom reads it: %+v, %+v", c, theirs.Toward)
 	}

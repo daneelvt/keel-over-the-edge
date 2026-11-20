@@ -122,6 +122,37 @@ describe('the notices', () => {
   });
 });
 
+describe('a line said in words of its own', () => {
+  it('is shown as its kind’s notice, and a happening of the kind takes its place, never folded with it', () => {
+    const n = new Notices(kinds, 3);
+    n.say('charted-own', 'Toward Helm · 2 of 4', 0);
+    expect(n.shown.value?.text).toBe('Toward Helm · 2 of 4');
+    expect(n.shown.value?.until).toBe(8000);
+    n.raise('charted-own', { name: 'Gannet Holm' }, 1000);
+    expect(n.shown.value?.text).toBe('You charted Gannet Holm');
+    expect(n.shown.value?.count).toBe(1);
+    n.raise('charted-own', { name: 'Saltcliff' }, 2000);
+    expect(n.shown.value?.text).toBe('You charted 2 places');
+  });
+
+  it('is not said while one of its kind is shown or waits, nor with the kind switched off', () => {
+    const n = new Notices(kinds, 3);
+    n.raise('charted-own', { name: 'Gannet Holm' }, 0);
+    n.say('charted-own', 'Toward Helm · 2 of 4', 0);
+    expect(n.shown.value?.text).toBe('You charted Gannet Holm');
+    expect(n.waiting).toBe(0);
+    // Behind another kind's, it waits its turn.
+    n.say('charted-great', 'A line', 0);
+    expect(n.waiting).toBe(1);
+    n.say('charted-great', 'Another', 0);
+    expect(n.waiting).toBe(1);
+    const off = new Notices(kinds, 3);
+    off.off.value = new Set(['own']);
+    off.say('charted-own', 'Toward Helm · 2 of 4', 0);
+    expect(off.shown.value).toBeNull();
+  });
+});
+
 describe('a notice’s key', () => {
   it('carried by the notice raised with it; the latest raised’s once folded', () => {
     const n = new Notices(kinds, 3);

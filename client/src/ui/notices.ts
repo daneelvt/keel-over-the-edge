@@ -43,6 +43,8 @@ export interface Shown {
   serial: number;
   /** Its key, if it carries one: the latest raised's. */
   action?: NoticeAction;
+  /** Said in words of its own (say): nothing folds into it. */
+  said?: true;
 }
 
 /** Fills a notice's words: {name} and the rest from fill. */
@@ -85,8 +87,18 @@ export class Notices {
     // The same kind folds into the one shown, or one waiting.
     const same = cur !== null && cur.kind === kind ? cur : this.#queue.find((q) => q.kind === kind);
     if (same !== undefined) {
+      // A line said in its own words is no count to fold into: the
+      // happening takes its place.
+      if (same.said === true) {
+        delete same.said;
+        same.count = 0;
+      }
       same.count++;
-      same.text = fillText(kind.folded, { ...fill, count: String(same.count) });
+      same.text =
+        same.count === 1
+          ? fillText(kind.text, fill)
+          : fillText(kind.folded, { ...fill, count: String(same.count) });
+      same.fill = fill;
       same.until = now + kind.stays * 1000;
       same.serial = ++this.#serial;
       if (action === undefined) {
@@ -113,6 +125,37 @@ export class Notices {
       return;
     }
     if (this.#queue.length < this.#most) {
+      this.#queue.push(n);
+    }
+  }
+
+  /**
+   * Says a line in words of its own, as a notice of the kind for on: under
+   * that kind's switch, at its level and for its time. Nothing if the kind
+   * is off, or while one of its kind is shown or waits: what happened
+   * says more than the line would.
+   */
+  say(on: string, text: string, now: number): void {
+    const kind = this.kindFor(on);
+    if (kind === undefined || this.off.value.has(kind.id)) {
+      return;
+    }
+    const cur = this.shown.value;
+    if (cur?.kind === kind || this.#queue.some((q) => q.kind === kind)) {
+      return;
+    }
+    const n: Shown = {
+      kind,
+      text,
+      count: 1,
+      fill: {},
+      until: now + kind.stays * 1000,
+      serial: ++this.#serial,
+      said: true,
+    };
+    if (cur === null) {
+      this.shown.value = n;
+    } else if (this.#queue.length < this.#most) {
       this.#queue.push(n);
     }
   }
