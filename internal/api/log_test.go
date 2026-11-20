@@ -82,6 +82,12 @@ func TestLogRoutes(t *testing.T) {
 		{"GET", "/api/log?name=Nobody+At+All&part=ribbons", "", 404, `{"error":"not-found"}`},
 		{"GET", "/api/me/log?part=ribbons&from=-1", "", 400, `{"error":"from"}`},
 		{"GET", "/api/machines/log?id=" + store.AccountID{9}.String() + "&part=ribbons", "", 404, `{"error":"not-found"}`},
+		// And its certificates, read when their page is opened: none held,
+		// with no ladder to stand on here.
+		{"GET", "/api/me/log?part=certificates", "", 200, `{"certificates":[]}`},
+		{"GET", "/api/log?name=ann+bonny&part=certificates", "", 200, `{"certificates":[]}`},
+		{"GET", "/api/log?name=Nobody+At+All&part=certificates", "", 404, `{"error":"not-found"}`},
+		{"GET", "/api/machines/log?id=" + store.AccountID{9}.String() + "&part=certificates", "", 404, `{"error":"not-found"}`},
 	} {
 		if status, body := bob.do(c.method, c.path, c.body); status != c.status || body != c.want {
 			t.Errorf("%s %s %s: %d %s", c.method, c.path, c.body, status, body)

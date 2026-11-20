@@ -77,6 +77,60 @@ func TestLogTasks(t *testing.T) {
 	}
 }
 
+// TestProgress: a task of the log says how far the log has come on it and
+// the mark it asks: miles for a distance, a count for the rest, the
+// weather met of four where every weather is asked; the lip's closest
+// approach survived apart, none until one is.
+func TestProgress(t *testing.T) {
+	solo := store.SoloLog{Distance: 1.4 * 1852, Places: 2, Weather: store.LogMetGale | store.LogRodeGale | store.LogMetNight}
+	task := func(m catalog.Measure, at float64) Task {
+		return taskOf(&catalog.CertificateTask{ID: "t", Measure: &m, At: &at}, nil, &solo)
+	}
+	if k := task(catalog.MeasureDistance, 3); k.Done || k.Measure != "distance" || k.At != 3 || k.Have < 1.39 || k.Have > 1.41 {
+		t.Errorf("the miles: %+v", k)
+	}
+	if k := task(catalog.MeasurePlacesSeen, 3); k.Done || k.Have != 2 || k.At != 3 {
+		t.Errorf("the places: %+v", k)
+	}
+	if k := task(catalog.MeasureEveryWeather, 1); k.Done || k.Have != 2 || k.At != 4 || k.Met != store.LogMetGale|store.LogMetNight {
+		t.Errorf("every weather: %+v", k)
+	}
+	if k := task(catalog.MeasureLip, 500); k.Done || k.Survived || k.At != 500 {
+		t.Errorf("the lip, never approached: %+v", k)
+	}
+	solo.Least, solo.Survived = 640, true
+	if k := task(catalog.MeasureLip, 500); k.Done || !k.Survived || k.Closest != 640 {
+		t.Errorf("the lip, 640 m off: %+v", k)
+	}
+	// A course's task has no measure.
+	if k := taskOf(&catalog.CertificateTask{ID: "c", Courses: []catalog.CertificateCourse{catalog.CertificateCourseShort},
+		Hand: &catalog.CertificateWay{Medal: catalog.MedalFinish}}, nil, &solo); k.Measure != "" || k.Have != 0 || k.At != 0 {
+		t.Errorf("a course's task: %+v", k)
+	}
+}
+
+// TestEarned: a certificate held is read by its place in the catalog's
+// list, its tasks by their places among its own, in order; a task the
+// catalog no longer has is left out, and so is a certificate it has not.
+func TestEarned(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := New(cat)
+	c := &cat.Certificates[1]
+	e, ok := l.earned(&store.Certificate{ID: string(c.ID), ByHand: true, World: 12, Tasks: []store.CertTask{
+		{Task: string(c.Tasks[3].ID), Way: store.WayLog}, {Task: "a-task-long-gone", Way: store.WayLog},
+		{Task: string(c.Tasks[0].ID), Way: store.WayHand}}})
+	if !ok || e.Place != 1 || !e.ByHand || e.World != 12 || len(e.Tasks) != 2 || e.Tasks[0] != (EarnedTask{Task: 0, Way: store.WayHand}) ||
+		e.Tasks[1] != (EarnedTask{Task: 3, Way: store.WayLog}) {
+		t.Errorf("earned: %+v %v", e, ok)
+	}
+	if _, ok := l.earned(&store.Certificate{ID: "a-certificate-long-gone"}); ok {
+		t.Error("a certificate the catalog has not was read")
+	}
+}
+
 // TestNeedsAndLine: the catalog's ladder opens each boat by one
 // certificate, the Jolly boat by none; a later certificate opens what an
 // earlier one does; the owner's card reads a standing in a line.

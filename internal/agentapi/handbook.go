@@ -61,7 +61,14 @@ func (c *Core) handbookPage(topic, name, owner, look string) (string, *refusal) 
 		return "", refuse(refusedArgs, "No page called "+fmt.Sprintf("%q", topic)+". The pages: "+strings.Join(topics, ", ")+".")
 	}
 	l := c.cfg.Limits
+	// The certificates' ladder is written from the catalog of the world
+	// sailed, so the page cannot drift from it.
+	ladder := ""
+	if s := c.sea.Load(); s != nil {
+		ladder = ladderWords(s.Catalog)
+	}
 	return strings.NewReplacer(
+		"{{ladder}}", ladder,
 		"{{orders}}", trimFloat(float64(l.Orders)), "{{orderBurst}}", fmt.Sprint(l.OrderBurst),
 		"{{looks}}", trimFloat(float64(l.Looks)), "{{lookBurst}}", fmt.Sprint(l.LookBurst),
 		"{{silence}}", durationWords(c.cfg.Silence), "{{look}}", look,

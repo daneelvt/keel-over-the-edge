@@ -3,9 +3,11 @@
 // Certificates as the phone says them: what a run counted, on the
 // finish's card (or its results, a trial's); a task of the log done, a
 // passing notice; a certificate earned, a notice that stays with See,
-// which opens the log's Ribbons, and the harbour's bell rung twice. The
-// words come from the catalog's names, handed in, so this module reads
-// no catalog of its own.
+// which opens the log's Certificates, and the harbour's bell rung twice;
+// on going to sea, once, how far the next one has come. The words come
+// from the catalog's names, handed in, so this module reads no catalog of
+// its own. How each task is done, the log's Certificates' words, is
+// certtasks.ts's, loaded with the log.
 
 import type { CertifiedIn } from '../net/messages';
 
@@ -13,18 +15,36 @@ import type { CertifiedIn } from '../net/messages';
 export const TASK_DONE = 'task-done';
 export const CERTIFICATE_EARNED = 'certificate-earned';
 
-/** The key on a certificate earned's notice: the log's Ribbons. */
+/** The key on a certificate earned's notice: the log's Certificates. */
 export const SEE = 'See';
 
 /** How many strokes the bell rings for a certificate earned. */
 export const BELL_STROKES = 2;
+
+/** A way a course's task is done, as the catalog has it: the medal a run needs, how many runs, on each of its courses, or each on a different one. */
+export interface CertWay {
+  medal: string;
+  runs?: number;
+  each?: boolean;
+  apart?: boolean;
+}
+
+/** A task as the catalog has it: a task of the log, a measure and its mark; or a course's, its courses and its two ways. */
+export interface CertTask {
+  name: string;
+  measure?: string;
+  at?: number;
+  courses?: readonly string[];
+  hand?: CertWay;
+  venture?: CertWay;
+}
 
 /** The catalog's certificates and boats, as far as their words need them. */
 export interface CertBook {
   certificates: readonly {
     name: string;
     opens: readonly string[];
-    tasks: readonly { name: string }[];
+    tasks: readonly CertTask[];
   }[];
   boats: readonly { id: string; name: string }[];
 }
@@ -99,6 +119,52 @@ export function earnedFill(book: CertBook, c: CertifiedIn): Record<string, strin
   return { cert: cert.name, boats: opensWords(book, c.certificate) };
 }
 
+/** Where a sailor stands toward the next certificate, as far as a line says it. */
+export interface TowardCount {
+  name: string;
+  done: number;
+  needs: number;
+}
+
+/** The line on going to sea: "Toward Helm · 2 of 4". */
+export function towardLine(t: TowardCount): string {
+  return `Toward ${t.name} · ${Math.min(t.done, t.needs)} of ${t.needs}`;
+}
+
+/** Where the player stands toward the next certificate, read from their own log's certificates; null after the last, or if not had. */
+export async function readToward(): Promise<TowardCount | null> {
+  try {
+    const res = await fetch('/api/me/log?part=certificates', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const t = ((await res.json()) as { toward?: Partial<TowardCount> } | null)?.toward;
+    return typeof t?.name === 'string' && typeof t.done === 'number' && typeof t.needs === 'number'
+      ? { name: t.name, done: t.done, needs: t.needs }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * On going to sea, once a visit: how far the next certificate has come,
+ * said as a passing notice under the tasks' own switch, so a sailor knows
+ * one is coming. Nothing after the last, or if the log is not had.
+ */
+export async function towardAtSea(
+  read: () => Promise<TowardCount | null>,
+  say: (on: string, text: string) => void,
+): Promise<void> {
+  const t = await read();
+  if (t !== null) {
+    say(TASK_DONE, towardLine(t));
+  }
+}
+
 /** What a page does with what it is told of certificates. */
 export interface CertParts {
   book: CertBook;
@@ -111,7 +177,7 @@ export interface CertParts {
     fill: Record<string, string>,
     action?: { label: string; act: () => void },
   ) => void;
-  /** Opens the log's Ribbons. */
+  /** Opens the log's Certificates. */
   see: () => void;
   /** Rings the bell. */
   bell: (strokes: number) => void;

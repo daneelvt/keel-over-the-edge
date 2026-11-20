@@ -1,0 +1,29 @@
+Deckhand	The Short Course	A time trial on the Short Course, sailed alone. By hand: just finish. With the autopilot: finish twice.
+Deckhand	Sail 1 NM alone	Your miles sailed alone are added each time a voyage ends.
+Deckhand	See three places	Chart a place, or end a voyage or meet a creature near one. Each place counts once.
+Deckhand	Meet a creature of the sea	Seabirds, dolphins, turtles, whales: any creature you meet while sailing alone counts.
+Helm	The Triangle, bronze	A time trial on the Triangle, sailed alone. By hand: bronze or better. With the autopilot: bronze or better, twice.
+Helm	The Long Course, bronze	A time trial on the Long Course, sailed alone. By hand: bronze or better. With the autopilot: bronze or better, twice.
+Helm	Sail 3 NM alone	Your miles sailed alone are added each time a voyage ends.
+Helm	A night at sea	Sail for half an hour after dark, in one voyage.
+Helm	Come within 500 m of the edge, and back	Sail to within 500 m of the world’s edge and come back without going over.
+Helm	Meet two kinds of the sea's life	Seabirds, dolphins, turtles, whales: meet two different kinds while sailing alone.
+Skipper	Any buoy course, silver	A time trial on any buoy course, sailed alone. By hand: silver or better. With the autopilot: bronze or better, three times.
+Skipper	An island course	A time trial on an island course, sailed alone. By hand: just finish. With the autopilot: finish on two different courses.
+Skipper	Sail 8 NM alone	Your miles sailed alone are added each time a voyage ends.
+Skipper	Ride out a gale	Find a gale on the weather chart and sail in it for ten minutes. It counts once the wind eases, or you make port.
+Skipper	Come within 100 m of the edge, and back	Sail to within 100 m of the world’s edge and come back without going over.
+Skipper	See ten places	Chart a place, or end a voyage or meet a creature near one. Each place counts once.
+Captain	An island course, bronze	A time trial on an island course, sailed alone. By hand: bronze or better. With the autopilot: bronze or better on two different courses.
+Captain	The Triangle and the Long Course, silver	A time trial on the Triangle and the Long Course, sailed alone. By hand: silver or better on both. With the autopilot: silver or better, four times in all.
+Captain	Sail 20 NM alone	Your miles sailed alone are added each time a voyage ends.
+Captain	Chart a place: be the first to see it	Be the first to sight a place nobody has charted yet.
+Captain	Ride out a storm, or make a landfall in fog	Sail in a storm until the wind eases or you make port, or sail into a port in fog.
+Captain	Come within 20 m of the edge, and back	Sail to within 20 m of the world’s edge and come back without going over.
+Master	Any buoy course, gold	A time trial on any buoy course, sailed alone. By hand: gold or better. With the autopilot: silver or better, three times.
+Master	An island course, silver	A time trial on an island course, sailed alone. By hand: silver or better. With the autopilot: silver or better on three different courses.
+Master	Sail 40 NM alone	Your miles sailed alone are added each time a voyage ends.
+Master	Sail in two worlds	Sail in two different worlds. A new world begins every week.
+Master	Come within 10 m of the edge, and back	Sail to within 10 m of the world’s edge and come back without going over.
+Master	Go over the edge	Sail right off the edge of the world. Yes, really.
+Master	Every weather: a gale, a storm, fog and a night	Sail in a gale and in a storm, sail into a port in fog, and sail half an hour after dark.

@@ -23,6 +23,7 @@ type Logs interface {
 	ByName(ctx context.Context, reader store.AccountID, name string, world int) (logbook.Log, error)
 	Machine(ctx context.Context, owner, machine store.AccountID, world int) (logbook.Log, error)
 	Ribbons(ctx context.Context, reader store.AccountID, who logbook.Who, from int) (logbook.Ribbons, error)
+	Certificates(ctx context.Context, reader store.AccountID, who logbook.Who) (logbook.Certificates, error)
 	SetShown(ctx context.Context, id store.AccountID, shown string) error
 }
 
@@ -46,11 +47,12 @@ type logAnswer struct {
 	News []news.Story `json:"news"`
 }
 
-// writeRibbons answers with a page of a log's races, kept by no cache.
-func writeRibbons(w http.ResponseWriter, rb logbook.Ribbons) {
-	body, err := json.Marshal(rb)
+// writePart answers with a part of a log, a page of its races or its
+// certificates, kept by no cache.
+func writePart(w http.ResponseWriter, part any) {
+	body, err := json.Marshal(part)
 	if err != nil {
-		panic(err) // ribbons always marshal
+		panic(err) // a log's parts always marshal
 	}
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
@@ -60,34 +62,54 @@ func writeRibbons(w http.ResponseWriter, rb logbook.Ribbons) {
 	_, _ = w.Write(append(body, '\n'))
 }
 
-// ribbonsAsked is whether a log's route was asked for its races
-// (?part=ribbons), and from which: the races after the first from=.
-func ribbonsAsked(r *http.Request) (asked bool, from int, ok bool) {
+// The parts of a log its routes answer with ?part=, read when the log's
+// page of them is opened.
+const (
+	partRibbons      = "ribbons"
+	partCertificates = "certificates"
+)
+
+// partAsked is the part a log's route was asked for: "" for the log
+// itself, its races (?part=ribbons) from the first after from=, or its
+// certificates (?part=certificates).
+func partAsked(r *http.Request) (part string, from int, ok bool) {
 	q := r.URL.Query()
-	if q.Get("part") != "ribbons" {
-		return false, 0, true
+	switch q.Get("part") {
+	case partCertificates:
+		return partCertificates, 0, true
+	case partRibbons:
+	default:
+		return "", 0, true
 	}
 	if s := q.Get("from"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 0 || n >= 1<<20 {
-			return true, 0, false
+			return partRibbons, 0, false
 		}
 		from = n
 	}
-	return true, from, true
+	return partRibbons, from, true
 }
 
-// answerRibbons answers ?part=ribbons on a log's route: the counts and a
-// page of the races of who's log, by the log's own rule.
-func (a *api) answerRibbons(w http.ResponseWriter, r *http.Request, reader store.AccountID, who logbook.Who, from int) {
-	rb, err := a.cfg.Logs.Ribbons(r.Context(), reader, who, from)
+// answerPart answers ?part= on a log's route, by the log's own rule: the
+// counts and a page of the races of who's log, or its certificates.
+func (a *api) answerPart(w http.ResponseWriter, r *http.Request, reader store.AccountID, who logbook.Who, part string, from int) {
+	var (
+		out any
+		err error
+	)
+	if part == partCertificates {
+		out, err = a.cfg.Logs.Certificates(r.Context(), reader, who)
+	} else {
+		out, err = a.cfg.Logs.Ribbons(r.Context(), reader, who, from)
+	}
 	switch {
 	case errors.Is(err, logbook.ErrNotFound):
 		refuseLog(w)
 	case err != nil:
-		a.unavailable(w, r, "reading a log's ribbons", err)
+		a.unavailable(w, r, "reading a log's "+part, err)
 	default:
-		writeRibbons(w, rb)
+		writePart(w, out)
 	}
 }
 
@@ -168,9 +190,10 @@ func (a *api) answerLog(w http.ResponseWriter, r *http.Request, l logbook.Log, e
 // ownLog answers GET /api/me/log?world=, behind auth.Required: the
 // player's own sailor's log, with its days of the world asked for, the
 // newest by default. With ?part=ribbons&from=, a page of its races
-// instead; so for every log's route.
+// instead, and with ?part=certificates its certificates; so for every
+// log's route.
 //
-//	200 the log (logbook.Log, its news with it); logbook.Ribbons
+//	200 the log (logbook.Log, its news with it); logbook.Ribbons; logbook.Certificates
 //	400 {"error":"world"} {"error":"from"}
 //	404 {"error":"not-found"}   no sailor
 //	403 {"error":"ai-account"}
@@ -184,11 +207,11 @@ func (a *api) ownLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "world")
 		return
 	}
-	if asked, from, ok := ribbonsAsked(r); !ok {
+	if part, from, ok := partAsked(r); !ok {
 		writeError(w, http.StatusBadRequest, "from")
 		return
-	} else if asked {
-		a.answerRibbons(w, r, acc.ID, logbook.Who{}, from)
+	} else if part != "" {
+		a.answerPart(w, r, acc.ID, logbook.Who{}, part, from)
 		return
 	}
 	l, err := a.cfg.Logs.Own(r.Context(), acc.ID, world)
@@ -199,7 +222,7 @@ func (a *api) ownLog(w http.ResponseWriter, r *http.Request) {
 // log of the sailor of the name, as the player may read it. No such
 // sailor, and one whose log the player may not read, are refused alike.
 //
-//	200 the log (logbook.Log, its news with it); logbook.Ribbons
+//	200 the log (logbook.Log, its news with it); logbook.Ribbons; logbook.Certificates
 //	400 {"error":"world"} {"error":"from"}
 //	404 {"error":"not-found"}
 //	403 {"error":"ai-account"}
@@ -218,11 +241,11 @@ func (a *api) sailorLog(w http.ResponseWriter, r *http.Request) {
 		refuseLog(w)
 		return
 	}
-	if asked, from, ok := ribbonsAsked(r); !ok {
+	if part, from, ok := partAsked(r); !ok {
 		writeError(w, http.StatusBadRequest, "from")
 		return
-	} else if asked {
-		a.answerRibbons(w, r, acc.ID, logbook.Who{Name: name}, from)
+	} else if part != "" {
+		a.answerPart(w, r, acc.ID, logbook.Who{Name: name}, part, from)
 		return
 	}
 	l, err := a.cfg.Logs.ByName(r.Context(), acc.ID, name, world)
@@ -233,7 +256,7 @@ func (a *api) sailorLog(w http.ResponseWriter, r *http.Request) {
 // auth.Required: the log of one of the player's machine sailors, by its
 // ID, as the machine sailors' panel lists them.
 //
-//	200 the log (logbook.Log, its news with it); logbook.Ribbons
+//	200 the log (logbook.Log, its news with it); logbook.Ribbons; logbook.Certificates
 //	400 {"error":"world"} {"error":"from"}
 //	404 {"error":"not-found"}   not the player's machine sailor
 //	403 {"error":"ai-account"}
@@ -252,11 +275,11 @@ func (a *api) machineLog(w http.ResponseWriter, r *http.Request) {
 		refuseLog(w)
 		return
 	}
-	if asked, from, ok := ribbonsAsked(r); !ok {
+	if part, from, ok := partAsked(r); !ok {
 		writeError(w, http.StatusBadRequest, "from")
 		return
-	} else if asked {
-		a.answerRibbons(w, r, acc.ID, logbook.Who{Machine: id}, from)
+	} else if part != "" {
+		a.answerPart(w, r, acc.ID, logbook.Who{Machine: id}, part, from)
 		return
 	}
 	l, err := a.cfg.Logs.Machine(r.Context(), acc.ID, id, world)

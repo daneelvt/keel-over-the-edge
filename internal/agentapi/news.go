@@ -227,7 +227,7 @@ func logWords(ctx context.Context, s *Sea, account store.AccountID) (string, *re
 				trials = bd.Trials
 			}
 		}
-		b.WriteString(certificateWords(&st, trials) + "\n")
+		b.WriteString(certificateWords(s.Catalog, &st, trials) + "\n")
 	}
 	if s.RaceRecords != nil {
 		if recs, err := s.RaceRecords(ctx, account); err == nil && len(recs) > 0 {

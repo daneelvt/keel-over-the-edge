@@ -5,7 +5,9 @@
 // since when; the abstract, four figures; then the days, a ruled logbook
 // of day, remarks and the day's run, each day opening to its voyages, with
 // the whole record at their foot and the log's other worlds; or the
-// collection, every kind found, and the rest as silhouettes. Held upright
+// collection, every kind found, and the rest as silhouettes; or the
+// ribbons, the races sailed; or the certificates, all of them in order,
+// each with what it opens, when it was earned and its tasks. Held upright
 // one column; held sideways the head and the abstract on the left, the
 // rest beside them. The reader's own log has who may read it behind its
 // ⋯; another's has the way back to the reader's own, and Watch while its
@@ -19,27 +21,46 @@ import { catalog } from '../catalog';
 import { type Look, lookWords, partsOf } from '../catalog/looks';
 import type { LogWho } from '../chart/chart';
 import {
+  asksMedal,
+  BY_HAND_MEANS,
+  howFar,
+  howTo,
+  isCourse,
+  MEDALS_MEAN,
+  opensLine,
+} from './certtasks';
+import type { CertTask } from './certwords';
+import {
   type Log,
   type LogAnswer,
+  type LogCertificates,
   type LogDay,
+  type LogEarned,
   type LogGroup,
   type LogKind,
   type LogRibbon,
   type LogShown,
   type LogSource,
-  type LogToward,
+  type LogTowardTask,
   serverLogs,
 } from './logapi';
 import { Glyph } from './logglyphs';
 import { openRaceCard, raceLink } from './loglazy';
 import {
+  afterLine,
+  anyOf,
+  CERTIFICATES,
   CLOSE,
   COCKADE,
   COLLECTION,
   certificateHead,
+  certificateKey,
+  certificateRules,
+  countsOnce,
   DAYS,
   dayCell,
   dayLong,
+  earnedLine,
   empty,
   figureWords,
   firstWords,
@@ -52,6 +73,8 @@ import {
   NO_SUCH_LOG,
   NOT_HAD,
   NOT_YET,
+  NOT_YET_EARNED,
+  nextLine,
   OLDER_RACES,
   ONLY_YOU,
   pendantWords,
@@ -68,17 +91,17 @@ import {
   shownLine,
   sinceLine,
   TRY_AGAIN,
-  towardHead,
-  towardTaskLine,
   voyageLine,
   voyageMore,
   WATCH,
   WHO_READS,
   WHOLE_RECORD,
+  wasNeeded,
+  wayWords,
   worldHeading,
   YOUR_LOG,
 } from './logwords';
-import { PendantInk } from './pendantink';
+import { PendantInk, PendantMark } from './pendantink';
 import { PlayerText } from './player';
 import { Prize, raceColour } from './prize';
 import { hangSpoon } from './raceapi';
@@ -180,7 +203,7 @@ function WhoReads({
   );
 }
 
-/** The log's head: the portrait, the name, since when, the worlds; ⋯ in one's own; the way back from another's; Watch. */
+/** The log's head: the portrait, the name, the certificate held (in one's own a key to the Certificates, with how far the next has come), since when, the worlds; ⋯ in one's own; the way back from another's; Watch. */
 function Head({
   log,
   who,
@@ -189,6 +212,7 @@ function Head({
   setMore,
   watch,
   close,
+  certificates,
 }: {
   log: Log;
   who: LogWho;
@@ -197,10 +221,12 @@ function Head({
   setMore: (on: boolean) => void;
   watch: (() => void) | null;
   close: (() => void) | null;
+  certificates: () => void;
 }) {
   const since = sinceLine(log.since, log.zone);
   const worlds = log.record.worlds;
   const cert = certificateHead(log.certificate);
+  const key = log.own ? certificateKey(log.certificate, log.toward) : null;
   const keyed = log.own && !log.machine && who.kind === 'own';
   return (
     <header class="log-head">
@@ -229,7 +255,24 @@ function Head({
             <PlayerText text={log.name} />
           </h2>
           {log.machine ? <p class="log-sub">{MACHINE_SAILOR}</p> : null}
-          {cert !== null ? (
+          {key !== null && (key.name !== '' || key.toward !== '') ? (
+            <button
+              type="button"
+              class="log-cert-key"
+              data-readout="log-certificate"
+              onClick={certificates}
+            >
+              <span class="log-cert-key-words">
+                {key.name}
+                {key.byHand ? <span class="log-by-hand"> by hand</span> : null}
+                {key.name !== '' && key.toward !== '' ? ' · ' : ''}
+                {key.toward}
+              </span>
+              <span class="log-task-go" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          ) : key === null && cert !== null ? (
             <p class="log-sub log-cert" data-readout="log-certificate">
               {cert[0]}
               {cert[1] !== '' ? <span class="log-by-hand"> {cert[1]}</span> : null}
@@ -557,65 +600,272 @@ function RibbonRow({ r, maiden, spoonKey }: { r: LogRibbon; maiden: boolean; spo
   );
 }
 
-/**
- * The head of one's own Ribbons: the next certificate and its count, its
- * tasks, done ones ticked with their way, a course's task opening the
- * Harbourmaster's course that counts for it; after the last, its name.
- */
-function TowardBlock({ log }: { log: Log }) {
-  const t: LogToward | undefined = log.toward;
-  if (t === undefined) {
-    return log.own && log.certificate?.last === true ? (
-      <section class="log-toward" data-readout="log-toward">
-        <h3 class="log-toward-head">{log.certificate.name}</h3>
-      </section>
-    ) : null;
-  }
+/** A task's line: its mark, its name and how it counted, and under them how far it has come and how it is done; a course's opening the Harbourmaster's course that counts for it. */
+function TaskLine({
+  mark,
+  name,
+  after,
+  far,
+  how,
+  code,
+  done,
+  faint,
+}: {
+  mark: string;
+  name: string;
+  after: string;
+  far: string;
+  how: string;
+  code: string;
+  done: boolean;
+  faint: boolean;
+}) {
+  const words = (
+    <>
+      <span class="log-task-mark" aria-hidden="true">
+        {mark}
+      </span>
+      <span class="log-task-words">
+        <span class="log-task-name">
+          {name}
+          {done ? <span class="log-unseen">, done</span> : null}
+          {after !== '' ? <span class="log-task-after"> · {after}</span> : null}
+        </span>
+        {far !== '' ? <span class="log-task-far">{far}</span> : null}
+        {how !== '' ? <span class="log-task-how">{how}</span> : null}
+      </span>
+    </>
+  );
   return (
-    <section class="log-toward" data-readout="log-toward">
-      <h3 class="log-toward-head">{towardHead(t)}</h3>
-      <ul class="log-toward-tasks">
-        {t.tasks.map((k) => {
-          const { mark, name, how } = towardTaskLine(k);
-          const words = (
-            <>
-              <span class="log-toward-mark" aria-hidden="true">
-                {mark}
-              </span>
-              <span class="log-toward-name">
-                {name}
-                {how !== '' ? <span class="log-faint"> · {how}</span> : null}
-              </span>
-            </>
-          );
-          const code = k.code ?? '';
+    <li class={`log-task${done ? ' done' : ''}${faint ? ' unneeded' : ''}`}>
+      {code !== '' ? (
+        <a
+          class="log-task-course"
+          href={raceLink(code)}
+          data-race={code}
+          onClick={(e) => {
+            if (openRaceCard(code)) {
+              e.preventDefault();
+            }
+          }}
+        >
+          {words}
+          <span class="log-unseen"> {SAIL_IT}</span>
+          <span class="log-task-go" aria-hidden="true">
+            ›
+          </span>
+        </a>
+      ) : (
+        <span class="log-task-line">{words}</span>
+      )}
+    </li>
+  );
+}
+
+/** Where a certificate stands in a log: held, the next, or later. */
+type CertState = 'earned' | 'next' | 'later';
+
+/** A certificate's tasks, opened: those that counted for one held; every task of the next with how far and how; a later one's with how. */
+function CertTasks({
+  place,
+  state,
+  earned,
+  toward,
+  machine,
+}: {
+  place: number;
+  state: CertState;
+  earned: LogEarned | undefined;
+  toward: LogTowardTask[];
+  machine: boolean;
+}) {
+  const certs = catalog.certificates ?? [];
+  const c = certs[place];
+  if (c === undefined) {
+    return null;
+  }
+  const tasks: readonly CertTask[] = c.tasks;
+  const counted = new Map((earned?.tasks ?? []).map((k) => [k.task, k.way]));
+  const before = certs[place - 1]?.name ?? '';
+  return (
+    <div class="log-cert-tasks">
+      <p class="log-faint">
+        {state === 'earned'
+          ? wasNeeded(c.needs, tasks.length)
+          : state === 'next'
+            ? anyOf(c.needs, tasks.length)
+            : `${anyOf(c.needs, tasks.length)}. ${countsOnce(before, machine)}`}
+      </p>
+      <ul class="log-tasks">
+        {tasks.map((t, i) => {
+          if (state === 'earned') {
+            const way = counted.get(i);
+            return (
+              <TaskLine
+                key={t.name}
+                mark={way !== undefined ? '✓' : '·'}
+                name={t.name}
+                after={wayWords(way)}
+                far=""
+                how=""
+                code=""
+                done={way !== undefined}
+                faint={way === undefined && counted.size > 0}
+              />
+            );
+          }
+          const k = state === 'next' ? toward[i] : undefined;
+          const done = k?.done === true;
           return (
-            <li key={k.name} class={k.done === true ? 'log-toward-task done' : 'log-toward-task'}>
-              {code !== '' ? (
-                <a
-                  class="log-toward-course"
-                  href={raceLink(code)}
-                  aria-label={`${name}${k.done === true ? ', done' : ''}: ${SAIL_IT}`}
-                  data-race={code}
-                  onClick={(e) => {
-                    if (openRaceCard(code)) {
-                      e.preventDefault();
-                    }
-                  }}
-                >
-                  {words}
-                  <span class="log-toward-go" aria-hidden="true">
-                    ›
-                  </span>
-                </a>
-              ) : (
-                <span class="log-toward-line">{words}</span>
-              )}
-            </li>
+            <TaskLine
+              key={t.name}
+              mark={done ? '✓' : '·'}
+              name={t.name}
+              after={done ? wayWords(k?.way) : ''}
+              far={!done && k !== undefined ? howFar(t, k) : ''}
+              how={done ? '' : howTo(t)}
+              code={k?.code ?? ''}
+              done={done}
+              faint={false}
+            />
           );
         })}
       </ul>
-    </section>
+      {state !== 'earned' && tasks.some(isCourse) ? (
+        <p class="log-faint log-cert-note">
+          {BY_HAND_MEANS}
+          {asksMedal(tasks) ? ` ${MEDALS_MEAN}` : ''}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Every certificate in order, each with its pendant, its name, the boats it opens and where the sailor stands on it; in one's own log each opens to its tasks, the next one open from the start (the last earned, once all are held). */
+function CertRows({ log, page }: { log: Log; page: LogCertificates }) {
+  const certs = catalog.certificates ?? [];
+  const book = { certificates: certs, boats: catalog.boats };
+  // The certificates held, by place: as the page lists them; from an older
+  // server, the highest held and those before it, with no more known.
+  const held = new Map<number, LogEarned>();
+  for (let i = 0; i < (page.certificate?.pendant ?? 0); i++) {
+    held.set(i, { place: i, at: 0, world: 0 });
+  }
+  for (const e of page.certificates ?? []) {
+    held.set(e.place, e);
+  }
+  const toward = log.own ? page.toward : undefined;
+  const named = certs.findIndex((c) => c.name === toward?.name);
+  const next = toward === undefined ? -1 : named >= 0 ? named : held.size;
+  const last = held.size > 0 ? Math.max(...held.keys()) : -1;
+  const [open, setOpen] = useState<number | null>(next >= 0 ? next : log.own ? last : null);
+  return (
+    <ol class="log-certs">
+      {certs.map((c, i) => {
+        const earned = held.get(i);
+        const state: CertState = earned !== undefined ? 'earned' : i === next ? 'next' : 'later';
+        const stand =
+          earned !== undefined
+            ? earnedLine(earned, log.zone)
+            : !log.own
+              ? NOT_YET_EARNED
+              : state === 'next' && toward !== undefined
+                ? nextLine(toward)
+                : afterLine(certs[i - 1]?.name ?? '');
+        const words = (
+          <>
+            <PendantMark n={i + 1} />
+            <span class="log-cert-words">
+              <span class="log-cert-name">{c.name}</span>
+              <span class="log-cert-opens">{opensLine(book, i)}</span>
+              <span class="log-cert-stand">{stand}</span>
+            </span>
+          </>
+        );
+        return (
+          <li key={c.id} class="log-cert-item" data-cert={c.name} data-state={state}>
+            {log.own ? (
+              <button
+                type="button"
+                class="log-cert-row"
+                aria-expanded={open === i}
+                onClick={() => setOpen(open === i ? null : i)}
+              >
+                {words}
+              </button>
+            ) : (
+              <div class="log-cert-row">{words}</div>
+            )}
+            {log.own && open === i ? (
+              <CertTasks
+                place={i}
+                state={state}
+                earned={earned}
+                toward={toward?.tasks ?? []}
+                machine={log.machine}
+              />
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
+ * The log's certificates: the rules nobody is otherwise told, then every
+ * certificate in order, read when the tab opens. Another's log shows
+ * which are held, when, in which world and whether by hand, and opens
+ * nothing. If the page of them cannot be had, the log's own word of the
+ * certificate held and the next one's tasks stands in.
+ */
+function Certificates({
+  log,
+  who,
+  source,
+  read,
+}: {
+  log: Log;
+  who: LogWho;
+  source: LogSource;
+  /** Told once the certificates are read and drawn. */
+  read: () => void;
+}) {
+  const [page, setPage] = useState<LogCertificates | null>(null);
+  useEffect(() => {
+    if (page !== null) {
+      read();
+    }
+  }, [page !== null]);
+  useEffect(() => {
+    let live = true;
+    void source.certificates(who).then((got) => {
+      if (live) {
+        setPage(
+          got ?? {
+            ...(log.certificate === undefined ? {} : { certificate: log.certificate }),
+            ...(log.toward === undefined ? {} : { toward: log.toward }),
+          },
+        );
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return (
+    <div class="log-certs-part" data-readout="log-certificates">
+      <p class="log-faint log-cert-rules">
+        {certificateRules((catalog.certificates ?? []).length, log.own, log.machine)}
+      </p>
+      {page === null ? (
+        <p class="log-faint" aria-live="polite">
+          {READING}
+        </p>
+      ) : (
+        <CertRows log={log} page={page} />
+      )}
+    </div>
   );
 }
 
@@ -674,7 +924,6 @@ function Ribbons({ log, who, source }: { log: Log; who: LogWho; source: LogSourc
   if (rb === null || sailed === 0) {
     return (
       <div class="log-ribbons-part">
-        <TowardBlock log={log} />
         <p class="log-faint">{NO_RACES}</p>
         {rb !== null && rb.counts.ran > 0 ? <p>{ribbonCounts(rb.counts).at(-1)}</p> : null}
       </div>
@@ -694,7 +943,6 @@ function Ribbons({ log, who, source }: { log: Log; who: LogWho; source: LogSourc
   const oldest = read.races.at(-1);
   return (
     <div class="log-ribbons-part" data-readout="log-ribbons">
-      <TowardBlock log={log} />
       <div class="log-ribbon-counts">
         {ribbonCounts(rb.counts).map((l) => (
           <p key={l}>{l}</p>
@@ -744,6 +992,15 @@ function Ribbons({ log, who, source }: { log: Log; who: LogWho; source: LogSourc
   );
 }
 
+/** The log's parts. */
+type LogTab = 'days' | 'collection' | 'ribbons' | 'certificates';
+const TABS: [LogTab, string][] = [
+  ['days', DAYS],
+  ['collection', COLLECTION],
+  ['ribbons', RIBBONS],
+  ['certificates', CERTIFICATES],
+];
+
 /** What reading a log has come to, while it is read. */
 type Reading = { kind: 'reading' } | { kind: 'read'; answer: LogAnswer };
 
@@ -767,14 +1024,15 @@ export function LogSheet({
 }) {
   const [world, setWorld] = useState(0);
   const [reading, setReading] = useState<Reading>({ kind: 'reading' });
-  const [tab, setTab] = useState<'days' | 'collection' | 'ribbons'>('days');
+  const [tab, setTab] = useState<LogTab>('days');
   const [more, setMore] = useState(false);
   const [watchable, setWatchable] = useState(false);
   const [again, setAgain] = useState(0);
   const sheet = useRef<HTMLElement | null>(null);
   const key = who.kind === 'own' ? 'own' : who.kind === 'sailor' ? `s:${who.name}` : `m:${who.id}`;
   // Another log, or the reader's own again: from its newest world, at its
-  // top; on its Ribbons when asked (a certificate earned's See).
+  // top; on the part asked for (a certificate earned's See opens its
+  // Certificates).
   const asked = who.kind === 'own' ? who.tab : undefined;
   useEffect(() => {
     setWorld(0);
@@ -785,7 +1043,7 @@ export function LogSheet({
       el.scrollTo?.({ top: 0 });
     }
   }, [key]);
-  // Asked again for its Ribbons, the log already open.
+  // Asked again for a part, the log already open.
   useEffect(() => {
     if (asked !== undefined) {
       setTab(asked);
@@ -824,6 +1082,25 @@ export function LogSheet({
   const back = who.kind === 'own' ? null : () => setWho({ kind: 'own' });
   const answer = reading.kind === 'read' ? reading.answer : null;
   const log = answer !== null && 'log' in answer ? answer.log : null;
+  // Brings the log's switch to the top of the sheet, where the sheet is
+  // one column that scrolls: the part under it is what was asked for.
+  const toSwitch = () => {
+    const el = sheet.current;
+    const sw = el?.querySelector('.log-switch');
+    if (el == null || sw == null || getComputedStyle(el).overflowY !== 'auto') {
+      return;
+    }
+    el.scrollTop += sw.getBoundingClientRect().top - el.getBoundingClientRect().top - 8;
+  };
+  // Opened on a part asked for: that part in view once the log is read,
+  // and again once the part itself is, if it is read apart.
+  const wanted = useRef(false);
+  useEffect(() => {
+    if (asked !== undefined && log !== null) {
+      wanted.current = true;
+      toSwitch();
+    }
+  }, [log === null, who]);
   const setShown = (s: LogShown) => {
     if (log === null) {
       return;
@@ -894,13 +1171,18 @@ export function LogSheet({
                 watchable && watch !== null && who.kind !== 'own' ? () => watch(who.name) : null
               }
               close={close}
+              certificates={() => {
+                setTab('certificates');
+                wanted.current = true;
+                toSwitch();
+              }}
             />
             {more ? <WhoReads log={log} set={setShown} close={() => setMore(false)} /> : null}
             <Abstract log={log} />
           </div>
           <div class="log-main">
             <div class="log-keys log-switch" role="tablist" aria-label="The log">
-              {(['days', 'collection', 'ribbons'] as const).map((t) => (
+              {TABS.map(([t, words]) => (
                 <button
                   key={t}
                   type="button"
@@ -909,7 +1191,7 @@ export function LogSheet({
                   aria-selected={tab === t}
                   onClick={() => setTab(t)}
                 >
-                  {t === 'days' ? DAYS : t === 'collection' ? COLLECTION : RIBBONS}
+                  {words}
                 </button>
               ))}
             </div>
@@ -917,8 +1199,21 @@ export function LogSheet({
               <Days log={log} read={setWorld} />
             ) : tab === 'collection' ? (
               <Collection log={log} />
-            ) : (
+            ) : tab === 'ribbons' ? (
               <Ribbons key={`${key}-${again}`} log={log} who={who} source={source} />
+            ) : (
+              <Certificates
+                key={`${key}-${again}`}
+                log={log}
+                who={who}
+                source={source}
+                read={() => {
+                  if (wanted.current) {
+                    wanted.current = false;
+                    toSwitch();
+                  }
+                }}
+              />
             )}
           </div>
         </>

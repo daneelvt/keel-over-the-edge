@@ -207,6 +207,33 @@ export interface Log {
   toward?: LogToward;
 }
 
+/**
+ * A log's certificates, read when its page of them is opened: the
+ * certificate held; in one's own log alone, where the sailor stands
+ * toward the next, each task of the log with how far it has come; and
+ * every certificate held, in the catalog's order (none from an older
+ * server, which answers with the log itself).
+ */
+export interface LogCertificates {
+  certificate?: LogCertificate;
+  toward?: LogToward;
+  certificates?: LogEarned[];
+}
+
+/**
+ * A certificate a log's sailor holds: its place in the catalog's list,
+ * when it was earned and in which world, whether by hand; and, in one's
+ * own log alone, the tasks that counted, each by its place among the
+ * certificate's tasks, with its way.
+ */
+export interface LogEarned {
+  place: number;
+  at: number;
+  world: number;
+  byHand?: boolean;
+  tasks?: { task: number; way: 'hand' | 'pilot' | 'log' }[];
+}
+
 /** The certificate a log's sailor holds: its name, whether earned by hand, whether the last there is, and the pendant worn at the neck (its place in the catalog's list and one). */
 export interface LogCertificate {
   name: string;
@@ -227,6 +254,10 @@ export interface LogToward {
  * A task of the next certificate: its name; whether done, and the way
  * (hand, pilot, log); a course's task's venture's runs so far of those it
  * asks, and the code of the Harbourmaster's course that counts for it.
+ * A task of the log not yet done says how far it has come: have of at
+ * (nautical miles for a distance, a count for the rest), the lip's
+ * closest approach survived so far, m, and the weather met of what every
+ * weather asks.
  */
 export interface LogTowardTask {
   name: string;
@@ -236,6 +267,10 @@ export interface LogTowardTask {
   runs?: number;
   of?: number;
   code?: string;
+  have?: number;
+  at?: number;
+  closest?: number;
+  met?: string[];
 }
 
 /** What asking for a log came to: the log; not there to be read (unknown and refused alike); or not had. */
@@ -249,13 +284,20 @@ export interface LogSource {
   read(who: LogWho, world: number): Promise<LogAnswer>;
   /** A page of a log's races, the newest first, after the first from; null if not had. */
   ribbons(who: LogWho, from: number): Promise<LogRibbons | null>;
+  /** A log's certificates; null if not had. */
+  certificates(who: LogWho): Promise<LogCertificates | null>;
   setShown(shown: LogShown): Promise<boolean>;
   /** Whether a sailor's boat can be watched now. */
   watchable(name: string): Promise<boolean>;
 }
 
-/** The route a log is read by; with from, a page of its races. */
-export function logPath(who: LogWho, world: number, from: number | null = null): string {
+/** The route a log is read by; with from, a page of its races; with part, that part of it. */
+export function logPath(
+  who: LogWho,
+  world: number,
+  from: number | null = null,
+  part: 'certificates' | null = null,
+): string {
   const q = new URLSearchParams();
   if (who.kind === 'sailor') {
     q.set('name', who.name);
@@ -265,7 +307,9 @@ export function logPath(who: LogWho, world: number, from: number | null = null):
   if (world > 0) {
     q.set('world', String(world));
   }
-  if (from !== null) {
+  if (part !== null) {
+    q.set('part', part);
+  } else if (from !== null) {
     q.set('part', 'ribbons');
     if (from > 0) {
       q.set('from', String(from));
@@ -308,6 +352,21 @@ export const serverLogs: LogSource = {
       }
       const rb = (await res.json()) as LogRibbons;
       return typeof rb?.counts === 'object' && rb.counts !== null ? rb : null;
+    } catch {
+      return null;
+    }
+  },
+  async certificates(who) {
+    try {
+      const res = await fetch(logPath(who, 0, null, 'certificates'), {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        return null;
+      }
+      const c = (await res.json()) as LogCertificates | null;
+      return typeof c === 'object' && c !== null ? c : null;
     } catch {
       return null;
     }
