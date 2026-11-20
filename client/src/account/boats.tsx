@@ -12,6 +12,7 @@
 import './boats.css';
 import { boatNamed } from '../catalog/boatlooks';
 import type { Boat } from '../catalog/types.gen';
+import { openLog } from '../ui/loglazy';
 import type { BoatChooser } from './boatchooser';
 import { Choices } from './choices';
 import {
@@ -486,23 +487,36 @@ export const CHANGE_ASHORE = 'The boat you choose is yours for your next voyage.
 export const CHANGE_AT_SEA = 'The boat you choose takes your boat’s place here, at rest.';
 export const NONE_AVAILABLE = 'No other boat of your fleet is available.';
 
+/** What a boat the player may not take yet says to a reader of the screen, after the certificate she needs. */
+export const SEE_CERTIFICATES = 'See your certificates';
+
+/** Opens the player's log on its Certificates: on the chart screen at sea, on its own over the start screen. */
+function seeCertificates(): void {
+  openLog({ kind: 'own', tab: 'certificates' });
+}
+
 /**
  * The fleet's boats to choose from: each with its picture, kind, name and
  * number, how many it takes and where it is; the player's marked, one
- * taken shown by whom and not chosen. At sea, only the available ones.
+ * taken shown by whom and not chosen. One that needs a certificate the
+ * player does not hold says which, and opens the log's Certificates,
+ * where it is told how to earn it. At sea, the boats taken are left out.
  */
 export function ChangeBoat({
   chooser: c,
   board = false,
   className = '',
   guard = (act) => act(),
+  certificates = seeCertificates,
 }: {
   chooser: BoatChooser;
-  /** On the board, at sea in a port: only the available boats, and one chosen takes the place of the one sailed. */
+  /** On the board, at sea in a port: the boats taken left out, and one chosen takes the place of the one sailed. */
   board?: boolean;
   className?: string;
   /** Asks first, with the boat still in the water, before another boat is chosen. */
   guard?: (act: () => void) => void;
+  /** Opens the player's certificates, from a boat that needs one. */
+  certificates?: () => void;
 }) {
   const f = c.fleet.value;
   if (f === null) {
@@ -511,7 +525,7 @@ export function ChangeBoat({
   const k = partsFor(board);
   const atSea = board;
   const busy = c.busy.value;
-  const boats = inOrder(c.cat, f.boats).filter((b) => !atSea || (!taken(b) && !closed(b)));
+  const boats = inOrder(c.cat, f.boats).filter((b) => !atSea || !taken(b));
   return (
     <section
       key="change-boat"
@@ -521,31 +535,52 @@ export function ChangeBoat({
       <Heading level={board ? 2 : 1} id="change-boat-title" text={CHANGE_BOAT} />
       <p class={k.faint}>{atSea ? CHANGE_AT_SEA : CHANGE_ASHORE}</p>
       <ul class="change-boat-list">
-        {boats.map((b) => (
-          <li key={b.id}>
-            <button
-              type="button"
-              class="change-boat-choice"
-              aria-current={b.id === f.boat ? 'true' : undefined}
-              disabled={busy || taken(b) || closed(b)}
-              onClick={() =>
-                b.id === f.boat ? void c.choose(b.id) : guard(() => void c.choose(b.id))
-              }
-            >
-              <Picture cat={c.cat} b={b} width={56} />
-              <span class="change-boat-words">
-                <span class="change-boat-name">
-                  <bdi>{boatTitle(c.cat, b)}</bdi>
+        {boats.map((b) => {
+          // Not hers to take yet: the row leads to the certificate she needs.
+          const needs = closed(b) && !taken(b) && b.id !== f.boat;
+          return (
+            <li key={b.id}>
+              <button
+                type="button"
+                class={needs ? 'change-boat-choice closed' : 'change-boat-choice'}
+                aria-current={b.id === f.boat ? 'true' : undefined}
+                disabled={needs ? false : busy || taken(b) || closed(b)}
+                data-needs={needs ? b.needs : undefined}
+                aria-label={
+                  needs
+                    ? `${boatTitle(c.cat, b)}, ${standingWords(f, b)}: ${SEE_CERTIFICATES}`
+                    : undefined
+                }
+                onClick={() =>
+                  needs
+                    ? certificates()
+                    : b.id === f.boat
+                      ? void c.choose(b.id)
+                      : guard(() => void c.choose(b.id))
+                }
+              >
+                <Picture cat={c.cat} b={b} width={56} />
+                <span class="change-boat-words">
+                  <span class="change-boat-name">
+                    <bdi>{boatTitle(c.cat, b)}</bdi>
+                  </span>
+                  <span class="change-boat-faint">
+                    {aboardWords(kindOf(c.cat, b.kind))} ·{' '}
+                    {needs ? (
+                      <span class="change-boat-needs">{standingWords(f, b)} ›</span>
+                    ) : (
+                      standingWords(f, b)
+                    )}
+                  </span>
                 </span>
-                <span class="change-boat-faint">
-                  {aboardWords(kindOf(c.cat, b.kind))} · {standingWords(f, b)}
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      {boats.every((b) => b.id === f.boat) ? <p class={k.faint}>{NONE_AVAILABLE}</p> : null}
+      {boats.every((b) => b.id === f.boat || closed(b)) ? (
+        <p class={k.faint}>{NONE_AVAILABLE}</p>
+      ) : null}
       <div class="boat-look-foot">
         <p class="boat-look-problem" aria-live="polite">
           {c.problem.value}

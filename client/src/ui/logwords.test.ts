@@ -10,23 +10,30 @@ import { catalog } from '../catalog';
 import type { LogDay, LogEntry, LogRecord, LogRibbon, LogVoyage } from './logapi';
 
 import {
+  afterLine,
+  anyOf,
   bumpWords,
   certificateEntry,
   certificateHead,
+  certificateKey,
+  certificateRules,
   companyWords,
+  countsOnce,
   dayCell,
+  earnedLine,
   empty,
   entryWords,
   figureWords,
   kindName,
+  nextLine,
   nm,
   recordLines,
   remarks,
   ribbonCounts,
   ribbonLines,
   span,
-  towardHead,
-  towardTaskLine,
+  wasNeeded,
+  wayWords,
   worldHeading,
 } from './logwords';
 
@@ -291,28 +298,58 @@ describe('certificates', () => {
     expect(certificateHead({ name: 'Master', last: true })).toEqual(['Master', '']);
   });
 
-  test('the Ribbons’ block: its count, each task ticked with its way or how far it has come', () => {
-    expect(towardHead({ name: 'Skipper', needs: 4, done: 2, tasks: [] })).toBe(
-      'Toward Skipper · 2 of 4',
+  test('the certificates’ rules: all of them in one’s own log, a machine sailor’s in its words, the first two in another’s', () => {
+    expect(certificateRules(5, true, false)).toBe(
+      'Five certificates, earned in order. Each opens bigger boats. Tasks can be done in any order, on any day, and nothing is ever lost. Only what you sail alone in your own boat counts.',
     );
-    expect(towardHead({ name: 'Skipper', needs: 4, done: 6, tasks: [] })).toBe(
-      'Toward Skipper · 4 of 4',
+    expect(certificateRules(5, true, true)).toContain('Only what it sails alone in its own boat');
+    expect(certificateRules(5, false, false)).toBe(
+      'Five certificates, earned in order. Each opens bigger boats.',
     );
-    expect(towardTaskLine({ name: 'Ride out a gale', done: true, way: 'log' })).toEqual({
-      mark: '✓',
-      name: 'Ride out a gale',
-      how: '',
+  });
+
+  test('where a sailor stands on each certificate: earned, when, where and how; the next; a later one', () => {
+    const at = Date.UTC(2026, 10, 14, 15);
+    expect(earnedLine({ at, world: 12, byHand: true }, 'UTC')).toBe(
+      'Earned 14 November 2026 · world 12 · by hand',
+    );
+    // The day is the log's zone's.
+    expect(earnedLine({ at: Date.UTC(2026, 10, 14, 2), world: 12 }, 'America/New_York')).toBe(
+      'Earned 13 November 2026 · world 12',
+    );
+    // From an older server: held, and no more known.
+    expect(earnedLine({ at: 0, world: 0 }, 'UTC')).toBe('Earned');
+    expect(nextLine({ done: 2, needs: 4 })).toBe('Next · 2 of 4');
+    expect(nextLine({ done: 6, needs: 4 })).toBe('Next · 4 of 4');
+    expect(afterLine('Helm')).toBe('After Helm');
+    expect(anyOf(4, 6)).toBe('Any 4 of these 6');
+    expect(anyOf(3, 3)).toBe('All 3 of these');
+    expect(wasNeeded(3, 4)).toBe('Any 3 of its 4 were needed');
+    expect(countsOnce('Helm', false)).toBe('Counts once you’re a Helm.');
+    expect(countsOnce('Helm', true)).toBe('Counts once it is a Helm.');
+    expect(wayWords('hand')).toBe('by hand');
+    expect(wayWords('pilot')).toBe('the autopilot way');
+    expect(wayWords('log')).toBe('');
+    expect(wayWords(undefined)).toBe('');
+  });
+
+  test('the key at the head of one’s own log: the certificate held, and how far the next has come', () => {
+    const toward = { name: 'Helm', needs: 4, done: 2, tasks: [] };
+    expect(certificateKey({ name: 'Deckhand', byHand: true }, toward)).toEqual({
+      name: 'Deckhand',
+      byHand: true,
+      toward: 'toward Helm 2\u00a0of\u00a04',
     });
-    expect(
-      towardTaskLine({ name: 'An island course', done: true, way: 'hand', course: true }),
-    ).toEqual({ mark: '✓', name: 'An island course', how: 'by hand' });
-    expect(
-      towardTaskLine({ name: 'Any buoy course, silver', course: true, runs: 1, of: 3 }).how,
-    ).toBe('the autopilot way, 1 of 3');
-    expect(towardTaskLine({ name: 'Any buoy course, silver', course: true, of: 3 })).toEqual({
-      mark: '·',
-      name: 'Any buoy course, silver',
-      how: '',
+    expect(certificateKey(undefined, { ...toward, name: 'Deckhand', needs: 3, done: 1 })).toEqual({
+      name: '',
+      byHand: false,
+      toward: 'Toward Deckhand 1\u00a0of\u00a03',
     });
+    expect(certificateKey({ name: 'Master', last: true }, undefined)).toEqual({
+      name: 'Master',
+      byHand: false,
+      toward: '',
+    });
+    expect(certificateKey(undefined, undefined).toward).toBe('');
   });
 });

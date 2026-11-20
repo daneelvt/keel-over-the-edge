@@ -4009,7 +4009,8 @@ name and account in others' rows.
 | `GET /owner/api/log.json?id=&world=` | any log, every name shown; an account's card carries its record, and the search's rows a few figures |
 
 Every route needs a session, and answers `Cache-Control: private,
-no-store`. A log is its header (name, look, since), an abstract of four
+no-store`. With `?part=ribbons&from=` a log's route answers a page of its
+races instead, and with `?part=certificates` its certificates. A log is its header (name, look, since), an abstract of four
 figures, the whole record, the worlds, one world's days in the world's
 zone (each day's voyages and entries; a kind of life met again the same
 day counted on the day's first) and the collection (`logbook.Log`). A
@@ -4162,13 +4163,44 @@ wherever it is; a sailor with none is told nothing (the log keeps it). The
 page (`ui/certwords.ts`) puts a course's task on the finish's card and a
 trial's results (`Racing.certified`), raises `task-done` (passive) for a task
 of the log, or for a course's while no card shows it, and
-`certificate-earned` (active, See opening the log's Ribbons) with the
-harbour's bell rung twice. The log's answer carries the certificate held
-(`certificate`, read by whoever may read the log) and, in one's own,
-`toward`: the next certificate's tasks, each course task with the code of
-the Harbourmaster's course that counts in the sailor's boat
-(`race.Service.CourseTrials`). In the sandbox `keel.certified({...})` tells
-the page as the server would.
+`certificate-earned` (active, See opening the log's Certificates) with the
+harbour's bell rung twice. Once a visit, on going to sea, it says how far
+the next certificate has come ("Toward Helm · 2 of 4") as a passing line
+under `task-done`'s switch (`Notices.say`: words of the page's own, which a
+task done replaces and never folds into).
+
+The log's answer carries the certificate held (`certificate`, read by
+whoever may read the log) and, in one's own, `toward`: the next
+certificate's tasks, each course task with the code of the Harbourmaster's
+course that counts in the sailor's boat (`race.Service.CourseTrials`). The
+log's fourth part, Certificates, reads its own page when it is opened,
+`?part=certificates` on every log's route (`logbook.Service.Certificates`),
+as Ribbons reads the races, so the log's answer stays under its 20 KB:
+`certificates`, every one held by its place in the catalog's list, with
+when, in which world and whether by hand; and, in one's own log alone, the
+tasks that counted, by their places, and `toward` with how far each task of
+the log has come (`have` of `at`, the lip's `closest`, the weather `met`:
+`certs.Task` keeps what `taskOf` reads). The page (`ui/log.tsx`) shows all
+of the catalog's certificates in order with the boats each opens; in one's
+own log each opens to its tasks, the next from the start. Another's shows
+which are held and opens nothing.
+
+How a task is done is a plain line by its measure or its courses, with the
+task's own numbers (`howTo` in `ui/certtasks.ts`, and in
+`internal/agentapi/certs.go` for the machine sailors' handbook): words in
+code, not in the catalog, so changing them does not begin a new world. Both
+are held to one file, `internal/agentapi/testdata/certificates_howto.golden.txt`
+(`go test ./internal/agentapi -run TestHowTo -update`), and both tests walk
+the catalog: a task with no line fails them. Each line says what the judge
+counts, no more.
+
+The ways to the page: See on a certificate earned; the certificate under
+the name in one's own log, a key with the next one's count; and a boat that
+needs a certificate in the fleet's boats (`ChangeBoat`), on the start
+screen, the player's own panel and the harbour's board, which opens the
+log on its Certificates (on its own over the start screen). In the sandbox
+`keel.certified({...})` tells the page as the server would, and
+`keel.towardAtSea({...})` says the line on going to sea.
 
 ### Gating
 
@@ -4192,10 +4224,10 @@ certificate a run counts toward (`toward`).
 ### Trying it
 
 ```sh
-go test ./internal/store -run 'BoatsKept|TheJudge|ThreeTasks|ByHand' -v
+go test ./internal/store -run 'BoatsKept|TheJudge|ThreeTasks|ByHand|TheLogReadsCertificates' -v
 go test ./internal/race -run 'RacesAskTheCertificates|ATrialsRun|HarbourJob' -v
 go test ./internal/fleet ./internal/owner -run 'Certificates|EveryBoat' -v
-go test ./internal/agentapi -run 'CertificateWords|BoatNeedsACertificate' -v
+go test ./internal/agentapi -run 'CertificateWords|CertificatesHeld|HowTo|HandbookLadder|BoatNeedsACertificate' -v
 go test ./internal/edge/edgetest -run CertifiedToTheSailor -v
 go test ./internal/logbook -run LogCertificates -v
 ```
@@ -6305,7 +6337,9 @@ deliberate change: run `go test ./internal/agentapi -run ToolsList
 -update` and name it in the release notes. The list is held under
 `mostToolBytes` compact (9,359 bytes, 2,315 o200k tokens, with `course`),
 and each handbook page under an estimate of its tokens
-(`TestHandbookPages`).
+(`TestHandbookPages`); the certificates' page, which lists the whole ladder
+from the catalog of the world sailed (each certificate's boats and tasks,
+and how each task is done), under its own (`TestHandbookLadder`).
 
 **The helm** (`helm.go`). Each machine sailor whose agent has called since
 keel started has one, in memory, shared by every app approved for it: its
@@ -6413,7 +6447,9 @@ skipper and crew: placed (wakes any wait: the boat was moved), the
 preparatory signal, the gun, its roundings, calls on it, its finish, the
 first home, the committee's question (wakes any wait) and the end; the
 rest wake `race`. `news` with `log` adds the lasting race records
-(`RaceRecordsOf`). Tests: `races_test.go` races a machine sailor round a
+(`RaceRecordsOf`), and the certificates: each one held with when, in which
+world and whether by hand, and the next one's tasks, each not yet done
+with how far it has come (`certificateWords`). Tests: `races_test.go` races a machine sailor round a
 spar in the sea harness against races kept in memory, and holds the race
 block to `testdata/race_block.golden.txt`.
 

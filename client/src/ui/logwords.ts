@@ -17,7 +17,6 @@ import type {
   LogRecord,
   LogRibbon,
   LogToward,
-  LogTowardTask,
   LogVoyage,
   LogWorld,
   RaceCounts,
@@ -623,24 +622,89 @@ export function certificateHead(c: LogCertificate | undefined): [string, string]
   return [c.name, c.byHand === true ? 'by hand' : ''];
 }
 
-/** The head of the Ribbons' block: "Toward Skipper · 2 of 4". */
-export function towardHead(t: LogToward): string {
-  return `Toward ${t.name} · ${Math.min(t.done, t.needs)} of ${t.needs}`;
+export const CERTIFICATES = 'Certificates';
+
+/** The rules nobody is otherwise told, above the certificates: in one's own log, a machine sailor's, and another's. */
+export function certificateRules(count: number, own: boolean, machine: boolean): string {
+  const first = `${inWords(count).replace(/^./, (c) => c.toUpperCase())} certificates, earned in order. Each opens bigger boats.`;
+  if (!own) {
+    return first;
+  }
+  return `${first} Tasks can be done in any order, on any day, and nothing is ever lost. ${
+    machine
+      ? 'Only what it sails alone in its own boat counts.'
+      : 'Only what you sail alone in your own boat counts.'
+  }`;
 }
 
-/** A task's line of the Ribbons' block: its tick, its name, and how it was done or how far it has come. */
-export function towardTaskLine(t: LogTowardTask): { mark: string; name: string; how: string } {
-  const how =
-    t.done === true
-      ? t.way === 'hand'
-        ? 'by hand'
-        : t.way === 'pilot'
-          ? 'the autopilot way'
-          : ''
-      : t.course === true && (t.runs ?? 0) > 0 && (t.of ?? 0) > 1
-        ? `the autopilot way, ${t.runs} of ${t.of}`
-        : '';
-  return { mark: t.done === true ? '✓' : '·', name: t.name, how };
+/** A day in full, in the log's zone: "14 November 2026". */
+export function dayOf(at: number, zone: string): string {
+  return format(zone, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(at));
+}
+
+/** A certificate held, where its sailor stands on it: "Earned 14 November 2026 · world 12 · by hand". */
+export function earnedLine(
+  e: { at: number; world: number; byHand?: boolean },
+  zone: string,
+): string {
+  return [
+    e.at > 0 ? `Earned ${dayOf(e.at, zone)}` : 'Earned',
+    e.world > 0 ? `world ${e.world.toLocaleString('en')}` : '',
+    e.byHand === true ? 'by hand' : '',
+  ]
+    .filter((x) => x !== '')
+    .join(' · ');
+}
+
+/** The next certificate, where its sailor stands on it: "Next · 2 of 4". */
+export function nextLine(t: { done: number; needs: number }): string {
+  return `Next · ${Math.min(t.done, t.needs)} of ${t.needs}`;
+}
+
+/** A later certificate: "After Helm"; "" with none before it. */
+export function afterLine(before: string): string {
+  return before === '' ? '' : `After ${before}`;
+}
+
+/** A certificate another sailor does not hold. */
+export const NOT_YET_EARNED = 'Not yet';
+
+/** Above the next certificate's tasks: "Any 4 of these 6". */
+export function anyOf(needs: number, of: number): string {
+  return needs >= of ? `All ${of} of these` : `Any ${needs} of these ${of}`;
+}
+
+/** Above a later certificate's tasks: "Counts once you're a Helm." */
+export function countsOnce(before: string, machine: boolean): string {
+  return machine ? `Counts once it is a ${before}.` : `Counts once you’re a ${before}.`;
+}
+
+/** Above the tasks of a certificate held: "Any 3 of its 4 were needed". */
+export function wasNeeded(needs: number, of: number): string {
+  return needs >= of ? `All ${of} were needed` : `Any ${needs} of its ${of} were needed`;
+}
+
+/** The way a task counted, after its name: "by hand", "the autopilot way"; "" for a task of the log. */
+export function wayWords(way: string | undefined): string {
+  return way === 'hand' ? 'by hand' : way === 'pilot' ? 'the autopilot way' : '';
+}
+
+/**
+ * The key at the head of one's own log, which opens its Certificates:
+ * "Deckhand · toward Helm 2 of 4", "Toward Deckhand 1 of 3", and after
+ * the last "Master"; its by hand apart, for small capitals.
+ */
+export function certificateKey(
+  c: LogCertificate | undefined,
+  t: LogToward | undefined,
+): { name: string; byHand: boolean; toward: string } {
+  // The count keeps to one line.
+  const count =
+    t === undefined ? '' : `${t.name} ${Math.min(t.done, t.needs)}\u00a0of\u00a0${t.needs}`;
+  if (c === undefined) {
+    return { name: '', byHand: false, toward: count === '' ? '' : `Toward ${count}` };
+  }
+  return { name: c.name, byHand: c.byHand === true, toward: count === '' ? '' : `toward ${count}` };
 }
 
 /** Why a course's task's line opens a course: its words to a reader of the screen. */

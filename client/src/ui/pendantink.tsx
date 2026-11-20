@@ -124,6 +124,22 @@ const DRAWINGS: Record<string, () => JSX.Element> = {
 /** A pendant none of the drawings has: a plain disc of its place's metal. */
 const PLAIN = () => <circle cx={12} cy={22} r={7} fill={GOLD} stroke={INK} stroke-width={0.6} />;
 
+/** A pendant's drawing in its box, 24 × 36: its cord from the neck, its bail, and the pendant below. */
+function Hung({ node }: { node: string }) {
+  const drawing = DRAWINGS[node] ?? PLAIN;
+  return (
+    <>
+      <path
+        d={`M${BAIL.x} ${BAIL.y} L5 0 M${BAIL.x} ${BAIL.y} L19 0`}
+        {...line}
+        stroke-width={0.9}
+      />
+      <circle cx={BAIL.x} cy={BAIL.y + 1} r={1.1} fill="none" stroke={INK} stroke-width={0.6} />
+      {drawing()}
+    </>
+  );
+}
+
 /**
  * The pendant of the certificate in place n−1 on the inked portrait, its
  * bail at (u, v), shares of the portrait's width and height; nothing for 0.
@@ -134,7 +150,6 @@ export function PendantInk({ n, at, label }: { n: number; at: [number, number]; 
   if (c === undefined) {
     return null;
   }
-  const drawing = DRAWINGS[c.pendantNode] ?? PLAIN;
   return (
     <svg
       class="log-pendant"
@@ -146,13 +161,24 @@ export function PendantInk({ n, at, label }: { n: number; at: [number, number]; 
         top: `${(Math.min(at[1], LOWEST) * 100).toFixed(1)}%`,
       }}
     >
-      <path
-        d={`M${BAIL.x} ${BAIL.y} L5 0 M${BAIL.x} ${BAIL.y} L19 0`}
-        {...line}
-        stroke-width={0.9}
-      />
-      <circle cx={BAIL.x} cy={BAIL.y + 1} r={1.1} fill="none" stroke={INK} stroke-width={0.6} />
-      {drawing()}
+      <Hung node={c.pendantNode} />
+    </svg>
+  );
+}
+
+/**
+ * The pendant of the certificate in place n−1 drawn by itself, beside the
+ * certificate's name in the log: the same drawing, a picture of what the
+ * words beside it say, so hidden from a reader of the screen.
+ */
+export function PendantMark({ n }: { n: number }) {
+  const c = catalog.certificates?.[n - 1];
+  if (c === undefined) {
+    return null;
+  }
+  return (
+    <svg class="log-cert-pendant" viewBox="0 0 24 36" aria-hidden="true">
+      <Hung node={c.pendantNode} />
     </svg>
   );
 }

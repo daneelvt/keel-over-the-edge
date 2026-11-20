@@ -152,6 +152,18 @@
   color: rgb(242 239 231 / 66%);
   font-size: 0.875rem;
 }
+/* One the player may not take yet: dimmed as one not to be chosen, but
+   for the certificate she needs, which opens the log's Certificates. */
+.change-boat-choice.closed .boat-picture,
+.change-boat-choice.closed .change-boat-name {
+  opacity: 0.6;
+}
+.change-boat-needs {
+  color: #f2efe7;
+  text-decoration: underline;
+  text-decoration-color: rgb(242 239 231 / 45%);
+  text-underline-offset: 3px;
+}
 
 /* On the start screen, alone on it: the panel scrolls within the screen. */
 .start > .start-panel:is(.boat-look, .change-boat) {
