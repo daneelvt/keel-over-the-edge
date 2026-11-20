@@ -346,6 +346,8 @@ jobs:
             else
               echo "| Gate | full: every check |"
             fi
+            # The backticks are Markdown's, not a command's.
+            # shellcheck disable=SC2016
             sed 's/^com\.keelovertheedge\.\([a-z]*\)=\(.*\)$/| \1 | `\2` |/' "$RUNNER_TEMP/annotations" | grep -v '^| gate '
             echo
             echo "On the local cluster: \`go run ./tools/cluster -release $BUILD\`. To production: the promote workflow, with build \`$BUILD\`."
