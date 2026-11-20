@@ -487,6 +487,15 @@
     padding-right: 96px;
   }
 
+  /* In the menu's place the ✕ at the top closes it: no Close beside the search. */
+  .watch-panel.at-side .watch-close {
+    display: none;
+  }
+
+  .at-side .watch-head {
+    padding-right: 0;
+  }
+
   /* The portrait a row's size, for the card's facts in view. */
   .watch-card-head .portrait {
     width: 40px;

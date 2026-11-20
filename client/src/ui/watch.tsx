@@ -39,6 +39,7 @@ import {
   ShareLink,
   SharePicture,
 } from './sharelink';
+import { SheetHead } from './sheet';
 import {
   Around,
   browserFetch,
@@ -470,6 +471,7 @@ export function WatchList({
   close,
   from = server,
   className = 'panel watch-list',
+  side = false,
   fleet = '',
   pick: pickAtOnce = false,
 }: {
@@ -478,6 +480,8 @@ export function WatchList({
   close: () => void;
   from?: WatchServer;
   className?: string;
+  /** At sea, in the menu's place: its name and its close at the top. */
+  side?: boolean;
   /** The code of the fleet's link the page was opened by: This fleet, first and chosen; '' for none. */
   fleet?: string;
   /**
@@ -679,9 +683,10 @@ export function WatchList({
   const pick = pickOne(rows) !== null;
   return (
     <section class={`${className} watch-panel`} aria-labelledby="watch-list-title">
+      {side ? <SheetHead title={WATCH_A_SAILOR} id="watch-list-title" close={close} /> : null}
       <div class="watch-top">
         <div class="watch-head">
-          <h2 id="watch-list-title">{WATCH_A_SAILOR}</h2>
+          {side ? null : <h2 id="watch-list-title">{WATCH_A_SAILOR}</h2>}
           <input
             class="watch-search"
             type="search"
@@ -878,7 +883,7 @@ export function WatchBar({
 }
 
 /** The list over the sea: watching from the own boat at sea asks first. Or the share of a machine sailor watched. */
-export function SeaWatchList({ view }: { view: WatchView }) {
+export function SeaWatchList({ view, side = true }: { view: WatchView; side?: boolean }) {
   const w = view.watching.value;
   if (view.sharing?.value === true && w !== null && w.machine) {
     return (
@@ -900,6 +905,7 @@ export function SeaWatchList({ view }: { view: WatchView }) {
       ask={() => sailsOwn(view)}
       close={() => (view.list.value = false)}
       fleet={view.fleet ?? ''}
+      {...(side ? { className: 'panel watch-list at-side', side: true } : {})}
     />
   ) : null;
 }
@@ -1003,7 +1009,7 @@ export function WatchParts({ view, news = null }: { view: WatchView; news?: (() 
   return (
     <>
       <WatchBar view={view} news={news} />
-      <SeaWatchList view={view} />
+      <SeaWatchList view={view} side={false} />
     </>
   );
 }

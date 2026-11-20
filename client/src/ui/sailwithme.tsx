@@ -8,7 +8,8 @@
 // own sheet, where it has one) and Copy; New link, which ends the old;
 // Links off; and Closed to knocks for the voyage. Before the first link,
 // the questions not yet answered: when the sailor was born, and the
-// Rules of the sea.
+// Rules of the sea. The player's own is a part of Invite friends (bare);
+// a machine sailor's is a window of its own, in the menu's place.
 
 import { useEffect, useState } from 'preact/hooks';
 import { FirstAsks, firstAsks } from '../account/firstasks';
@@ -24,6 +25,7 @@ import {
   COPIED,
   COPY,
   endsText,
+  GET_LINK,
   LINK_ENDED,
   LINK_NOT_HERE,
   LINK_UNREADABLE,
@@ -36,6 +38,7 @@ import {
   SAIL_WITH_ME_DETAIL,
   SHARE,
 } from './deckwords';
+import { SheetHead } from './sheet';
 
 /** A link as the server gave it: its address, and when it ends, ms of UTC. */
 export interface SailLink {
@@ -217,7 +220,7 @@ const defaultServer = linkServer();
 /** How often the time left is read again, ms. */
 const AGAIN = 30_000;
 
-/** The skipper's link, in a window over the sea. */
+/** The skipper's link: a window in the menu's place, or, bare, its parts alone for the page that holds them. */
 export function SailWithMe({
   deck,
   sailor,
@@ -226,6 +229,7 @@ export function SailWithMe({
   store = defaultStore(),
   title = SAIL_WITH_ME,
   detail = SAIL_WITH_ME_DETAIL,
+  bare = false,
 }: {
   /** The boat closed to knocks, and the switch; null for none here. */
   deck: Pick<DeckView, 'closed' | 'closeKnocks'> | null;
@@ -235,6 +239,8 @@ export function SailWithMe({
   store?: LinkStore | null;
   title?: string;
   detail?: string;
+  /** Its parts alone, with no window, head or Close of its own. */
+  bare?: boolean;
 }) {
   const who = sailor ?? '';
   const [shown, setShown] = useState<LinkShown>({ kind: 'reading' });
@@ -325,7 +331,7 @@ export function SailWithMe({
 
   if (asks.length > 0) {
     return (
-      <div class="deck-window deck-asks">
+      <div class={bare ? 'deck-part deck-asks' : 'deck-window deck-asks at-side'}>
         <FirstAsks
           asks={asks}
           onDone={() => {
@@ -359,9 +365,8 @@ export function SailWithMe({
       () => setCopied(false),
     );
   };
-  return (
-    <section class="panel deck-window deck-link" aria-labelledby="deck-link-title">
-      <h2 id="deck-link-title">{title}</h2>
+  const parts = (
+    <>
       <p class="deck-faint">{detail}</p>
       {shown.kind === 'reading' ? <p aria-live="polite">{READING_LINK}</p> : null}
       {shown.kind === 'unread' ? <p aria-live="polite">{LINK_UNREADABLE}</p> : null}
@@ -415,7 +420,7 @@ export function SailWithMe({
             disabled={busy}
             onClick={() => void make()}
           >
-            {NEW_LINK}
+            {shown.kind === 'here' || shown.kind === 'elsewhere' ? NEW_LINK : GET_LINK}
           </button>
           {shown.kind === 'here' || shown.kind === 'elsewhere' ? (
             <button type="button" class="plate-key" disabled={busy} onClick={() => void end()}>
@@ -438,6 +443,15 @@ export function SailWithMe({
           />
         </label>
       )}
+    </>
+  );
+  if (bare) {
+    return <div class="deck-part deck-link">{parts}</div>;
+  }
+  return (
+    <section class="panel deck-window deck-link at-side" aria-labelledby="deck-link-title">
+      <SheetHead title={title} id="deck-link-title" close={close} />
+      {parts}
       <button type="button" class="plate-key deck-close" onClick={close}>
         {CLOSE}
       </button>

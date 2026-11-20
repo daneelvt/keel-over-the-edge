@@ -9,12 +9,13 @@
 // the helm returns to the centre when let go, and whether the camera comes
 // back behind the boat by itself. The full screen where the
 // page can take it, with how to install the game where that gives more of
-// the screen, an Install key once the browser has offered to. Online, the player's shipmates, a sailor to watch, the link
-// that asks others to sail with the player (while their own boat is in
-// the water), who may watch the player's own boat and their link to watch
-// them, shared with a picture of the view; Make a race, and the player's
-// races ahead, each a tap from its card; Back to Port Royal, while the
-// player sails their own boat, which asks first. It stands over everything at
+// the screen, an Install key once the browser has offered to. Online, at
+// the top with the other keys, the player's shipmates; Invite friends, the
+// one page of links to share (to watch the player, alone or with a picture
+// of the view, and, while their own boat is in the water, to sail with
+// them); a sailor to watch; Back to Port Royal and Change boat, while the
+// player sails their own boat, which ask first; Make a race, and the
+// player's races ahead, each a tap from its card. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
@@ -24,10 +25,10 @@ import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
 import type { Countdown } from './countdown';
-import { canShareLink, type DeckView, machineShared } from './decklazy';
-import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
+import { type DeckView, machineShared } from './decklazy';
+import { INVITE_FRIENDS, WHO_IS_ABOARD } from './deckwords';
 import type { HomeView } from './home';
-import { BACK_TO_PORT_ROYAL } from './homewords';
+import { BACK_TO_PORT_ROYAL, CHANGE_BOAT } from './homewords';
 import { INSTALL, INSTALL_CHROME, INSTALL_HOME_SCREEN } from './installwords';
 import { sailWithMeFor } from './machinewords';
 import { Modal } from './modal';
@@ -38,19 +39,8 @@ import { MAKE_A_RACE, whenLine } from './racewords';
 import type { SettingsSignal } from './settings';
 import { SHIPMATES } from './shipmatewords';
 import { percentText, SEA_AND_WIND, SOUND, SOUNDS, VOLUME } from './soundwords';
-import { useWatch, type WatchView } from './watchlazy';
+import type { WatchView } from './watchlazy';
 import { STOP_WATCHING, WATCH_A_SAILOR } from './watchwords';
-
-/**
- * "Allow spectators", once its module is loaded, with the player's own
- * link to share; and a picture of the view with it while their own boat
- * is drawn, not one watched.
- */
-function LazySpectators({ watch }: { watch: WatchView }) {
-  const m = useWatch();
-  const capture = watch.spectating.value ? null : (watch.capture ?? null);
-  return m === null ? null : <m.SpectatorsChoice share={{ capture }} />;
-}
 
 function Toggle({
   label,
@@ -280,6 +270,7 @@ export function Menu({
   end = null,
   account = null,
   machines = null,
+  invite = null,
   watch = null,
   deck = null,
   fullScreen = null,
@@ -302,6 +293,8 @@ export function Menu({
   account?: (() => void) | null;
   /** Opens the machine sailors' panel; null in the offline sandbox. */
   machines?: (() => void) | null;
+  /** Opens Invite friends; null where there is no link to share. */
+  invite?: (() => void) | null;
   /** Watching another sailor's boat; null in the offline sandbox. */
   watch?: WatchView | null;
   /** Sailing together; null in the offline sandbox. */
@@ -363,16 +356,10 @@ export function Menu({
               </button>
             </div>
           ) : null}
-          {deck !== null && canShareLink(deck) ? (
+          {invite !== null ? (
             <div class="menu-chart">
-              <button
-                type="button"
-                onClick={() => {
-                  deck.link.value = true;
-                  close();
-                }}
-              >
-                {SAIL_WITH_ME}
+              <button type="button" onClick={invite}>
+                {INVITE_FRIENDS}
               </button>
             </div>
           ) : null}
@@ -434,6 +421,19 @@ export function Menu({
                 }}
               >
                 {BACK_TO_PORT_ROYAL}
+              </button>
+            </div>
+          ) : null}
+          {home !== null && home.offered() ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  home.changing.value = true;
+                  close();
+                }}
+              >
+                {CHANGE_BOAT}
               </button>
             </div>
           ) : null}
@@ -520,7 +520,6 @@ export function Menu({
             set={(seaMotion) => settings.set({ seaMotion })}
           />
           {notices !== null ? <NoticeSwitches notices={notices} /> : null}
-          {watch !== null ? <LazySpectators watch={watch} /> : null}
           {fly !== null ? (
             <button type="button" class="menu-fly" onClick={fly}>
               Free camera (F)

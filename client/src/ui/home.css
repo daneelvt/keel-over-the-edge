@@ -38,3 +38,7 @@
 .home-keys > button {
   flex: 1 1 auto;
 }
+
+.home-problem {
+  color: var(--warn, #f3b3a6);
+}

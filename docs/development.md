@@ -2842,6 +2842,16 @@ input log records a Lift as its boat (format 23). Machine sailors have no
 `home`: `boat` with `action: "leave"`, then any call that sails, starts
 them again at the start.
 
+**Change boat**, under Back to Port Royal in the menu while the player
+sails their own boat, asks first ("Your boat comes out of the water and
+this voyage ends…", and what else racing or with shipmates aboard), then
+takes the boat out by `POST /api/me/ashore`, marks the tab
+(`sessionStorage`'s `keel.changeBoat`, read once: `markChangeBoat`,
+`takeChangeBoat` in `account/boatchooser.ts`) and reloads: the start
+screen opens on the fleet's boats to choose from, and Set sail starts the
+one chosen afresh off Port Royal. A boat that could not be taken out is
+said in the question, which stays.
+
 **`POST /api/me/ashore`** (`internal/api/me.go`, the edge's `TakeOut`),
 behind a session, human accounts only (403 `ai-account`), takes the
 account's boat out of the water at once, with no grace, as a watch does:
@@ -5935,7 +5945,22 @@ Facebook, TikTok… by the marks in its user agent, kept in that one module)
 is asked to open the game in the phone's browser, with "Try here anyway"; a
 browser without WebAuthn is told so; one that offers neither a passkey of
 its own nor a phone by QR code is warned, never stopped. The account page
-is a panel from the menu, "Account".
+is a page from the menu, "Account".
+
+**The menu's pages** (`client/src/ui/sheet.tsx`). Every page and window
+the menu opens stands where the menu stood: at the right beside its
+button held sideways, across the top held upright, never over the middle
+of the screen, where the boat is. Each has its name and a close (✕,
+"Close this window") at its top, which stay put while the rest scrolls,
+and the menu's margin round what it holds; Escape and a tap beside a page
+close it. `Sheet` draws a whole page so (the account, the machine sailors,
+Invite friends); `SheetHead` and the class `at-side` put a window that
+keeps its own frame there (the shipmates, who is aboard, the sailors to
+watch, a machine sailor's link), and `at-side` alone the questions the
+menu asks (Back to Port Royal, Change boat). A new page of the menu uses
+one of the two. The race's windows and the chart are screens of their
+own. `e2e/menu.spec.ts` holds each page to the menu's place, its close and
+its margin on a phone held either way and a desktop.
 
 **Tests and tools** make their sailors through the same routes with a
 software authenticator: `internal/auth/softkey` in Go (the API's tests,
@@ -6889,8 +6914,10 @@ reload just sails (`listFromQuery`, `listLink` in `watchwords.ts`).
 On the phone (`client/src/account/yourlink.tsx`, `ui/sharelink.tsx`),
 "Share a link to watch me" sits under Set sail on "Your sailor" (with "Your
 link shows your boat only on voyages you let others watch." while the box
-is unticked) and under the spectators switch in the menu; the machine
-sailors' panel shares each one's and the fleet's. Each goes through
+is unticked) and, at sea, on the menu's **Invite friends** page
+(`ui/invite.tsx`), under "Watch me sail" with the spectators switch and
+"Share with a picture"; the machine sailors' panel shares each one's and
+the fleet's. Each goes through
 `navigator.share` with the link at the end of its text, or is copied
 ("Copied"); "Make a new link" asks first. A visitor opening a link with no
 session is told "Make a sailor, and you will be watching." on the start
@@ -6932,8 +6959,9 @@ second).
 
 ### Sailing together
 
-A skipper shares a **link** ("Sail with me" in the menu: share, copy, a new
-link, links off, closed to knocks); whoever opens it, signed in or after
+A skipper shares a **link** ("Sail with me" on the menu's Invite friends
+page, under the link to watch: Get a link, then share, copy, a new link,
+links off, closed to knocks); whoever opens it, signed in or after
 making a sailor, **knocks** on the game connection, and the skipper lets
 each arrival aboard, every time. Aboard, one person **holds the boat's
 controls**, all of them: the skipper unless they hand them on.
