@@ -28,6 +28,14 @@ const revisionAnnotation = "org.opencontainers.image.revision"
 // mainBranch is the branch releases are made from.
 const mainBranch = "main"
 
+// latestBuild is what -promote takes in place of a build, to promote the
+// newest one released; latestWithin, how many of main's commits it looks
+// through for it, GitHub's most for one page.
+const (
+	latestBuild  = "latest"
+	latestWithin = 100
+)
+
 // approvalEnvironment is the deployment environment the promote workflow's
 // job runs in: its required reviewers are who approves a promotion.
 const approvalEnvironment = "production"
@@ -222,12 +230,59 @@ func (p *promoter) released(ctx context.Context, build string) (bool, error) {
 	return true, nil
 }
 
+// latest is the newest build with a release: the first of main's commits,
+// from its head back, whose build has a tag in the registry. A commit just
+// merged has none until its release is published, and is passed over, as
+// one whose release failed is. Whether the release found is signed is
+// promote's to check: one published and not signed is refused there, not
+// passed over for an older one.
+func (p *promoter) latest(ctx context.Context) (string, error) {
+	var commits []struct {
+		SHA string `json:"sha"`
+	}
+	status, err := p.github(ctx, fmt.Sprintf("commits?sha=%s&per_page=%d", mainBranch, latestWithin), &commits)
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("GitHub answered %d for the commits of %s", status, mainBranch)
+	}
+	for i, c := range commits {
+		if len(c.SHA) != 40 || !manifests.BuildID.MatchString(c.SHA[:12]) {
+			return "", fmt.Errorf("GitHub's commits of %s: %q is not a commit", mainBranch, c.SHA)
+		}
+		build := c.SHA[:12]
+		_, found, err := p.reg.Resolve(ctx, p.repo, build)
+		if err != nil {
+			return "", err
+		}
+		if !found {
+			continue
+		}
+		if i == 0 {
+			p.logf("no build given: the latest release is build %s, the head of %s", build, mainBranch)
+		} else {
+			p.logf("no build given: the latest release is build %s; %d newer commit(s) of %s have no release, the newest %s", build, i, mainBranch, commits[0].SHA[:12])
+		}
+		return build, nil
+	}
+	return "", fmt.Errorf("none of the last %d commits of %s has a release: not promoted. Name the build", len(commits), mainBranch)
+}
+
 // promote makes build the release production follows: the tag prod is
 // moved to it, once a promotion is seen to need approval, the release's
 // signature is checked as Flux will check it, its commit is found on main,
 // and it is not older than what production follows now, unless rollback
-// says that is meant.
+// says that is meant. The build may be latestBuild, for the newest one
+// released.
 func (p *promoter) promote(ctx context.Context, build string, rollback bool) error {
+	chosen := build == latestBuild
+	if chosen {
+		var err error
+		if build, err = p.latest(ctx); err != nil {
+			return err
+		}
+	}
 	if !manifests.BuildID.MatchString(build) {
 		return fmt.Errorf("%q is not a build, the first 12 characters of its commit", build)
 	}
@@ -263,6 +318,9 @@ func (p *promoter) promote(ctx context.Context, build string, rollback bool) err
 	if following && now.digest == next.digest {
 		p.logf("production follows %s already: nothing to move", next)
 		fmt.Fprintf(p.summary, "### Production follows build `%s` already\n\nNothing was moved: `%s`.\n", next.build, next.digest)
+		if chosen {
+			fmt.Fprintf(p.summary, "\nNo build was given: this is the latest release.\n")
+		}
 		return nil
 	}
 	if following {
@@ -303,6 +361,9 @@ func (p *promoter) promote(ctx context.Context, build string, rollback bool) err
 	fmt.Fprintf(p.summary, "| Now | `%s` | %s | `%s` |\n", next.build, next.commit, next.digest)
 	if following && rollback {
 		fmt.Fprintf(p.summary, "\nA rollback, asked for.\n")
+	}
+	if chosen {
+		fmt.Fprintf(p.summary, "\nNo build was given: this is the latest release.\n")
 	}
 	return nil
 }
