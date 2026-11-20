@@ -7999,7 +7999,10 @@ SHA-256 in `infra/cluster/monitoring/dashboards/index.yaml`
 
 Deploying is tagging. Production's Flux follows the tag **`prod`** of
 `keel-manifests`, and looks every minute. `promote.yaml` moves it: Actions
-→ promote → Run workflow, with the build. The run waits in the
+→ promote → Run workflow, with the build, or with none for the latest
+release: the newest commit of `main` that has one (a commit whose release
+is still being made is passed over, and the run's log and summary say
+which build it took). The run waits in the
 `production` environment for the owner's approval, and then, before it
 moves anything (`go run ./tools/release -promote`):
 

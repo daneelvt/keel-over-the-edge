@@ -325,14 +325,16 @@ type world struct {
 	// environment is GitHub's answer for the production environment; "",
 	// that there is none.
 	environment string
-	ran         []string
-	summary     bytes.Buffer
-	p           *promoter
+	// commits are main's, as GitHub lists them: the newest first.
+	commits []string
+	ran     []string
+	summary bytes.Buffer
+	p       *promoter
 }
 
 func newWorld(t *testing.T) *world {
 	t.Helper()
-	w := &world{reg: newRegistry(t), unsigned: map[string]bool{}, environment: reviewed}
+	w := &world{reg: newRegistry(t), unsigned: map[string]bool{}, environment: reviewed, commits: []string{commitC, commitB, commitA}}
 	order := map[string]int{"main": 3, commitA: 1, commitB: 2, commitC: 3}
 	github := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/repos/daneelvt/keel-over-the-edge/environments/production" {
@@ -341,6 +343,18 @@ func newWorld(t *testing.T) *world {
 				return
 			}
 			io.WriteString(rw, w.environment)
+			return
+		}
+		if r.URL.Path == "/repos/daneelvt/keel-over-the-edge/commits" {
+			if q := r.URL.Query(); q.Get("sha") != "main" || q.Get("per_page") != "100" {
+				http.Error(rw, "unexpected query", http.StatusBadRequest)
+				return
+			}
+			var list []string
+			for _, c := range w.commits {
+				list = append(list, fmt.Sprintf(`{"sha":%q}`, c))
+			}
+			io.WriteString(rw, "["+strings.Join(list, ",")+"]")
 			return
 		}
 		spec, ok := strings.CutPrefix(r.URL.Path, "/repos/daneelvt/keel-over-the-edge/compare/")
@@ -468,6 +482,65 @@ func TestPromote(t *testing.T) {
 	// With rollback ticked, a newer build is promoted as any other.
 	if err := w.p.promote(ctx, buildC, true); err != nil || w.prod() != c {
 		t.Errorf("a newer build with rollback ticked: %v; production follows %s", err, w.prod())
+	}
+}
+
+// TestPromoteLatest: with no build named, the newest of main's commits that
+// has a release is promoted, checked as a named build is.
+func TestPromoteLatest(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	var log bytes.Buffer
+	w.p.out = &log
+	a, b := w.release(commitA), w.release(commitB)
+
+	// Main's head has no release yet: the one before it is the latest.
+	if err := w.p.promote(ctx, latestBuild, false); err != nil || w.prod() != b {
+		t.Fatalf("with the head not released: %v; production follows %s, want build B's %s", err, w.prod(), b)
+	}
+	if !strings.Contains(log.String(), "the latest release is build "+buildB+"; 1 newer commit(s) of main have no release, the newest "+buildC) {
+		t.Errorf("the log:\n%s", log.String())
+	}
+	if s := w.summary.String(); !strings.Contains(s, "| Now | `"+buildB+"`") || !strings.Contains(s, "No build was given: this is the latest release.") {
+		t.Errorf("the summary:\n%s", s)
+	}
+
+	// Once the head is released, it is.
+	c := w.release(commitC)
+	w.summary.Reset()
+	if err := w.p.promote(ctx, latestBuild, false); err != nil || w.prod() != c {
+		t.Fatalf("with the head released: %v; production follows %s, want build C's %s", err, w.prod(), c)
+	}
+	// Again, nothing moves, and the summary still says how it was chosen.
+	w.ran, w.summary = nil, bytes.Buffer{}
+	if err := w.p.promote(ctx, latestBuild, false); err != nil || w.tagged() {
+		t.Fatalf("the latest again: %v; ran %q", err, w.ran)
+	}
+	if s := w.summary.String(); !strings.Contains(s, "already") || !strings.Contains(s, "No build was given") {
+		t.Errorf("the summary:\n%s", s)
+	}
+	// A named build's summary does not say so.
+	w.summary.Reset()
+	if err := w.p.promote(ctx, buildA, true); err != nil || w.prod() != a || strings.Contains(w.summary.String(), "No build was given") {
+		t.Errorf("a named build: %v; the summary:\n%s", err, w.summary.String())
+	}
+
+	// The latest release not signed is refused, not passed over for an
+	// older one that is.
+	w.unsigned[c] = true
+	w.ran = nil
+	if err := w.p.promote(ctx, latestBuild, false); err == nil || !strings.Contains(err.Error(), "the release of build "+buildC+" is not signed") || w.tagged() || w.prod() != a {
+		t.Errorf("the latest not signed: %v; ran %q", err, w.ran)
+	}
+
+	// Nothing released at all, and GitHub not answering.
+	w = newWorld(t)
+	if err := w.p.promote(ctx, latestBuild, false); err == nil || !strings.Contains(err.Error(), "none of the last 3 commits of main has a release") || w.tagged() {
+		t.Errorf("with no release: %v", err)
+	}
+	w.commits = []string{"not a commit"}
+	if err := w.p.promote(ctx, latestBuild, false); err == nil || !strings.Contains(err.Error(), "is not a commit") {
+		t.Errorf("a commit that is none: %v", err)
 	}
 }
 
