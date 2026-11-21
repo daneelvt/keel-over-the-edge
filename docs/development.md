@@ -4216,17 +4216,58 @@ placing. Crew and the helm stay open. `GET /api/fleet` gives each boat's
 
 ### The Harbourmaster's courses
 
-The harbour job makes the standing trials, owner none, once each: the short
-windward–leeward, the short triangle and the long windward–leeward for every
-kind that races buoy courses, and each island course open for every kind it
-is offered to. The board lists those in the sailor's boat, each with the
-certificate a run counts toward (`toward`).
+The harbour job makes the standing trials, owner none, once each: the reach,
+the short windward–leeward, the short triangle and the long windward–leeward
+for every kind that races buoy courses, and each island course open for every
+kind it is offered to. The board lists those in the sailor's boat, the reach
+first, each with the certificate a run counts toward (`toward`).
+
+The reach ("the Harbourmaster's Reach", `race.ShapeReach`, the course
+`buoy:reach:short`) is the first certificate's course, and a standing trial's
+alone: nobody makes a race or a trial on it. The committee lays its line
+along the wind and its one mark straight across the wind from it
+(`layReach`), sized by the boat's polar for five minutes or to what the
+racing area holds, so both legs are beam reaches and there is no beat. The
+boat is placed facing the mark, her sheet her kind's start sheet for a beam
+reach (`boats[].startSheet` at 90°). The mark is left to port, and lies to the
+side that makes the turn round it a tack: the judge's rounding ray counts
+crossings one way, so a boat that rounds it the other way is told she missed
+it and goes back.
+
+A trial's run is ended at four times its course's expected time, a race at
+twice (`committee.TrialLimit`, `RaceLimit`): the expected time is the polar's,
+sailed perfectly, and a newcomer's first beat takes longer than twice that.
+
+### No task too difficult
+
+The head of `certificates.yaml` holds five rules every task is checked
+against, and `internal/certs`' `TestNoTaskIsTooDifficult` holds the catalog
+to them: the first certificate's course is the reach; a beat is first asked
+at the second, only to be finished; by hand none before the last asks more
+than bronze, the last asks silver once, none asks gold; each can be earned
+with no rare thing and at most one medal.
+
+What a medal asks is measured, not guessed: `internal/agentapi`'s
+`careful_test.go` sails every standing course through the machine sailors'
+tools as a plain, careful sailor would, in a Jolly boat and a yacht in 6, 12
+and 20 knots, in seed 1's world, and a Jolly boat to the lip and back, and
+prints each run as a multiple of its course's expected time:
+
+```sh
+KEEL_CAREFUL_RUNS=1 go test ./internal/agentapi -run 'TestCarefulRuns|TestCarefulEdge' -v
+```
+
+`KEEL_CAREFUL_ONLY='the Reach,Jolly boat,12'` sails one, and
+`KEEL_CAREFUL_TRACE=1` prints the boat once a second. One run, the Reach in a
+Jolly boat in 12 knots, is sailed in every test run and held to bronze.
 
 ### Trying it
 
 ```sh
 go test ./internal/store -run 'BoatsKept|TheJudge|ThreeTasks|ByHand|TheLogReadsCertificates' -v
 go test ./internal/race -run 'RacesAskTheCertificates|ATrialsRun|HarbourJob' -v
+go test ./internal/race/committee -run 'Reach|ATrialsTimeLimit' -v
+go test ./internal/certs -run NoTaskIsTooDifficult -v
 go test ./internal/fleet ./internal/owner -run 'Certificates|EveryBoat' -v
 go test ./internal/agentapi -run 'CertificateWords|CertificatesHeld|HowTo|HandbookLadder|BoatNeedsACertificate' -v
 go test ./internal/edge/edgetest -run CertifiedToTheSailor -v

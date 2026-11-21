@@ -44,6 +44,8 @@ const (
 	// short and long, in the race's boat's time.
 	ShortSeconds = 10 * 60
 	LongSeconds  = 20 * 60
+	// ReachSeconds is what a reach is sized to.
+	ReachSeconds = 5 * 60
 )
 
 // The waits of a race, variables only so that a test may wait less: the

@@ -316,6 +316,13 @@ func startLineWords(c *bus.RaceCourse, r *bus.Race, rc *bus.Racer, x, y float64,
 	case along > 1:
 		w += fmt.Sprintf(", beyond its committee boat's end by %.0f m", (along-1)*l)
 	}
+	if c.Across && len(c.Way) > 1 {
+		// A reach's line lies along the wind: it is crossed across it,
+		// toward the mark.
+		out := three(degrees(physics.Atan2(c.Way[1][0]-c.Way[0][0], c.Way[1][1]-c.Way[0][1])))
+		return fmt.Sprintf("%s · the line %.0f m long, its middle %s · the committee boat (starboard end) %s · the pin (port end) %s · cross it across the wind, toward %s and the mark: your clock starts as you do",
+			w, l, whereWords(x, y, mx, my), whereWords(x, y, c.Committee[0], c.Committee[1]), whereWords(x, y, c.Pin[0], c.Pin[1]), out)
+	}
 	return fmt.Sprintf("%s · the line %.0f m long, its middle %s · the committee boat (starboard end) %s · the pin (port end) %s · cross it up the wind, toward %s, after the gun (over it at the gun, or within a fifth of its length beyond an end, adds 10 s)",
 		w, l, whereWords(x, y, mx, my), whereWords(x, y, c.Committee[0], c.Committee[1]), whereWords(x, y, c.Pin[0], c.Pin[1]), up)
 }
@@ -398,6 +405,14 @@ func courseCardWords(s *Sea, c *bus.RaceCourse) string {
 	}
 	var parts []string
 	start := &c.Checks[0]
+	if c.Across && len(c.Marks) == 1 {
+		// A reach: no beat in it, and one mark.
+		m := c.Marks[0]
+		return fmt.Sprintf("Start: the line from the pin (port end, %s) to the committee boat (starboard end, %s), along the wind from %s, crossed across the wind. "+
+			"Mark 1 to %s (%s), straight across the wind from the line: sail out to it on a beam reach, round it by turning up through the wind, a tack, and reach back. "+
+			"Finish: the start line, crossed coming back.",
+			chart.Format(start.X, start.Y), chart.Format(start.X2, start.Y2), three(degrees(c.From)), sideWords(m.Side), chart.Format(m.X, m.Y))
+	}
 	parts = append(parts, fmt.Sprintf("Start: the line from the pin (port end, %s) to the committee boat (starboard end, %s), square to the wind from %s, crossed up the wind after the gun.",
 		chart.Format(start.X, start.Y), chart.Format(start.X2, start.Y2), three(degrees(c.From))))
 	if c.Island {

@@ -116,6 +116,13 @@ func headingOf(a float64) float64 {
 // of f starts with: its kind's start sheet for startOffWind, or half on
 // the spawn grid.
 func (w *World) startSheet(f *bus.Frame, s int32) uint16 {
+	return w.startSheetOff(f, s, startOffWind*180/math.Pi)
+}
+
+// startSheetOff is the sheet, in a control word's steps, the boat in slot
+// s of f starts with from rest off degrees off the wind: its kind's start
+// sheet for it, or half on the spawn grid.
+func (w *World) startSheetOff(f *bus.Frame, s int32, off float64) uint16 {
 	if len(w.start) == 0 {
 		return bus.Steps / 2
 	}
@@ -123,7 +130,7 @@ func (w *World) startSheet(f *bus.Frame, s int32) uint16 {
 	if k := int(f.Kind[s]); k < len(w.sheets) {
 		t = StartSheet(w.sheets[k])
 	}
-	sheet := min(max(t.At(startOffWind*180/math.Pi), 0), 1)
+	sheet := min(max(t.At(off), 0), 1)
 	return uint16(math.Floor(float64(sheet*bus.Steps) + 0.5))
 }
 
@@ -133,11 +140,17 @@ func (w *World) startSheet(f *bus.Frame, s int32) uint16 {
 // its sailor writes again; the sailor's phone takes them from the
 // Welcome that follows.
 func (w *World) readyControls(f *bus.Frame, s int32) {
+	w.readyControlsOff(f, s, startOffWind*180/math.Pi)
+}
+
+// readyControlsOff is readyControls for a boat put at rest off degrees
+// off the wind: the sheet is its start sheet for that angle.
+func (w *World) readyControlsOff(f *bus.Frame, s int32, off float64) {
 	if len(w.start) == 0 {
 		return
 	}
 	word := f.Control[s]
-	f.Control[s] = bus.Pack(word.Seq(), bus.Steps/2, w.startSheet(f, s), f.Gen[s])
+	f.Control[s] = bus.Pack(word.Seq(), bus.Steps/2, w.startSheetOff(f, s, off), f.Gen[s])
 	f.Pilot[s] = bus.HandPilot(f.Control[s])
 	f.Rig[s] = bus.HandRig(f.Control[s])
 	if w.given == nil {

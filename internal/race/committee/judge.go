@@ -30,7 +30,8 @@ import (
 //
 // Once a boat is home the finishing window opens for the rest, for half
 // the winner's time or five minutes, whichever is longer; with no boat
-// home by twice the course's expected time, the race ends there. Either
+// home by twice the course's expected time (four times, a trial's run),
+// the race ends there. Either
 // way everyone is placed: those home by their time and the seconds added,
 // then those still racing by their progress, the marks rounded and then
 // the way still to go. A boat whose boat leaves the water, goes over the
@@ -483,10 +484,22 @@ func ends(f *bus.Frame, r *bus.Race, lo, hi int) bool {
 }
 
 // limit is race r's time limit from its start, ticks: twice its course's
-// expected time.
+// expected time, and four times for a trial's run. The expected time is
+// the polar's, sailed perfectly; a trial holds nobody up, and a newcomer
+// tacking up a first beat must still be let to finish.
 func limit(r *bus.Race) int64 {
-	return int64(toInt32(math.Ceil(float64(2*r.Course.Expected) * Second)))
+	times := RaceLimit
+	if r.Trial {
+		times = TrialLimit
+	}
+	return int64(toInt32(math.Ceil(float64(times*r.Course.Expected) * Second)))
 }
+
+// The time limits, in the course's expected times.
+const (
+	RaceLimit  = 2.0
+	TrialLimit = 4.0
+)
 
 // end ends f.Races[i]: everyone placed, its medal or its awards given.
 func end(f *bus.Frame, i int) {

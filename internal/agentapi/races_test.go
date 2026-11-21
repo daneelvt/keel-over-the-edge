@@ -700,3 +700,47 @@ func TestTwoRaceEventsOfOneTick(t *testing.T) {
 		t.Fatalf("after the first was told: %+v", evs)
 	}
 }
+
+// TestTheReachAsToldToAMachine: placed for a run of the Harbourmaster's
+// Reach, a machine sailor is told its line lies along the wind and is
+// crossed across it, toward the mark; that its one mark is left to port,
+// by a tack; and that the finish is the same line coming back. Nothing
+// says to cross up the wind, or of a beat.
+func TestTheReachAsToldToAMachine(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := carefulStage(cat)
+	f := bus.NewFrame(16)
+	f.Tick = 90000
+	me := bus.Account{0x01, 0x9a, 1}
+	f.Occupied[0], f.Live, f.Boat[0], f.Owner[0] = true, append(f.Live, 0), 1, me
+	call := &bus.RaceCall{ID: [16]byte{0xab, 1}, Run: 1, Trial: true, Across: true,
+		Entrants: []bus.RaceEntrant{{Account: me, Number: 1, Machine: true}}}
+	// The wind from the north: the mark lies east of the line.
+	course := st.Lay(f, call, 5, 0, 1)
+	if course == nil || !course.Across {
+		t.Fatalf("the course laid: %+v", course)
+	}
+	f.State[0] = committee.Spots(course, cat.Boats[0].LengthOverall)[0]
+	committee.Begin(f, call, course, []committee.Placing{{Slot: 0, Boat: 1, Placed: true}})
+	h := &helm{account: [16]byte(me), raceKnown: map[uint32]*knownRace{f.Races[0].Key: {name: "the Harbourmaster's Reach", code: "abcdefghij",
+		entrants: map[int]race.Entrant{}}}}
+	var b strings.Builder
+	if r := h.raceFactsFor(&Sea{}, f, 0, false); r != nil {
+		r.text(&b)
+	}
+	text := b.String()
+	for _, want := range []string{"cross it across the wind, toward 090° and the mark", "along the wind from 000°, crossed across the wind",
+		"Mark 1 to port", "round it by turning up through the wind, a tack", "Finish: the start line, crossed coming back"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("no %q in the Reach as told:\n%s", want, text)
+		}
+	}
+	for _, not := range []string{"up the wind, toward", "square to the wind", "crossed downwind", "adds 10 s"} {
+		if strings.Contains(text, not) {
+			t.Errorf("%q in the Reach as told:\n%s", not, text)
+		}
+	}
+}

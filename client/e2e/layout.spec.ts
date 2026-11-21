@@ -129,7 +129,7 @@ import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
 import { deckhandLog, emptyLog, LONG_NAME, longLog, masterLog, standInLogs } from './logs';
 import { firstEdition, fullDay, quietDay, standInNews } from './news';
-import { OTHERS, REFUSED, standInRaces } from './races';
+import { OTHERS, REACH, REFUSED, standInRaces } from './races';
 import { GONE, RACED, standInReplays } from './replays';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
@@ -3870,7 +3870,7 @@ for (const text of TEXT_SIZES) {
       await expect(certs.first().locator('.log-task.done')).toHaveCount(3);
       await expect(certs.first().locator('.log-task.unneeded')).toHaveCount(1);
       await expect(certs.first().locator('.log-task').first()).toContainText(
-        'The Short Course, done · by hand',
+        `${data.certificates?.[0]?.tasks[0]?.name ?? ''}, done · by hand`,
       );
       await check(`${s.name}, a certificate held, opened`);
       // After the last certificate: five held, the last open; no next.
@@ -4243,10 +4243,17 @@ for (const text of TEXT_SIZES) {
       await card.getByRole('button', { name: 'The race’s owner’s choices' }).click();
       await check(`${s.name}, the owner’s card`, '[data-panel=race-card]');
       await card.getByRole('button', { name: 'Close', exact: true }).click();
-      for (const code of [OTHERS, REFUSED]) {
+      // Another's race on an island course, one refused, and the
+      // Harbourmaster's Reach: its line upright, its mark across the wind.
+      for (const code of [OTHERS, REFUSED, REACH]) {
         await page.getByRole('button', { name: 'Menu' }).click();
         await page.locator(`.menu-race[data-race=${code}]`).click();
         await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+        if (code === REACH) {
+          await expect(
+            card.getByRole('img', { name: 'Reach: across the wind to one mark and back' }),
+          ).toBeVisible();
+        }
         await check(`${s.name}, the card of ${code}`, '[data-panel=race-card]');
         await card.getByRole('button', { name: 'Close', exact: true }).click();
         await expect(card).toHaveCount(0);

@@ -105,16 +105,39 @@ describe('how a task is done, in a plain line', () => {
     ).toBe(
       'A time trial on the Short Course, sailed alone. By hand: just finish. With the autopilot: finish twice.',
     );
+    // The reach, sailed alone on it: how it is sailed, in a breath.
     expect(
       howTo({
-        name: 'Any buoy course, silver',
+        name: 'The Reach',
+        courses: ['reach'],
+        hand: { medal: 'finish' },
+        venture: { medal: 'finish', runs: 2 },
+      }),
+    ).toBe(
+      'A time trial on the Reach, sailed alone. Sail across the wind to the mark, go round it, and sail back. No tacking up the wind. By hand: just finish. With the autopilot: finish twice.',
+    );
+    // Any buoy course names its courses, with the reach or without it.
+    expect(
+      howTo({
+        name: 'Any buoy course but the Reach, silver',
         courses: ['short', 'long', 'triangle', 'long-triangle'],
         hand: { medal: 'silver' },
         venture: { medal: 'bronze', runs: 3 },
       }),
     ).toBe(
-      'A time trial on any buoy course, sailed alone. By hand: silver or better. With the autopilot: bronze or better, three times.',
+      'A time trial on any buoy course but the Reach (the Short Course, the Long Course, the Triangle or the Long Triangle), sailed alone. By hand: silver or better. With the autopilot: bronze or better, three times.',
     );
+    expect(
+      howTo({
+        name: 'Any buoy course',
+        courses: ['reach', 'short', 'long', 'triangle', 'long-triangle'],
+        hand: { medal: 'finish' },
+      }),
+    ).toBe(
+      'A time trial on any buoy course (the Reach, the Short Course, the Long Course, the Triangle or the Long Triangle), sailed alone. By hand: just finish.',
+    );
+    // A gale counts however it went: a capsize does not undo it.
+    expect(howTo({ name: 'x', measure: 'gales', at: 1 })).toContain('A capsize doesn’t undo it.');
     // One on each of its courses by hand; runs each on a different course.
     expect(
       howTo({

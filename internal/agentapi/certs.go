@@ -35,10 +35,14 @@ func wayWords(way uint8) string {
 	return ""
 }
 
-// certifiedWords are an event of a sailor's certificates: "Toward Helm:
-// The Triangle, bronze ✓ by hand · 3 of 4"; a run nearer a venture,
-// "Toward Helm: The Triangle, bronze, the autopilot way · 1 of 2 runs";
-// and "You earned Helm, by hand: the beach cat is yours to take."
+// certifiedWords are an event of a sailor's certificates: a task done,
+// "A task done toward Helm: A night at sea. 3 of the 4 tasks it needs, 1
+// to go: Helm is not earned yet"; a run nearer a venture, "A run toward
+// Helm's task The Reach, bronze, the autopilot way: 1 of the 2 runs it
+// asks. The task is not done yet, and Helm is not earned"; and "You
+// earned Helm, by hand: the beach cat is yours to take." A task done
+// never reads as a certificate held: each says in words that it is not
+// earned, with no tick beside the certificate's name.
 func certifiedWords(cat *catalog.Catalog, c *bus.Certified) string {
 	if cat == nil || int(c.Certificate) < 0 || int(c.Certificate) >= len(cat.Certificates) {
 		return "a certificate's task done"
@@ -48,13 +52,18 @@ func certifiedWords(cat *catalog.Catalog, c *bus.Certified) string {
 	t := int(c.Task)
 	switch {
 	case t >= 0 && t < len(ct.Tasks) && c.RunsOf > 0:
-		parts = append(parts, fmt.Sprintf("Toward %s: %s, the autopilot way · %d of %d runs", ct.Name, ct.Tasks[t].Name, c.Runs, c.RunsOf))
+		parts = append(parts, fmt.Sprintf("A run toward %s's task %s, the autopilot way: %d of the %d runs it asks. The task is not done yet, and %s is not earned",
+			ct.Name, ct.Tasks[t].Name, c.Runs, c.RunsOf, ct.Name))
 	case t >= 0 && t < len(ct.Tasks):
-		task := ct.Tasks[t].Name + " ✓"
+		task := ct.Tasks[t].Name
 		if w := wayWords(c.Way); w != "" {
-			task += " " + w
+			task += " (" + w + ")"
 		}
-		parts = append(parts, fmt.Sprintf("Toward %s: %s · %d of %d", ct.Name, task, c.Done, c.Of))
+		done := fmt.Sprintf("A task done toward %s: %s. %d of the %d tasks it needs", ct.Name, task, c.Done, c.Of)
+		if left := int(c.Of) - int(c.Done); !c.Earned && left > 0 {
+			done += fmt.Sprintf(", %d to go: %s is not earned yet", left, ct.Name)
+		}
+		parts = append(parts, done)
 	}
 	if c.Earned {
 		earned := "You earned " + ct.Name
@@ -103,14 +112,14 @@ func standingOf(ctx context.Context, s *Sea, account store.AccountID) (certs.Sta
 }
 
 // towardLine is the line going to sea tells of a sailor's next
-// certificate: "Toward Helm: 2 of the 4 tasks it needs (news with log
-// lists them)."; "" for none.
+// certificate: "Helm is not earned yet: 2 of the 4 tasks it needs are
+// done (news with log lists them)."; "" for none.
 func towardLine(ctx context.Context, s *Sea, account store.AccountID) string {
 	st, ok := standingOf(ctx, s, account)
 	if !ok || st.Next < 0 {
 		return ""
 	}
-	return fmt.Sprintf("Toward %s: %d of the %d tasks it needs (news with log lists them).", st.Name, min(st.Done, st.Needs), st.Needs)
+	return fmt.Sprintf("%s is not earned yet: %d of the %d tasks it needs are done (news with log lists them).", st.Name, min(st.Done, st.Needs), st.Needs)
 }
 
 // smallCounts are small counts in words.
@@ -136,6 +145,7 @@ func timesWords(n int) string {
 
 // courseNames are the kinds of course, as a line names them.
 var courseNames = map[catalog.CertificateCourse]string{
+	catalog.CertificateCourseReach:        "the Reach",
 	catalog.CertificateCourseShort:        "the Short Course",
 	catalog.CertificateCourseLong:         "the Long Course",
 	catalog.CertificateCourseTriangle:     "the Triangle",
@@ -143,37 +153,50 @@ var courseNames = map[catalog.CertificateCourse]string{
 	catalog.CertificateCourseIsland:       "an island course",
 }
 
-// buoyCourses are the kinds of buoy course: a task open to all of them is
-// open to "any buoy course".
+// buoyCourses are the kinds of buoy course with a beat in them: a task
+// open to all of them is open to "any buoy course but the Reach", and
+// with the reach too to "any buoy course". Either names them, so nobody
+// has to guess which they are.
 var buoyCourses = []catalog.CertificateCourse{catalog.CertificateCourseShort, catalog.CertificateCourseLong,
 	catalog.CertificateCourseTriangle, catalog.CertificateCourseLongTriangle}
 
 // taskCourses are a task's courses in words: "the Triangle", "the
-// Triangle and the Long Course", "any buoy course".
+// Triangle and the Long Course", "any buoy course but the Reach (the
+// Short Course, the Long Course, the Triangle or the Long Triangle)".
 func taskCourses(courses []catalog.CertificateCourse, each bool) string {
-	if len(courses) == len(buoyCourses) && !slices.ContainsFunc(buoyCourses, func(b catalog.CertificateCourse) bool {
-		return !slices.Contains(courses, b)
-	}) {
-		return "any buoy course"
-	}
 	names := make([]string, len(courses))
 	for i, c := range courses {
 		if names[i] = courseNames[c]; names[i] == "" {
 			names[i] = "a " + string(c) + " course"
 		}
 	}
+	list := ""
 	switch len(names) {
 	case 0:
 		return "a course"
 	case 1:
 		return names[0]
+	default:
+		join := " or "
+		if each {
+			join = " and "
+		}
+		list = strings.Join(names[:len(names)-1], ", ") + join + names[len(names)-1]
 	}
-	join := " or "
-	if each {
-		join = " and "
+	beats := !slices.ContainsFunc(buoyCourses, func(b catalog.CertificateCourse) bool { return !slices.Contains(courses, b) })
+	reach := slices.Contains(courses, catalog.CertificateCourseReach)
+	switch {
+	case beats && reach && len(courses) == len(buoyCourses)+1:
+		return "any buoy course (" + list + ")"
+	case beats && len(courses) == len(buoyCourses):
+		return "any buoy course but the Reach (" + list + ")"
 	}
-	return strings.Join(names[:len(names)-1], ", ") + join + names[len(names)-1]
+	return list
 }
+
+// reachHow is how the reach is sailed, for a task that is sailed on it
+// alone.
+const reachHow = "Sail across the wind to the mark, go round it, and sail back. No tacking up the wind."
 
 // medalWords are what a run must come to: "finish", "bronze or better".
 func medalWords(m catalog.Medal) string {
@@ -188,6 +211,9 @@ func medalWords(m catalog.Medal) string {
 func courseHowTo(t *catalog.CertificateTask) string {
 	each := t.Hand != nil && t.Hand.Each != nil && *t.Hand.Each && len(t.Courses) > 1
 	out := []string{"A time trial on " + taskCourses(t.Courses, each) + ", sailed alone."}
+	if len(t.Courses) == 1 && t.Courses[0] == catalog.CertificateCourseReach {
+		out = append(out, reachHow)
+	}
 	if t.Hand != nil {
 		on := ""
 		if each {
@@ -264,7 +290,7 @@ func howTo(t *catalog.CertificateTask) string {
 		}
 		return "Sail for half an hour after dark, on " + countWord(n) + " voyages."
 	case catalog.MeasureGales:
-		return "Find a gale on the weather chart and sail in it for ten minutes. It counts once the wind eases, or you make port."
+		return "Find a gale on the weather chart and sail in it for ten minutes. It counts once the wind eases, or you make port. A capsize doesn’t undo it."
 	case catalog.MeasureStormsOrFogs:
 		return "Sail in a storm until the wind eases or you make port, or sail into a port in fog."
 	case catalog.MeasureLip:

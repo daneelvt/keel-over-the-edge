@@ -545,6 +545,7 @@ type CertificateCourse string
 const CertificateCourseIsland CertificateCourse = "island"
 const CertificateCourseLong CertificateCourse = "long"
 const CertificateCourseLongTriangle CertificateCourse = "long-triangle"
+const CertificateCourseReach CertificateCourse = "reach"
 const CertificateCourseShort CertificateCourse = "short"
 const CertificateCourseTriangle CertificateCourse = "triangle"
 
@@ -6181,4 +6182,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "3ffedd6a7cd63a06"
+const Version = "d62bca3881c1b72d"

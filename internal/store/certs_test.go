@@ -188,35 +188,38 @@ func taskOf(t *testing.T, st certs.Standing, id string) certs.Task {
 func TestTheJudgeCountsRunsAlone(t *testing.T) {
 	w := newJudgeWorld(t)
 	ann, tom := w.sailor("Ann Bonny", "annbonny"), w.sailor("Tom Bowline", "tornbowline")
-	if told := w.run(tom, store.CourseShort, "", false, false); len(told) != 0 {
+	if told := w.run(tom, store.CourseReach, "", false, false); len(told) != 0 {
 		t.Errorf("a run with a friend aboard told %+v", told)
 	}
-	if task := taskOf(t, w.standing(tom), "short-course"); task.Done {
+	if task := taskOf(t, w.standing(tom), "the-reach"); task.Done {
 		t.Errorf("a run with a friend aboard counted: %+v", task)
 	}
-	told := w.run(ann, store.CourseShort, "", false, true)
+	told := w.run(ann, store.CourseReach, "", false, true)
 	if len(told) != 1 || told[0].Task != 0 || told[0].Way != store.WayHand || told[0].Done != 1 || told[0].Of != 3 || told[0].Earned {
 		t.Errorf("a run alone by hand told %+v", told)
 	}
-	if told := w.run(ann, store.CourseShort, "", false, true); len(told) != 0 {
+	if told := w.run(ann, store.CourseReach, "", false, true); len(told) != 0 {
 		t.Errorf("a task done twice told again: %+v", told)
 	}
 	// Tom on the autopilot: 1 of 2, told as a run nearer, then done the
 	// autopilot way.
-	if told := w.run(tom, store.CourseShort, "bronze", true, true); len(told) != 1 || told[0].Task != 0 || told[0].Way != store.WayPilot ||
+	if told := w.run(tom, store.CourseReach, "bronze", true, true); len(told) != 1 || told[0].Task != 0 || told[0].Way != store.WayPilot ||
 		told[0].Runs != 1 || told[0].RunsOf != 2 || told[0].Done != 0 || told[0].Earned {
 		t.Errorf("one run of a venture of two told %+v", told)
 	}
-	if task := taskOf(t, w.standing(tom), "short-course"); task.Done || task.Runs != 1 || task.Of != 2 {
+	if task := taskOf(t, w.standing(tom), "the-reach"); task.Done || task.Runs != 1 || task.Of != 2 {
 		t.Errorf("after one piloted run: %+v", task)
 	}
-	told = w.run(tom, store.CourseShort, "", true, true)
+	told = w.run(tom, store.CourseReach, "", true, true)
 	if len(told) != 1 || told[0].Way != store.WayPilot || told[0].RunsOf != 0 || told[0].Done != 1 {
 		t.Errorf("the venture's second run told %+v", told)
 	}
-	// A run on another course counts toward nothing of Deckhand's.
-	if told := w.run(ann, store.CourseTriangle, "gold", false, true); len(told) != 0 {
-		t.Errorf("a triangle told %+v toward Deckhand", told)
+	// A run on a course with a beat in it counts toward nothing of
+	// Deckhand's, however fast.
+	for _, course := range []string{store.CourseShort, store.CourseTriangle, store.CourseLong} {
+		if told := w.run(ann, course, "gold", false, true); len(told) != 0 {
+			t.Errorf("a run of the %s course told %+v toward Deckhand", course, told)
+		}
 	}
 }
 
@@ -229,7 +232,7 @@ func TestThreeTasksEarnDeckhand(t *testing.T) {
 	ctx := context.Background()
 	w := newJudgeWorld(t)
 	ann, tom := w.sailor("Ann Bonny", "annbonny"), w.sailor("Tom Bowline", "tornbowline")
-	w.run(ann, store.CourseShort, "", false, true)
+	w.run(ann, store.CourseReach, "", false, true)
 	if told := w.met(ann, "dolphin", true); len(told) != 0 {
 		t.Errorf("a creature met crewed told %+v", told)
 	}
@@ -329,7 +332,7 @@ func TestTheLogReadsCertificates(t *testing.T) {
 		t.Fatalf("a new sailor's certificates: %+v", own)
 	}
 	// Deckhand by hand: the course, a mile and a creature.
-	w.run(ann, store.CourseShort, "", false, true)
+	w.run(ann, store.CourseReach, "", false, true)
 	w.voyage(ann, 2000, 0, store.AccountID{})
 	w.met(ann, "dolphin", false)
 	deckhand := w.at
@@ -358,9 +361,9 @@ func TestTheLogReadsCertificates(t *testing.T) {
 		t.Errorf("two kinds of life, both met: %+v", k)
 	}
 	// Helm, the autopilot on for one of its courses: not by hand.
-	w.run(ann, store.CourseTriangle, "bronze", false, true)
-	w.run(ann, store.CourseLong, "silver", true, true)
-	w.run(ann, store.CourseLong, "bronze", true, true)
+	w.run(ann, store.CourseReach, "bronze", false, true)
+	w.run(ann, store.CourseShort, "", true, true)
+	w.run(ann, store.CourseShort, "bronze", true, true)
 	w.voyage(ann, 2*1852, store.LogMetNight, store.AccountID{})
 	helm := w.at
 	// And a voyage toward Skipper since.
@@ -399,8 +402,8 @@ func TestTheLogReadsCertificates(t *testing.T) {
 func TestByHandOnlyWhenEveryCourseWas(t *testing.T) {
 	w := newJudgeWorld(t)
 	ann, tom := w.sailor("Ann Bonny", "annbonny"), w.sailor("Tom Bowline", "tornbowline")
-	w.run(ann, store.CourseShort, "", true, true)
-	w.run(ann, store.CourseShort, "", true, true)
+	w.run(ann, store.CourseReach, "", true, true)
+	w.run(ann, store.CourseReach, "", true, true)
 	w.voyage(ann, 2000, 0, store.AccountID{})
 	if told := w.met(ann, "dolphin", false); len(told) != 1 || !told[0].Earned || told[0].ByHand {
 		t.Errorf("Deckhand the autopilot way told %+v", told)

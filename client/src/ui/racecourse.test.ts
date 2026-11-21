@@ -52,6 +52,35 @@ describe('a buoy course', () => {
     );
   });
 
+  test('a reach: the line upright at one side, its one mark straight across the wind from it', () => {
+    const reach: CourseTold = {
+      id: 'buoy:reach:short',
+      kind: 'buoy',
+      shape: 'reach',
+      long: false,
+      name: 'Reach',
+    };
+    const s = courseShape(reach, 100, 100, 10);
+    expect(s.marks).toHaveLength(1);
+    const [a, b] = s.line ?? [];
+    // The line runs with the wind, from the top of the box to its foot.
+    expect(a?.x).toBeCloseTo(b?.x ?? -1, 5);
+    expect(Math.abs((a?.y ?? 0) - (b?.y ?? 0))).toBeGreaterThan(10);
+    // The mark is level with the line's middle, well out to the side.
+    const mark = s.marks[0];
+    expect(mark?.y).toBeCloseTo(((a?.y ?? 0) + (b?.y ?? 0)) / 2, 5);
+    expect((mark?.x ?? 0) - (a?.x ?? 0)).toBeGreaterThan(40);
+    // Out and home over the same line, never far up or down the wind.
+    expect(s.legs[0]).toEqual(s.legs.at(-1));
+    for (const p of s.legs) {
+      expect(Math.abs(p.y - (mark?.y ?? 0))).toBeLessThan(10);
+    }
+    // The way goes out beyond the mark, to round it.
+    expect(Math.max(...s.legs.map((p) => p.x))).toBeGreaterThan(mark?.x ?? 0);
+    expect(s.wind).not.toBeNull();
+    expect(shapeText(reach)).toBe('Reach: across the wind to one mark and back');
+  });
+
   test('a wide box keeps the course square, centred', () => {
     const s = courseShape(triangle, 200, 100, 0);
     const xs = s.legs.map((p) => p.x);

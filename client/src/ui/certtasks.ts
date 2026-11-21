@@ -33,25 +33,41 @@ function times(n: number): string {
 
 /** The kinds of course, as a line names them. */
 const COURSES: Record<string, string> = {
+  reach: 'the Reach',
   short: 'the Short Course',
   long: 'the Long Course',
   triangle: 'the Triangle',
   'long-triangle': 'the Long Triangle',
   island: 'an island course',
 };
+/** The buoy courses with a beat in them: every one but the reach. */
 const BUOYS = ['short', 'long', 'triangle', 'long-triangle'];
 
-/** A task's courses in words: "the Triangle", "the Triangle and the Long Course", "any buoy course". */
+/**
+ * A task's courses in words: "the Triangle", "the Triangle and the Long
+ * Course", "any buoy course but the Reach (the Short Course, the Long
+ * Course, the Triangle or the Long Triangle)". Any buoy course names its
+ * courses, so nobody has to guess which they are.
+ */
 function coursesWords(courses: readonly string[], each: boolean): string {
-  if (BUOYS.every((b) => courses.includes(b)) && courses.length === BUOYS.length) {
-    return 'any buoy course';
-  }
   const names = courses.map((c) => COURSES[c] ?? `a ${c} course`);
   if (names.length < 2) {
     return names[0] ?? 'a course';
   }
-  return `${names.slice(0, -1).join(', ')} ${each ? 'and' : 'or'} ${names[names.length - 1]}`;
+  const list = `${names.slice(0, -1).join(', ')} ${each ? 'and' : 'or'} ${names[names.length - 1]}`;
+  const beats = BUOYS.every((b) => courses.includes(b));
+  if (beats && courses.includes('reach') && courses.length === BUOYS.length + 1) {
+    return `any buoy course (${list})`;
+  }
+  if (beats && courses.length === BUOYS.length) {
+    return `any buoy course but the Reach (${list})`;
+  }
+  return list;
 }
+
+/** How the reach is sailed, for a task that is sailed on it alone. */
+const REACH_HOW =
+  'Sail across the wind to the mark, go round it, and sail back. No tacking up the wind.';
 
 /** What a run must come to: "finish", "bronze or better". */
 function medalWords(medal: string): string {
@@ -63,6 +79,9 @@ function courseHowTo(t: CertTask): string {
   const courses = t.courses ?? [];
   const each = t.hand?.each === true && courses.length > 1;
   const out = [`A time trial on ${coursesWords(courses, each)}, sailed alone.`];
+  if (courses.length === 1 && courses[0] === 'reach') {
+    out.push(REACH_HOW);
+  }
   if (t.hand !== undefined) {
     const on = each ? (courses.length === 2 ? ' on both' : ' on each') : '';
     out.push(
@@ -113,7 +132,7 @@ export function howTo(t: CertTask): string {
         ? 'Sail for half an hour after dark, in one voyage.'
         : `Sail for half an hour after dark, on ${count(n)} voyages.`;
     case 'gales':
-      return 'Find a gale on the weather chart and sail in it for ten minutes. It counts once the wind eases, or you make port.';
+      return 'Find a gale on the weather chart and sail in it for ten minutes. It counts once the wind eases, or you make port. A capsize doesn’t undo it.';
     case 'storms-or-fogs':
       return 'Sail in a storm until the wind eases or you make port, or sail into a port in fog.';
     case 'lip':

@@ -246,6 +246,11 @@ func TestMakingRefused(t *testing.T) {
 		{by, Making{Kind: KindRace, Course: "island:3", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "island:9", Boat: tall, Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: tall, Who: WhoEveryone}, RefuseCourse},
+		// The reach is the Harbourmaster's own: nobody makes a race on it,
+		// nor a trial, and it has no long form.
+		{by, Making{Kind: KindRace, Course: "buoy:reach:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone}, RefuseCourse},
+		{by, Making{Kind: KindTrial, Course: "buoy:reach:short", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
+		{by, Making{Kind: KindRace, Course: "buoy:reach:long", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:square:short", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: "no-boat", Who: WhoEveryone}, RefuseBoat},
 		{engine, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoHumans}, RefuseWho},
@@ -510,7 +515,8 @@ func TestHarbourJob(t *testing.T) {
 	trials := 0
 	for i := range s.svc.cfg.Catalog.Boats {
 		if s.svc.inAreas(&s.svc.cfg.Catalog.Boats[i], &courses) {
-			trials += 3
+			// The reach, the short course, the triangle and the long course.
+			trials += 4
 		}
 	}
 	for _, ic := range courses.Island {
@@ -558,8 +564,8 @@ func TestHarbourJob(t *testing.T) {
 		}
 		names = append(names, tr.Name)
 	}
-	if len(names) < 3 || names[0] != "the Harbourmaster's Short Course" || names[1] != "the Harbourmaster's Triangle" ||
-		names[2] != "the Harbourmaster's Long Course" {
+	if len(names) < 4 || names[0] != "the Harbourmaster's Reach" || names[1] != "the Harbourmaster's Short Course" ||
+		names[2] != "the Harbourmaster's Triangle" || names[3] != "the Harbourmaster's Long Course" {
 		t.Errorf("the standing trials on the board: %q", names)
 	}
 }

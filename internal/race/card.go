@@ -448,21 +448,23 @@ func (s *Service) CourseTrials(ctx context.Context, id store.AccountID) (map[str
 	return out, nil
 }
 
-// standingOrder is a standing trial's place on the board: the short
-// windward–leeward, the short triangle, the long windward–leeward, the
-// long triangle, then the island courses by number.
+// standingOrder is a standing trial's place on the board: the reach, the
+// short windward–leeward, the short triangle, the long windward–leeward,
+// the long triangle, then the island courses by number.
 func standingOrder(r *store.Race) int {
 	switch recordCourse(r) {
-	case store.CourseShort:
+	case store.CourseReach:
 		return 0
-	case store.CourseTriangle:
+	case store.CourseShort:
 		return 1
-	case store.CourseLong:
+	case store.CourseTriangle:
 		return 2
-	case store.CourseLongTriangle:
+	case store.CourseLong:
 		return 3
+	case store.CourseLongTriangle:
+		return 4
 	}
-	return 4 + r.Course
+	return 5 + r.Course
 }
 
 // sailorBoat is the catalog's id of the boat each sailor brings to the

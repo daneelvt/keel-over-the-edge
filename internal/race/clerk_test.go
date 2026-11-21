@@ -124,6 +124,24 @@ func route(rc *bus.RaceCourse) [][2]float64 {
 	return append(out, [2]float64{out[len(out)-1][0] - 20*us, out[len(out)-1][1] - 20*uc})
 }
 
+// reachRoute is a way round reach rc: over its line, past its mark under
+// its lee, round it to port and home over the line.
+func reachRoute(rc *bus.RaceCourse) [][2]float64 {
+	us, uc := physics.SinCos(rc.From)
+	mark := rc.Checks[1]
+	ox, oy := mark.S, mark.C
+	at := func(out, up float64) [2]float64 {
+		return [2]float64{mark.X + out*ox + up*us, mark.Y + out*oy + up*uc}
+	}
+	home := rc.Way[0]
+	return [][2]float64{
+		{home[0] + 10*ox, home[1] + 10*oy},
+		at(-5, -15), at(15, -15), at(15, 15), at(-5, 15),
+		{home[0] + 10*ox, home[1] + 10*oy},
+		{home[0] - 20*ox, home[1] - 20*oy},
+	}
+}
+
 // A race of three boats, made, entered, handed to the committee at its
 // warning signal, sailed by scripted boats from the gun to the finish, and
 // written: its boats started, everyone's result and track, the records,
@@ -347,14 +365,39 @@ func (c *course) restart() {
 
 // A time trial's run: asked for by entering, handed to the committee at
 // once, timed from its crossing of the line, written with its medal as a
-// run of its own; entering again asks for the next.
+// run of its own; entering again asks for the next. A run of the
+// Harbourmaster's Reach, his standing trial, is the first task of the
+// first certificate; a run of a trial a sailor made on the short
+// windward–leeward counts toward nothing yet.
 func TestATrialsRun(t *testing.T) {
+	t.Run("the Reach", func(t *testing.T) { aTrialsRun(t, true) })
+	t.Run("a sailor's own", func(t *testing.T) { aTrialsRun(t, false) })
+}
+
+func aTrialsRun(t *testing.T, reach bool) {
 	s := newSea(t)
 	c := newCourse(s)
 	c.clerk.cfg.Examiner = certs.Judge{L: certs.New(s.cat)}
 	sl := s.human()
-	card, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindTrial, Course: "buoy:windward-leeward:short", Boat: s.jolly(), Who: WhoEveryone})
-	if err != nil {
+	var card Card
+	var err error
+	course := store.CourseShort
+	if reach {
+		course = store.CourseReach
+		if _, _, err := s.svc.Harbour(s.ctx, s.lease, s.now); err != nil {
+			t.Fatal(err)
+		}
+		b, err := s.svc.Board(s.ctx, sl)
+		if err != nil || len(b.Trials) == 0 || b.Trials[0].Course != store.CourseReach || b.Trials[0].Name != "the Harbourmaster's Reach" {
+			t.Fatalf("the board's first standing trial: %+v %v", b.Trials, err)
+		}
+		if card, err = s.svc.Card(s.ctx, sl, b.Trials[0].Code); err != nil {
+			t.Fatal(err)
+		}
+		if card.Course.ID != "buoy:reach:short" || card.Course.Shape != ShapeReach || card.Course.Name != "Reach off Port Royal" || card.Minutes != ReachMinutes {
+			t.Errorf("the Reach's card: %+v, %d minutes", card.Course, card.Minutes)
+		}
+	} else if card, err = s.svc.Make(s.ctx, s.human(), Making{Kind: KindTrial, Course: "buoy:windward-leeward:short", Boat: s.jolly(), Who: WhoEveryone}); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.w.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.Join, Account: bus.Account(sl.ID), Conn: 1}); err != nil {
@@ -375,6 +418,12 @@ func TestATrialsRun(t *testing.T) {
 	// time.
 	rc := f.Races[0].Course
 	way := route(rc)
+	if reach {
+		if !rc.Across {
+			t.Fatalf("the Reach's course laid: %+v", rc)
+		}
+		way = reachRoute(rc)
+	}
 	slot := f.Live[0]
 	st := f.State[slot]
 	at := 0
@@ -412,13 +461,14 @@ func TestATrialsRun(t *testing.T) {
 	}
 	c.tick(2, listen)
 	listen()
-	// Sailed alone by hand on the short windward–leeward: the first task
-	// of the first certificate, told through the world.
-	if len(told) != 1 || told[0].Certificate != 0 || told[0].Task != 0 || told[0].Way != bus.CertHand || told[0].Done != 1 {
+	// Sailed alone by hand on the Reach: the first task of the first
+	// certificate, told through the world. On another course, nothing.
+	if reach && (len(told) != 1 || told[0].Certificate != 0 || told[0].Task != 0 || told[0].Way != bus.CertHand || told[0].Done != 1) ||
+		!reach && len(told) != 0 {
 		t.Errorf("the run told %+v", told)
 	}
 	recs, err := s.db.RaceRecordsByCode(s.ctx, card.Code)
-	if err != nil || len(recs) != 1 || !recs[0].Alone || recs[0].Piloted || recs[0].Course != store.CourseShort {
+	if err != nil || len(recs) != 1 || !recs[0].Alone || recs[0].Piloted || recs[0].Course != course {
 		t.Errorf("the run's record %+v %v", recs, err)
 	}
 	res, err := s.db.RaceResults(s.ctx, s.world.ID, card2ID(t, s, card.Code))

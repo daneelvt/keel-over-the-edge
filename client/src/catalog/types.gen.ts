@@ -166,12 +166,12 @@ export type LifeBody =
   | "booby"
   | "booby-asleep";
 /**
- * A course a task is sailed on: the short windward-leeward, the long one, the short triangle, the long one, or an island course.
+ * A course a task is sailed on: the reach (across the wind to one mark and back), the short windward-leeward, the long one, the short triangle, the long one, or an island course.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "CertificateCourse".
  */
-export type CertificateCourse = "short" | "long" | "triangle" | "long-triangle" | "island";
+export type CertificateCourse = "reach" | "short" | "long" | "triangle" | "long-triangle" | "island";
 /**
  * A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
  *
@@ -10164,4 +10164,4 @@ export interface PendantsArt {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '3ffedd6a7cd63a06';
+export const CATALOG_VERSION = 'd62bca3881c1b72d';

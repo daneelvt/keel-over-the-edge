@@ -83,7 +83,9 @@ func TestRacesAskTheCertificates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(b.Trials) < 3 || b.Trials[0].Toward != l.Name(0) || b.Trials[1].Toward != "" {
+	// The first certificate's course is the reach, first on the board; the
+	// short course counts toward nothing until the second.
+	if len(b.Trials) < 4 || b.Trials[0].Course != store.CourseReach || b.Trials[0].Toward != l.Name(0) || b.Trials[1].Toward != "" {
 		t.Errorf("the standing trials: %+v", b.Trials)
 	}
 }

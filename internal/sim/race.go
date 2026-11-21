@@ -13,7 +13,8 @@ import (
 // its place. Each entrant's boat at sea is then placed behind the line, in
 // an order drawn by lot, at the first of the committee's spots clear of
 // land, shoal water and every other boat: at rest, its course cleared, its
-// controls ready to sail as a new boat's. A skipper sailing another kind
+// controls ready to sail as a new boat's; on a reach, where it is placed
+// facing the mark across the wind, its sheet set for a beam reach. A skipper sailing another kind
 // of boat changes to the race's, from their fleet, wherever they are: the
 // voyage in the old boat ends and one in the new begins, so the log keeps
 // the boat sailed. Those aboard stay if the skipper entered with them and
@@ -55,7 +56,7 @@ func (w *World) racePlace(c *bus.Command) bus.Reply {
 		if s < 0 {
 			continue
 		}
-		w.raceSpot(f, s, spots)
+		w.raceSpot(f, s, spots, course.Across)
 		placed[i] = committee.Placing{Slot: s, Boat: f.Boat[s], Placed: true}
 	}
 	committee.Begin(f, call, course, placed)
@@ -98,8 +99,9 @@ func (w *World) raceBoat(f *bus.Frame, e *bus.RaceEntrant, kind uint16) int32 {
 }
 
 // raceSpot puts the boat in slot s of f at the first of spots where it
-// fits, at rest, ready to sail; at the first if none is clear.
-func (w *World) raceSpot(f *bus.Frame, s int32, spots []physics.State) {
+// fits, at rest, ready to sail; at the first if none is clear. Across is
+// a reach's spots: the boat lies across the wind there.
+func (w *World) raceSpot(f *bus.Frame, s int32, spots []physics.State, across bool) {
 	if len(spots) == 0 {
 		return
 	}
@@ -117,7 +119,11 @@ func (w *World) raceSpot(f *bus.Frame, s int32, spots []physics.State) {
 		// The odometer adds nothing for the move.
 		lg.X, lg.Y = st.X, st.Y
 	}
-	w.readyControls(f, s)
+	if across {
+		w.readyControlsOff(f, s, 90)
+	} else {
+		w.readyControls(f, s)
+	}
 	w.racePlaced = append(w.racePlaced, s)
 }
 

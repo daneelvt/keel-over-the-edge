@@ -3,8 +3,10 @@
 // A course drawn small, in a box of its own, north up: a buoy course as
 // its shape, laid square to a wind from the top of the box (the windward
 // mark at the top, the start line across the foot, a triangle's wing mark
-// to one side, a windward–leeward's gate above the line) with the wind's
-// arrow beside it; an island course as its way, fitted to the box with
+// to one side, a windward–leeward's gate above the line; a reach's line
+// upright at one side and its one mark out at the other, across the
+// wind) with the wind's arrow beside it; an island course as its way,
+// fitted to the box with
 // its proportions kept. The same shape is drawn in the panels' pictures
 // and on the picture shared with a race's link.
 
@@ -35,6 +37,21 @@ function buoyUnit(shape: CourseTold['shape'], long: boolean): CourseShape {
     { x: 0.88, y: 0.08 },
     { x: 0.88, y: 0.34 },
   ];
+  if (shape === 'reach') {
+    // The line along the wind, the mark straight across it: out under the
+    // mark, round it, and back above it.
+    const home = { x: 0.14, y: 0.5 };
+    const mark = { x: 0.76, y: 0.5 };
+    return {
+      legs: [home, { x: 0.74, y: 0.57 }, { x: 0.86, y: 0.5 }, { x: 0.74, y: 0.43 }, home],
+      marks: [mark],
+      line: [
+        { x: 0.14, y: 0.36 },
+        { x: 0.14, y: 0.64 },
+      ],
+      wind,
+    };
+  }
   if (shape === 'windward-leeward') {
     const gate = { x: 0.5, y: 0.72 };
     const legs = [start, windward, gate, windward, gate];
@@ -134,6 +151,9 @@ export function pathData(points: readonly Pt[]): string {
 export function shapeText(course: CourseTold): string {
   if (course.kind === 'island') {
     return 'Island course';
+  }
+  if (course.shape === 'reach') {
+    return 'Reach: across the wind to one mark and back';
   }
   const shape = course.shape === 'windward-leeward' ? 'Windward–leeward' : 'Triangle';
   return `${shape}, ${course.long === true ? 'long' : 'short'}`;
