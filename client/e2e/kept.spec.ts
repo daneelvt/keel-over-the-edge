@@ -304,19 +304,29 @@ test('the off switch: a build with KEEL_SW=off takes the worker and its caches a
     stdio: 'pipe',
   });
   await restartOn(request, off);
+  // Each registration left, as its workers stand (installing, waiting,
+  // active, and whether one controls the page): a failure says how far the
+  // off switch came.
   const none = async () => ({
-    registrations: await page.evaluate(
-      async () => (await navigator.serviceWorker.getRegistrations()).length,
+    registrations: await page.evaluate(async () =>
+      (await navigator.serviceWorker.getRegistrations()).map((r) =>
+        [
+          `installing ${r.installing?.state ?? 'none'}`,
+          `waiting ${r.waiting?.state ?? 'none'}`,
+          `active ${r.active?.state ?? 'none'}`,
+          `controlled ${navigator.serviceWorker.controller !== null}`,
+        ].join(', '),
+      ),
     ),
     caches: Object.keys(await cachesOf()),
   });
   // A navigation: the browser finds the worker changed, and the page is
   // the build without one.
   await page.reload();
-  await expect.poll(none, { timeout: 60_000 }).toEqual({ registrations: 0, caches: [] });
+  await expect.poll(none, { timeout: 60_000 }).toEqual({ registrations: [], caches: [] });
   // At sea again, past the reveal and its registration: still none.
   await page.reload();
   await setSail();
   await page.waitForTimeout(2000);
-  expect(await none()).toEqual({ registrations: 0, caches: [] });
+  expect(await none()).toEqual({ registrations: [], caches: [] });
 });
