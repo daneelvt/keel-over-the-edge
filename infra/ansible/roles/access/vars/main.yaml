@@ -1,12 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # What the machine serves to the tailnet, as tailscale serve status --json
-# says it (access_serve), and what the list says it should, each a line a
-# page: its port, its path and where its requests go.
+# says it (access_serve), and what the list says it should: each a sorted
+# list with a line a page, its port, its path and where its requests go.
+# Lists, so the two are equal whatever order tailscale names its pages in.
 access_serve_web: "{{ (access_serve.stdout | default('{}', true) | from_json).Web | default({}, true) }}"
 access_serving: >-
-  {% for host, web in access_serve_web.items() -%}
-  {% for path, handler in (web.Handlers | default({}, true)).items() -%}
-  {{ host.split(':') | last }} {{ path }} {{ handler.Proxy | default('-') }}{{ '\n' }}{%- endfor %}{%- endfor %}
+  {%- set pages = [] -%}
+  {%- for host, web in access_serve_web.items() -%}
+  {%- for path, handler in (web.Handlers | default({}, true)).items() -%}
+  {%- set _ = pages.append((host.split(':') | last) ~ ' ' ~ path ~ ' ' ~ (handler.Proxy | default('-'))) -%}
+  {%- endfor -%}
+  {%- endfor -%}
+  {{ pages | sort }}
 access_to_serve: >-
-  {% for page in access_tailscale_serve -%}
-  {{ page.port }} {{ page.path | default('/') }} {{ page.target }}{{ '\n' }}{%- endfor %}
+  {%- set pages = [] -%}
+  {%- for page in access_tailscale_serve -%}
+  {%- set _ = pages.append(page.port ~ ' ' ~ (page.path | default('/')) ~ ' ' ~ page.target) -%}
+  {%- endfor -%}
+  {{ pages | sort }}
