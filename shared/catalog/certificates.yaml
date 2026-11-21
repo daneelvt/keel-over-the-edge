@@ -17,6 +17,25 @@
 # any moment, it counts toward the task's venture, more runs. A
 # certificate is earned by hand when every course task it counted was.
 #
+# No task may be too difficult. Every task here is held to five rules, and
+# so is every change to this file:
+#
+#   1. Deckhand asks no more than steering: its course is the Reach,
+#      across the wind to one mark and back, with no beat in it.
+#   2. A beat is first asked at Helm, and only to be finished, at any
+#      pace. No task holds a beat against the clock before Skipper.
+#   3. By hand, no certificate before Master asks more than bronze.
+#      Master asks silver once. None asks gold: gold is the boat's polar
+#      sailed perfectly, a time no hand sails.
+#   4. Each certificate can be earned with no rare thing (a storm, fog,
+#      being the first to chart a place) and with at most one medal.
+#   5. A long task is long in hours, never in skill.
+#
+# With the tasks below: Deckhand and Helm can be earned with no course at
+# all; Skipper with an island course finished; Captain with one bronze;
+# Master with one bronze on an island course, or one silver, or every
+# weather.
+#
 # A log task is a measure of the sailor's log reaching a mark: distance in
 # nautical miles, the lip's closest approach in metres, the rest a count.
 #
@@ -34,9 +53,9 @@ certificates:
     opens: [skiff, keelboat]
     needs: 3
     tasks:
-      - id: short-course
-        name: The Short Course
-        courses: [short]
+      - id: the-reach
+        name: The Reach
+        courses: [reach]
         hand: { medal: finish }
         venture: { medal: finish, runs: 2 }
       - id: one-mile
@@ -59,16 +78,16 @@ certificates:
     opens: [beach-cat]
     needs: 4
     tasks:
-      - id: the-triangle
-        name: The Triangle, bronze
-        courses: [triangle]
+      - id: reach-bronze
+        name: The Reach, bronze
+        courses: [reach]
         hand: { medal: bronze }
         venture: { medal: bronze, runs: 2 }
-      - id: the-long-course
-        name: The Long Course, bronze
-        courses: [long]
-        hand: { medal: bronze }
-        venture: { medal: bronze, runs: 2 }
+      - id: short-course
+        name: The Short Course
+        courses: [short]
+        hand: { medal: finish }
+        venture: { medal: finish, runs: 2 }
       - id: three-miles
         name: Sail 3 NM alone
         measure: distance
@@ -93,11 +112,11 @@ certificates:
     opens: [yacht]
     needs: 4
     tasks:
-      - id: buoys-silver
-        name: Any buoy course, silver
+      - id: buoys-bronze
+        name: Any buoy course but the Reach, bronze
         courses: [short, long, triangle, long-triangle]
-        hand: { medal: silver }
-        venture: { medal: bronze, runs: 3 }
+        hand: { medal: bronze }
+        venture: { medal: finish, runs: 3 }
       - id: an-island
         name: An island course
         courses: [island]
@@ -133,10 +152,10 @@ certificates:
         hand: { medal: bronze }
         venture: { medal: bronze, runs: 2, apart: true }
       - id: triangle-and-long
-        name: The Triangle and the Long Course, silver
+        name: The Triangle and the Long Course, bronze
         courses: [triangle, long]
-        hand: { medal: silver, each: true }
-        venture: { medal: silver, runs: 4 }
+        hand: { medal: bronze, each: true }
+        venture: { medal: bronze, runs: 4 }
       - id: twenty-miles
         name: Sail 20 NM alone
         measure: distance
@@ -153,6 +172,10 @@ certificates:
         name: Come within 20 m of the edge, and back
         measure: lip
         at: 20
+      - id: twenty-places
+        name: See twenty places
+        measure: places-seen
+        at: 20
 
   - id: master-cert
     name: Master
@@ -161,16 +184,16 @@ certificates:
     opens: [tall-ship]
     needs: 5
     tasks:
-      - id: buoys-gold
-        name: Any buoy course, gold
+      - id: buoys-silver
+        name: Any buoy course but the Reach, silver
         courses: [short, long, triangle, long-triangle]
-        hand: { medal: gold }
-        venture: { medal: silver, runs: 3 }
-      - id: island-silver
-        name: An island course, silver
-        courses: [island]
         hand: { medal: silver }
-        venture: { medal: silver, runs: 3, apart: true }
+        venture: { medal: bronze, runs: 3 }
+      - id: master-island
+        name: An island course, bronze
+        courses: [island]
+        hand: { medal: bronze }
+        venture: { medal: bronze, runs: 3, apart: true }
       - id: forty-miles
         name: Sail 40 NM alone
         measure: distance

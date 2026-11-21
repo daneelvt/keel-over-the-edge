@@ -19,7 +19,7 @@ export interface CourseTold {
   id: string;
   kind: 'buoy' | 'island';
   /** A buoy course's shape. */
-  shape?: 'triangle' | 'windward-leeward';
+  shape?: 'triangle' | 'windward-leeward' | 'reach';
   /** A buoy course's long form. */
   long?: boolean;
   name: string;

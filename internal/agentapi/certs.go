@@ -136,6 +136,7 @@ func timesWords(n int) string {
 
 // courseNames are the kinds of course, as a line names them.
 var courseNames = map[catalog.CertificateCourse]string{
+	catalog.CertificateCourseReach:        "the Reach",
 	catalog.CertificateCourseShort:        "the Short Course",
 	catalog.CertificateCourseLong:         "the Long Course",
 	catalog.CertificateCourseTriangle:     "the Triangle",
@@ -143,37 +144,50 @@ var courseNames = map[catalog.CertificateCourse]string{
 	catalog.CertificateCourseIsland:       "an island course",
 }
 
-// buoyCourses are the kinds of buoy course: a task open to all of them is
-// open to "any buoy course".
+// buoyCourses are the kinds of buoy course with a beat in them: a task
+// open to all of them is open to "any buoy course but the Reach", and
+// with the reach too to "any buoy course". Either names them, so nobody
+// has to guess which they are.
 var buoyCourses = []catalog.CertificateCourse{catalog.CertificateCourseShort, catalog.CertificateCourseLong,
 	catalog.CertificateCourseTriangle, catalog.CertificateCourseLongTriangle}
 
 // taskCourses are a task's courses in words: "the Triangle", "the
-// Triangle and the Long Course", "any buoy course".
+// Triangle and the Long Course", "any buoy course but the Reach (the
+// Short Course, the Long Course, the Triangle or the Long Triangle)".
 func taskCourses(courses []catalog.CertificateCourse, each bool) string {
-	if len(courses) == len(buoyCourses) && !slices.ContainsFunc(buoyCourses, func(b catalog.CertificateCourse) bool {
-		return !slices.Contains(courses, b)
-	}) {
-		return "any buoy course"
-	}
 	names := make([]string, len(courses))
 	for i, c := range courses {
 		if names[i] = courseNames[c]; names[i] == "" {
 			names[i] = "a " + string(c) + " course"
 		}
 	}
+	list := ""
 	switch len(names) {
 	case 0:
 		return "a course"
 	case 1:
 		return names[0]
+	default:
+		join := " or "
+		if each {
+			join = " and "
+		}
+		list = strings.Join(names[:len(names)-1], ", ") + join + names[len(names)-1]
 	}
-	join := " or "
-	if each {
-		join = " and "
+	beats := !slices.ContainsFunc(buoyCourses, func(b catalog.CertificateCourse) bool { return !slices.Contains(courses, b) })
+	reach := slices.Contains(courses, catalog.CertificateCourseReach)
+	switch {
+	case beats && reach && len(courses) == len(buoyCourses)+1:
+		return "any buoy course (" + list + ")"
+	case beats && len(courses) == len(buoyCourses):
+		return "any buoy course but the Reach (" + list + ")"
 	}
-	return strings.Join(names[:len(names)-1], ", ") + join + names[len(names)-1]
+	return list
 }
+
+// reachHow is how the reach is sailed, for a task that is sailed on it
+// alone.
+const reachHow = "Sail across the wind to the mark, go round it, and sail back. No tacking up the wind."
 
 // medalWords are what a run must come to: "finish", "bronze or better".
 func medalWords(m catalog.Medal) string {
@@ -188,6 +202,9 @@ func medalWords(m catalog.Medal) string {
 func courseHowTo(t *catalog.CertificateTask) string {
 	each := t.Hand != nil && t.Hand.Each != nil && *t.Hand.Each && len(t.Courses) > 1
 	out := []string{"A time trial on " + taskCourses(t.Courses, each) + ", sailed alone."}
+	if len(t.Courses) == 1 && t.Courses[0] == catalog.CertificateCourseReach {
+		out = append(out, reachHow)
+	}
 	if t.Hand != nil {
 		on := ""
 		if each {
@@ -264,7 +281,7 @@ func howTo(t *catalog.CertificateTask) string {
 		}
 		return "Sail for half an hour after dark, on " + countWord(n) + " voyages."
 	case catalog.MeasureGales:
-		return "Find a gale on the weather chart and sail in it for ten minutes. It counts once the wind eases, or you make port."
+		return "Find a gale on the weather chart and sail in it for ten minutes. It counts once the wind eases, or you make port. A capsize doesn’t undo it."
 	case catalog.MeasureStormsOrFogs:
 		return "Sail in a storm until the wind eases or you make port, or sail into a port in fog."
 	case catalog.MeasureLip:

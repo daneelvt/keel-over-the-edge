@@ -640,7 +640,7 @@ func TestCarefulEdge(t *testing.T) {
 	for _, windward := range []bool{true, false} {
 		for _, knots := range carefulWinds {
 			for _, turn := range []float64{40, 30, 20, 15, 12, 10} {
-				if o := os.Getenv("KEEL_CAREFUL_ONLY"); o != "" && o != fmt.Sprint(windward, knots, turn) {
+				if o := os.Getenv("KEEL_CAREFUL_ONLY"); o != "" && !strings.Contains(o, ",") && o != fmt.Sprint(windward, knots, turn) {
 					continue
 				}
 				synctest.Test(t, func(t *testing.T) {

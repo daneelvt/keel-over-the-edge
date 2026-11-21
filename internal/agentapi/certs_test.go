@@ -163,7 +163,7 @@ func TestHowTo(t *testing.T) {
 	for m := range measures {
 		t.Errorf("the catalog's measure %s is not among those walked", m)
 	}
-	for _, c := range []catalog.CertificateCourse{catalog.CertificateCourseShort, catalog.CertificateCourseLong, catalog.CertificateCourseTriangle,
+	for _, c := range []catalog.CertificateCourse{catalog.CertificateCourseReach, catalog.CertificateCourseShort, catalog.CertificateCourseLong, catalog.CertificateCourseTriangle,
 		catalog.CertificateCourseLongTriangle, catalog.CertificateCourseIsland} {
 		if courseNames[c] == "" {
 			t.Errorf("the course %s has no name", c)

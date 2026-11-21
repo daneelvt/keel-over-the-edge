@@ -107,9 +107,9 @@
     },
     "CertificateCourse": {
       "title": "CertificateCourse",
-      "description": "A course a task is sailed on: the short windward-leeward, the long one, the short triangle, the long one, or an island course.",
+      "description": "A course a task is sailed on: the reach (across the wind to one mark and back), the short windward-leeward, the long one, the short triangle, the long one, or an island course.",
       "type": "string",
-      "enum": ["short", "long", "triangle", "long-triangle", "island"]
+      "enum": ["reach", "short", "long", "triangle", "long-triangle", "island"]
     },
     "CertificateWay": {
       "title": "CertificateWay",
