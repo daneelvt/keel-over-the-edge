@@ -19,6 +19,7 @@ import { SheetInput } from '../input/sheet';
 import type { Status, WatchingTold } from '../net/messages';
 import type { Place, WatchEnd } from '../net/online';
 import { ConnectionLine } from './connection';
+import { INVITE_FRIENDS } from './deckwords';
 import { SeaControls } from './hud';
 import { Menu } from './menu';
 import { HudModel } from './model';
@@ -301,6 +302,24 @@ describe('the screen on a boat watched', () => {
     expect(WatchBar({ view: own })).toBeNull();
   });
 
+  test('says how many watch, the reader among them, after the name; its label says it whole', () => {
+    for (const [n, words] of [
+      [1, '1 watching'],
+      [12, '12 watching'],
+      [1200, '1,200 watching'],
+    ] as const) {
+      const v = view(mary, true, 'sailing');
+      (v.watchers as ReturnType<typeof signal<number>>).value = n;
+      const bar = expand(WatchBar({ view: v }));
+      expect(text(bar)).toContain(`Watching Iron Mary⚙ · ${words}`);
+      expect((bar as VNode<{ 'aria-label': string }>).props['aria-label']).toBe(
+        `Watching Iron Mary, ${words}`,
+      );
+    }
+    // None told yet: the name alone.
+    expect(text(expand(WatchBar({ view: view(mary, true, 'sailing') })))).not.toContain('watching');
+  });
+
   test('a watch ended: why, and the way to another or to sea', () => {
     const v = view(null, true, 'idle', { why: 'left', sailor: 'Iron Mary' });
     const bar = expand(WatchBar({ view: v }));
@@ -350,6 +369,21 @@ describe('the screen on a boat watched', () => {
     );
     expect(own).toContain(WATCH_A_SAILOR);
     expect(own).not.toContain(STOP_WATCHING);
+  });
+
+  test('the menu, watching the player’s own machine sailor: its links are Invite friends’, no key of their own', () => {
+    const own = view({ ...mary, mine: true }, true, 'sailing');
+    const b = buttons(
+      Menu({
+        settings: settingsSignal(null),
+        sailor: 'Ann Bonny',
+        close: () => {},
+        watch: own,
+        invite: () => {},
+      }),
+    );
+    expect(b).toContain(INVITE_FRIENDS);
+    expect(b.filter((t) => /Sail with|link/i.test(t))).toEqual([]);
   });
 
   test('no taking the boat over', () => {

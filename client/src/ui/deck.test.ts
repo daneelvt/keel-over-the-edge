@@ -426,6 +426,8 @@ describe('the skipper’s link', () => {
       expect(await s.make()).toEqual({ error });
     }
     expect(madeProblem('links-off')).toBe('Links are resting for now.');
+    // The link's own limit, not the words of the new sailors' that share its code.
+    expect(madeProblem('often')).toBe('You’ve made lots of links lately. Try again in a while.');
     const down = linkServer(async () => {
       throw new Error('offline');
     });

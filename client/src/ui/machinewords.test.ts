@@ -8,7 +8,7 @@ import {
   comeAboardText,
   machineAsksWords,
   machineKnockingWords,
-  sailWithMeFor,
+  sailWithFor,
   sendAboardText,
 } from './machinewords';
 
@@ -37,7 +37,7 @@ describe('machine sailors together, in words', () => {
 
   test('the keys', () => {
     expect(comeAboardText('Iron Mary')).toBe('Come aboard Iron Mary’s boat');
-    expect(sailWithMeFor('Iron Mary')).toBe('Sail with me for Iron Mary');
+    expect(sailWithFor('Iron Mary')).toBe('Sail with Iron Mary');
     expect(sendAboardText('Rover')).toBe('Send Rover aboard');
     expect(cantSendText('ok', 'Rover', 'Iron Mary')).toBe('');
     expect(cantSendText('away', 'Rover', 'Iron Mary')).toBe(

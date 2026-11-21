@@ -699,11 +699,12 @@ const DOT_AGAIN = 120_000;
 
 /**
  * The tabs between the chart, its list, the news and the log; the Log tab
- * opens the reader's own, the News tab today's edition. The News tab has a
+ * opens the log of the sailor watched, or the reader's own while none is,
+ * the News tab today's edition. The News tab has a
  * dot while today's edition has a story not yet read: set over its corner,
  * so the strip keeps its width.
  */
-function Tabs({ sea }: { sea: ChartSea }) {
+function Tabs({ sea, watched }: { sea: ChartSea; watched: string | null }) {
   const mode = sea.chart.mode.value;
   const dot = unread.value && mode !== 'news';
   useEffect(() => {
@@ -714,7 +715,7 @@ function Tabs({ sea }: { sea: ChartSea }) {
   }, [sea]);
   const open = (m: ChartMode) => {
     if (m === 'log') {
-      sea.chart.showLog({ kind: 'own' });
+      sea.chart.showLog(watched === null ? { kind: 'own' } : { kind: 'sailor', name: watched });
     } else if (m === 'news') {
       sea.chart.showNews(null);
     } else {
@@ -899,7 +900,15 @@ function NewsTab({ sea }: { sea: ChartSea }) {
 }
 
 /** The Log tab: a sailor's log, loaded when first opened. */
-function LogTab({ sea, watch }: { sea: ChartSea; watch: ((name: string) => void) | null }) {
+function LogTab({
+  sea,
+  watch,
+  watched,
+}: {
+  sea: ChartSea;
+  watch: ((name: string) => void) | null;
+  watched: string | null;
+}) {
   const m = useLog();
   const who = sea.chart.logOf.value;
   if (m === null) {
@@ -916,6 +925,7 @@ function LogTab({ sea, watch }: { sea: ChartSea; watch: ((name: string) => void)
         sea.chart.logOf.value = w;
       }}
       watch={watch}
+      watched={watched}
     />
   );
 }
@@ -929,12 +939,15 @@ export function ChartScreen({
   end = null,
   notices = null,
   watch = null,
+  watched = null,
 }: {
   sea: ChartSea;
   end?: Countdown | null;
   notices?: Notices | null;
   /** Watches a sailor from their log, the chart closed; null where none may be watched from it. */
   watch?: ((name: string) => void) | null;
+  /** The sailor watched, whose log the Log tab opens; null while none is. */
+  watched?: string | null;
 }) {
   const chart = sea.chart;
   const surface = useGestures(sea);
@@ -1004,7 +1017,7 @@ export function ChartScreen({
       <div class="chart-labels" ref={labels} hidden={mode !== 'chart'} />
       <header class="chart-top" ref={top}>
         <div class="chart-case chart-strip">
-          <Tabs sea={sea} />
+          <Tabs sea={sea} watched={watched} />
           <Position sea={sea} />
           {mode === 'chart' && !upright ? <StripClock sea={sea} /> : null}
           <button
@@ -1047,7 +1060,7 @@ export function ChartScreen({
       ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
       {mode === 'news' ? <NewsTab sea={sea} /> : null}
-      {mode === 'log' ? <LogTab sea={sea} watch={watch} /> : null}
+      {mode === 'log' ? <LogTab sea={sea} watch={watch} watched={watched} /> : null}
     </div>
   );
 }

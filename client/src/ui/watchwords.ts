@@ -54,9 +54,9 @@ export const NOT_TAKEN_OUT = 'Your boat could not be taken out just now. Try aga
 /** Who may watch the account's boat, as GET /api/me names it: no one, or anyone for the voyage. */
 export type Spectators = 'no' | 'voyage';
 
-/** How many watch a boat: "3 watching"; "" for none. */
+/** How many watch a boat: "3 watching", "1,200 watching"; "" for none. */
 export function watchersText(n: number): string {
-  return n >= 1 ? `${n} watching` : '';
+  return n >= 1 ? `${n.toLocaleString('en')} watching` : '';
 }
 
 /** Why a watch ended or was refused, as the worker names WatchEnded's reasons. */
@@ -204,6 +204,11 @@ export const PICTURE_FAILED = 'No picture can be made just now.';
 /** The words on a picture shared, and over the link shared with it. */
 export function watchSailText(name: string): string {
   return `Watch ${name} sail`;
+}
+
+/** What the link to watch a machine sailor does, in Invite friends. */
+export function watchSailorDetail(name: string): string {
+  return `Whoever opens the link can watch ${name} sail.`;
 }
 
 /** The text a link is shared with, the link last, so that an app that keeps only the text keeps it. */

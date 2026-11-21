@@ -245,15 +245,76 @@
   border-bottom: 1px solid rgb(242 239 231 / 15%);
 }
 
-/* Watch, beside a machine sailor at sea, and how many watch it. */
-.machine-watch {
-  display: flex;
+/* A machine sailor's row: a grid, never words round a key. Its portrait,
+   its name over its one line, then its one key with Log beside it; how to
+   connect it, opened, under the whole row. */
+.machine-list > li.machine-row {
+  display: grid;
+  grid-template-areas:
+    "picture words keys"
+    "more more more";
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
 }
 
-.machine-watch .start-sign-in {
+.machine-row-picture {
+  grid-area: picture;
+  align-self: start;
+  line-height: 0;
+}
+
+.machine-row-words {
+  display: flex;
+  grid-area: words;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.machine-row-keys {
+  display: flex;
+  grid-area: keys;
+  align-items: center;
+  gap: 2px;
+}
+
+.machine-row-more {
+  grid-area: more;
+  min-width: 0;
+}
+
+.machine-row .machine-key {
   padding: 0 16px;
+  white-space: nowrap;
+}
+
+.machine-row .machine-log {
+  min-width: 44px;
+  padding: 0 6px;
+}
+
+/* Another made, a quiet key under the rows. */
+.machine-make {
+  display: block;
+  padding: 0;
+}
+
+/* The heading's cog: the account page, a touch wide round the mark; the
+   heading as tall as the touch, so it stands over no words. */
+.machines-cog {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0 -6px 0 -12px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 /* A machine sailor's link to watch, shared, with Make a new link beside it. */
@@ -268,7 +329,7 @@
   padding: 0 16px;
 }
 
-/* The fleet's link, above the list. */
+/* The fleet's link, at the head of the account page's machine sailors. */
 .fleet-link {
   margin: 4px 0 8px;
 }
@@ -281,4 +342,10 @@
 .fleet-list li {
   margin: 2px 0;
   overflow-wrap: anywhere;
+}
+
+/* The account page opened from the AI sailors' cog: over the start
+   screen, in a layer of its own, as at sea. */
+.start-account {
+  z-index: 30;
 }

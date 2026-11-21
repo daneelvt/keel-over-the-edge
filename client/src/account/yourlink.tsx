@@ -1,72 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// On the player's own panel: their link to watch them, to share anywhere,
-// whether or not the box is ticked, with a faint line while it is not;
-// and Make a new link. And at its head, a link to watch the page was
+// At the head of the player's own panel, a link to watch the page was
 // opened at that opened no watch: why, and for a sailor's, ☆ Follow, which
 // tells the player here, while the game is open, once the sailor may be
 // watched. In the game's first download, with the panel.
 
 import { type Signal, signal } from '@preact/signals';
 import { followSailing } from '../ui/following';
-import { linkState, NewLink, ShareLink, type Sharer } from '../ui/sharelink';
 import { FOLLOW, FOLLOWING, TOO_MANY } from '../ui/watchlistwords';
-import {
-  linkRefusedText,
-  nowWatchableText,
-  SHARE_ME,
-  SHOWN_WHEN_WATCHED,
-  shareText,
-  WATCH,
-  watchLink,
-} from '../ui/watchwords';
-import type { Fetch, LinkNote, Me } from './me';
+import { linkRefusedText, nowWatchableText, WATCH } from '../ui/watchwords';
+import type { Fetch, LinkNote } from './me';
 import { call, reasonOf } from './passkeys';
 import { reasonText } from './reasons';
-
-/** Share a link to watch me, its faint line while the box is unticked, and Make a new link. */
-export function YourLink({
-  me,
-  ticked,
-  sharer,
-  f,
-}: {
-  me: Me;
-  ticked: boolean;
-  sharer?: Sharer;
-  f?: Fetch;
-}) {
-  const told = me.watchCode ?? '';
-  if (told === '') {
-    return null;
-  }
-  const st = linkState('me', told);
-  const url = watchLink(location.origin, st.code.value);
-  return (
-    <div class="share-links your-link">
-      <div class="share-links-row">
-        <ShareLink
-          label={SHARE_ME}
-          cls="start-sign-in"
-          copied={st.copied}
-          shared={() => ({ url, text: shareText(me.name, url) })}
-          {...(sharer === undefined ? {} : { sharer })}
-        />
-        <NewLink
-          which={{ which: 'me' }}
-          state={st}
-          cls="start-sign-in"
-          {...(f === undefined ? {} : { f })}
-        />
-      </div>
-      {ticked ? null : (
-        <p class="start-text start-faint" data-readout="shown-when-watched">
-          {SHOWN_WHEN_WATCHED}
-        </p>
-      )}
-    </div>
-  );
-}
 
 /** POST /api/watch/follow by a link's code: '' if it was taken, or why not in words. */
 export async function followByLink(

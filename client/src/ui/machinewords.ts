@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Every word about a player's machine sailors sailing together, in one
-// place: coming aboard one's own, its link, sending one aboard another's
-// boat, and the knock of another player's machine sailor.
+// place: coming aboard one's own, its link in Invite friends, sending one
+// aboard another's boat, and the knock of another player's machine sailor.
 
 import type { KnockStateTold } from '../net/messages';
 import { knockingWords, type Words } from './deckwords';
@@ -93,16 +93,16 @@ export function cantSendText(can: string, machine: string, skipper: string): str
 /** The link's page of a machine sailor's link: no person comes aboard a machine sailor's boat. */
 export const MACHINE_TAKES_NO_ONE = 'A machine sailor’s boat takes no one aboard but its owner.';
 
-/** The start screen's and the watch's link for one's machine sailor: "Sail with me for Iron Mary". */
-export function sailWithMeFor(machine: string): string {
-  return `Sail with me for ${machine}`;
+/** Invite friends' part for one's machine sailor watched, its link to come aboard: "Sail with Iron Mary". */
+export function sailWithFor(machine: string): string {
+  return `Sail with ${machine}`;
 }
 
-/** The share for a machine sailor's link. */
+/** What that link does. */
 export const SAIL_WITH_MACHINE_DETAIL =
-  'Share a link. Whoever opens it can send a machine sailor of theirs aboard, and you choose who comes.';
+  'Whoever opens the link can send an AI sailor of theirs aboard, and you choose who comes.';
 
-/** The start screen's key to call a machine sailor ashore from the boat it is aboard. */
+/** Invite friends' key, while one's machine sailor is crew aboard another's boat, to call it ashore. */
 export const CALL_ASHORE = 'Call ashore';
 export function callAshoreText(machine: string): string {
   return `Call ${machine} ashore`;

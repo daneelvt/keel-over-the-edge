@@ -52,7 +52,6 @@ export const REASONS: Readonly<Record<string, string>> = {
   born: 'Choose the month and year you were born.',
   young: 'Sorry, a sailor can’t be made.',
   answered: 'That is answered already.',
-  rules: 'Accept the Rules of the sea first.',
   // A new sailor's limits: how many come from one connection in a day,
   // and the human check. Cloudflare's own 429, a page and not the
   // server's JSON, reads as unavailable.
@@ -118,6 +117,74 @@ export const CHECKING = 'Checking…';
 
 /** Added to taken on the start screen: the player may be the sailor's. */
 export const TAKEN_SIGN_IN = 'If that’s you, sign in with your passkey.';
+
+/**
+ * A refusal the player can put right themselves: what puts it right, and
+ * where each page that meets it does, by the name in that page's code of
+ * the card it opens or the field or key its words stand with.
+ */
+export interface Cure {
+  what: string;
+  at: Readonly<Record<string, string>>;
+}
+
+/** A name's field, its words under it: every refusal of a name typed. */
+const NAME_FIELD: Cure = {
+  what: 'The name’s field, the words under it',
+  at: {
+    'account/start.tsx': 'start-name',
+    'account/machines.tsx': 'MachineFields',
+  },
+};
+
+/**
+ * The refusals a player can put right themselves, by their codes. None is
+ * ever shown by its words alone: a refusal for the Rules of the sea or the
+ * age question opens its card where the player is, and what they asked
+ * for goes on once it is answered; the others' words stand with the field
+ * or key that puts them right. reasons.test.ts sweeps every page that
+ * shows a reason's words and holds each to this.
+ */
+export const CURES: Readonly<Record<string, Cure>> = {
+  rules: {
+    what: 'The Rules of the sea’s card, opened where the refusal arose; I’ll keep to them goes on with what was asked',
+    at: { 'ui/sailwithme.tsx': 'FirstAsks', 'ui/chat.tsx': "ask.value = 'rules'" },
+  },
+  born: {
+    what: 'The age question’s month and year: its card where the refusal arose, or the boxes on the new sailor’s form',
+    at: {
+      'ui/sailwithme.tsx': 'FirstAsks',
+      'account/start.tsx': 'BornFields',
+      'account/firstasks.tsx': 'BornFields',
+    },
+  },
+  short: NAME_FIELD,
+  long: NAME_FIELD,
+  characters: NAME_FIELD,
+  scripts: NAME_FIELD,
+  words: NAME_FIELD,
+  taken: {
+    what: 'The name’s field, and signing in with the passkey beside it',
+    at: { 'account/start.tsx': 'TAKEN_SIGN_IN', 'account/machines.tsx': 'MachineFields' },
+  },
+  often: {
+    what: 'Signing in with a passkey, the key under the words',
+    at: { 'account/start.tsx': 'setOften' },
+  },
+  check: { what: 'Set sail, which asks again', at: { 'account/start.tsx': 'human.mount' } },
+  confirm: {
+    what: 'The same key again, which asks for the passkey first',
+    at: { 'account/account.tsx': 'confirmPasskey', 'account/machines.tsx': 'confirmPasskey' },
+  },
+  'last-passkey': {
+    what: 'Add a passkey, on the same page',
+    at: { 'account/account.tsx': 'addPasskey' },
+  },
+  name: {
+    what: 'The name typed again, in the field above the key',
+    at: { 'account/account.tsx': 'account-name', 'account/machines.tsx': 'machine-delete-name' },
+  },
+};
 
 /** The words for a reason code, or a general message for one unknown. */
 export function reasonText(code: string): string {

@@ -11,7 +11,9 @@
 // one column; held sideways the head and the abstract on the left, the
 // rest beside them. The reader's own log has who may read it behind its
 // ⋯; another's has the way back to the reader's own, and Watch while its
-// sailor can be watched. Loaded when the log is first opened.
+// sailor can be watched. While a sailor is watched the Log tab opens
+// theirs, with My log at its head, and the reader's own has the way back
+// to theirs. Loaded when the log is first opened.
 
 import './log.css';
 import { render } from 'preact';
@@ -68,6 +70,7 @@ import {
   kindName,
   loggedFromLine,
   MACHINE_SAILOR,
+  MY_LOG,
   NO_RACES,
   NO_SAILOR,
   NO_SUCH_LOG,
@@ -91,6 +94,7 @@ import {
   shownLine,
   sinceLine,
   TRY_AGAIN,
+  theirLogText,
   voyageLine,
   voyageMore,
   WATCH,
@@ -216,7 +220,7 @@ function Head({
 }: {
   log: Log;
   who: LogWho;
-  back: (() => void) | null;
+  back: BackKey | null;
   more: boolean;
   setMore: (on: boolean) => void;
   watch: (() => void) | null;
@@ -233,8 +237,8 @@ function Head({
       {back !== null || close !== null ? (
         <div class="log-keys log-top-keys">
           {back !== null ? (
-            <button type="button" class="log-key log-back" onClick={back}>
-              ‹ {YOUR_LOG}
+            <button type="button" class="log-key log-back" onClick={back.go}>
+              {back.words}
             </button>
           ) : null}
           {close !== null ? (
@@ -1001,13 +1005,42 @@ const TABS: [LogTab, string][] = [
   ['certificates', CERTIFICATES],
 ];
 
+/** The key at a log's head to another: its words, and where it goes. */
+interface BackKey {
+  words: string;
+  go: () => void;
+}
+
+/**
+ * The key at the head of who's log: from another's, back to the reader's
+ * own; while watched is the sailor watched, My log from theirs, and from
+ * the reader's own the way back to theirs.
+ */
+export function backKey(
+  who: LogWho,
+  watched: string | null,
+  setWho: (w: LogWho) => void,
+): BackKey | null {
+  const own = () => setWho({ kind: 'own' });
+  if (watched !== null && who.kind === 'sailor' && who.name === watched) {
+    return { words: MY_LOG, go: own };
+  }
+  if (who.kind !== 'own') {
+    return { words: `‹ ${YOUR_LOG}`, go: own };
+  }
+  return watched === null
+    ? null
+    : { words: `‹ ${theirLogText(watched)}`, go: () => setWho({ kind: 'sailor', name: watched }) };
+}
+
 /** What reading a log has come to, while it is read. */
 type Reading = { kind: 'reading' } | { kind: 'read'; answer: LogAnswer };
 
 /**
  * A sailor's log: whose is who, the reader's own unless set; setWho moves
  * to another's or back. watch, if given, watches a sailor (closing the
- * chart); close, if given, closes a log opened on its own.
+ * chart); close, if given, closes a log opened on its own; watched is the
+ * sailor watched, whose log and the reader's own each lead to the other.
  */
 export function LogSheet({
   who,
@@ -1015,12 +1048,14 @@ export function LogSheet({
   source = serverLogs,
   watch = null,
   close = null,
+  watched = null,
 }: {
   who: LogWho;
   setWho: (w: LogWho) => void;
   source?: LogSource;
   watch?: ((name: string) => void) | null;
   close?: (() => void) | null;
+  watched?: string | null;
 }) {
   const [world, setWorld] = useState(0);
   const [reading, setReading] = useState<Reading>({ kind: 'reading' });
@@ -1065,7 +1100,8 @@ export function LogSheet({
   // Watch, while the sailor whose log it is can be watched.
   useEffect(() => {
     setWatchable(false);
-    if (watch === null || who.kind === 'own') {
+    // The sailor watched already is.
+    if (watch === null || who.kind === 'own' || who.name === watched) {
       return;
     }
     let live = true;
@@ -1079,7 +1115,7 @@ export function LogSheet({
       live = false;
     };
   }, [key, watch === null]);
-  const back = who.kind === 'own' ? null : () => setWho({ kind: 'own' });
+  const back = backKey(who, watched, setWho);
   const answer = reading.kind === 'read' ? reading.answer : null;
   const log = answer !== null && 'log' in answer ? answer.log : null;
   // Brings the log's switch to the top of the sheet, where the sheet is
@@ -1135,8 +1171,8 @@ export function LogSheet({
     back !== null || close !== null ? (
       <div class="log-keys log-top-keys">
         {back !== null ? (
-          <button type="button" class="log-key log-back" onClick={back}>
-            ‹ {YOUR_LOG}
+          <button type="button" class="log-key log-back" onClick={back.go}>
+            {back.words}
           </button>
         ) : null}
         {close !== null ? (

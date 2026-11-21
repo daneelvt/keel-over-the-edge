@@ -29,6 +29,7 @@ import {
   RULES_LINES,
   RULES_PAGE,
   RULES_TITLE,
+  RULES_WHAT,
   SAFETY_PAGE,
   STAYING_SAFE,
   YEAR,
@@ -235,8 +236,9 @@ export function RulesLinks() {
 }
 
 /**
- * The Rules of the sea in short, accepted once: I'll keep to them tells
- * the server, then calls onAccepted. With onCancel, Cancel goes back.
+ * The Rules of the sea in short, under a line that says what they are,
+ * accepted once: I'll keep to them tells the server, then calls
+ * onAccepted. With onCancel, Cancel goes back.
  */
 export function RulesCard({
   onAccepted,
@@ -267,6 +269,7 @@ export function RulesCard({
   return (
     <section class="start-panel first-ask rules-card" aria-labelledby="first-ask-title">
       <h1 id="first-ask-title">{RULES_TITLE}</h1>
+      <p class="start-text rules-what">{RULES_WHAT}</p>
       <ul class="rules-lines">
         {RULES_LINES.map((l) => (
           <li key={l}>{l}</li>
