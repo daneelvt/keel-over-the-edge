@@ -4,5 +4,5 @@
 # no other, as a workflow's actions are pinned; it checks the binaries it
 # downloads against the release's own checksums. Renovate moves the two
 # together (renovate.json).
-version: v1.36.5+k3s1
-commit: 3dd98cc58ec34991e7e59b93663eee2e26fc1f65
+version: v1.37.2+k3s1
+commit: f6973cb850e9b245585363d15bde80904ac862fd
