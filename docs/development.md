@@ -7,10 +7,11 @@ same checks a pull request runs.
 
 - **Go**, any recent version. The repository pins its own toolchain in
   `go.mod`, and Go downloads it on first use.
-- **Node.js 24**, the version in `.nvmrc`. With nvm: `nvm install` in the
+- **Node.js 26**, the version in `.nvmrc`. With nvm: `nvm install` in the
   repository, then `nvm use`.
-- **npm 12**. Either `npm install -g npm@12`, or `corepack enable npm`, which
-  uses the exact version pinned in `client/package.json` and checks its hash.
+- **npm 12**. Either `npm install -g npm@12`, or `node client/build/npm.mjs`,
+  which installs the exact version pinned in `client/package.json` and checks
+  its hash.
 - **Docker or Podman**, for the database: `tools/dev` runs PostgreSQL 18 in a
   container. Docker Desktop on macOS and Windows; Docker or Podman on Linux.
   Or, instead, **a PostgreSQL 18 of your own**: set `KEEL_DEV_DATABASE_URL`
