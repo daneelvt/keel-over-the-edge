@@ -40,6 +40,12 @@ export const ART_CACHE = `${PREFIX}art`;
 
 /** How long a page waits on the network before the kept page is shown, ms. */
 export const SHELL_WAIT = 3000;
+/**
+ * How long a worker taken away may still be finishing what it was
+ * answering, ms: it may keep a file as it goes, in a cache it found there
+ * a moment before, so its caches are deleted again after this.
+ */
+export const SETTLE = 3000;
 /** How many files the worker fetches at once at install. */
 const AT_ONCE = 4;
 

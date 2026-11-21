@@ -61,26 +61,29 @@ describe('the game’s storage kept', () => {
 });
 
 describe('the worker switched off', () => {
-  const kept = (names: string[]) => {
-    const gone: string[] = [];
-    let unregistered = 0;
+  /** The caches by name, a registration, and a wait during which the worker before may keep a file. */
+  const kept = (names: string[], during: () => void = () => {}) => {
+    const state = { names: [...names], unregistered: 0, waited: [] as number[] };
     return {
-      gone,
-      unregistered: () => unregistered,
+      state,
       registrations: async () => [
         {
           unregister: async () => {
-            unregistered++;
+            state.unregistered++;
             return true;
           },
         },
       ],
       caches: {
-        keys: async () => names,
+        keys: async () => [...state.names],
         delete: async (name: string) => {
-          gone.push(name);
+          state.names = state.names.filter((n) => n !== name);
           return true;
         },
+      },
+      wait: async (ms: number) => {
+        state.waited.push(ms);
+        during();
       },
     };
   };
@@ -88,8 +91,17 @@ describe('the worker switched off', () => {
   test('the page takes the registration and the worker’s caches away itself, and no other cache', async () => {
     const k = kept(['keel-code-1', 'keel-art', 'another']);
     await switchOff(k);
-    expect(k.unregistered()).toBe(1);
-    expect(k.gone).toEqual(['keel-code-1', 'keel-art']);
+    expect(k.state.unregistered).toBe(1);
+    expect(k.state.names).toEqual(['another']);
+  });
+
+  test('a cache the worker before made again as it finished an answer is taken away too', async () => {
+    const k = kept(['keel-code-1', 'keel-art'], () => {
+      k.state.names.push('keel-art');
+    });
+    await switchOff(k);
+    expect(k.state.waited).toEqual([3000]);
+    expect(k.state.names).toEqual([]);
   });
 
   test('storage refused is no error', async () => {
