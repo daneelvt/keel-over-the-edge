@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
-import { keepStorage, type WorkerEnv, wantsWorker } from './sw';
+import { keepStorage, switchOff, type WorkerEnv, wantsWorker } from './sw';
 
 describe('whether the page registers the worker', () => {
   const env: WorkerEnv = { built: true, on: true, supported: true };
@@ -57,5 +57,45 @@ describe('the game’s storage kept', () => {
     expect(await keepStorage(s, true, marks())).toBe(false);
     expect(s.asked).toEqual([]);
     expect(await keepStorage(undefined, true, marks())).toBe(false);
+  });
+});
+
+describe('the worker switched off', () => {
+  const kept = (names: string[]) => {
+    const gone: string[] = [];
+    let unregistered = 0;
+    return {
+      gone,
+      unregistered: () => unregistered,
+      registrations: async () => [
+        {
+          unregister: async () => {
+            unregistered++;
+            return true;
+          },
+        },
+      ],
+      caches: {
+        keys: async () => names,
+        delete: async (name: string) => {
+          gone.push(name);
+          return true;
+        },
+      },
+    };
+  };
+
+  test('the page takes the registration and the worker’s caches away itself, and no other cache', async () => {
+    const k = kept(['keel-code-1', 'keel-art', 'another']);
+    await switchOff(k);
+    expect(k.unregistered()).toBe(1);
+    expect(k.gone).toEqual(['keel-code-1', 'keel-art']);
+  });
+
+  test('storage refused is no error', async () => {
+    const k = kept([]);
+    await expect(
+      switchOff({ ...k, registrations: () => Promise.reject(new Error('refused')) }),
+    ).resolves.toBeUndefined();
   });
 });
