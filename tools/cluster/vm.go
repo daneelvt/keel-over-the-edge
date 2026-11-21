@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/devcert"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"

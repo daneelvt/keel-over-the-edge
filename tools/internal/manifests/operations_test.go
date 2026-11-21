@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/production"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // all renders every entry point of a cluster, with Flux's own where the

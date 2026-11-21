@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // K3sFile is where the repository pins k3s, from its root.

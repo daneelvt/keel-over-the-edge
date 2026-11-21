@@ -11,7 +11,7 @@ metadata:
 spec:
   image:
     # renovate: image=victoriametrics/victoria-logs
-    tag: v1.53.0@sha256:251121fa882af99b95ba0c230a4a2f412ea602d2698c64a96c58dc9842bb755d
+    tag: v1.54.0@sha256:ee4e820cac3721f5f5d91641b950c22439593adc4224f9655e5333d5a84c1dfe
   useStrictSecurity: true
   retentionPeriod: 14d
   retentionMaxDiskSpaceUsageBytes: 20GiB
@@ -64,7 +64,7 @@ metadata:
 spec:
   image:
     # renovate: image=victoriametrics/vlagent
-    tag: v1.53.0@sha256:a82f93ffecc153fb068606903e512368b070272739d823abe99fad0eff6e1849
+    tag: v1.54.0@sha256:fcfb8ce38b503c691fa8e794ba1812fda82e363207235afbd7ceeb95eb18def0
   k8sCollector:
     enabled: true
     includePodLabels: true
