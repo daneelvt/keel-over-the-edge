@@ -189,3 +189,60 @@ func TestARaceRestores(t *testing.T) {
 		t.Errorf("a race under way written: %+v", r)
 	}
 }
+
+// TestAReachsBoatIsPlacedAcrossTheWind: a boat placed for a run on a
+// reach lies facing the mark, across the wind, her sheet her kind's for a
+// start from rest on a beam reach; one placed for a course up the wind
+// has the sheet of the broader reach she is placed on.
+func TestAReachsBoatIsPlacedAcrossTheWind(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &committee.Stage{Areas: []committee.Area{{Number: 1, Radius: 450}}}
+	for i := range cat.Boats {
+		st.Kinds = append(st.Kinds, committee.Kind{Polar: cat.Polar(i), Length: cat.Boats[i].LengthOverall})
+	}
+	sheets := cat.StartSheets()
+	for _, across := range []bool{true, false} {
+		w, err := New(Config{Capacity: 4, Kinds: kinds(t), Workers: 1, Tick: 100, Capacities: cat.Capacities(), Races: st, StartSheets: sheets,
+			Terrain: &Terrain{Start: []physics.State{{X: 0, Y: -3000}}, Away: []float64{0}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+		for range 30 {
+			w.Tick()
+		}
+		call := &bus.RaceCall{ID: [16]byte{5}, Run: 1, Trial: true, Across: across, Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}}}
+		if got := do(t, w, bus.Command{Op: bus.RacePlace, Race: call}); got.Result != bus.Done {
+			t.Fatalf("placing: %+v", got)
+		}
+		f := w.Latest()
+		if len(f.Races) != 1 || f.Races[0].Course.Across != across {
+			t.Fatalf("the race placed: %+v", f.Races)
+		}
+		c := f.Races[0].Course
+		off := math.Abs(math.Remainder(c.From-f.State[r.Slot].Heading, 2*math.Pi))
+		want := 110.0
+		if across {
+			want = 90
+			mark := physics.Atan2(c.Marks[0].X-f.State[r.Slot].X, c.Marks[0].Y-f.State[r.Slot].Y)
+			if d := math.Abs(math.Remainder(mark-f.State[r.Slot].Heading, 2*math.Pi)); d > 0.05 {
+				t.Errorf("the boat placed heads %.2f rad off her mark", d)
+			}
+		}
+		// A tick has passed since she was placed: within half a degree.
+		if math.Abs(off*180/math.Pi-want) > 0.5 {
+			t.Errorf("across %v: placed %.1f° off the wind, want %.0f°", across, off*180/math.Pi, want)
+		}
+		sheet := StartSheet(sheets[f.Kind[r.Slot]]).At(want)
+		if got := f.Control[r.Slot].Sheet(); math.Abs(got-sheet) > 1.0/bus.Steps {
+			t.Errorf("across %v: the sheet %.3f, her start sheet for %.0f° is %.3f", across, got, want, sheet)
+		}
+		if StartSheet(sheets[f.Kind[r.Slot]]).At(90) == StartSheet(sheets[f.Kind[r.Slot]]).At(110) {
+			t.Error("the kind's start sheets for a beam reach and a broad one are the same: the test shows nothing")
+		}
+		w.Close()
+	}
+}

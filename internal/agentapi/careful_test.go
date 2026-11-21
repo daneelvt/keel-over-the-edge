@@ -443,7 +443,7 @@ func carefulWorld(t *testing.T, cat *catalog.Catalog, knots, from float64) (*har
 		st.Courses = append(st.Courses, ic)
 	}
 	e := cat.World.Edge
-	return newHarnessWith(t, harnessWith{limit: 8, knots: knots, from: from, stage: st, terrain: b.Terrain(cat.PrepareGround()),
+	return newHarnessWith(t, harnessWith{limit: 8, knots: knots, from: from, stage: st, terrain: b.Terrain(cat.PrepareGround()), sheets: cat.StartSheets(),
 		edge: &sim.Edge{Fall: int64(math.Round(e.Fall * physics.StepsPerSecond)), Clear: e.Clear}}), b
 }
 
@@ -555,31 +555,27 @@ type edgeRun struct {
 }
 
 // carefulEdge sails a Jolly boat at the lip in harness h's world, in a
-// wind of knots from the east, and turns away once the lip is turn m off.
-// Windward, she comes at the eastern rim close-hauled, the wind blowing
-// from the lip, and bears away from it; else at the western rim on a
-// broad reach with the wind behind her, and comes up and about.
+// wind of knots from the east, and turns for home once the lip is turn m
+// off: she steers straight out for the lip as the careful sailor steers
+// for any point, and then for the world's centre the same way,
+// close-hauled and tacking where that is up the wind. Windward, she comes
+// at the eastern rim, the wind blowing from the lip; else at the western,
+// the wind behind her.
 func carefulEdge(t *testing.T, h *harness, cat *catalog.Catalog, knots, turn float64, windward bool) edgeRun {
 	t.Helper()
 	a := sailor(1, "Careful Kate")
 	if text, refused := h.call(t, a, "observe", nil); refused {
 		t.Fatalf("no boat: %s", text)
 	}
-	cs := &carefulSailor{t: t, h: h, a: a, boat: carefulBoats["Jolly boat"], knots: knots, from: radOf(90), trace: os.Getenv("KEEL_CAREFUL_TRACE") != ""}
+	cs := &carefulSailor{t: t, h: h, a: a, boat: carefulBoats["Jolly boat"], knots: knots, from: radOf(90), ease: 25, lead: 15,
+		trace: os.Getenv("KEEL_CAREFUL_TRACE") != ""}
 	w := cat.PrepareWeather()
 	r := w.Edge()
 	band := r - cat.Weather.Disk.Rim*nm + cat.World.Edge.Clear
 	// 400 m inside the lip, sailing already.
-	st := physics.State{X: r - 400, Y: -300, Heading: radOf(45), Surge: 1.5}
-	in, out := map[string]any{"wind_angle": 45, "side": "starboard", "boom": 4}, map[string]any{"wind_angle": 135, "side": "starboard", "boom": 60}
+	st := physics.State{X: r - 400, Y: 0, Heading: radOf(45), Surge: 1.5}
 	if !windward {
-		// The lee rim, the wind blowing onto the lip: in on a broad
-		// reach, and out close-hauled the other way.
-		st = physics.State{X: -(r - 400), Y: 0, Heading: radOf(-120), Surge: 1.5}
-		in, out = map[string]any{"wind_angle": 150, "side": "starboard", "boom": 75}, map[string]any{"wind_angle": 50, "side": "port", "via": "tack", "boom": 8}
-	}
-	if knots >= cs.boat.reefFrom {
-		in["reef"], out["reef"] = 1, 1
+		st = physics.State{X: -(r - 400), Y: 0, Heading: radOf(-100), Surge: 1.5}
 	}
 	f := h.w.Bus().Frames.Acquire()
 	var boat uint64
@@ -593,11 +589,10 @@ func carefulEdge(t *testing.T, h *harness, cat *catalog.Catalog, knots, turn flo
 		t.Fatal(err)
 	}
 	time.Sleep(200 * time.Millisecond)
-	h.call(t, a, "steer", in)
 	res := edgeRun{least: math.Inf(1)}
 	turned := false
-	for i := range 45 * 60 * 4 {
-		time.Sleep(250 * time.Millisecond)
+	// Two looks a second, for two hours at most.
+	for i := range 2 * 3600 * 2 {
 		f := h.w.Bus().Frames.Acquire()
 		var now physics.State
 		falling := false
@@ -614,19 +609,21 @@ func carefulEdge(t *testing.T, h *harness, cat *catalog.Catalog, knots, turn flo
 		}
 		res.least = min(res.least, d)
 		if cs.trace && i%20 == 0 {
-			t.Logf("t=%3d s  %.0f m inside  hdg %.0f  %.1f m/s through the water  turned %v", i/4, d, now.Heading*180/math.Pi, now.Surge, turned)
+			t.Logf("t=%4d s  %.0f m inside  hdg %.0f  %.1f m/s through the water  turned %v  %s", i/2, d, now.Heading*180/math.Pi, now.Surge, turned, cs.last)
 		}
-		if !turned && d <= turn {
-			turned = true
-			h.call(t, a, "steer", out)
-		}
-		if turned && d >= band {
+		turned = turned || d <= turn
+		switch {
+		case turned && d >= band:
 			res.back = true
 			return res
+		case turned:
+			cs.toward(&now, 0, 0)
+		default:
+			// Straight out: a point beyond the lip, on from the centre.
+			out := (r + 1000) / math.Hypot(now.X, now.Y)
+			cs.toward(&now, now.X*out, now.Y*out)
 		}
-		if i%40 == 0 {
-			h.call(t, a, "observe", map[string]any{"detail": "brief"})
-		}
+		time.Sleep(500 * time.Millisecond)
 	}
 	return res
 }
@@ -645,18 +642,18 @@ func TestCarefulEdge(t *testing.T) {
 	var table strings.Builder
 	for _, windward := range []bool{true, false} {
 		for _, knots := range carefulWinds {
-			for _, turn := range []float64{40, 30, 20, 15, 12, 10} {
+			for _, turn := range []float64{100, 60, 40, 20, 15, 12, 10} {
 				if o := os.Getenv("KEEL_CAREFUL_ONLY"); o != "" && !strings.Contains(o, ",") && o != fmt.Sprint(windward, knots, turn) {
 					continue
 				}
 				synctest.Test(t, func(t *testing.T) {
 					h, _ := carefulWorld(t, cat, knots, 90)
 					run := carefulEdge(t, h, cat, knots, turn, windward)
-					rim := "the windward rim, bearing away"
+					rim := "the rim the wind blows from"
 					if !windward {
-						rim = "the lee rim, coming about"
+						rim = "the rim the wind blows to"
 					}
-					fmt.Fprintf(&table, "%-30s %2.0f kn  turned at %2.0f m  nearest %5.1f m  over %-5v back out %v\n", rim, knots, turn, run.least, run.over, run.back)
+					fmt.Fprintf(&table, "%-27s %2.0f kn  turned at %2.0f m  nearest %5.1f m  over %-5v back out %v\n", rim, knots, turn, run.least, run.over, run.back)
 				})
 			}
 		}

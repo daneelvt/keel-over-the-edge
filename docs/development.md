@@ -4228,7 +4228,8 @@ alone: nobody makes a race or a trial on it. The committee lays its line
 along the wind and its one mark straight across the wind from it
 (`layReach`), sized by the boat's polar for five minutes or to what the
 racing area holds, so both legs are beam reaches and there is no beat. The
-boat is placed facing the mark. The mark is left to port, and lies to the
+boat is placed facing the mark, her sheet her kind's start sheet for a beam
+reach (`boats[].startSheet` at 90°). The mark is left to port, and lies to the
 side that makes the turn round it a tack: the judge's rounding ray counts
 crossings one way, so a boat that rounds it the other way is told she missed
 it and goes back.
