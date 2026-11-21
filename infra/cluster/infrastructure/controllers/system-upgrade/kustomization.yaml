@@ -18,7 +18,7 @@ resources:
 images:
   - name: rancher/system-upgrade-controller
     # renovate: image=rancher/system-upgrade-controller
-    newTag: v0.20.2@sha256:61b68d4372baf7ae90fb0f879feea1c082381a8b7547cc5ec85d393c497b11cb
+    newTag: v0.21.1@sha256:14636476f2801b9b6556dd4942f3e2371e8ac9e2b33986d5a59b742bc35f5152
 patches:
   - target:
       kind: Namespace
