@@ -323,7 +323,37 @@ test('the off switch: a build with KEEL_SW=off takes the worker and its caches a
   // A navigation: the browser finds the worker changed, and the page is
   // the build without one.
   await page.reload();
-  await expect.poll(none, { timeout: 60_000 }).toEqual({ registrations: [], caches: [] });
+  try {
+    await expect.poll(none, { timeout: 60_000 }).toEqual({ registrations: [], caches: [] });
+  } catch (err) {
+    // TEMPORARY diagnostics.
+    const cdp = await context.newCDPSession(page);
+    const targets = (await cdp.send('Target.getTargets')) as {
+      targetInfos: { type: string; url: string; attached: boolean }[];
+    };
+    console.log(
+      'DIAG targets',
+      JSON.stringify(targets.targetInfos.map((t) => `${t.type} ${t.attached} ${t.url.slice(-50)}`)),
+    );
+    console.log('DIAG page.workers', JSON.stringify(page.workers().map((w) => w.url().slice(-50))));
+    console.log(
+      'DIAG serviceWorkers',
+      JSON.stringify(context.serviceWorkers().map((w) => w.url().slice(-30))),
+    );
+    console.log(
+      'DIAG page',
+      JSON.stringify(
+        await page.evaluate(() => ({
+          entries: performance
+            .getEntriesByType('resource')
+            .filter((e) => e.name.includes('transcoderworker'))
+            .map((e) => `${Math.round(e.startTime)} ${Math.round(e.duration)}`),
+          thrown: Reflect.get(globalThis, 'keptErrors'),
+        })),
+      ),
+    );
+    throw err;
+  }
   // At sea again, past the reveal and its registration: still none.
   await page.reload();
   await setSail();
