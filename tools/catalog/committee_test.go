@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 // committeeDoc is a catalog of two boats and the committee's flags as given.

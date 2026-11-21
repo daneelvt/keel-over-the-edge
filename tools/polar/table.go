@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 // The catalog's polar tables: every boat's steady speed in the game's wind,

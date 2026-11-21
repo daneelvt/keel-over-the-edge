@@ -17,7 +17,7 @@ import (
 // field it does not know. At one commit, so what a kind may hold never
 // changes under a check. A kubeconform schema location (its Readme,
 // "Overriding schemas location").
-const coreSchemas = "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/5f1fa4f7908afc9b6641c62d282a4a22437626e1/" +
+const coreSchemas = "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/88b0235585da4efb0e4bc6cc00baccf0e327e54d/" +
 	"{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json"
 
 // crdSchema is a schema file under Schemas.CRDs, as a kubeconform schema

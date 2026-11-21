@@ -15,7 +15,7 @@ import (
 	"slices"
 	"strings"
 
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 // File is where the identifiers are kept, from the repository's root.

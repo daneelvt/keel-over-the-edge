@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
 )

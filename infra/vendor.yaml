@@ -14,10 +14,10 @@ files:
     url: https://github.com/kubereboot/kured/releases/download/1.23.0/kured-1.23.0-combined.yaml
     sha256: 8572f7f2118ae7c943e9a3624f2385162ff9ec4e49283b65fd0c091714a2c662
   - file: infra/cluster/infrastructure/controllers/system-upgrade/system-upgrade-controller.yaml
-    url: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/system-upgrade-controller.yaml
-    checksums: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/sha256sum-amd64.txt
-    sha256: fd474b662d1f2b74ab150d95b6482869e1fd1f27ceee54b13e94b92292097969
+    url: https://github.com/rancher/system-upgrade-controller/releases/download/v0.21.1/system-upgrade-controller.yaml
+    checksums: https://github.com/rancher/system-upgrade-controller/releases/download/v0.21.1/sha256sum-amd64.txt
+    sha256: 5b46172058b198f8297c9966aacdcd9da2604f740254f0beae74e61b1ad84eac
   - file: infra/cluster/infrastructure/controllers/system-upgrade/crd.yaml
-    url: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/crd.yaml
-    checksums: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/sha256sum-amd64.txt
-    sha256: 1fb061e0d8bf9534da0145e614a9e03ca376cd5d1adcca17d13cfa12e211c48c
+    url: https://github.com/rancher/system-upgrade-controller/releases/download/v0.21.1/crd.yaml
+    checksums: https://github.com/rancher/system-upgrade-controller/releases/download/v0.21.1/sha256sum-amd64.txt
+    sha256: 1393ba034e7691273fc519b721a7f72a0cdbef8c7b051c9e408be96090b8478d

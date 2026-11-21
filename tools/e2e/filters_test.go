@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 // pr.render's path filters, as dorny/paths-filter reads them: each step's

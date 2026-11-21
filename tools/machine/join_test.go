@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 // The script that joins the machine to the tailnet, by hand, once; and
