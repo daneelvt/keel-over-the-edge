@@ -18,7 +18,13 @@
 // - The developer page (module workers found by a blob's worker, the
 //   physics compiled), the sound room, the notice page, and the pages
 //   without script, each with its own policy.
+// - The approval page for AI apps, built apart from the game: opened as
+//   an app opens it, it draws where the sign-in returns, and Cancel goes
+//   back to the app. Code of the game's that reaches its build can read
+//   what only the game's build defines, and stop the page blank, which
+//   the development server, defining it for every page, never shows.
 
+import { createHash, randomBytes } from 'node:crypto';
 import { expect, type Page, type Response, test } from '@playwright/test';
 import { answerBorn, stamp } from './helpers';
 import { markPage, revealed } from './wire';
@@ -178,5 +184,44 @@ test('the other pages: each with its policy, nothing refused', async ({ page }) 
     // Its style sheet, its own, was applied.
     expect(await page.evaluate(() => document.styleSheets.length)).toBeGreaterThan(0);
   }
+  expect(heard).toEqual([]);
+});
+
+test('the approval page for AI apps: drawn as an app opens it, and Cancel goes back, nothing refused', async ({
+  page,
+}) => {
+  const heard = await watchPolicy(page);
+  // The test plays the app: registered, its redirect on this computer,
+  // where nothing listens and the test answers.
+  const redirect = 'http://localhost:47615/callback';
+  const registered = await page.request.post('/oauth/register', {
+    data: { redirect_uris: [redirect], client_name: 'Built test app' },
+  });
+  expect(registered.status(), await registered.text()).toBe(201);
+  const { client_id: clientId } = (await registered.json()) as { client_id: string };
+  let back: URL | null = null;
+  await page.route(`${redirect}**`, async (route) => {
+    back = new URL(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'text/plain', body: 'back at the app' });
+  });
+
+  const q = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirect,
+    state: 'built',
+    code_challenge: createHash('sha256').update(randomBytes(32)).digest('base64url'),
+    code_challenge_method: 'S256',
+  });
+  const policy = enforced(await page.goto(`/oauth/authorize?${q}`));
+  expect(policy).toContain("script-src 'self'");
+  expect(policy).toContain("form-action 'none'");
+
+  await expect(page.getByRole('heading', { name: 'an app on this computer' })).toBeVisible();
+  await expect(page.getByText('Built test app')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue with your passkey' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect.poll(() => back?.searchParams.get('error') ?? '').toBe('access_denied');
   expect(heard).toEqual([]);
 });
