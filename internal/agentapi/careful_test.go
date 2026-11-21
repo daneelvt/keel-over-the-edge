@@ -24,20 +24,27 @@ import (
 // courses through the machine sailors' tools, and the run is told as a
 // multiple of the course's expected time, the polar's sailed perfectly.
 // It is what the certificates' medals are held against: a medal a careful
-// run does not reach with a fifth of its time to spare is not one to ask
-// of a certificate before the last.
+// run does not reach with time to spare is not one to ask early.
 //
-// The sailor knows what the handbook says and no more. She steers by the
-// autopilot: straight at the next point of the course where the boat can
-// lie it; close-hauled where it is up the wind, tacking once the point
-// can be laid on the other tack; ten degrees off a dead run where it is
-// straight down the wind, gybing the same way. She leaves each mark two
-// lengths clear. She trims to the handbook's table for the angle and the
-// wind, eased to its word for a breeze, and reefs where it says to. She
-// looks once a second. The wind is steady: no gusts, no shifts.
+// The sailor knows what the handbook says and little more. She steers by
+// the autopilot: straight at the next point of the course where the boat
+// can lie it; close-hauled, 45° off the wind, where it is up the wind,
+// tacking once the point is laid on the other tack; ten degrees off a
+// dead run where it is straight down the wind, gybing the same way. She
+// leaves each mark two lengths clear, and sails an island course by its
+// way's own points. Placed at rest under a line across the wind, she
+// runs off ten lengths first and comes back at it close-hauled with way
+// on. She trims to the handbook's table for the angle and the wind,
+// eased to its word for a breeze, and reefs where it says to; coming up
+// from a run she comes up a little at a time, the sheet coming in with
+// the boat; stopped head to wind, she bears away with the sheet eased
+// and gathers way. She looks once a second. The wind is steady: no
+// gusts, no shifts.
 //
-// One run is always sailed, the first certificate's own: the rest are
-// sailed, and their table printed, with KEEL_CAREFUL_RUNS=1.
+// One run is always sailed, the first certificate's own, in open water:
+// the rest are sailed in seed 1's world, and their tables printed, with
+// KEEL_CAREFUL_RUNS=1. KEEL_CAREFUL_ONLY="the Reach,Jolly boat,12" sails
+// one, and KEEL_CAREFUL_TRACE=1 says where the boat is at every look.
 
 // carefulBoat is what the careful sailor knows of a boat: the handbook's
 // fastest boom by angle off the wind in 6, 12 and 20 knots, the wind she
@@ -55,8 +62,7 @@ var carefulAngles = [7]float64{40, 60, 90, 120, 150, 170, 180}
 // carefulWinds are their winds, knots.
 var carefulWinds = [3]float64{6, 12, 20}
 
-// The handbook's tables (handbook/trim.md), by the boats' places in the
-// catalog.
+// The handbook's tables (handbook/trim.md), by the boats' names.
 var carefulBoats = map[string]carefulBoat{
 	"Jolly boat": {boom: [7][3]float64{{4, 4, 5}, {4, 10, 15}, {20, 25, 30}, {45, 50, 50}, {75, 80, 70}, {80, 80, 80}, {85, 85, 85}}, reefFrom: 19, close: 45},
 	"Yacht":      {boom: [7][3]float64{{4, 4, 4}, {4, 5, 10}, {25, 25, 30}, {45, 50, 50}, {75, 75, 65}, {75, 75, 75}, {75, 75, 75}}, reefFrom: 30, close: 45},
@@ -85,7 +91,6 @@ type carefulRun struct {
 	elapsed, expected float64
 	medal             uint8
 	capsizes          int
-	leg               float64
 }
 
 func (r carefulRun) multiple() float64 { return r.elapsed / r.expected }
@@ -103,19 +108,20 @@ type carefulSailor struct {
 	boat  carefulBoat
 	knots float64
 	from  float64 // rad
-	// The order held: the autopilot's angle off the wind and side (side
-	// 0 for a heading), or the heading, and the boom.
-	side       int
-	last       string
-	beating    int // the side of the tack she beats on, 0 for none
-	running    int
-	tacks      int
-	gather     int // seconds still to gather way for
+	// last is the order she holds, as it was sent.
+	last    string
+	beating int // the side of the tack she beats on, 1 port, −1 starboard, 0 for none
+	running int // and the side she runs on
+	// gather is how many looks she still gathers way for, bearing away on
+	// gatherSide with the sheet eased once.
+	gather     int
 	gatherSide int
 	eased      bool
-	lead       float64
-	ease       float64
-	trace      bool
+	// lead is how far ahead of the boat an order to come up is given,
+	// degrees; ease the most boom she gets under way with in a breeze.
+	lead  float64
+	ease  float64
+	trace bool
 }
 
 // state is the sailor's boat's state, its racer and its race in the
@@ -334,7 +340,7 @@ func (cs *carefulSailor) sail(length float64) carefulRun {
 			cs.t.Fatalf("no boat or no race: %v", ok)
 		}
 		c := r.Course
-		out.expected, out.leg = c.Expected, c.Length
+		out.expected = c.Expected
 		if down := st.SailorMode != physics.Sailing; down != capsized {
 			capsized = down
 			if down {
@@ -526,12 +532,12 @@ func TestCarefulRuns(t *testing.T) {
 				synctest.Test(t, func(t *testing.T) {
 					h, _ := carefulWorld(t, cat, knots, from)
 					run := carefulTrial(t, h, cat, boat, knots, from, c.call)
-					how := medalWord(run.medal)
 					if !run.finished {
-						how = "not finished"
+						fmt.Fprintf(&table, "%-18s %-10s %2.0f kn  not finished, %d capsizes\n", c.name, boat, knots, run.capsizes)
+						return
 					}
 					fmt.Fprintf(&table, "%-18s %-10s %2.0f kn  %5.0f s of %5.0f  ×%.2f  %s, %d capsizes\n",
-						c.name, boat, knots, run.elapsed, run.expected, run.multiple(), how, run.capsizes)
+						c.name, boat, knots, run.elapsed, run.expected, run.multiple(), medalWord(run.medal), run.capsizes)
 				})
 			}
 		}

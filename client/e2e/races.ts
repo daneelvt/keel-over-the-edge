@@ -21,6 +21,8 @@ const first = boats[0] ?? { id: '', name: '', most: 12 };
 export const MADE = 'madeaaaaaa';
 export const OTHERS = 'othersaaaa';
 export const REFUSED = 'refusedaaa';
+/** The Harbourmaster's Reach, his standing trial, entered. */
+export const REACH = 'reachaaaaa';
 
 /** A harbour race on the board. */
 function harbour(code: string, name: string, at: number, o: object = {}) {
@@ -60,6 +62,15 @@ export function raceBoard(now: number) {
     mine: [
       { ...harbour(OTHERS, 'the Gannet Holm Gallop', now + 40 * MINUTE), harbour: false },
       { ...harbour(REFUSED, 'Sunday Sprint', now + 90 * MINUTE), harbour: false },
+      {
+        ...harbour(REACH, 'the Harbourmaster’s Reach', now - 60 * MINUTE),
+        harbour: false,
+        kind: 'trial',
+        entered: 1,
+        mine: { owner: false, entered: true },
+        standing: true,
+        toward: 'Deckhand',
+      },
     ],
     make: {
       can: { ok: true },
@@ -158,6 +169,26 @@ export async function standInRaces(page: Page, now: number): Promise<RaceStandIn
       startsAt: now + 90 * MINUTE,
       mine: reader,
       enter: { ok: false, reason: 'daily', until: now + 160 * MINUTE },
+    }),
+    [REACH]: raceCard(now, {
+      code: REACH,
+      name: 'the Harbourmaster’s Reach',
+      kind: 'trial',
+      startsAt: now - 60 * MINUTE,
+      minutes: 5,
+      course: {
+        id: 'buoy:reach:short',
+        kind: 'buoy',
+        shape: 'reach',
+        long: false,
+        name: 'Reach off Port Royal',
+      },
+      owner: null,
+      mine: { ...reader, entered: true, number: 1 },
+      enter: { ok: false, reason: 'entered' },
+      entrants: raceCard(now)
+        .entrants.slice(0, 1)
+        .map((e) => ({ ...e, me: true })),
     }),
   };
   await page.route(
