@@ -29,7 +29,7 @@ runs:
     - if: inputs.node == 'true'
       name: Use the npm pinned in client/package.json, verified by its hash
       shell: bash
-      run: corepack enable npm
+      run: node client/build/npm.mjs
 
     - if: inputs.node == 'true'
       name: Install client packages

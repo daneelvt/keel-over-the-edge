@@ -9,7 +9,7 @@
 # go run ./tools/cluster -deploy builds it so for the local cluster.
 
 ARG GO_IMAGE=golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d
-ARG NODE_IMAGE=node:24.21.0-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66
+ARG NODE_IMAGE=node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc
 ARG BASE_IMAGE=gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
 
 FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS node
@@ -20,14 +20,12 @@ FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS node
 FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS client
 COPY --from=node /usr/local/bin/ /usr/local/bin/
 COPY --from=node /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
-# npm as client/package.json pins it, checked against its hash.
-ENV COREPACK_HOME=/root/.cache/corepack
-RUN corepack enable npm
 WORKDIR /src
 COPY client/package.json client/package-lock.json client/.npmrc client/
+COPY client/build/npm.mjs client/build/
+# npm as client/package.json pins it, checked against its hash.
 RUN --mount=type=cache,id=keel-npm,target=/root/.npm \
-    --mount=type=cache,id=keel-corepack,target=/root/.cache/corepack \
-    cd client && npm ci
+    node client/build/npm.mjs && cd client && npm ci
 COPY go.mod go.sum ./
 RUN --mount=type=cache,id=keel-gomod,target=/root/go/pkg/mod \
     go mod download
@@ -44,7 +42,6 @@ ENV KEEL_SW=$SW
 RUN --mount=type=cache,id=keel-gomod,target=/root/go/pkg/mod \
     --mount=type=cache,id=keel-gobuild-client,target=/root/.cache/go-build \
     --mount=type=cache,id=keel-tinygo,target=/src/.dev \
-    --mount=type=cache,id=keel-corepack,target=/root/.cache/corepack \
     go run ./tools/physics \
     && cd client && npx --no-install vite build && npx --no-install vite build -c vite.owner.config.ts
 
