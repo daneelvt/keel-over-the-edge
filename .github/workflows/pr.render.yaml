@@ -352,13 +352,7 @@ jobs:
         working-directory: client
         env:
           SUMMARY_TITLE: browser (the built page)
-        shell: bash
-        run: |
-          # TEMPORARY: the off switch's race, sampled; to be removed.
-          for i in 1 2 3 4 5 6; do
-            echo "sample $i"
-            npx --no-install playwright test -c playwright.built.config.ts kept.spec.ts 2>&1 | grep -v WebServer | grep -E "✓  3|✘|DIAG|installing|passed|failed" || true
-          done
+        run: npx --no-install playwright test -c playwright.built.config.ts
       - name: The traces of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
