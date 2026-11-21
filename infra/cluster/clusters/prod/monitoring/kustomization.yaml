@@ -1,9 +1,25 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Monitoring in production: the base's sizes, which are production's,
-# Grafana's passwords from Infisical, and Kured's metrics.
+# Grafana's passwords from Infisical, Kured's metrics, and Grafana's own
+# address: the machine's name on the tailnet, where the machine serves it
+# to the owner's devices over HTTPS (tools/internal/manifests keeps it the
+# served one). Its live connection is also let in from the tunnel's
+# address, which is checked against this one otherwise.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../monitoring
   - grafana-secrets.yaml
   - kured.yaml
+patches:
+  - target:
+      kind: HelmRelease
+      name: victoria-metrics-k8s-stack
+    patch: |-
+      - op: replace
+        path: /spec/values/grafana/grafana.ini/server/root_url
+        value: https://keel-prod-1.tail2bec2e.ts.net:3000/
+      - op: add
+        path: /spec/values/grafana/grafana.ini/live
+        value:
+          allowed_origins: https://keel-prod-1.tail2bec2e.ts.net:3000,http://localhost:3000

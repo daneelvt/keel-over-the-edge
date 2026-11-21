@@ -142,7 +142,7 @@ import { startWakeScene, wakeSceneFromQuery, wakeSceneHost } from '../sandbox/wa
 import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
-import { certifiedTold } from '../ui/certwords';
+import { certifiedTold, readToward, towardAtSea } from '../ui/certwords';
 import { ClearView, type Needed, needed, overboard } from '../ui/clearview';
 import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
@@ -1050,7 +1050,7 @@ async function start(): Promise<void> {
   const certBook = { certificates: catalog.certificates ?? [], boats: catalog.boats };
   // What the sailor's certificates came to: a course's on the finish's
   // card, the log's tasks and an earning as notices, the earning with the
-  // bell and See, the log's Ribbons.
+  // bell and See, the log's Certificates.
   online.onCertified = (c) =>
     certifiedTold(
       {
@@ -1058,7 +1058,7 @@ async function start(): Promise<void> {
         line: racing.certified,
         shown: () => racing.finishOpen.peek() || racing.resultsOpen.peek(),
         raise: (on, fill, action) => parts.notices.raise(on, fill, performance.now(), action),
-        see: () => parts.chart.showLog({ kind: 'own', tab: 'ribbons' }),
+        see: () => parts.chart.showLog({ kind: 'own', tab: 'certificates' }),
         bell: (n) => game.bell(n),
       },
       c,
@@ -1428,7 +1428,7 @@ async function start(): Promise<void> {
   // before, they open on their own over the screen.
   setLogHost((who) => parts.chart.showLog(who));
   setNewsHost((day) => parts.chart.showNews(day));
-  // A Harbourmaster's course in the log's Ribbons opens its card over the
+  // A Harbourmaster's course in the log's Certificates opens its card over the
   // sea, the chart put away.
   setRaceHost((code) => {
     parts.chart.show(null);
@@ -1473,7 +1473,16 @@ async function start(): Promise<void> {
   }
   // A word from the game's owner about chat, if one waits unread.
   void checkStatements(statements);
+  // And, to a sailor in a boat of their own, how far the next certificate
+  // has come: once, here.
+  if (!online.spectating.value && !towardSaid) {
+    towardSaid = true;
+    void towardAtSea(readToward, (on, text) => parts.notices.say(on, text, performance.now()));
+  }
 }
+
+/** Whether this visit has said how far the next certificate has come. */
+let towardSaid = false;
 
 /** A race's replay, opened on the chart by its link's code, or its results alone. */
 function hostReplay(parts: ChartParts): void {

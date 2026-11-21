@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // The tailnet's access policy: who may reach production's machine, and how;
-// and the pages the machine routes to the tailnet: monitoring's, and the
-// owner's world page.
+// and the pages the machine serves and routes to the tailnet: monitoring's,
+// and the owner's world page.
 // The tailnet workflow writes this file to Tailscale after the owner
 // approves the run (go run ./tools/tailnet -apply); a change made in
 // Tailscale's admin page is replaced by it, and the run shows what was
@@ -36,14 +36,19 @@
 	// What may connect to what, at the network layer. SSH is the only way
 	// in to the machine: the Kubernetes API and everything else stay on its
 	// loopback, reached over an SSH session when needed. The owner's devices
-	// also reach the three monitoring pages and the owner's world page
-	// through the routes, each on its one port, with no tunnel (from a
-	// phone, say). The monitoring pages keep their own logins; the world
-	// page has none, so this grant is who may work it. The database has no
-	// route.
+	// also reach the three monitoring pages and the owner's world page with
+	// no tunnel (from a phone, say): over HTTPS at the machine's own name,
+	// where the machine's Tailscale serves each on a port of its own, and
+	// through the routes, each on its one port. Grafana keeps its own
+	// login; the others have none, so these grants are who may open them.
+	// The database is neither served nor routed.
 	"grants": [
 		{"src": ["tag:ci-prod"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
 		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
+		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:3000"]},
+		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:8428"]},
+		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:9428"]},
+		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:9090"]},
 		{"src": ["autogroup:admin"], "dst": ["10.43.0.51"], "ip": ["tcp:80"]},
 		{"src": ["autogroup:admin"], "dst": ["10.43.0.52"], "ip": ["tcp:8428"]},
 		{"src": ["autogroup:admin"], "dst": ["10.43.0.50"], "ip": ["tcp:9428"]},
@@ -72,13 +77,15 @@
 
 	// Tailscale runs these on every change and refuses a policy that fails
 	// them: a workflow's node reaches SSH on the machine, and nothing else
-	// there, nor any of the cluster's fixed addresses.
+	// there, not the pages it serves, nor any of the cluster's fixed
+	// addresses.
 	"tests": [
 		{
 			"src":    "tag:ci-prod",
 			"accept": ["tag:keel-prod:22"],
 			"deny": [
 				"tag:keel-prod:80", "tag:keel-prod:443", "tag:keel-prod:6443", "tag:keel-prod:10250",
+				"tag:keel-prod:3000", "tag:keel-prod:8428", "tag:keel-prod:9428", "tag:keel-prod:9090",
 				"10.43.0.50:9428", "10.43.0.51:80", "10.43.0.52:8428", "10.43.0.53:5432", "10.43.0.54:9090",
 			],
 		},

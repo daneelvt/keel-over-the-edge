@@ -62,6 +62,17 @@
     - ((access_prefs.stdout | from_json).AdvertiseRoutes | default([], true) | sort) != (access_tailscale_routes | sort)
   changed_when: true
 
+# The same pages over HTTPS, at the machine's own name on the tailnet:
+# tailscaled ends the TLS with a certificate it fetches and renews itself
+# (the tailnet's HTTPS certificates, enabled by hand), and passes each
+# request on from the machine, as a forward is dialled. What is served is
+# kept across restarts. When it differs from the list, all of it is
+# stopped and the list served again, so a page taken off the list is
+# served no longer.
+- name: Serve the owner's pages to the tailnet over HTTPS
+  ansible.builtin.import_tasks: serve.yaml
+  when: not (machine_runner | default(false))
+
 - name: Make OpenSSH's folder of settings
   ansible.builtin.file:
     path: /etc/ssh/sshd_config.d

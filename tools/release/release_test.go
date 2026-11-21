@@ -22,6 +22,9 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/registry"
 )
@@ -230,11 +233,17 @@ func digestOf(body []byte) string {
 }
 
 // put publishes a release's manifests made from commit under tag, and
-// returns their digest. extra tells two artifacts of one commit apart.
-func (f *fakeRegistry) put(repo, tag, commit, extra string) string {
+// returns their digest. extra tells two artifacts of one commit apart;
+// more are the release's own annotations, if any.
+func (f *fakeRegistry) put(repo, tag, commit, extra string, more ...string) string {
+	annotations := map[string]string{revisionAnnotation: "main@sha1:" + commit, "org.opencontainers.image.source": "https://github.com/daneelvt/keel-over-the-edge", "extra": extra}
+	for _, kv := range more {
+		k, v, _ := strings.Cut(kv, "=")
+		annotations[k] = v
+	}
 	body, _ := json.Marshal(map[string]any{
 		"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
-		"annotations": map[string]string{revisionAnnotation: "main@sha1:" + commit, "org.opencontainers.image.source": "https://github.com/daneelvt/keel-over-the-edge", "extra": extra},
+		"annotations": annotations,
 	})
 	f.manifests[repo+":"+tag] = body
 	return digestOf(body)
@@ -325,22 +334,77 @@ type world struct {
 	// environment is GitHub's answer for the production environment; "",
 	// that there is none.
 	environment string
-	ran         []string
-	summary     bytes.Buffer
-	p           *promoter
+	// runs are the release runs, by commit.
+	runs map[string]*releaseRun
+	// commits are main's, as GitHub lists them: the newest first.
+	commits []string
+	// asked are the paths of GitHub's API asked for.
+	asked   []string
+	ran     []string
+	summary bytes.Buffer
+	p       *promoter
+}
+
+// releaseRun is a release run as GitHub's API shows it: its status, and
+// its after job's, "" if it has none.
+type releaseRun struct {
+	id     int64
+	status string
+	// after is the after job's state: "" (none), "in_progress", or its
+	// conclusion.
+	after string
 }
 
 func newWorld(t *testing.T) *world {
 	t.Helper()
-	w := &world{reg: newRegistry(t), unsigned: map[string]bool{}, environment: reviewed}
+	w := &world{reg: newRegistry(t), unsigned: map[string]bool{}, environment: reviewed, runs: map[string]*releaseRun{}, commits: []string{commitC, commitB, commitA}}
 	order := map[string]int{"main": 3, commitA: 1, commitB: 2, commitC: 3}
 	github := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w.asked = append(w.asked, r.URL.Path)
 		if r.URL.Path == "/repos/daneelvt/keel-over-the-edge/environments/production" {
 			if w.environment == "" {
 				http.NotFound(rw, r)
 				return
 			}
 			io.WriteString(rw, w.environment)
+			return
+		}
+		if r.URL.Path == "/repos/daneelvt/keel-over-the-edge/actions/workflows/release.yaml/runs" {
+			q := r.URL.Query()
+			runs := []any{}
+			if run, ok := w.runs[q.Get("head_sha")]; ok && q.Get("event") == "push" {
+				runs = append(runs, map[string]any{"id": run.id, "status": run.status, "html_url": fmt.Sprintf("https://github.com/daneelvt/keel-over-the-edge/actions/runs/%d", run.id)})
+			}
+			json.NewEncoder(rw).Encode(map[string]any{"workflow_runs": runs})
+			return
+		}
+		if id, ok := strings.CutPrefix(r.URL.Path, "/repos/daneelvt/keel-over-the-edge/actions/runs/"); ok && strings.HasSuffix(id, "/jobs") {
+			jobs := []any{map[string]any{"name": "ci / ci", "status": "completed", "conclusion": "success"}}
+			for _, run := range w.runs {
+				if fmt.Sprintf("%d/jobs", run.id) != id || r.URL.Query().Get("filter") != "latest" {
+					continue
+				}
+				switch run.after {
+				case "":
+				case "in_progress":
+					jobs = append(jobs, map[string]any{"name": afterJob, "status": "in_progress", "conclusion": nil})
+				default:
+					jobs = append(jobs, map[string]any{"name": afterJob, "status": "completed", "conclusion": run.after})
+				}
+			}
+			json.NewEncoder(rw).Encode(map[string]any{"jobs": jobs})
+			return
+		}
+		if r.URL.Path == "/repos/daneelvt/keel-over-the-edge/commits" {
+			if q := r.URL.Query(); q.Get("sha") != "main" || q.Get("per_page") != "100" {
+				http.Error(rw, "unexpected query", http.StatusBadRequest)
+				return
+			}
+			var list []string
+			for _, c := range w.commits {
+				list = append(list, fmt.Sprintf(`{"sha":%q}`, c))
+			}
+			io.WriteString(rw, "["+strings.Join(list, ",")+"]")
 			return
 		}
 		spec, ok := strings.CutPrefix(r.URL.Path, "/repos/daneelvt/keel-over-the-edge/compare/")
@@ -401,6 +465,17 @@ func (w *world) release(commit string) string {
 	return w.reg.put(w.p.repo, commit[:12], commit, "")
 }
 
+// releaseAs publishes a signed release of commit with its own
+// annotations, as key=value, and returns its digest.
+func (w *world) releaseAs(commit string, annotations ...string) string {
+	return w.reg.put(w.p.repo, commit[:12], commit, "", annotations...)
+}
+
+// follows makes production follow the release of a build.
+func (w *world) follows(build string) {
+	w.reg.manifests[w.p.repo+":"+manifests.ProdTag] = w.reg.manifests[w.p.repo+":"+build]
+}
+
 // prod is the digest production follows; "" if none.
 func (w *world) prod() string {
 	if m, ok := w.reg.manifests[w.p.repo+":"+manifests.ProdTag]; ok {
@@ -419,7 +494,7 @@ func TestPromote(t *testing.T) {
 	a, b, c := w.release(commitA), w.release(commitB), w.release(commitC)
 
 	// The first promotion: production follows nothing yet.
-	if err := w.p.promote(ctx, buildB, false); err != nil {
+	if err := w.p.promote(ctx, buildB, promotion{}); err != nil {
 		t.Fatal(err)
 	}
 	if w.prod() != b {
@@ -436,7 +511,7 @@ func TestPromote(t *testing.T) {
 
 	// A newer build moves it on.
 	w.summary.Reset()
-	if err := w.p.promote(ctx, buildC, false); err != nil || w.prod() != c {
+	if err := w.p.promote(ctx, buildC, promotion{}); err != nil || w.prod() != c {
 		t.Fatalf("a newer build: %v; production follows %s", err, w.prod())
 	}
 	if s := w.summary.String(); !strings.Contains(s, "| Before | `"+buildB+"` | "+commitB) || !strings.Contains(s, "| Now | `"+buildC+"` | "+commitC) {
@@ -445,7 +520,7 @@ func TestPromote(t *testing.T) {
 
 	// An older one is refused, unless a rollback is meant.
 	w.ran = nil
-	err := w.p.promote(ctx, buildA, false)
+	err := w.p.promote(ctx, buildA, promotion{})
 	if err == nil || !strings.Contains(err.Error(), "is older than build "+buildC) || !strings.Contains(err.Error(), "rollback") {
 		t.Fatalf("an older build: %v", err)
 	}
@@ -453,7 +528,7 @@ func TestPromote(t *testing.T) {
 		t.Fatalf("an older build moved the tag: production follows %s; ran %q", w.prod(), w.ran)
 	}
 	w.summary.Reset()
-	if err := w.p.promote(ctx, buildA, true); err != nil || w.prod() != a {
+	if err := w.p.promote(ctx, buildA, promotion{rollback: true}); err != nil || w.prod() != a {
 		t.Fatalf("a rollback: %v; production follows %s", err, w.prod())
 	}
 	if !strings.Contains(w.summary.String(), "A rollback, asked for.") {
@@ -462,12 +537,81 @@ func TestPromote(t *testing.T) {
 
 	// The build production follows already: nothing moves.
 	w.ran = nil
-	if err := w.p.promote(ctx, buildA, false); err != nil || w.tagged() || w.prod() != a {
+	if err := w.p.promote(ctx, buildA, promotion{}); err != nil || w.tagged() || w.prod() != a {
 		t.Errorf("the same build again: %v; ran %q", err, w.ran)
 	}
 	// With rollback ticked, a newer build is promoted as any other.
-	if err := w.p.promote(ctx, buildC, true); err != nil || w.prod() != c {
+	if err := w.p.promote(ctx, buildC, promotion{rollback: true}); err != nil || w.prod() != c {
 		t.Errorf("a newer build with rollback ticked: %v; production follows %s", err, w.prod())
+	}
+}
+
+// TestPromoteLatest: with no build named, the newest of main's commits that
+// has a release is promoted, checked as a named build is.
+func TestPromoteLatest(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	var log bytes.Buffer
+	w.p.out = &log
+	a, b := w.release(commitA), w.release(commitB)
+
+	// Main's head has no release yet: the one before it is the latest.
+	if err := w.p.promote(ctx, latestBuild, promotion{}); err != nil || w.prod() != b {
+		t.Fatalf("with the head not released: %v; production follows %s, want build B's %s", err, w.prod(), b)
+	}
+	if !strings.Contains(log.String(), "the latest release is build "+buildB+"; 1 newer commit(s) of main have no release, the newest "+buildC) {
+		t.Errorf("the log:\n%s", log.String())
+	}
+	if s := w.summary.String(); !strings.Contains(s, "| Now | `"+buildB+"`") || !strings.Contains(s, "No build was given: this is the latest release.") {
+		t.Errorf("the summary:\n%s", s)
+	}
+
+	// Once the head is released, it is.
+	c := w.release(commitC)
+	w.summary.Reset()
+	if err := w.p.promote(ctx, latestBuild, promotion{}); err != nil || w.prod() != c {
+		t.Fatalf("with the head released: %v; production follows %s, want build C's %s", err, w.prod(), c)
+	}
+	// Again, nothing moves, and the summary still says how it was chosen.
+	w.ran, w.summary = nil, bytes.Buffer{}
+	if err := w.p.promote(ctx, latestBuild, promotion{}); err != nil || w.tagged() {
+		t.Fatalf("the latest again: %v; ran %q", err, w.ran)
+	}
+	if s := w.summary.String(); !strings.Contains(s, "already") || !strings.Contains(s, "No build was given") {
+		t.Errorf("the summary:\n%s", s)
+	}
+	// A check of the latest says which build it would be, and moves nothing.
+	w.ran, w.summary = nil, bytes.Buffer{}
+	w.follows(buildB)
+	if err := w.p.promote(ctx, latestBuild, promotion{check: true}); err != nil || w.tagged() || w.prod() != b {
+		t.Fatalf("a check of the latest: %v; ran %q", err, w.ran)
+	}
+	if s := w.summary.String(); !strings.Contains(s, "| After | `"+buildC+"`") || !strings.Contains(s, "No build was given") {
+		t.Errorf("the summary:\n%s", s)
+	}
+	w.follows(buildC)
+	// A named build's summary does not say so.
+	w.summary.Reset()
+	if err := w.p.promote(ctx, buildA, promotion{rollback: true}); err != nil || w.prod() != a || strings.Contains(w.summary.String(), "No build was given") {
+		t.Errorf("a named build: %v; the summary:\n%s", err, w.summary.String())
+	}
+
+	// The latest release not signed is refused, not passed over for an
+	// older one that is.
+	w.unsigned[c] = true
+	w.ran = nil
+	if err := w.p.promote(ctx, latestBuild, promotion{}); err == nil || !strings.Contains(err.Error(), "the release of build "+buildC+" is not signed") || w.tagged() || w.prod() != a {
+		t.Errorf("the latest not signed: %v; ran %q", err, w.ran)
+	}
+
+	// Nothing released at all, and GitHub not answering.
+	w = newWorld(t)
+	if err := w.p.promote(ctx, latestBuild, promotion{}); err == nil || !strings.Contains(err.Error(), "none of the last 3 commits of main has a release") || w.tagged() {
+		t.Errorf("with no release: %v", err)
+	}
+	w.commits = []string{"not a commit"}
+	if err := w.p.promote(ctx, latestBuild, promotion{}); err == nil || !strings.Contains(err.Error(), "is not a commit") {
+		t.Errorf("a commit that is none: %v", err)
 	}
 }
 
@@ -518,7 +662,7 @@ func TestPromoteRefuses(t *testing.T) {
 			before := w.release(commitB)
 			w.reg.manifests[w.p.repo+":"+manifests.ProdTag] = w.reg.manifests[w.p.repo+":"+buildB]
 			tc.arrange(w)
-			err := w.p.promote(ctx, tc.build, tc.rollback)
+			err := w.p.promote(ctx, tc.build, promotion{rollback: tc.rollback})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("promote: %v", err)
 			}
@@ -540,7 +684,7 @@ func TestPromoteRefuses(t *testing.T) {
 		}
 		return run(ctx, name, args...)
 	}
-	if err := w.p.promote(ctx, buildB, false); err == nil || !strings.Contains(err.Error(), "does not name the release promoted") {
+	if err := w.p.promote(ctx, buildB, promotion{}); err == nil || !strings.Contains(err.Error(), "does not name the release promoted") {
 		t.Errorf("a tag not moved: %v", err)
 	}
 }
@@ -631,6 +775,278 @@ func TestVerifyKeyed(t *testing.T) {
 		fail = bad
 		if err := v.verify(context.Background()); err == nil || !strings.Contains(err.Error(), bad) || !strings.Contains(err.Error(), "is not signed by") {
 			t.Errorf("with %s unsigned: %v", bad, err)
+		}
+	}
+}
+
+// annotated are a release's annotations for gate, with the versions of
+// this commit, and those of the catalog given if not "".
+func annotated(t *testing.T, gate, catalogVersion string) []string {
+	t.Helper()
+	a, err := annotations(gate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if catalogVersion != "" {
+		a[1] = catalogAnnotation + "=" + catalogVersion
+	}
+	return a
+}
+
+// TestAnnotations: a release says which checks its build passed, and the
+// very versions the checkpoint is compared with.
+func TestAnnotations(t *testing.T) {
+	for _, gate := range []string{gateFull, gateHotfix} {
+		got, err := annotations(gate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{
+			"com.keelovertheedge.gate=" + gate,
+			"com.keelovertheedge.catalog=" + catalog.Version,
+			"com.keelovertheedge.snapshot=" + fmt.Sprint(sim.SnapshotVersion),
+			"com.keelovertheedge.layout=" + fmt.Sprint(physics.LayoutVersion),
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("annotations(%s) = %q, want %q", gate, got, want)
+		}
+	}
+	for _, bad := range []string{"", "Full", "short"} {
+		if _, err := annotations(bad); err == nil {
+			t.Errorf("annotations(%q) made annotations", bad)
+		}
+	}
+}
+
+// TestPromoteHotfix: a build that passed only the hotfix checks is
+// promoted with the hotfix box ticked, or once the full suite after them
+// has passed; never by accident.
+func TestPromoteHotfix(t *testing.T) {
+	ctx := context.Background()
+	refused := func(t *testing.T, w *world, build string, o promotion, want string) {
+		t.Helper()
+		before := w.prod()
+		err := w.p.promote(ctx, build, o)
+		if err == nil || !strings.Contains(err.Error(), "passed only the hotfix checks") || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "hotfix ticked") {
+			t.Fatalf("promote: %v", err)
+		}
+		if w.tagged() || w.prod() != before || w.summary.Len() != 0 {
+			t.Fatalf("a refusal moved the tag or wrote the summary: ran %q\n%s", w.ran, w.summary.String())
+		}
+	}
+	setup := func(t *testing.T, after string) (*world, string) {
+		w := newWorld(t)
+		w.releaseAs(commitA, annotated(t, gateFull, "")...)
+		w.follows(buildA)
+		c := w.releaseAs(commitC, annotated(t, gateHotfix, "")...)
+		w.runs[commitC] = &releaseRun{id: 7, status: "in_progress", after: after}
+		return w, c
+	}
+
+	t.Run("refused without the box while the suite runs", func(t *testing.T) {
+		w, _ := setup(t, "in_progress")
+		refused(t, w, buildC, promotion{}, "is still running")
+		w.runs[commitC].after = ""
+		refused(t, w, buildC, promotion{}, "is still running")
+	})
+	t.Run("refused without the box once the suite failed", func(t *testing.T) {
+		w, _ := setup(t, "failure")
+		w.runs[commitC].status = "completed"
+		refused(t, w, buildC, promotion{}, "failed")
+		w.runs[commitC].after = "cancelled"
+		refused(t, w, buildC, promotion{}, "failed")
+		// A run that ended without the suite never ran it.
+		w.runs[commitC].after = ""
+		refused(t, w, buildC, promotion{}, "was not found")
+		// Nor does a rollback's box stand for the hotfix's.
+		w.runs[commitC].after = "failure"
+		refused(t, w, buildC, promotion{rollback: true}, "failed")
+	})
+	t.Run("refused without the box when there is no release run", func(t *testing.T) {
+		w, _ := setup(t, "")
+		delete(w.runs, commitC)
+		refused(t, w, buildC, promotion{}, "was not found")
+	})
+	t.Run("checked with the box, nothing moved", func(t *testing.T) {
+		w, _ := setup(t, "in_progress")
+		if err := w.p.promote(ctx, buildC, promotion{hotfix: true, check: true}); err != nil {
+			t.Fatal(err)
+		}
+		if w.tagged() {
+			t.Fatalf("a check moved the tag: %q", w.ran)
+		}
+		s := w.summary.String()
+		for _, want := range []string{"would pass every check", "| After | `" + buildC + "`", "A hotfix, asked for", "running ([the release run](https://github.com/daneelvt/keel-over-the-edge/actions/runs/7))", "Nothing was moved"} {
+			if !strings.Contains(s, want) {
+				t.Errorf("the summary lacks %q:\n%s", want, s)
+			}
+		}
+	})
+	t.Run("promoted with the box while the suite runs", func(t *testing.T) {
+		w, c := setup(t, "in_progress")
+		if err := w.p.promote(ctx, buildC, promotion{hotfix: true}); err != nil || w.prod() != c {
+			t.Fatalf("promote: %v; production follows %s", err, w.prod())
+		}
+		if s := w.summary.String(); !strings.Contains(s, "Production follows build `"+buildC+"`") || !strings.Contains(s, "A hotfix, asked for") || !strings.Contains(s, "The full suite after them: running") {
+			t.Errorf("the summary:\n%s", s)
+		}
+	})
+	t.Run("promoted with the box after the suite failed", func(t *testing.T) {
+		w, c := setup(t, "failure")
+		if err := w.p.promote(ctx, buildC, promotion{hotfix: true}); err != nil || w.prod() != c {
+			t.Fatalf("promote: %v; production follows %s", err, w.prod())
+		}
+		if s := w.summary.String(); !strings.Contains(s, "The full suite after them: failed") {
+			t.Errorf("the summary:\n%s", s)
+		}
+	})
+	t.Run("promoted without the box once the suite passed", func(t *testing.T) {
+		w, c := setup(t, "success")
+		if err := w.p.promote(ctx, buildC, promotion{}); err != nil || w.prod() != c {
+			t.Fatalf("promote: %v; production follows %s", err, w.prod())
+		}
+		if s := w.summary.String(); !strings.Contains(s, "A hotfix's build, whose full suite after its checks passed ([the release run]") {
+			t.Errorf("the summary:\n%s", s)
+		}
+	})
+	t.Run("an ordinary build is unaffected by the box", func(t *testing.T) {
+		w := newWorld(t)
+		w.releaseAs(commitA, annotated(t, gateFull, "")...)
+		w.follows(buildA)
+		b := w.releaseAs(commitB, annotated(t, gateFull, "")...)
+		c := w.release(commitC) // released before the gate was recorded
+		if err := w.p.promote(ctx, buildB, promotion{hotfix: true}); err != nil || w.prod() != b {
+			t.Fatalf("an ordinary build with the box: %v; production follows %s", err, w.prod())
+		}
+		if s := w.summary.String(); !strings.Contains(s, "the box changed nothing") || strings.Contains(s, "A hotfix, asked for") {
+			t.Errorf("the summary:\n%s", s)
+		}
+		if err := w.p.promote(ctx, buildC, promotion{}); err != nil || w.prod() != c {
+			t.Fatalf("a build released before the gate was recorded: %v; production follows %s", err, w.prod())
+		}
+		if slices.ContainsFunc(w.asked, func(p string) bool { return strings.Contains(p, "/actions/") }) {
+			t.Errorf("an ordinary build's release run was looked up: %q", w.asked)
+		}
+	})
+	t.Run("a hotfix and a rollback together", func(t *testing.T) {
+		w := newWorld(t)
+		b := w.releaseAs(commitB, annotated(t, gateHotfix, "")...)
+		w.runs[commitB] = &releaseRun{id: 8, status: "in_progress", after: "in_progress"}
+		w.releaseAs(commitC, annotated(t, gateFull, "")...)
+		w.follows(buildC)
+		refused(t, w, buildB, promotion{rollback: true}, "is still running")
+		if err := w.p.promote(ctx, buildB, promotion{rollback: true, hotfix: true}); err != nil || w.prod() != b {
+			t.Fatalf("promote: %v; production follows %s", err, w.prod())
+		}
+		if s := w.summary.String(); !strings.Contains(s, "A rollback, asked for.") || !strings.Contains(s, "A hotfix, asked for") {
+			t.Errorf("the summary:\n%s", s)
+		}
+	})
+}
+
+// TestPromoteSaysWhenTheWorldStartsEmpty: every promote's summary opens
+// with whether the world carries on, rollbacks and checks too.
+func TestPromoteSaysWhenTheWorldStartsEmpty(t *testing.T) {
+	ctx := context.Background()
+	for name, tc := range map[string]struct {
+		prod, next []string // the annotations of production's build and of the next
+		o          promotion
+		want       string
+	}{
+		"the same versions": {
+			annotated(t, gateFull, ""), annotated(t, gateFull, ""), promotion{},
+			"**The world carries on**: the catalog, the snapshot format and the physics layout are those production runs now.",
+		},
+		"a catalog changed": {
+			annotated(t, gateFull, "0000000000000000"), annotated(t, gateFull, ""), promotion{},
+			"**This promote starts the world empty**: changed, the catalog (`0000000000000000` → `" + catalog.Version + "`).",
+		},
+		"a snapshot format changed, checked first": {
+			[]string{gateAnnotation + "=full", catalogAnnotation + "=" + catalog.Version, snapshotAnnotation + "=1", layoutAnnotation + "=" + fmt.Sprint(physics.LayoutVersion)},
+			annotated(t, gateFull, ""), promotion{check: true},
+			"**This promote starts the world empty**: changed, the snapshot format (`1` → `" + fmt.Sprint(sim.SnapshotVersion) + "`).",
+		},
+		"a rollback across a reset": {
+			annotated(t, gateFull, ""), annotated(t, gateFull, "0000000000000000"), promotion{rollback: true},
+			"**This promote starts the world empty**: changed, the catalog (`" + catalog.Version + "` → `0000000000000000`).",
+		},
+		"a build released before the versions were recorded": {
+			annotated(t, gateFull, ""), nil, promotion{rollback: true},
+			"**Whether the world starts empty is unknown**: build `" + buildA + "` was released before the versions were recorded.",
+		},
+		"production on a build released before they were": {
+			nil, annotated(t, gateFull, ""), promotion{rollback: true},
+			"**Whether the world starts empty is unknown**: build `" + buildB + "`, which production follows, was released before the versions were recorded.",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t)
+			w.releaseAs(commitB, tc.prod...)
+			w.follows(buildB)
+			next := buildC
+			if tc.o.rollback {
+				next = buildA
+				w.releaseAs(commitA, tc.next...)
+			} else {
+				w.releaseAs(commitC, tc.next...)
+			}
+			if err := w.p.promote(ctx, next, tc.o); err != nil {
+				t.Fatal(err)
+			}
+			if s := w.summary.String(); !strings.HasPrefix(s, tc.want+"\n") {
+				t.Errorf("the summary opens:\n%s\nwant:\n%s", s, tc.want)
+			}
+		})
+	}
+	// The first promote of all.
+	w := newWorld(t)
+	w.releaseAs(commitA, annotated(t, gateFull, "")...)
+	if err := w.p.promote(ctx, buildA, promotion{}); err != nil {
+		t.Fatal(err)
+	}
+	if s := w.summary.String(); !strings.HasPrefix(s, "**The world starts empty**: production follows no release yet.\n") {
+		t.Errorf("the summary:\n%s", s)
+	}
+}
+
+// TestWorkflowsHotfix: the release run's full suite after a hotfix is the
+// job the promote looks for, the release annotates its manifests with
+// what -annotations prints, and the promote's hotfix box reaches -promote.
+func TestWorkflowsHotfix(t *testing.T) {
+	type job struct {
+		Name string            `yaml:"name"`
+		Uses string            `yaml:"uses"`
+		With map[string]string `yaml:"with"`
+	}
+	read := func(name string) (string, map[string]job) {
+		data, err := os.ReadFile("../../.github/workflows/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var w struct {
+			Jobs map[string]job `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal(data, &w); err != nil {
+			t.Fatal(err)
+		}
+		return string(data), w.Jobs
+	}
+	release, jobs := read(releaseWorkflow)
+	_, ci := read("ci.yaml")
+	caller, called, _ := strings.Cut(afterJob, " / ")
+	if a := jobs["after"]; a.Name != caller || a.Uses != "./.github/workflows/ci.yaml" || a.With["mode"] != gateFull {
+		t.Errorf("release.yaml's after job: %+v", a)
+	}
+	if ci["ci"].Name != called {
+		t.Errorf("ci.yaml's ci job is named %q", ci["ci"].Name)
+	}
+	if !strings.Contains(release, "go run ./tools/release -annotations") || !strings.Contains(release, "--annotations") {
+		t.Error("release.yaml does not push the manifests with the annotations -annotations prints")
+	}
+	promote, _ := read("promote.yaml")
+	for _, want := range []string{"HOTFIX: ${{ inputs.hotfix }}", "set -- \"$@\" -hotfix", "-check"} {
+		if !strings.Contains(promote, want) {
+			t.Errorf("promote.yaml lacks %q", want)
 		}
 	}
 }

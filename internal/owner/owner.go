@@ -273,9 +273,10 @@ type Config struct {
 	// From, if not nil, is a view of the same world already drawn, the
 	// next world's before it began: its drawings are kept, not drawn again.
 	From *Owner
-	// Host, if not "", is the address and port the page is routed to the
-	// owner's devices at: one more Host the guard answers.
-	Host string
+	// Hosts are where the page is served to the owner's devices, each a
+	// host and its port: the Hosts the guard answers beside this
+	// computer's own.
+	Hosts []string
 
 	// Charted, if not nil, is the world's chart as it stands; Subjects how
 	// many subjects there are to chart.
@@ -450,10 +451,7 @@ func (o *Owner) Handler() http.Handler {
 		c := m.OwnerRefused.WithLabelValues("request")
 		refused = c.Inc
 	}
-	if o.cfg.Host != "" {
-		return Guard(mux, refused, o.cfg.Host)
-	}
-	return Guard(mux, refused)
+	return Guard(mux, refused, o.cfg.Hosts...)
 }
 
 // drawn adds the routes of what is drawn and listed of the world's

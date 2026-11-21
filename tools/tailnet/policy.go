@@ -101,12 +101,25 @@ func routed() map[string]string {
 	return m
 }
 
+// served is the ports of the machine's own name it serves a forward on
+// over HTTPS, each as a grant's, with the forward's service: what the
+// admins alone may reach there beside SSH.
+func served() map[string]string {
+	m := map[string]string{}
+	for _, f := range manifests.Served() {
+		m[fmt.Sprintf("tcp:%d", f.Serve)] = f.Service
+	}
+	return m
+}
+
 // check keeps the policy's shape: no rule for everyone, tags owned by the
 // admins alone, the workflow's node reaching SSH on the machine and no
 // other port, logging in there without a fresh sign-in only for it; the
-// machine's routes the forwards routed to the tailnet alone, which only
-// the admins reach, each on its port; and Tailscale's own tests saying
-// so, so that a change that broke it is refused when it is applied.
+// ports the machine serves a forward on, which only the admins reach,
+// each by a grant of its own; the machine's routes the forwards routed to
+// the tailnet alone, which only the admins reach, each on its port; and
+// Tailscale's own tests saying so, so that a change that broke it is
+// refused when it is applied.
 func (p policy) check(raw []byte) error {
 	var errs []error
 	fail := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
@@ -163,6 +176,7 @@ func (p policy) check(raw []byte) error {
 	if len(p.Grants) == 0 {
 		fail("grants: none")
 	}
+	toServe := served()
 	granted := map[string]bool{}
 	for i, g := range p.Grants {
 		where := fmt.Sprintf("grants[%d]", i)
@@ -182,8 +196,16 @@ func (p policy) check(raw []byte) error {
 			granted[g.Dst[0]] = true
 			continue
 		}
+		if slices.Equal(g.Dst, []string{machineTag}) && len(g.IP) == 1 && toServe[g.IP[0]] != "" {
+			// A page the machine serves: the admins alone.
+			if !slices.Equal(g.Src, []string{admins}) {
+				fail("%s: %v to %s on %s, want %s alone: the machine serves %s there", where, g.Src, machineTag, g.IP[0], admins, toServe[g.IP[0]])
+			}
+			granted[g.IP[0]] = true
+			continue
+		}
 		if !slices.Equal(g.Dst, []string{machineTag}) || !slices.Equal(g.IP, []string{"tcp:22"}) {
-			fail("%s: to %v on %v, want %s on tcp:22 alone: SSH is the only way in", where, g.Dst, g.IP, machineTag)
+			fail("%s: to %v on %v, want %s on tcp:22 alone, or on one port it serves: SSH is the only way in", where, g.Dst, g.IP, machineTag)
 		}
 		for _, s := range g.Src {
 			if s != ciTag && s != admins {
@@ -194,6 +216,11 @@ func (p policy) check(raw []byte) error {
 	for ip, port := range toRoute {
 		if !granted[ip] {
 			fail("grants: none lets %s reach %s on %s, which the machine routes", admins, ip, port)
+		}
+	}
+	for port, service := range toServe {
+		if !granted[port] {
+			fail("grants: none lets %s reach %s on %s, where the machine serves %s", admins, machineTag, port, service)
 		}
 	}
 
@@ -245,6 +272,12 @@ func (p policy) check(raw []byte) error {
 	for _, port := range closedPorts {
 		if !denied[machineTag+":"+port] {
 			fail("tests: none says %s is denied %s:%s", ciTag, machineTag, port)
+		}
+	}
+	// Nor a page the machine serves.
+	for _, f := range manifests.Served() {
+		if d := fmt.Sprintf("%s:%d", machineTag, f.Serve); !denied[d] {
+			fail("tests: none says %s is denied %s (%s)", ciTag, d, f.Service)
 		}
 	}
 	// Nor any of the cluster's fixed addresses, routed or not.

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What the machine serves to the tailnet over HTTPS: the list, and no more.
+- name: Read what the machine serves to the tailnet
+  ansible.builtin.command:
+    cmd: tailscale serve status --json
+  register: access_serve
+  changed_when: false
+  check_mode: false
+
+- name: Serve the list, when what is served differs from it
+  when: (access_serving | default('', true)).splitlines() | sort != (access_to_serve | default('', true)).splitlines() | sort
+  block:
+    - name: Stop serving everything
+      ansible.builtin.command:
+        cmd: tailscale serve reset
+      changed_when: true
+
+    - name: Serve each page on the list
+      ansible.builtin.command:
+        argv: >-
+          {{ ['tailscale', 'serve', '--bg', '--https=' ~ item.port]
+             + (['--set-path=' ~ item.path] if item.path is defined else [])
+             + [item.target] }}
+      loop: "{{ access_tailscale_serve }}"
+      loop_control:
+        label: "{{ item.port }}"
+      changed_when: true

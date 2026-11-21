@@ -4,7 +4,8 @@
 // card, a notice only while no card shows it and never for a run nearer a
 // venture; a task of the log a passing notice; a certificate earned a
 // notice with See and the bell rung twice; the catalog's notices' words
-// filled in whole; and the boats it opens as a sentence opens them.
+// filled in whole; and the boats it opens as a sentence opens them; and
+// the line on going to sea.
 
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
@@ -20,6 +21,8 @@ import {
   SEE,
   TASK_DONE,
   taskFill,
+  towardAtSea,
+  towardLine,
 } from './certwords';
 import { fillText } from './notices';
 
@@ -170,5 +173,24 @@ describe('what a page does with what it is told', () => {
     const alone = page();
     certifiedTold(alone.p, told({ task: -1, done: 3, earned: true }));
     expect(alone.raised.map((r) => r.on)).toEqual([CERTIFICATE_EARNED]);
+  });
+});
+
+describe('on going to sea', () => {
+  test('how far the next certificate has come, said once under the tasks’ switch', async () => {
+    expect(towardLine({ name: 'Helm', done: 2, needs: 4 })).toBe('Toward Helm · 2 of 4');
+    expect(towardLine({ name: 'Helm', done: 5, needs: 4 })).toBe('Toward Helm · 4 of 4');
+    const said: [string, string][] = [];
+    await towardAtSea(
+      async () => ({ name: 'Deckhand', done: 0, needs: 3 }),
+      (on, text) => said.push([on, text]),
+    );
+    expect(said).toEqual([[TASK_DONE, 'Toward Deckhand · 0 of 3']]);
+    // After the last, or the log not had: nothing.
+    await towardAtSea(
+      async () => null,
+      (on, text) => said.push([on, text]),
+    );
+    expect(said).toHaveLength(1);
   });
 });

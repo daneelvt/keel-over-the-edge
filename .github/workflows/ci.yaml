@@ -6,36 +6,92 @@
 # a draft nothing runs until it is marked ready for review. On a push to
 # main, release.yaml calls this workflow first, and it runs everything: a
 # release is built only from a commit that passed.
+#
+# A pull request from this repository labelled hotfix, and its release,
+# run the short form: the Go tests in their short forms without the race
+# detector, every package on amd64 over three jobs, and on arm64 only the
+# tests that hold the two machines together bit for bit; the smoke test
+# beside them rather than after. The client and the image run as ever.
+# What the short form leaves out (the race detector, the full lengths, the
+# build for fused multiply-add, the tick's timing, the fuzzing) runs in
+# the release beside the build, called again in full as after. The label
+# is read when the run starts, from the API: labelling a pull request
+# already open re-runs its newest run (pr.hotfix.yaml), and labels are not
+# a trigger here, so another label's run never replaces the real one.
 name: ci
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_call:
+    inputs:
+      mode:
+        description: full, every check; or hotfix, the short form
+        type: string
+        default: full
 
 permissions: {}
 
 # A pull request's newer run replaces its older one. Called by a release,
 # each run stands alone: the group would otherwise be the caller's, and one
-# release's tests would cancel the tests of the release before it.
+# release's tests would cancel the tests of the release before it, or its
+# full suite after a hotfix wait for its short form.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || format('{0}-{1}', github.run_id, inputs.mode) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
     name: changes
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-slim
     permissions:
-      pull-requests: read # list the pull request's changed files
+      pull-requests: read # list the pull request's changed files, read its labels and whether it is a draft
     outputs:
       go: ${{ github.event_name != 'pull_request' || steps.filter.outputs.go == 'true' }}
       client: ${{ github.event_name != 'pull_request' || steps.filter.outputs.client == 'true' }}
       image: ${{ github.event_name != 'pull_request' || steps.filter.outputs.image == 'true' }}
+      mode: ${{ steps.mode.outputs.mode }}
     steps:
-      - id: filter
+      # Whether the pull request is ready now, and this event is for its
+      # head: an event's draft flag is as it was when the event was made,
+      # and events can arrive out of order. A push just before "ready for
+      # review" can arrive after it and cancel the run that was ready, and
+      # a late event for an older commit need not be tested.
+      - id: ready
         if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: echo "ready=$(gh api "repos/$REPO/pulls/$NUMBER" --jq '(.draft | not) and .head.sha == env.HEAD')" >> "$GITHUB_OUTPUT"
+      # hotfix only for a pull request from this repository, never a
+      # fork's, and only while it carries the label now.
+      - id: mode
+        name: The full checks, or the short form of a hotfix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          CALLED: ${{ inputs.mode }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          mode=full
+          if [ "$EVENT" = pull_request ]; then
+            if gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
+              --jq '.head.repo.full_name == env.GITHUB_REPOSITORY and any(.labels[]; .name == "hotfix")' | grep -qx true; then
+              mode=hotfix
+            fi
+          elif [ "$CALLED" = hotfix ]; then
+            mode=hotfix
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          if [ "$mode" = hotfix ]; then
+            echo "### The short form of a hotfix" >> "$GITHUB_STEP_SUMMARY"
+            echo "The race detector, the full lengths, the timing and the fuzzing run after it, in the release." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - id: filter
+        if: steps.ready.outputs.ready == 'true'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
@@ -94,7 +150,7 @@ jobs:
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
     needs: [changes]
-    if: needs.changes.outputs.go == 'true'
+    if: needs.changes.outputs.go == 'true' && needs.changes.outputs.mode == 'full'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -179,6 +235,74 @@ jobs:
         if: runner.arch == 'X64'
         run: go test -run '^$' -fuzz FuzzApplyEntries -fuzztime 30s ./internal/protocol
 
+  # The Go tests' short form, for a hotfix: every package, short, without
+  # the race detector, which makes a boat's step ten times dearer. On amd64
+  # in three parts side by side: the game server's own tests, the
+  # simulation and the world's slowest packages, and the rest. On arm64,
+  # the tests that show the two machines agree bit for bit: the physics'
+  # golden files and the simulation's committed replay.
+  go-short:
+    name: go short (${{ matrix.part }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { part: the game server, runner: ubuntu-24.04 }
+          - { part: the simulation and the world, runner: ubuntu-24.04 }
+          - { part: the rest, runner: ubuntu-24.04 }
+          - { part: arm64 bit for bit, runner: ubuntu-24.04-arm }
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true' && needs.changes.outputs.mode == 'hotfix'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: The tests in their short forms, without the race detector
+        shell: bash
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          set -euo pipefail
+          slow='.*/internal/(sim|edge/edgetest|weather|physics|worldgen)'
+          case "$PART" in
+            "the game server")
+              go test -short ./cmd/keel ;;
+            "the simulation and the world")
+              mapfile -t packages < <(go list ./... | grep -xE "$slow")
+              go test -short "${packages[@]}" ;;
+            "the rest")
+              mapfile -t packages < <(go list ./... | grep -vxE ".*/cmd/keel|$slow")
+              go test -short "${packages[@]}" ;;
+            "arm64 bit for bit")
+              go test -short ./internal/physics
+              go test -short -run '^TestFixture$' ./internal/sim ;;
+            *)
+              echo "no such part: $PART"; exit 1 ;;
+          esac
+
   client:
     name: client
     needs: [changes]
@@ -218,6 +342,27 @@ jobs:
     needs: [changes, go, client]
     if: >-
       always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
+      needs.changes.outputs.mode == 'full' &&
+      (needs.changes.outputs.go == 'true' || needs.changes.outputs.client == 'true')
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Start everything with the one command, check it over HTTPS
+        run: go run ./tools/dev -smoke
+
+  # The same, for a hotfix: beside the Go tests, not after them. It builds
+  # keel itself.
+  smoke-short:
+    name: smoke (hotfix)
+    needs: [changes, client]
+    if: >-
+      always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
+      needs.changes.outputs.mode == 'hotfix' &&
       (needs.changes.outputs.go == 'true' || needs.changes.outputs.client == 'true')
     runs-on: ubuntu-26.04
     permissions:
@@ -258,7 +403,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, go, client, smoke, image]
+    needs: [changes, go, go-short, client, smoke, smoke-short, image]
     runs-on: ubuntu-slim
     permissions: {}
     steps:
@@ -269,3 +414,23 @@ jobs:
           for r in $RESULTS; do
             case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
           done
+      # GitHub counts a skipped job as passed: a short form that ran
+      # nothing must not pass.
+      - name: The short form ran every job whose files changed
+        if: needs.changes.outputs.mode == 'hotfix'
+        env:
+          GO: ${{ needs.changes.outputs.go }}
+          CLIENT: ${{ needs.changes.outputs.client }}
+          IMAGE: ${{ needs.changes.outputs.image }}
+          GO_SHORT: ${{ needs.go-short.result }}
+          CLIENT_RESULT: ${{ needs.client.result }}
+          SMOKE_SHORT: ${{ needs.smoke-short.result }}
+          IMAGE_RESULT: ${{ needs.image.result }}
+        run: |
+          failed=0
+          ran() { if [ "$2" != success ]; then echo "$1: $2, though its files changed"; failed=1; fi; }
+          if [ "$GO" = true ]; then ran "go short" "$GO_SHORT"; fi
+          if [ "$CLIENT" = true ]; then ran client "$CLIENT_RESULT"; fi
+          if [ "$GO" = true ] || [ "$CLIENT" = true ]; then ran "smoke (hotfix)" "$SMOKE_SHORT"; fi
+          if [ "$IMAGE" = true ]; then ran image "$IMAGE_RESULT"; fi
+          exit "$failed"

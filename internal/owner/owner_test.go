@@ -598,6 +598,57 @@ func TestGuardRouted(t *testing.T) {
 	}
 }
 
+// TestGuardServed: served under the machine's name, behind HTTPS, the
+// page answers that name with its port, beside an address while both are
+// in use, and no other name, port or origin's control.
+func TestGuardServed(t *testing.T) {
+	const name, addr = "keel-prod-1.tail1234.ts.net:9090", "10.43.0.54:9090"
+	h := Guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }), nil, name, addr)
+	do := func(method, host string, mod func(*http.Request)) int {
+		req := httptest.NewRequest(method, "http://x/owner/api/flag", strings.NewReader(`{"on":true}`))
+		req.Host = host
+		req.Header.Set("Content-Type", "application/json")
+		if mod != nil {
+			mod(req)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	// Over HTTPS a browser says where a request comes from.
+	own := func(q *http.Request) {
+		q.Header.Set("Origin", "https://"+name)
+		q.Header.Set("Sec-Fetch-Site", "same-origin")
+	}
+	for _, host := range []string{name, addr, "localhost:9090"} {
+		if code := do("GET", host, nil); code != http.StatusNoContent {
+			t.Errorf("GET with Host %q: %d", host, code)
+		}
+	}
+	if code := do("POST", name, own); code != http.StatusNoContent {
+		t.Errorf("the page's own control: %d", code)
+	}
+	for _, host := range []string{
+		"keel-prod-1.tail1234.ts.net", "keel-prod-1.tail1234.ts.net:443", "keel-prod-1.tail1234.ts.net.:9090",
+		"keel-prod-1:9090", "other.tail1234.ts.net:9090", "keel-prod-1.tail1234.ts.net.evil.example:9090", "evil.example:9090",
+	} {
+		for _, method := range []string{"GET", "POST"} {
+			if code := do(method, host, own); code != http.StatusForbidden {
+				t.Errorf("%s with Host %q: %d", method, host, code)
+			}
+		}
+	}
+	for what, mod := range map[string]func(*http.Request){
+		"a foreign Origin": func(q *http.Request) { q.Header.Set("Origin", "https://evil.example") },
+		"cross-site":       func(q *http.Request) { q.Header.Set("Sec-Fetch-Site", "cross-site") },
+		"same-site":        func(q *http.Request) { q.Header.Set("Sec-Fetch-Site", "same-site") },
+	} {
+		if code := do("POST", name, mod); code < 400 {
+			t.Errorf("a control with %s: %d", what, code)
+		}
+	}
+}
+
 func TestGuard(t *testing.T) {
 	r := newRig(t, 0)
 	r.o.Build(context.Background())

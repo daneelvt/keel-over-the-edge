@@ -133,9 +133,9 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the sizes of its parts loaded apart (the approval page, the log, the news), the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the sizes of its parts loaded apart (the approval page, the log, the news), the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary. A pull request from this repository labelled `hotfix`, and its release, run the short form instead ([Hotfixes](#hotfixes)) | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. The built page's, when either's ran: the page built and served by keel, and a new sailor's first download to the reveal held under 4 MB on the wire (`critical.spec.ts`). Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2`; `npx vite build`, then `npx playwright test -c playwright.built.config.ts` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. The built page's, when either's ran: the page built and served by keel, and a new sailor's first download to the reveal held under 4 MB on the wire (`critical.spec.ts`); on a pull request labelled `hotfix`, this alone ([Hotfixes](#hotfixes)). Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2`; `npx vite build`, then `npx playwright test -c playwright.built.config.ts` |
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
@@ -146,12 +146,13 @@ credentials.
 | `pr.worldgen.yaml` | Pull requests labelled `worldgen` (each push while the label stays), and by hand; not a required check | The world generator over a hundred seeds: each world passes the validator's rules within its attempts; how long they took, their attempts, land and islands, in the log (see [The world](#the-world)) | `go test ./internal/worldgen -run '^TestSeeds$' -seeds 100 -v` |
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
+| `pr.hotfix.yaml` | A pull request from this repository labelled `hotfix`, or marked ready with the label; not a required check | Every other pull request's runs, queued or running, cancelled (never `main`'s), and this one's newest `ci` and `pr.render` runs run again in their short form if they read its labels before it had this one ([Hotfixes](#hotfixes)) | |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures of the client's packages and the website's | `go tool govulncheck ./...`, `npm audit signatures` in `client/` and `website/` |
 | `pr.website.yaml` | Pull requests, not drafts, that change its files: the website, and the chart's painters, fonts and catalog it shares with the game, and the art its pictures are | Biome (the client's configuration) and tsc over `website/`; the Worker's tests in workerd (`@cloudflare/vitest-plugin`); the pictures' manifest against the files it names, and the page's colours, words and build, in Node; the page built by Vite and the Worker by `wrangler deploy --dry-run`, nothing uploaded; the page's checks in Chromium through `wrangler dev` (see [The website](#the-website)) | in `website/`, `npm test`, `npm run typecheck`, `npm run build`, `npm run checks` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
-| `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
-| `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
+| `release.yaml` | Every push to `main` | `ci.yaml`, whole (after a hotfix, its short form, with the whole beside the build as `after`); then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
+| `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature, its place on `main` and its gate are checked; whether the world starts empty, said before the approval | |
 | `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`; with **rebuild**, on a machine reinstalled from nothing), or `audit` (see [The machine](#the-machine)) | |
 | `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read, then the website deployed (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
@@ -4008,7 +4009,8 @@ name and account in others' rows.
 | `GET /owner/api/log.json?id=&world=` | any log, every name shown; an account's card carries its record, and the search's rows a few figures |
 
 Every route needs a session, and answers `Cache-Control: private,
-no-store`. A log is its header (name, look, since), an abstract of four
+no-store`. With `?part=ribbons&from=` a log's route answers a page of its
+races instead, and with `?part=certificates` its certificates. A log is its header (name, look, since), an abstract of four
 figures, the whole record, the worlds, one world's days in the world's
 zone (each day's voyages and entries; a kind of life met again the same
 day counted on the day's first) and the collection (`logbook.Log`). A
@@ -4161,13 +4163,44 @@ wherever it is; a sailor with none is told nothing (the log keeps it). The
 page (`ui/certwords.ts`) puts a course's task on the finish's card and a
 trial's results (`Racing.certified`), raises `task-done` (passive) for a task
 of the log, or for a course's while no card shows it, and
-`certificate-earned` (active, See opening the log's Ribbons) with the
-harbour's bell rung twice. The log's answer carries the certificate held
-(`certificate`, read by whoever may read the log) and, in one's own,
-`toward`: the next certificate's tasks, each course task with the code of
-the Harbourmaster's course that counts in the sailor's boat
-(`race.Service.CourseTrials`). In the sandbox `keel.certified({...})` tells
-the page as the server would.
+`certificate-earned` (active, See opening the log's Certificates) with the
+harbour's bell rung twice. Once a visit, on going to sea, it says how far
+the next certificate has come ("Toward Helm · 2 of 4") as a passing line
+under `task-done`'s switch (`Notices.say`: words of the page's own, which a
+task done replaces and never folds into).
+
+The log's answer carries the certificate held (`certificate`, read by
+whoever may read the log) and, in one's own, `toward`: the next
+certificate's tasks, each course task with the code of the Harbourmaster's
+course that counts in the sailor's boat (`race.Service.CourseTrials`). The
+log's fourth part, Certificates, reads its own page when it is opened,
+`?part=certificates` on every log's route (`logbook.Service.Certificates`),
+as Ribbons reads the races, so the log's answer stays under its 20 KB:
+`certificates`, every one held by its place in the catalog's list, with
+when, in which world and whether by hand; and, in one's own log alone, the
+tasks that counted, by their places, and `toward` with how far each task of
+the log has come (`have` of `at`, the lip's `closest`, the weather `met`:
+`certs.Task` keeps what `taskOf` reads). The page (`ui/log.tsx`) shows all
+of the catalog's certificates in order with the boats each opens; in one's
+own log each opens to its tasks, the next from the start. Another's shows
+which are held and opens nothing.
+
+How a task is done is a plain line by its measure or its courses, with the
+task's own numbers (`howTo` in `ui/certtasks.ts`, and in
+`internal/agentapi/certs.go` for the machine sailors' handbook): words in
+code, not in the catalog, so changing them does not begin a new world. Both
+are held to one file, `internal/agentapi/testdata/certificates_howto.golden.txt`
+(`go test ./internal/agentapi -run TestHowTo -update`), and both tests walk
+the catalog: a task with no line fails them. Each line says what the judge
+counts, no more.
+
+The ways to the page: See on a certificate earned; the certificate under
+the name in one's own log, a key with the next one's count; and a boat that
+needs a certificate in the fleet's boats (`ChangeBoat`), on the start
+screen, the player's own panel and the harbour's board, which opens the
+log on its Certificates (on its own over the start screen). In the sandbox
+`keel.certified({...})` tells the page as the server would, and
+`keel.towardAtSea({...})` says the line on going to sea.
 
 ### Gating
 
@@ -4191,10 +4224,10 @@ certificate a run counts toward (`toward`).
 ### Trying it
 
 ```sh
-go test ./internal/store -run 'BoatsKept|TheJudge|ThreeTasks|ByHand' -v
+go test ./internal/store -run 'BoatsKept|TheJudge|ThreeTasks|ByHand|TheLogReadsCertificates' -v
 go test ./internal/race -run 'RacesAskTheCertificates|ATrialsRun|HarbourJob' -v
 go test ./internal/fleet ./internal/owner -run 'Certificates|EveryBoat' -v
-go test ./internal/agentapi -run 'CertificateWords|BoatNeedsACertificate' -v
+go test ./internal/agentapi -run 'CertificateWords|CertificatesHeld|HowTo|HandbookLadder|BoatNeedsACertificate' -v
 go test ./internal/edge/edgetest -run CertifiedToTheSailor -v
 go test ./internal/logbook -run LogCertificates -v
 ```
@@ -4376,7 +4409,8 @@ owner's flag**.
 
 On keel's internal listener at `/owner/`, which has no route to the
 internet. From a phone, or any of the owner's devices on the tailnet,
-production's opens with no tunnel at **http://10.43.0.54:9090/owner/**
+production's opens with no tunnel at
+**https://keel-prod-1.tail2bec2e.ts.net:9090/owner/**
 (see [Opening it](#opening-it)). Or reach it through the tunnel to
 production, or a port forward on the local cluster, or keel's own address
 in the inner loop:
@@ -4425,12 +4459,14 @@ frame), `gusts.bin` (168 × 168 signed bytes, 0.1 m/s a step), `islands.json`,
 `land.png`, `coasts.svg`, `island/{n}.svg` and `point?east=…&north=…`.
 
 **The guard** (`internal/owner/guard.go`): every request whose `Host` is not
-`localhost` or a loopback address, on any port, or the one address the
-page is routed to the owner's devices at, port and all
-(`KEEL_OWNER_HOST`, `10.43.0.54:9090` in the cluster; an IP address, never
-a name), is refused, so a page the owner has open elsewhere cannot read
-the map or work a control by re-pointing a name of its own at this
-computer or at that address (DNS rebinding); a control
+`localhost` or a loopback address, on any port, or a host the page is
+served to the owner's devices at, port and all (`KEEL_OWNER_HOST`: in
+production the machine's own name on the tailnet,
+`keel-prod-1.tail2bec2e.ts.net:9090`, and its forward's address,
+`10.43.0.54:9090`), is refused, so a page the owner has open elsewhere
+cannot read the map or work a control by re-pointing a name of its own at
+this computer or at that address (DNS rebinding): such a request carries
+that page's own name, never the machine's. A control
 must also pass `net/http`'s cross-origin protection (`Sec-Fetch-Site`,
 `Origin`), be JSON and at most 4 KB. Responses carry no CORS header, forbid
 framing and a strict Content Security Policy. The probes and the metrics
@@ -5493,7 +5529,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_PASSKEY_RP_ID` | the play origin's host | The domain players' passkeys are made for (WebAuthn's relying party ID): the play origin's host or a parent of it, never an IP address. Production's is `keelovertheedge.com` |
 | `KEEL_PASSKEY_ORIGINS` | none | More origins of that domain whose pages may make and use passkeys, comma-separated: the browser tests' lagged and WebKit servers |
 | `KEEL_DATABASE_URL` | required | The database: a `postgres://` URL or `key=value` pairs, as pgx reads them. It holds the password and is never logged |
-| `KEEL_OWNER_HOST` | none | One more `Host` the owner's world page answers, beside `localhost` and the loopback addresses: the address and port it is routed to the owner's devices at, an IP address with its port (`10.43.0.54:9090` in the cluster). Unset, the page answers this computer alone (see [The world page](#the-world-page)) |
+| `KEEL_OWNER_HOST` | none | The `Host`s the owner's world page answers, beside `localhost` and the loopback addresses: where it is served to the owner's devices, each a full host name in lower case or an IP address, with its port; two at most, comma-separated (production's: `keel-prod-1.tail2bec2e.ts.net:9090,10.43.0.54:9090`). Unset, the page answers this computer alone (see [The world page](#the-world-page)) |
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
@@ -6301,7 +6337,9 @@ deliberate change: run `go test ./internal/agentapi -run ToolsList
 -update` and name it in the release notes. The list is held under
 `mostToolBytes` compact (9,359 bytes, 2,315 o200k tokens, with `course`),
 and each handbook page under an estimate of its tokens
-(`TestHandbookPages`).
+(`TestHandbookPages`); the certificates' page, which lists the whole ladder
+from the catalog of the world sailed (each certificate's boats and tasks,
+and how each task is done), under its own (`TestHandbookLadder`).
 
 **The helm** (`helm.go`). Each machine sailor whose agent has called since
 keel started has one, in memory, shared by every app approved for it: its
@@ -6409,7 +6447,9 @@ skipper and crew: placed (wakes any wait: the boat was moved), the
 preparatory signal, the gun, its roundings, calls on it, its finish, the
 first home, the committee's question (wakes any wait) and the end; the
 rest wake `race`. `news` with `log` adds the lasting race records
-(`RaceRecordsOf`). Tests: `races_test.go` races a machine sailor round a
+(`RaceRecordsOf`), and the certificates: each one held with when, in which
+world and whether by hand, and the next one's tasks, each not yet done
+with how far it has come (`certificateWords`). Tests: `races_test.go` races a machine sailor round a
 spar in the sea harness against races kept in memory, and holds the race
 block to `testdata/race_block.golden.txt`.
 
@@ -7877,6 +7917,8 @@ more says so with a label of its own, and three do: `monitoring-node`
 
 Every push to `main` makes a release, by itself. Nothing in it deploys.
 `release.yaml` runs the tests (`ci.yaml`, whole), and only if they pass:
+(after a pull request labelled `hotfix`, the tests' short form, and the
+whole beside the build: [Hotfixes](#hotfixes))
 
 1. **The image.** One `docker buildx build` for `linux/amd64` and
    `linux/arm64`, on a BuildKit pinned by digest, pushed as
@@ -7896,6 +7938,12 @@ Every push to `main` makes a release, by itself. Nothing in it deploys.
    `infra/`](#the-layout-of-infra)), and writes plain YAML. `flux push
    artifact` pushes the folder as
    `ghcr.io/daneelvt/keel-manifests:<build>`, and cosign signs its digest.
+   The artifact is annotated, under the signature, with the **gate** the
+   build passed (`com.keelovertheedge.gate`: `full`, or `hotfix`) and the
+   three versions keel compares with its checkpoint as it starts
+   (`com.keelovertheedge.catalog`, `.snapshot`, `.layout`), which
+   `go run ./tools/release -annotations <gate>` prints from the very
+   constants.
 
 The **build** is the first 12 characters of the commit, as `/api/version`
 reports it. The run's summary names the build and both digests.
@@ -7999,7 +8047,10 @@ SHA-256 in `infra/cluster/monitoring/dashboards/index.yaml`
 
 Deploying is tagging. Production's Flux follows the tag **`prod`** of
 `keel-manifests`, and looks every minute. `promote.yaml` moves it: Actions
-→ promote → Run workflow, with the build. The run waits in the
+→ promote → Run workflow, with the build, or with none for the latest
+release: the newest commit of `main` that has one (a commit whose release
+is still being made is passed over, and the run's log and summary say
+which build it took). The run waits in the
 `production` environment for the owner's approval, and then, before it
 moves anything (`go run ./tools/release -promote`):
 
@@ -8009,12 +8060,24 @@ moves anything (`go run ./tools/release -promote`):
 - the build must be released, and its signature verify as Flux will
   verify it, so `prod` never names what Flux would refuse;
 - the commit it was made from must be on `main`;
-- it must not be **older** than the build production follows now.
+- it must not be **older** than the build production follows now;
+- if it passed only a hotfix's short checks (its gate is `hotfix`), the
+  full suite after them, the `after` job of its release run, must have
+  passed.
 
 **Rolling back** is promoting an older build with the *rollback* box
-ticked, which lifts only the last check. Promotions never run two at once:
-a second waits for the first. The run's summary shows the build, commit
-and digest before and after. Flux's own controllers, and what they
+ticked, which lifts only the older-build check; the *hotfix* box lifts
+only the last. Promotions never run two at once: a second waits for the
+first.
+
+While the run waits for approval, its **check** job runs the same checks
+and moves nothing (`-promote <build> -check`): its summary, there within a
+minute, says what the promote will do. Both summaries open with **whether
+the world starts empty**: the three versions in the build's annotations
+against production's build's. "This promote starts the world empty" names
+what changed; a build released before the versions were recorded reads
+"unknown". Rollbacks are told the same. Then the build, commit and digest
+before and after. Flux's own controllers, and what they
 follow, are the release's first layer, `prod/flux-system`: once a
 machine's Flux has been given it, Flux applies it itself from then on, and
 so upgrades itself.
@@ -8025,6 +8088,93 @@ removes what a release no longer holds, with two exceptions it never
 removes: the database and the namespace it is in (an annotation on each).
 Deleting one of Flux's `Kustomization` objects deletes nothing it applied
 (`deletionPolicy: Orphan`). Removing the database takes a person.
+
+### Hotfixes
+
+A fault in production: **stop the harm first**, then fix it.
+
+1. **Roll back**, when the last promote brought the fault and going back
+   is safe: the promote's check says "The world carries on" (a rollback
+   across a reset starts the world empty), and it is one build back (a
+   migration is undone safely one release back, not two). About five
+   minutes with the approval, Flux's minute and the deploy's pause:
+
+   ```sh
+   # the build: the Before row of the last promote's summary
+   gh workflow run promote.yaml -f build=0123456789ab -f rollback=true
+   ```
+
+   Then fix it the ordinary way.
+2. **Switch it off**, when one of the owner's switches covers it: chat,
+   shipmates' messages or spectators' chat, the links to come aboard,
+   boarding, the human check (the world page's Accounts tab, or `keel
+   admin`; see [Links to come aboard](#links-to-come-aboard)). Then fix it
+   the ordinary way.
+3. **A hotfix**, when production is harmed now, a rollback cannot help or
+   would start the world empty, and the fix is small. About half an hour
+   from the pull request to production, with no other runs queued.
+
+A hotfix takes the same route as every change: a pull request whose
+required checks pass, `main`, the release, the promote. Its checks run in
+a shorter form: the label **`hotfix`** on a pull request from this
+repository (only the maintainer can label one) makes `ci` and `pr-render`
+run
+
+- the Go tests short and without the race detector, every package on
+  amd64 over three jobs, and on arm64 the physics' golden files and the
+  simulation's committed replay, which hold the two machines together;
+- the smoke test beside them, the client, the image, and the built page;
+- every other check as ever: lint, CodeQL, zizmor, the secrets, the
+  licences, the catalog, the dependencies, infra, physics.
+
+What it leaves out (the race detector, the full lengths, the build for
+fused multiply-add, the tick's timing, the fuzzing) runs in the release
+beside the build, as its `after` job, on the very commit. The page's, the
+scene's and WebKit's browser tests run that night in `render-nightly`. A
+`ci` that skipped a short-form job whose files changed fails: a short form
+never passes by running nothing.
+
+The steps:
+
+```sh
+git fetch && git worktree add -b fix-the-fault ../keel-hotfix origin/main
+cd ../keel-hotfix
+# the smallest change, and a test that fails without it; no catalog,
+# snapshot or migration change unless that is the fix
+git commit -am "Fix the fault"
+git push -u origin HEAD
+gh pr create --label hotfix --fill
+```
+
+Labelling cancels every other pull request's runs, queued or running
+(`pr.hotfix`), so the hotfix waits for no runner; theirs run again on
+their next push. The nights on `main` are not cancelled: at 04:17 UTC
+`render-nightly` holds about a dozen runners, and
+`gh run cancel $(gh run list --workflow render-nightly.yaml --status in_progress --json databaseId --jq '.[0].databaseId')`
+frees them. Labelling a pull request already open runs its checks again in
+the short form. Removing the label sends it back to the full checks on its
+next run.
+
+Merge nothing else meanwhile: a strict merge would ask the hotfix to be
+brought up to date and checked again. Once merged, `release.yaml` finds
+the pull request and its label (the `gate` job), checks the short form
+again, and builds; its summary says **gate: hotfix**. Then:
+
+```sh
+gh workflow run promote.yaml -f build=0123456789ab -f hotfix=true
+```
+
+The promote refuses a hotfix's build without the box until `after` has
+passed; with it, it promotes at once, and its summary gives `after`'s
+state. Watch the game's dashboard, and `after`:
+
+```sh
+gh run watch $(gh run list --workflow release.yaml --commit <commit> --json databaseId --jq '.[0].databaseId')
+```
+
+**Afterwards.** If `after` fails, an ordinary pull request mends it; what
+is promoted stays. The hotfix's pull request says what broke and when, and
+how long each step took.
 
 ### Connecting an AI on the local cluster
 
@@ -8226,13 +8376,15 @@ The policy: two tags, each owned by `autogroup:admin` (the owner; no
 person's login is in the file). `tag:ci-prod` reaches `tag:keel-prod` on
 TCP 22 alone, and logs in there as root; the owner's devices reach it on
 22 too, and log in as root after a fresh sign-in every 12 hours
-(`check`). The machine also advertises four routes, approved for it
+(`check`). The machine serves four pages over HTTPS at its own name, each
+on a port of its own (3000, 8428, 9428 and 9090), which the owner's
+devices reach and `tag:ci-prod` does not. The machine also advertises four routes, approved for it
 alone: the fixed addresses of Grafana, VictoriaMetrics' and VictoriaLogs'
 pages in the cluster, and of keel's internal listener, where the owner's
 world page is (each a /32; see [Opening it](#opening-it)). The owner's
 devices reach each on its one port, and `tag:ci-prod` none of them, nor
 the database's, which has no route. Nothing else: no rule for `*`. `go run ./tools/tailnet -check`
-keeps that shape, offline, the routes and grants the same as
+keeps that shape, offline, the served ports, the routes and their grants the same as
 `tools/internal/manifests`' `Forwards`.
 
 ### The playbook
@@ -8255,7 +8407,8 @@ infra/ansible/
                                 systemd-resolved; k3s's kernel settings; no swap
     hardening/                  the CIS benchmark, below
     access/                     Tailscale from its own repository; the
-                                owner's pages' routes; OpenSSH gone
+                                owner's pages served over HTTPS, and
+                                their routes; OpenSSH gone
     firewall/                   the table hostfw, and its unit
     updates/                    security updates every day, Tailscale's too; no reboot
     observe/                    the journal uploaded to the cluster's logs; the
@@ -9361,33 +9514,49 @@ manifests and the list the same.
 `-tunnel -print` prints the command and runs nothing.
 
 From a phone, or any of the owner's devices on the tailnet, the three
-pages and the owner's world page open with no tunnel, at their own
-addresses:
+pages and the owner's world page open with no tunnel, over HTTPS, at the
+machine's own name on the tailnet, each on a port of its own:
 
 | On the tailnet | What |
 |---|---|
-| http://10.43.0.51 | Grafana, the same sign-in |
-| http://10.43.0.52:8428 | VictoriaMetrics' own page |
-| http://10.43.0.50:9428 | VictoriaLogs' own page |
-| http://10.43.0.54:9090/owner/ | The owner's world page and its controls (see [The owner's tools](#the-owners-tools)); the rest of keel's internal listener is on the same port |
+| https://keel-prod-1.tail2bec2e.ts.net:3000/ | Grafana, the same sign-in |
+| https://keel-prod-1.tail2bec2e.ts.net:8428/vmui/ | VictoriaMetrics' own page |
+| https://keel-prod-1.tail2bec2e.ts.net:9428/select/vmui/ | VictoriaLogs' own page |
+| https://keel-prod-1.tail2bec2e.ts.net:9090/owner/ | The owner's world page and its controls (see [The owner's tools](#the-owners-tools)), and nothing else of keel's internal listener: the profiles and the input log stay behind the tunnel |
 
-The machine advertises them as routes (the access role,
+The machine's own Tailscale serves them (`tailscale serve`, set by the
+access role from `access_tailscale_serve`; `tailscale serve status` on the
+machine lists them): it ends the TLS with a Let's Encrypt certificate for
+the machine's name, which it fetches and renews by itself (the tailnet's
+HTTPS certificates, enabled once by hand), and passes each request on to
+the page's fixed address from the machine, as the tunnel does. It listens
+to the tailnet alone, and the tailnet policy lets the tailnet's admins
+alone reach each port. A browser that refuses plain HTTP, as a phone's
+may, opens these. The name is answered by the tailnet's own DNS: a phone
+whose Private DNS names a provider does not ask it, so that setting is
+automatic or off. `verify.yaml` checks what is served is the list, and
+fetches a page through it with its certificate checked.
+
+The same four also answer over plain HTTP at their fixed addresses
+(`http://10.43.0.51`, `http://10.43.0.52:8428`, `http://10.43.0.50:9428`,
+`http://10.43.0.54:9090/owner/`, where the rest of keel's internal
+listener is too), for a device that uses the tailnet's subnets:
+the machine advertises them as routes (the access role,
 `access_tailscale_routes`), the tailnet policy approves them and lets the
 tailnet's admins alone reach them, each on its port, and each page's
 NetworkPolicy lets the tailnet's range (100.64.0.0/10) in on that port:
 the packets still come from the device's tailnet address when the
 cluster's policies see them, as Tailscale masquerades only afterwards.
-The device must use the tailnet's subnets (Tailscale's app on Android and
-iOS does by default; on a Mac, its "Use Tailscale subnets"). The database
-stays behind the tunnel.
+The database stays behind the tunnel.
 
 The world page has no sign-in of its own: who may work its controls is
 who the tailnet policy lets reach that address, the tailnet's admins,
 which is the owner. Through the tunnel that took a Tailscale sign-in
-within the last 12 hours (SSH's `check`); routed, a device of the owner's
-on the tailnet is enough, so such a device is kept locked. The page
-answers that address as its `Host` and no other (keel's `KEEL_OWNER_HOST`,
-which `TestForwards` keeps the forward's address), so its guard still
+within the last 12 hours (SSH's `check`); served or routed, a device of
+the owner's on the tailnet is enough, so such a device is kept locked. The
+page answers the machine's name and that address as its `Host`, each with
+its port, and no other (keel's `KEEL_OWNER_HOST`, which `TestForwards`
+keeps the served name and the forward's address), so its guard still
 refuses a name re-pointed there.
 
 ### The dashboards
@@ -10719,7 +10888,7 @@ keel's own count of new sailors groups by /56, where it matters.
 |---|---|---|
 | Traffic floods | Cloudflare in front; no inbound web port, the tunnel alone | online "a PUT is blocked at the edge", "another host is not served", "one address is limited…"; verify "Check the firewall drops what is not let in, and lets the tailnet in" |
 | Finding and attacking the machine | its address in no DNS record; no open port: web traffic by the tunnel, administration over Tailscale | verify "Check the firewall drops…"; the tailnet policy (`go run ./tools/tailnet -check`, `TestRepositoryPolicyKeepsItsRules`); `TestCloseOpenSSHOnlyFromTheTailnet`; rule "no address range but the internet" |
-| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants the machine's port 22 alone (and the owner's devices the three monitoring pages' and the world page's routes, each on its port), its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
+| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants the machine's port 22 alone (and the owner's devices the three monitoring pages and the world page, each on the one port the machine serves it at, and on its route's), its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
 | A node port or host port | ServiceLB off; no NodePort service; the forward chain drops new connections from outside | rules "nothing exposed on production's node", "fixed addresses for the forwards alone"; `TestProductionTraefik`; verify "Check the firewall drops…" |
 | Secrets in the repository or GitHub | none kept there: Infisical and Tailscale reached with GitHub's short-lived tokens, External Secrets brings the rest | rules "no Secret in the manifests", "production's Secrets from Infisical", "every Secret a workload needs is made"; `TestNoSecretInInfra`; gitleaks (`pr.secrets`); push protection (`tools/github -check`); `TestPlanGivesTheCredentialsOnlyToTofu`, `TestPlanShowsNoValue` |
 | A stolen GitHub session changing production | production's jobs in the `production` environment, approved by the owner, `main` only; Infisical and Tailscale trust that environment's identity alone | `TestLoadRepositorySettings`, `TestEnvironmentDrift`; `TestPromoteRefuses`. The identities' bindings are set by hand (infra/MANUAL-STEPS.md) |

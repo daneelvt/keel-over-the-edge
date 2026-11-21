@@ -175,6 +175,50 @@ describe('spray', () => {
     expect(low.count).toBe(0);
   });
 
+  it('is not thrown by a bow over the lip, however fast the sea rises past it', () => {
+    const dt = 1 / 60;
+    const fall = (lip: number): number => {
+      const drops = new SprayDrops(2048, 1);
+      drops.lip = lip;
+      let most = 0;
+      for (let i = 0; i < 120; i++) {
+        const t = i * dt;
+        // Falling from the sea's level, 101 m from the centre.
+        const src: SpraySource = {
+          east: 101,
+          north: 0,
+          height: -0.5 * 9.81 * t * t,
+          sea: 0,
+          heading: Math.PI / 2,
+          speed: 4,
+        };
+        drops.step(dt, [src], weather(15));
+        most = Math.max(most, drops.count);
+      }
+      return most;
+    };
+    expect(fall(Infinity)).toBeGreaterThan(0);
+    expect(fall(100)).toBe(0);
+  });
+
+  it('forgets a bow that is gone: the next one there does not start from its rise', () => {
+    const dt = 1 / 60;
+    const drops = new SprayDrops(2048, 1);
+    const at = (sea: number): SpraySource => ({
+      east: 0,
+      north: 0,
+      height: 0,
+      sea,
+      heading: 0,
+      speed: 4,
+    });
+    drops.step(dt, [at(0)], weather(15));
+    drops.step(dt, [], weather(15));
+    // A metre higher a frame later would be a rise of 60 m/s, had it been remembered.
+    drops.step(dt, [at(1)], weather(15));
+    expect(drops.count).toBe(0);
+  });
+
   it('holds no more drops than the tier allows', () => {
     const drops = new SprayDrops(96);
     sail(drops, 5, 40, 3);

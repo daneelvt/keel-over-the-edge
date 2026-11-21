@@ -1,12 +1,21 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Checks the machine is as the playbook leaves it, from outside the roles,
 # changing nothing: the firewall, the way in, the hardening, what the
-# machine reports of itself, k3s, Flux and the bootstrap secret. go run
-# ./tools/machine -verify runs it.
+# machine reports of itself, k3s, Flux and the bootstrap secret, and what
+# it serves to the tailnet. go run ./tools/machine -verify runs it.
 - name: Verify production's machine
   hosts: all
   gather_facts: false
+  # The access role's list of what the machine serves to the tailnet, and
+  # how it is compared with what tailscale says (access_serve).
+  vars_files:
+    - roles/access/defaults/main.yaml
+    - roles/access/vars/main.yaml
   vars:
+    # A page served to the tailnet that answers without a login:
+    # VictoriaMetrics' health.
+    verify_served_port: 8428
+    verify_served_path: /health
     verify_kubectl: /usr/local/bin/k3s kubectl
     # The observe role's: where the journal goes, and the facts' file.
     verify_logs_url: http://10.43.0.50:9428/insert/journald
@@ -302,6 +311,46 @@
         that: verify_refused.stdout is not search('PodSecurity')
         fail_msg: "{{ verify_refused.stdout }}"
         quiet: true
+
+    # The machine does not resolve its own name on the tailnet (it keeps
+    # its own DNS), so curl is told the address; the certificate is
+    # checked against the name all the same.
+    - name: Read what the machine serves to the tailnet, and its address there
+      ansible.builtin.command:
+        cmd: "{{ item }}"
+      loop: [tailscale serve status --json, tailscale ip -4]
+      register: verify_tailnet
+      changed_when: false
+      when: not (machine_runner | default(false))
+
+    - name: Check it serves the owner's pages over HTTPS, and no more
+      vars:
+        access_serve: "{{ verify_tailnet.results[0] }}"
+      ansible.builtin.assert:
+        that: (access_serving | default('', true)).splitlines() | sort == (access_to_serve | default('', true)).splitlines() | sort
+        fail_msg: "{{ access_serving | default('nothing', true) }}"
+        quiet: true
+      when: not (machine_runner | default(false))
+
+    - name: Fetch a page through it, its certificate checked  # noqa: command-instead-of-module (uri cannot be told the address)
+      vars:
+        verify_served: >-
+          {{ (verify_tailnet.results[0].stdout | from_json).Web | select('search', ':' ~ verify_served_port ~ '$') | first }}
+      ansible.builtin.command:
+        argv:
+          - curl
+          - --silent
+          - --show-error
+          - --fail
+          - --max-time
+          - "90"
+          - --output
+          - /dev/null
+          - --resolve
+          - "{{ verify_served }}:{{ verify_tailnet.results[1].stdout_lines[0] }}"
+          - "https://{{ verify_served }}{{ verify_served_path }}"
+      changed_when: false
+      when: not (machine_runner | default(false))
 
     - name: Read what listens
       ansible.builtin.command:
