@@ -302,7 +302,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.page == 'true' || needs.changes.outputs.scene == 'true'
     runs-on: ubuntu-26.04
-    timeout-minutes: 40
+    timeout-minutes: 15
     permissions:
       contents: read
     services:
@@ -348,15 +348,6 @@ jobs:
         working-directory: client
         shell: bash
         run: node e2e/gpu.ts | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: TEMPORARY the off switch's race, sampled
-        working-directory: client
-        shell: bash
-        run: |
-          for i in 1 2 3 4 5 6 7 8; do
-            echo "::group::sample $i"
-            npx --no-install playwright test -c playwright.built.config.ts kept.spec.ts 2>&1 | grep -v WebServer | grep -E "✓|✘|installing|waiting|active|controlled|keel-code|keel-art|passed|failed|Error" || true
-            echo "::endgroup::"
-          done
       - name: The built page, and its first download
         working-directory: client
         env:
