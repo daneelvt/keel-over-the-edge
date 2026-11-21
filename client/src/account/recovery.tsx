@@ -8,22 +8,12 @@
 // next sign-in is told it was used, in case it was not the player.
 
 import { useState } from 'preact/hooks';
+import { dayOf } from './day';
 import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
 import { addPasskey, type Reach, signOut } from './passkeys';
 import { reasonText } from './reasons';
 import { SetSail } from './yoursailor';
-
-/** A date as the player reads it: 23 October, or 23 October 2025 in another year. */
-export function dayOf(ms: number, now = Date.now()): string {
-  const d = new Date(ms);
-  const sameYear = d.getFullYear() === new Date(now).getFullYear();
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    ...(sameYear ? {} : { year: 'numeric' }),
-  });
-}
 
 /** The recovery code shown once: copied, saved as a file, or written down. */
 export function RecoveryCode({

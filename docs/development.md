@@ -10144,11 +10144,14 @@ argument `SW=off`: change its default in the `Dockerfile` to release one)
 builds a `sw.js` that takes over at once, every open page with it (so the
 worker before answers nothing more), deletes every `keel-` cache (again
 3 s later, after what the worker before was answering), and unregisters
-itself; and a page that registers nothing, asks the browser to
-check a worker it is still under at once, and takes away any worker and
-caches left once under none. Browsers check `/sw.js` at every visit,
-past their HTTP cache (`updateViaCache: 'none'`), so it reaches every phone
-that comes back. Building with the worker again later turns it back on.
+itself; and a page that registers nothing and takes every registration
+and `keel-` cache away itself, whether or not a worker still answers it.
+The page does not wait for the new `sw.js` to take over: a browser lets a
+worker take over only once the one before has no work in hand, and one
+answer that never ends keeps the worker before for minutes. The new
+`sw.js` is for a page the worker before still answers from its kept copy.
+Browsers check `/sw.js` at every visit, past their HTTP cache
+(`updateViaCache: 'none'`), so it reaches every phone that comes back. Building with the worker again later turns it back on.
 
 **Seeing it.** In Chrome, DevTools' Application panel: Service workers (the
 worker and its state; "Update on reload" for trying changes) and Cache
@@ -10173,8 +10176,8 @@ with every asset renamed and the build's id changed, since a second build
 of the same tree names most files as the first did; the open page opens
 the log and the news from the worker, and its reload runs the next build
 with the first's code kept) and the off switch (keel restarted on a build
-made with `KEEL_SW=off`: after a navigation no worker and no `keel-`
-caches). By hand: `npx vite build`, then `go run ./tools/e2e -client
+made with `KEEL_SW=off`, the worker before held busy by a file the test
+never answers: after a navigation no worker and no `keel-` caches). By hand: `npx vite build`, then `go run ./tools/e2e -client
 client/dist` and `http://localhost:18088/` in Chrome, DevTools open as
 above.
 

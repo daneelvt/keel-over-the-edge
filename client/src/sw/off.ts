@@ -7,16 +7,13 @@
 // itself. It answers nothing, so the page comes from the network, and the
 // page built with it registers no worker.
 
-import { clear } from './worker';
+import { clear, SETTLE } from './worker';
 
 const scope = self as unknown as ServiceWorkerGlobalScope;
 
 scope.addEventListener('install', () => {
   void scope.skipWaiting();
 });
-
-/** How long the worker before may still be finishing what it was answering, ms. */
-const SETTLE = 3000;
 
 scope.addEventListener('activate', (e) => {
   // Every page taken over first, so the worker before answers nothing

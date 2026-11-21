@@ -11,8 +11,24 @@
 // In development the game's Vite serves approve.html itself.
 
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { licences } from './build/licences.ts';
+
+// The page loads nothing of the game's start (src/boot/): that code reads
+// what only the game's build defines, its build's ID for one, and a page
+// built here with it stops on its first line, blank. A module that brings
+// it in fails the build, named with what imported it.
+const noGameStart: Plugin = {
+  name: 'approve-no-game-start',
+  apply: 'build',
+  moduleParsed(info) {
+    if (info.id.includes('/src/boot/')) {
+      this.error(
+        `the approval page must not load the game's start: ${info.id} is imported by ${info.importers.join(', ')}`,
+      );
+    }
+  },
+};
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
@@ -29,6 +45,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    noGameStart,
     licences({ allowedFile: '../tools/licences/allowed.txt', shared: new Set(), emit: false }),
   ],
 });

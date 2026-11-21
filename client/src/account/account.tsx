@@ -22,6 +22,7 @@ import { lookFrom } from '../catalog/looks';
 import { Sheet } from '../ui/sheet';
 import { useWatch } from '../ui/watchlazy';
 import { useChatAccount } from './chatlazy';
+import { dayOf } from './day';
 import { RULES_PAGE, RULES_TITLE, SAFETY_PAGE, STAYING_SAFE } from './firstwords';
 import { useMachines } from './lazy';
 import {
@@ -39,7 +40,7 @@ import {
 } from './passkeys';
 import { InkPortrait, Portrait } from './portraits';
 import { reasonText } from './reasons';
-import { dayOf, RecoveryCode } from './recovery';
+import { RecoveryCode } from './recovery';
 
 /** The account page's machine sailors, once their module is loaded. */
 function MachinesSection() {

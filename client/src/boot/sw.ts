@@ -8,7 +8,7 @@
 // storage. A build with the worker switched off (KEEL_SW=off) registers
 // nothing and takes away any worker and caches it finds.
 
-import { PREFIX } from '../sw/worker';
+import { clear, SETTLE } from '../sw/worker';
 import { browserEnv, installed } from './fullscreen';
 import { scriptURL } from './policy';
 
@@ -111,28 +111,34 @@ async function registerAndKeep(): Promise<void> {
   await keepStorage(navigator.storage, installed(browserEnv()), localMarks());
 }
 
+/** What the off switch takes away: the registrations, and the caches. */
+export interface Kept {
+  registrations(): Promise<readonly Pick<ServiceWorkerRegistration, 'unregister'>[]>;
+  caches: Pick<CacheStorage, 'keys' | 'delete'>;
+  wait(ms: number): Promise<void>;
+}
+
 /**
- * The worker switched off. A page still under a worker asks the browser
- * to check it now: the worker it finds (off.ts) takes over, deletes its
- * caches and unregisters itself, and the worker before answers nothing
- * more. A page under none takes away any worker and caches left.
+ * The worker switched off: the page takes every registration and every
+ * cache of the worker's away itself, whether or not a worker still answers
+ * it. It does not wait for the worker that switches off (off.ts) to take
+ * over: a browser lets a worker take over only once the one before has no
+ * work in hand, and one answer that never ends would keep the worker
+ * before, and its caches, for as long. A worker unregistered answers this
+ * page until it is left, and no page after; what it was answering when its
+ * caches went it may still keep, so they are deleted again after SETTLE.
+ * Nothing here asks anything of the worker before: the switch is for a
+ * worker that is broken. off.ts is for a page the worker before still
+ * answers from its kept copy, which never runs this.
  */
-async function switchOff(): Promise<void> {
+export async function switchOff(kept: Kept): Promise<void> {
   try {
-    const sw = navigator.serviceWorker;
-    const regs = await sw.getRegistrations();
-    if (sw.controller !== null) {
-      await Promise.all(regs.map((r) => r.update().catch(() => {})));
-      return;
-    }
-    for (const reg of regs) {
+    for (const reg of await kept.registrations()) {
       await reg.unregister();
     }
-    for (const name of await caches.keys()) {
-      if (name.startsWith(PREFIX)) {
-        await caches.delete(name);
-      }
-    }
+    await clear(kept.caches);
+    await kept.wait(SETTLE);
+    await clear(kept.caches);
   } catch {
     // Nothing to take away, or storage refused.
   }
@@ -151,7 +157,11 @@ export interface WorkerStart {
 export function startWorker(query: URLSearchParams): WorkerStart {
   const env = pageEnv();
   if (env.built && env.supported && !env.on) {
-    void switchOff();
+    void switchOff({
+      registrations: () => navigator.serviceWorker.getRegistrations(),
+      caches,
+      wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
   }
   if (!wantsWorker(env, query)) {
     return { revealed: () => {} };

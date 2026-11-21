@@ -14,9 +14,9 @@ import './machines.css';
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import { Choices } from './choices';
+import { dayOf } from './day';
 import { drawLook } from './looks';
 import { MAX_NAME } from './reasons';
-import { dayOf } from './recovery';
 
 /** One choice of a machine sailor's look: its id, its name in words, and its colour where it has one. */
 export interface LookOption {

@@ -51,6 +51,8 @@ const RETURN_BUDGET = 100 * 1024;
 
 /** tools/e2e's control: a restart of keel, on another build. */
 const CONTROL = 'http://127.0.0.1:19099';
+/** A file no build has, which the test never answers: the worker asked for it stays busy. */
+const HELD = '/assets/held-by-the-test.js';
 /** The build tools/e2e serves first, from the repository's root. */
 const DIST = 'client/dist';
 
@@ -296,6 +298,13 @@ test('the off switch: a build with KEEL_SW=off takes the worker and its caches a
 }) => {
   test.setTimeout(240_000);
   expect(Object.keys(await cachesOf()).length).toBeGreaterThan(0);
+  // The worker before is kept busy: a file it fetches for the page is
+  // never answered. A worker with work in hand is not taken over from, so
+  // the switch must not wait for the worker that comes to take over.
+  await context.route(`**${HELD}`, () => {});
+  await page.evaluate((held) => {
+    void fetch(held).catch(() => {});
+  }, HELD);
   const off = test.info().outputPath('off');
   written.push(off);
   execFileSync('npx', ['--no-install', 'vite', 'build', '--outDir', off, '--logLevel', 'warn'], {
@@ -304,19 +313,29 @@ test('the off switch: a build with KEEL_SW=off takes the worker and its caches a
     stdio: 'pipe',
   });
   await restartOn(request, off);
+  // Each registration left, as its workers stand (installing, waiting,
+  // active, and whether one controls the page): a failure says how far the
+  // off switch came.
   const none = async () => ({
-    registrations: await page.evaluate(
-      async () => (await navigator.serviceWorker.getRegistrations()).length,
+    registrations: await page.evaluate(async () =>
+      (await navigator.serviceWorker.getRegistrations()).map((r) =>
+        [
+          `installing ${r.installing?.state ?? 'none'}`,
+          `waiting ${r.waiting?.state ?? 'none'}`,
+          `active ${r.active?.state ?? 'none'}`,
+          `controlled ${navigator.serviceWorker.controller !== null}`,
+        ].join(', '),
+      ),
     ),
     caches: Object.keys(await cachesOf()),
   });
   // A navigation: the browser finds the worker changed, and the page is
   // the build without one.
   await page.reload();
-  await expect.poll(none, { timeout: 60_000 }).toEqual({ registrations: 0, caches: [] });
+  await expect.poll(none, { timeout: 60_000 }).toEqual({ registrations: [], caches: [] });
   // At sea again, past the reveal and its registration: still none.
   await page.reload();
   await setSail();
   await page.waitForTimeout(2000);
-  expect(await none()).toEqual({ registrations: 0, caches: [] });
+  expect(await none()).toEqual({ registrations: [], caches: [] });
 });
