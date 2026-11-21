@@ -8,11 +8,11 @@ terraform {
   required_providers {
     cloudflare = {
       source  = "registry.opentofu.org/cloudflare/cloudflare"
-      version = "5.28.1"
+      version = "5.29.0"
     }
     infisical = {
       source  = "registry.opentofu.org/infisical/infisical"
-      version = "0.20.9"
+      version = "0.20.16"
     }
     random = {
       source  = "registry.opentofu.org/hashicorp/random"

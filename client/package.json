@@ -3,7 +3,7 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "packageManager": "npm@12.2.1+sha512.6ca0a6151553fc107e60f1186d9c10d57508dcde6de31292a54d4cc4e8e8ef3de25b3281274657442d7115d10df930bb3794ddcb0681cdfd9d317189abf7b63d",
+  "packageManager": "npm@12.2.3+sha512.a2f98d4517bbe89bdca7513a88e78f43a1fd66be1730eaea81f69e18d86d46f3f75d29762e8fdaf42d4de7f8d194b2ebb2a09e9bfa268067591e96796baca7d5",
   "engines": {
     "node": ">=24.15.0 <25",
     "npm": ">=12.2.0"
@@ -25,21 +25,21 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.8",
     "@bufbuild/buf": "1.75.0",
-    "@bufbuild/protobuf": "2.16.0",
-    "@bufbuild/protoc-gen-es": "2.16.0",
-    "@playwright/test": "1.64.1",
+    "@bufbuild/protobuf": "2.17.0",
+    "@bufbuild/protoc-gen-es": "2.17.0",
+    "@playwright/test": "1.65.1",
     "@preact/signals": "2.11.4",
     "@types/node": "26.6.6",
     "@types/three": "0.187.0",
     "binaryen": "132.0.0",
     "gltfpack": "1.3.0",
     "json-schema-to-typescript": "16.0.0",
-    "preact": "11.1.1",
+    "preact": "11.2.0",
     "three": "0.187.0",
     "typescript": "7.0.2",
-    "vite": "8.3.5",
+    "vite": "8.3.8",
     "vitest": "5.1.0"
   },
   "overrides": {

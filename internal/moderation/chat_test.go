@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/nyaruka/phonenumbers"
+	"github.com/nyaruka/phonenumbers/v2"
 	"mvdan.cc/xurls/v2"
 )
 
@@ -411,7 +411,7 @@ func TestPhoneExamples(t *testing.T) {
 			phonenumbers.FIXED_LINE, phonenumbers.MOBILE, phonenumbers.TOLL_FREE, phonenumbers.VOIP,
 			phonenumbers.PERSONAL_NUMBER, phonenumbers.UAN, phonenumbers.PAGER, phonenumbers.VOICEMAIL,
 		} {
-			n := phonenumbers.GetExampleNumberForType(region, kind)
+			n := phonenumbers.GetExampleNumberForTypeInRegion(region, kind)
 			if n == nil {
 				continue
 			}

@@ -843,7 +843,7 @@ const keelLooks = await Promise.all(
   }),
 );
 
-describe('on the keelboat, nothing through anything', () => {
+describe('on the keelboat, nothing through anything', { timeout: 20_000 }, () => {
   const {
     boat,
     boomOver,
@@ -1163,7 +1163,7 @@ describe('on the keelboat, nothing through anything', () => {
       });
     },
   );
-}, 20_000);
+});
 
 /** The capsules of a posed body in the boat's model, the head as a ball: [a, b, radius]. */
 function capsulesOf(body: CrewBody): [Vector3, Vector3, number][] {
@@ -1189,7 +1189,7 @@ function apart(a: [Vector3, Vector3, number][], b: [Vector3, Vector3, number][])
   return least;
 }
 
-describe('on the keelboat, nobody through anybody', () => {
+describe('on the keelboat, nobody through anybody', { timeout: 60_000 }, () => {
   const { boat, plan, duckFor } = keel;
   /** Two looks: a woman's and the male machine, the tallest. */
   const looks = keelLooks.filter(
@@ -1372,7 +1372,7 @@ describe('on the keelboat, nobody through anybody', () => {
       }
     },
   );
-}, 60_000);
+});
 
 // --- Aboard the tall ship ----------------------------------------------------
 

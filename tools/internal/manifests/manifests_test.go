@@ -1238,12 +1238,12 @@ func TestEachRuleFails(t *testing.T) {
 				"metadata": map[string]any{"name": "from-keel", "namespace": "monitoring"}})
 		}},
 		{"the k3s upgrade plan", inRelease(prod, "configs"), func(objs []Object) []Object {
-			spec(Find(objs, "Plan", "k3s-server"))["version"] = "v1.36.6+k3s1"
+			spec(Find(objs, "Plan", "k3s-server"))["version"] = "v1.37.3+k3s1"
 			return objs
 		}},
 		{"the k3s upgrade plan", inRelease(prod, "configs"), func(objs []Object) []Object {
 			u := Get(Find(objs, "Plan", "k3s-server"), "spec", "upgrade").(map[string]any)
-			u["image"] = strings.Replace(u["image"].(string), "v1.36.5-k3s1", "v1.36.4-k3s1", 1)
+			u["image"] = strings.Replace(u["image"].(string), "v1.37.2-k3s1", "v1.37.1-k3s1", 1)
 			return objs
 		}},
 		{"the k3s upgrade plan", inRelease(prod, "configs"), func(objs []Object) []Object {

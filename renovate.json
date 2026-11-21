@@ -105,6 +105,12 @@
       "groupName": null
     },
     {
+      "description": "The YAML library stays on v3 while actionlint, a tool in go.mod, builds only against a release candidate of v4: the two share one version of v4.",
+      "matchDepNames": ["go.yaml.in/yaml/v3"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "Node follows the LTS line in .nvmrc; a new major is a deliberate change.",
       "matchDepNames": ["node"],
       "matchUpdateTypes": ["major"],

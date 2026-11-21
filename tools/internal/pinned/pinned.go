@@ -57,13 +57,13 @@ var releases = []release{
 	{"aquasecurity/kube-bench", "linux-amd64", "v0.16.0", "82dbc7e598740dc9344d41f8ad0b8210d57c4c00bdb2c5f1d8a69a2b98baddcf"},
 	{"aquasecurity/kube-bench", "linux-arm64", "v0.16.0", "64500561f5fcaa3f86fe951ed26bbfc28f7bbf3d2eac13843abfd2924955d10b"},
 
-	{"opentofu/opentofu", "darwin-arm64", "v1.13.2", "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59"},
-	{"opentofu/opentofu", "linux-amd64", "v1.13.2", "ac05d9952662c7db28dd57e93f0a68018837bfdf9342384ec0987977c16a9645"},
-	{"opentofu/opentofu", "linux-arm64", "v1.13.2", "88e2d9e3f94f97b76ab2faf55ade87578f56aed19c5e45fa139d70e994366d1f"},
+	{"opentofu/opentofu", "darwin-arm64", "v1.13.9", "496f4c3064b5c3bff79174b3dae4faaf65a66774eb8e2bf074f895412c5f124f"},
+	{"opentofu/opentofu", "linux-amd64", "v1.13.9", "b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857"},
+	{"opentofu/opentofu", "linux-arm64", "v1.13.9", "5dc196dde75b667e4806d358310ec96742774cd0993c54c1237efee5644b69b8"},
 
-	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.155.0", "30c316c0bfb840962a8b878a451acf6dcdae50294543b3a829d54ca0bb6674e1"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.155.0", "b6181fc16cf19835706ea5d67215eea56c1fe87350fdfd82a5ff803ea2c1a907"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.155.0", "45fa04b8d616dd644c33c00698f22bbe67f9402bc474a1e6df8025f7e649d78f"},
+	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.156.0", "b3d27efed825007a72b49faf6e87e9edad60750f34638e4c12218241d4253b6a"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.156.0", "d71f7f00e07782531000620ec6c2a9d7ec83324f364dd1f36095ab378b5fb43b"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.156.0", "1a8e4ed55df2a59d5cd03056213f50d293d4fab029e38dd960597362d92cf176"},
 
 	{"zeux/meshoptimizer", "darwin-arm64", "v1.3", "1002fe6a437aa005eca541502c27b8d2b184f91f4ad0c6d282e3614a1e35e75a"},
 }
