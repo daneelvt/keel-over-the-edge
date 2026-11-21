@@ -35,10 +35,14 @@ func wayWords(way uint8) string {
 	return ""
 }
 
-// certifiedWords are an event of a sailor's certificates: "Toward Helm:
-// The Triangle, bronze ✓ by hand · 3 of 4"; a run nearer a venture,
-// "Toward Helm: The Triangle, bronze, the autopilot way · 1 of 2 runs";
-// and "You earned Helm, by hand: the beach cat is yours to take."
+// certifiedWords are an event of a sailor's certificates: a task done,
+// "A task done toward Helm: A night at sea. 3 of the 4 tasks it needs, 1
+// to go: Helm is not earned yet"; a run nearer a venture, "A run toward
+// Helm's task The Reach, bronze, the autopilot way: 1 of the 2 runs it
+// asks. The task is not done yet, and Helm is not earned"; and "You
+// earned Helm, by hand: the beach cat is yours to take." A task done
+// never reads as a certificate held: each says in words that it is not
+// earned, with no tick beside the certificate's name.
 func certifiedWords(cat *catalog.Catalog, c *bus.Certified) string {
 	if cat == nil || int(c.Certificate) < 0 || int(c.Certificate) >= len(cat.Certificates) {
 		return "a certificate's task done"
@@ -48,13 +52,18 @@ func certifiedWords(cat *catalog.Catalog, c *bus.Certified) string {
 	t := int(c.Task)
 	switch {
 	case t >= 0 && t < len(ct.Tasks) && c.RunsOf > 0:
-		parts = append(parts, fmt.Sprintf("Toward %s: %s, the autopilot way · %d of %d runs", ct.Name, ct.Tasks[t].Name, c.Runs, c.RunsOf))
+		parts = append(parts, fmt.Sprintf("A run toward %s's task %s, the autopilot way: %d of the %d runs it asks. The task is not done yet, and %s is not earned",
+			ct.Name, ct.Tasks[t].Name, c.Runs, c.RunsOf, ct.Name))
 	case t >= 0 && t < len(ct.Tasks):
-		task := ct.Tasks[t].Name + " ✓"
+		task := ct.Tasks[t].Name
 		if w := wayWords(c.Way); w != "" {
-			task += " " + w
+			task += " (" + w + ")"
 		}
-		parts = append(parts, fmt.Sprintf("Toward %s: %s · %d of %d", ct.Name, task, c.Done, c.Of))
+		done := fmt.Sprintf("A task done toward %s: %s. %d of the %d tasks it needs", ct.Name, task, c.Done, c.Of)
+		if left := int(c.Of) - int(c.Done); !c.Earned && left > 0 {
+			done += fmt.Sprintf(", %d to go: %s is not earned yet", left, ct.Name)
+		}
+		parts = append(parts, done)
 	}
 	if c.Earned {
 		earned := "You earned " + ct.Name
@@ -103,14 +112,14 @@ func standingOf(ctx context.Context, s *Sea, account store.AccountID) (certs.Sta
 }
 
 // towardLine is the line going to sea tells of a sailor's next
-// certificate: "Toward Helm: 2 of the 4 tasks it needs (news with log
-// lists them)."; "" for none.
+// certificate: "Helm is not earned yet: 2 of the 4 tasks it needs are
+// done (news with log lists them)."; "" for none.
 func towardLine(ctx context.Context, s *Sea, account store.AccountID) string {
 	st, ok := standingOf(ctx, s, account)
 	if !ok || st.Next < 0 {
 		return ""
 	}
-	return fmt.Sprintf("Toward %s: %d of the %d tasks it needs (news with log lists them).", st.Name, min(st.Done, st.Needs), st.Needs)
+	return fmt.Sprintf("%s is not earned yet: %d of the %d tasks it needs are done (news with log lists them).", st.Name, min(st.Done, st.Needs), st.Needs)
 }
 
 // smallCounts are small counts in words.

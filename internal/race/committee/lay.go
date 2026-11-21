@@ -155,8 +155,8 @@ func layBuoy(a *Area, k Kind, triangle bool, target, speed, from float64, n int)
 	return c
 }
 
-// layReach lays a reach in area a for boats k, n of them, in a wind of
-// speed from from.
+// layReach lays a reach in area a for a boat k, in a wind of speed from
+// from: a reach is sailed alone, so its line is the shortest.
 func layReach(a *Area, k Kind, speed, from float64) *bus.RaceCourse {
 	us, uc := physics.SinCos(from)
 	// u is up the wind, r to starboard looking up it: out to the mark. A

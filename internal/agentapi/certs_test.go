@@ -29,15 +29,25 @@ func TestCertificateWords(t *testing.T) {
 	}
 	first := &cat.Certificates[0]
 	got := certifiedWords(cat, &bus.Certified{Certificate: 0, Task: 0, Done: 1, Of: 3, Way: bus.CertHand})
-	if want := "Toward " + first.Name + ": " + first.Tasks[0].Name + " ✓ by hand · 1 of 3"; got != want {
+	if want := "A task done toward " + first.Name + ": " + first.Tasks[0].Name + " (by hand). 1 of the 3 tasks it needs, 2 to go: " + first.Name +
+		" is not earned yet"; got != want {
 		t.Errorf("a task done: %q, want %q", got, want)
 	}
+	// Nothing short of the earning can be read as the certificate held:
+	// no tick, and "not earned" in words.
+	for _, c := range []bus.Certified{{Certificate: 0, Task: 1, Done: 1, Of: 3, Way: bus.CertLog}, {Certificate: 0, Task: 1, Done: 2, Of: 3, Way: bus.CertLog},
+		{Certificate: 0, Task: 0, Done: 0, Of: 3, Way: bus.CertPilot, Runs: 1, RunsOf: 2}} {
+		if w := certifiedWords(cat, &c); strings.Contains(w, "✓") || strings.Contains(w, "earned "+first.Name) || !strings.Contains(w, first.Name+" is not earned") {
+			t.Errorf("a task or a run short of %s reads as %q", first.Name, w)
+		}
+	}
 	got = certifiedWords(cat, &bus.Certified{Certificate: 0, Task: 0, Done: 1, Of: 3, Way: bus.CertPilot, Runs: 1, RunsOf: 2})
-	if want := "Toward " + first.Name + ": " + first.Tasks[0].Name + ", the autopilot way · 1 of 2 runs"; got != want {
+	if want := "A run toward " + first.Name + "'s task " + first.Tasks[0].Name + ", the autopilot way: 1 of the 2 runs it asks. The task is not done yet, and " +
+		first.Name + " is not earned"; got != want {
 		t.Errorf("a run nearer a venture: %q, want %q", got, want)
 	}
 	got = certifiedWords(cat, &bus.Certified{Certificate: 0, Task: 2, Done: 3, Of: 3, Earned: true, ByHand: true})
-	if !strings.Contains(got, "You earned "+first.Name+", by hand: the ") || !strings.Contains(got, "yours to take") {
+	if !strings.Contains(got, "You earned "+first.Name+", by hand: the ") || !strings.Contains(got, "yours to take") || strings.Contains(got, "not earned") {
 		t.Errorf("a certificate earned: %q", got)
 	}
 	st := certs.Standing{Held: -1, Next: 0, Name: first.Name, Needs: 3, Done: 1, Tasks: []certs.Task{
