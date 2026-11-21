@@ -8,7 +8,7 @@
   check_mode: false
 
 - name: Serve the list, when what is served differs from it
-  when: (access_serving | default('', true)).splitlines() | sort != (access_to_serve | default('', true)).splitlines() | sort
+  when: access_serving != access_to_serve
   block:
     - name: Stop serving everything
       ansible.builtin.command:

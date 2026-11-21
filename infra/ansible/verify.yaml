@@ -327,8 +327,8 @@
       vars:
         access_serve: "{{ verify_tailnet.results[0] }}"
       ansible.builtin.assert:
-        that: (access_serving | default('', true)).splitlines() | sort == (access_to_serve | default('', true)).splitlines() | sort
-        fail_msg: "{{ access_serving | default('nothing', true) }}"
+        that: access_serving == access_to_serve
+        fail_msg: "{{ access_serving | join(', ') | default('nothing', true) }}"
         quiet: true
       when: not (machine_runner | default(false))
 
