@@ -550,9 +550,32 @@ func TestForwards(t *testing.T) {
 	// world page: never the database.
 	const worldPage = "keel-internal-forward"
 	for _, f := range Forwards {
-		if f.Tailnet && f.Namespace != "monitoring" && f.Service != worldPage {
-			t.Errorf("%s/%s is routed to the tailnet: the monitoring pages and the owner's world page alone are", f.Namespace, f.Service)
+		if (f.Tailnet || f.Serve != 0) && f.Namespace != "monitoring" && f.Service != worldPage {
+			t.Errorf("%s/%s is routed or served to the tailnet: the monitoring pages and the owner's world page alone are", f.Namespace, f.Service)
 		}
+	}
+	// The machine serves over HTTPS what Served says, and no more (the
+	// access role's list): each on a port of its own, and of keel's
+	// internal listener the world page's path alone.
+	list, _ := access["access_tailscale_serve"].([]any)
+	var serves, served []string
+	for _, e := range list {
+		m, _ := e.(map[string]any)
+		path, _ := m["path"].(string)
+		serves = append(serves, fmt.Sprintf("%v %s %v", m["port"], path, m["target"]))
+	}
+	taken := map[int]bool{}
+	for _, f := range Served() {
+		if taken[f.Serve] || (f.Path != "") != (f.Service == worldPage) {
+			t.Errorf("%s/%s is served on port %d, path %q: a port of its own, and a path for the world page alone", f.Namespace, f.Service, f.Serve, f.Path)
+		}
+		taken[f.Serve] = true
+		served = append(served, fmt.Sprintf("%d %s %s", f.Serve, f.Path, f.Target()))
+	}
+	slices.Sort(serves)
+	slices.Sort(served)
+	if len(served) == 0 || !slices.Equal(serves, served) {
+		t.Errorf("the machine serves %v, the forwards served to the tailnet are %v", serves, served)
 	}
 	// The scraper's port on keel is the metrics listener's, and no other.
 	apps := release(t, prod, "apps")
@@ -561,12 +584,17 @@ func TestForwards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The world page answers the address it is routed at, and no other:
-	// keel's KEEL_OWNER_HOST is its forward's address and port, which is
-	// the internal listener's.
+	// The world page answers where it is served and where it is routed,
+	// and no other Host: production's KEEL_OWNER_HOST is the machine's
+	// name on the tailnet with the port it is served on, and the
+	// forward's address and port, which is the internal listener's.
 	i = slices.IndexFunc(Forwards, func(f Forward) bool { return f.Service == worldPage })
-	if i < 0 || !Forwards[i].Tailnet || Forwards[i].Port != internal {
-		t.Fatalf("%s is not routed to the tailnet on the internal listener's port, %d", worldPage, internal)
+	if i < 0 || !Forwards[i].Tailnet || Forwards[i].Port != internal || Forwards[i].Serve == 0 || Forwards[i].Path != WorldPage {
+		t.Fatalf("%s is not routed to the tailnet on the internal listener's port, %d, and its world page served", worldPage, internal)
+	}
+	p, err := production.Read(filepath.Join("..", "..", "..", production.File))
+	if err != nil {
+		t.Fatal(err)
 	}
 	var host string
 	for _, o := range apps {
@@ -574,8 +602,17 @@ func TestForwards(t *testing.T) {
 			host = Str(o, "data", "KEEL_OWNER_HOST")
 		}
 	}
-	if want := fmt.Sprintf("%s:%d", Forwards[i].IP, Forwards[i].Port); host != want {
-		t.Errorf("KEEL_OWNER_HOST is %q, the world page is routed at %s", host, want)
+	if want := fmt.Sprintf("%s:%d,%s:%d", p.MagicDNS(), Forwards[i].Serve, Forwards[i].IP, Forwards[i].Port); host != want {
+		t.Errorf("KEEL_OWNER_HOST is %q, the world page is served and routed at %s", host, want)
+	}
+	// Grafana's own address in production is where the machine serves it,
+	// and its live connection is let in from there and from the tunnel.
+	g := slices.IndexFunc(Forwards, func(f Forward) bool { return f.Service == "grafana-forward" })
+	ini := Get(Find(release(t, prod, "monitoring"), "HelmRelease", "victoria-metrics-k8s-stack"), "spec", "values", "grafana", "grafana.ini")
+	at, tunnel := fmt.Sprintf("https://%s:%d", p.MagicDNS(), Forwards[g].Serve), fmt.Sprintf("http://localhost:%d", Forwards[g].Local)
+	if Str(ini, "server", "root_url") != at+"/" || Str(ini, "live", "allowed_origins") != at+","+tunnel {
+		t.Errorf("Grafana's root_url is %q and its live origins %q, it is served at %s and forwarded at %s",
+			Str(ini, "server", "root_url"), Str(ini, "live", "allowed_origins"), at, tunnel)
 	}
 	if m := containerPort(keel, "metrics"); m == 0 || m == internal || Str(Find(apps, "VMPodScrape", "keel"), "spec", "podMetricsEndpoints", 0, "port") != "metrics" {
 		t.Errorf("keel's metrics are scraped on %d, its internal listener is %d", m, internal)

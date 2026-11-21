@@ -16,3 +16,19 @@ access_tailscale_routes:
   - 10.43.0.51/32
   - 10.43.0.52/32
   - 10.43.0.54/32
+# What the machine serves to the tailnet over HTTPS, at its own name
+# there, with a certificate Tailscale fetches and renews: the same pages,
+# each on a port of its own, and of keel's internal listener the owner's
+# world page alone. The tailnet policy lets the tailnet's admins alone
+# reach each port; tools/internal/manifests' Forwards say which, and a
+# test there keeps this list the same.
+access_tailscale_serve:
+  - port: 3000
+    target: http://10.43.0.51:80
+  - port: 8428
+    target: http://10.43.0.52:8428
+  - port: 9428
+    target: http://10.43.0.50:9428
+  - port: 9090
+    path: /owner
+    target: http://10.43.0.54:9090/owner

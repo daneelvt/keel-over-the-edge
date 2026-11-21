@@ -86,11 +86,11 @@ type process struct {
 	ladder  *certs.Ladder
 	page    *api.Page
 	ownPage *api.Page
-	// ownerHost is the address the world page is routed to the owner's
-	// devices at, if any.
-	ownerHost string
-	flight    *obs.Flight
-	jobs      *jobs.Runner
+	// ownerHosts are where the world page is served to the owner's
+	// devices, if anywhere.
+	ownerHosts []string
+	flight     *obs.Flight
+	jobs       *jobs.Runner
 	// agents is sign-in for AI apps and the MCP address.
 	agents *agents
 	// hand is the owner's hand on accounts, and every deletion's.
@@ -434,7 +434,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
-		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand, host: p.ownerHost,
+		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand, hosts: p.ownerHosts,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
 		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat, logs: logs, news: h.news,
 	})

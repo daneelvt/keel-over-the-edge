@@ -346,16 +346,45 @@ type Forward struct {
 	// monitoring pages and keel's internal listener, for the owner's world
 	// page: never the database.
 	Tailnet bool
+	// Serve, if not 0, is the port of the machine's own name on the
+	// tailnet the machine serves this forward at over HTTPS (tailscale
+	// serve, set by the access role), for the tailnet's admins alone
+	// (the tailnet policy); and Path the one path served there, the
+	// whole forward if "". The monitoring pages, and of keel's internal
+	// listener the owner's world page alone: never the database.
+	Serve int
+	Path  string
+}
+
+// Target is where the machine's Tailscale sends what it serves of f: the
+// forward's address over HTTP, under the path served.
+func (f Forward) Target() string {
+	return fmt.Sprintf("http://%s:%d%s", f.IP, f.Port, f.Path)
 }
 
 // Forwards are the fixed addresses, each a Service of its own: what the
 // owner reaches from the Mac, and the journal's way to VictoriaLogs.
 var Forwards = []Forward{
-	{"monitoring", "grafana-forward", "10.43.0.51", 80, 3000, "Grafana", true},
-	{"monitoring", "vmsingle-forward", "10.43.0.52", 8428, 8428, "VictoriaMetrics' UI (vmui), with vmalert's rules and alerts", true},
-	{"monitoring", "victoria-logs", "10.43.0.50", 9428, 9428, "VictoriaLogs' UI", true},
-	{"keel", "keel-db-forward", "10.43.0.53", 5432, 15432, "the database, for psql as reader", false},
-	{"keel", "keel-internal-forward", "10.43.0.54", 9090, 9090, "keel's internal listener: the owner's world page, profiles, the flight recorder", true},
+	{"monitoring", "grafana-forward", "10.43.0.51", 80, 3000, "Grafana", true, 3000, ""},
+	{"monitoring", "vmsingle-forward", "10.43.0.52", 8428, 8428, "VictoriaMetrics' UI (vmui), with vmalert's rules and alerts", true, 8428, ""},
+	{"monitoring", "victoria-logs", "10.43.0.50", 9428, 9428, "VictoriaLogs' UI", true, 9428, ""},
+	{"keel", "keel-db-forward", "10.43.0.53", 5432, 15432, "the database, for psql as reader", false, 0, ""},
+	{"keel", "keel-internal-forward", "10.43.0.54", 9090, 9090, "keel's internal listener: the owner's world page, profiles, the flight recorder", true, 9090, WorldPage},
+}
+
+// WorldPage is the path of the owner's world page on keel's internal
+// listener: all of that listener the machine serves to the tailnet.
+const WorldPage = "/owner"
+
+// Served are the forwards the machine serves to the tailnet over HTTPS.
+func Served() []Forward {
+	var served []Forward
+	for _, f := range Forwards {
+		if f.Serve != 0 {
+			served = append(served, f)
+		}
+	}
+	return served
 }
 
 // TailnetRange is the tailnet's IPv4 range, which every device on it has

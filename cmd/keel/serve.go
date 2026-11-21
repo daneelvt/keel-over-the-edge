@@ -96,10 +96,11 @@ Configured from the environment:
                        trailing slash (default the play origin's /mcp)
   KEEL_INTERNAL_ADDR   probes, metrics, profiles and the owner's world page,
                        /owner/ (default 127.0.0.1:9090)
-  KEEL_OWNER_HOST      one more Host the owner's world page answers, beside
-                       this computer's own: the address and port it is routed
-                       to the owner's devices at, as 10.43.0.54:9090 (default
-                       none)
+  KEEL_OWNER_HOST      the Hosts the owner's world page answers, beside this
+                       computer's own: where it is served to the owner's
+                       devices, a host name or an address with its port, as
+                       keel-prod-1.tail1234.ts.net:9090; two at most,
+                       comma-separated (default none)
   KEEL_METRICS_ADDR    the metrics alone, GET /metrics, for a scraper that may
                        reach nothing else (default none)
   KEEL_LOG_LEVEL       debug, info, warn or error (default info)
@@ -507,7 +508,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		cfg: cfg, opt: opt, build: build, log: log, health: health, metrics: metrics,
 		db: db, writer: writer, lease: leaseEpoch, cat: cat, waves: waves, kinds: kinds, wcfg: wcfg,
 		sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
-		passkeys: passkeys, looks: looks, page: page, ownPage: worldPage, ownerHost: cfg.OwnerHost, flight: flight,
+		passkeys: passkeys, looks: looks, page: page, ownPage: worldPage, ownerHosts: cfg.OwnerHosts, flight: flight,
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
@@ -768,9 +769,9 @@ type ownerConfig struct {
 	agents *agents
 	// hand is the owner's hand on accounts.
 	hand *accounts.Accounts
-	// host is the address the page is routed to the owner's devices at,
-	// if any.
-	host string
+	// hosts are where the page is served to the owner's devices, if
+	// anywhere.
+	hosts []string
 	// logs are the sailors' logs, and news the world's news; nil for the
 	// next world.
 	logs owner.Logs
@@ -803,7 +804,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
-		Life: c.lifecycle, From: c.from, Hand: c.hand, Host: c.host,
+		Life: c.lifecycle, From: c.from, Hand: c.hand, Hosts: c.hosts,
 		Racing: c.db, RaceBoats: raceBoats(c.cat),
 	}
 	if c.news != nil {

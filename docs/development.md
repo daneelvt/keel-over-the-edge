@@ -4409,7 +4409,8 @@ owner's flag**.
 
 On keel's internal listener at `/owner/`, which has no route to the
 internet. From a phone, or any of the owner's devices on the tailnet,
-production's opens with no tunnel at **http://10.43.0.54:9090/owner/**
+production's opens with no tunnel at
+**https://keel-prod-1.tail2bec2e.ts.net:9090/owner/**
 (see [Opening it](#opening-it)). Or reach it through the tunnel to
 production, or a port forward on the local cluster, or keel's own address
 in the inner loop:
@@ -4458,12 +4459,14 @@ frame), `gusts.bin` (168 × 168 signed bytes, 0.1 m/s a step), `islands.json`,
 `land.png`, `coasts.svg`, `island/{n}.svg` and `point?east=…&north=…`.
 
 **The guard** (`internal/owner/guard.go`): every request whose `Host` is not
-`localhost` or a loopback address, on any port, or the one address the
-page is routed to the owner's devices at, port and all
-(`KEEL_OWNER_HOST`, `10.43.0.54:9090` in the cluster; an IP address, never
-a name), is refused, so a page the owner has open elsewhere cannot read
-the map or work a control by re-pointing a name of its own at this
-computer or at that address (DNS rebinding); a control
+`localhost` or a loopback address, on any port, or a host the page is
+served to the owner's devices at, port and all (`KEEL_OWNER_HOST`: in
+production the machine's own name on the tailnet,
+`keel-prod-1.tail2bec2e.ts.net:9090`, and its forward's address,
+`10.43.0.54:9090`), is refused, so a page the owner has open elsewhere
+cannot read the map or work a control by re-pointing a name of its own at
+this computer or at that address (DNS rebinding): such a request carries
+that page's own name, never the machine's. A control
 must also pass `net/http`'s cross-origin protection (`Sec-Fetch-Site`,
 `Origin`), be JSON and at most 4 KB. Responses carry no CORS header, forbid
 framing and a strict Content Security Policy. The probes and the metrics
@@ -5526,7 +5529,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_PASSKEY_RP_ID` | the play origin's host | The domain players' passkeys are made for (WebAuthn's relying party ID): the play origin's host or a parent of it, never an IP address. Production's is `keelovertheedge.com` |
 | `KEEL_PASSKEY_ORIGINS` | none | More origins of that domain whose pages may make and use passkeys, comma-separated: the browser tests' lagged and WebKit servers |
 | `KEEL_DATABASE_URL` | required | The database: a `postgres://` URL or `key=value` pairs, as pgx reads them. It holds the password and is never logged |
-| `KEEL_OWNER_HOST` | none | One more `Host` the owner's world page answers, beside `localhost` and the loopback addresses: the address and port it is routed to the owner's devices at, an IP address with its port (`10.43.0.54:9090` in the cluster). Unset, the page answers this computer alone (see [The world page](#the-world-page)) |
+| `KEEL_OWNER_HOST` | none | The `Host`s the owner's world page answers, beside `localhost` and the loopback addresses: where it is served to the owner's devices, each a full host name in lower case or an IP address, with its port; two at most, comma-separated (production's: `keel-prod-1.tail2bec2e.ts.net:9090,10.43.0.54:9090`). Unset, the page answers this computer alone (see [The world page](#the-world-page)) |
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
@@ -8373,13 +8376,15 @@ The policy: two tags, each owned by `autogroup:admin` (the owner; no
 person's login is in the file). `tag:ci-prod` reaches `tag:keel-prod` on
 TCP 22 alone, and logs in there as root; the owner's devices reach it on
 22 too, and log in as root after a fresh sign-in every 12 hours
-(`check`). The machine also advertises four routes, approved for it
+(`check`). The machine serves four pages over HTTPS at its own name, each
+on a port of its own (3000, 8428, 9428 and 9090), which the owner's
+devices reach and `tag:ci-prod` does not. The machine also advertises four routes, approved for it
 alone: the fixed addresses of Grafana, VictoriaMetrics' and VictoriaLogs'
 pages in the cluster, and of keel's internal listener, where the owner's
 world page is (each a /32; see [Opening it](#opening-it)). The owner's
 devices reach each on its one port, and `tag:ci-prod` none of them, nor
 the database's, which has no route. Nothing else: no rule for `*`. `go run ./tools/tailnet -check`
-keeps that shape, offline, the routes and grants the same as
+keeps that shape, offline, the served ports, the routes and their grants the same as
 `tools/internal/manifests`' `Forwards`.
 
 ### The playbook
@@ -8402,7 +8407,8 @@ infra/ansible/
                                 systemd-resolved; k3s's kernel settings; no swap
     hardening/                  the CIS benchmark, below
     access/                     Tailscale from its own repository; the
-                                owner's pages' routes; OpenSSH gone
+                                owner's pages served over HTTPS, and
+                                their routes; OpenSSH gone
     firewall/                   the table hostfw, and its unit
     updates/                    security updates every day, Tailscale's too; no reboot
     observe/                    the journal uploaded to the cluster's logs; the
@@ -9508,33 +9514,49 @@ manifests and the list the same.
 `-tunnel -print` prints the command and runs nothing.
 
 From a phone, or any of the owner's devices on the tailnet, the three
-pages and the owner's world page open with no tunnel, at their own
-addresses:
+pages and the owner's world page open with no tunnel, over HTTPS, at the
+machine's own name on the tailnet, each on a port of its own:
 
 | On the tailnet | What |
 |---|---|
-| http://10.43.0.51 | Grafana, the same sign-in |
-| http://10.43.0.52:8428 | VictoriaMetrics' own page |
-| http://10.43.0.50:9428 | VictoriaLogs' own page |
-| http://10.43.0.54:9090/owner/ | The owner's world page and its controls (see [The owner's tools](#the-owners-tools)); the rest of keel's internal listener is on the same port |
+| https://keel-prod-1.tail2bec2e.ts.net:3000/ | Grafana, the same sign-in |
+| https://keel-prod-1.tail2bec2e.ts.net:8428/vmui/ | VictoriaMetrics' own page |
+| https://keel-prod-1.tail2bec2e.ts.net:9428/select/vmui/ | VictoriaLogs' own page |
+| https://keel-prod-1.tail2bec2e.ts.net:9090/owner/ | The owner's world page and its controls (see [The owner's tools](#the-owners-tools)), and nothing else of keel's internal listener: the profiles and the input log stay behind the tunnel |
 
-The machine advertises them as routes (the access role,
+The machine's own Tailscale serves them (`tailscale serve`, set by the
+access role from `access_tailscale_serve`; `tailscale serve status` on the
+machine lists them): it ends the TLS with a Let's Encrypt certificate for
+the machine's name, which it fetches and renews by itself (the tailnet's
+HTTPS certificates, enabled once by hand), and passes each request on to
+the page's fixed address from the machine, as the tunnel does. It listens
+to the tailnet alone, and the tailnet policy lets the tailnet's admins
+alone reach each port. A browser that refuses plain HTTP, as a phone's
+may, opens these. The name is answered by the tailnet's own DNS: a phone
+whose Private DNS names a provider does not ask it, so that setting is
+automatic or off. `verify.yaml` checks what is served is the list, and
+fetches a page through it with its certificate checked.
+
+The same four also answer over plain HTTP at their fixed addresses
+(`http://10.43.0.51`, `http://10.43.0.52:8428`, `http://10.43.0.50:9428`,
+`http://10.43.0.54:9090/owner/`, where the rest of keel's internal
+listener is too), for a device that uses the tailnet's subnets:
+the machine advertises them as routes (the access role,
 `access_tailscale_routes`), the tailnet policy approves them and lets the
 tailnet's admins alone reach them, each on its port, and each page's
 NetworkPolicy lets the tailnet's range (100.64.0.0/10) in on that port:
 the packets still come from the device's tailnet address when the
 cluster's policies see them, as Tailscale masquerades only afterwards.
-The device must use the tailnet's subnets (Tailscale's app on Android and
-iOS does by default; on a Mac, its "Use Tailscale subnets"). The database
-stays behind the tunnel.
+The database stays behind the tunnel.
 
 The world page has no sign-in of its own: who may work its controls is
 who the tailnet policy lets reach that address, the tailnet's admins,
 which is the owner. Through the tunnel that took a Tailscale sign-in
-within the last 12 hours (SSH's `check`); routed, a device of the owner's
-on the tailnet is enough, so such a device is kept locked. The page
-answers that address as its `Host` and no other (keel's `KEEL_OWNER_HOST`,
-which `TestForwards` keeps the forward's address), so its guard still
+within the last 12 hours (SSH's `check`); served or routed, a device of
+the owner's on the tailnet is enough, so such a device is kept locked. The
+page answers the machine's name and that address as its `Host`, each with
+its port, and no other (keel's `KEEL_OWNER_HOST`, which `TestForwards`
+keeps the served name and the forward's address), so its guard still
 refuses a name re-pointed there.
 
 ### The dashboards
@@ -10866,7 +10888,7 @@ keel's own count of new sailors groups by /56, where it matters.
 |---|---|---|
 | Traffic floods | Cloudflare in front; no inbound web port, the tunnel alone | online "a PUT is blocked at the edge", "another host is not served", "one address is limited…"; verify "Check the firewall drops what is not let in, and lets the tailnet in" |
 | Finding and attacking the machine | its address in no DNS record; no open port: web traffic by the tunnel, administration over Tailscale | verify "Check the firewall drops…"; the tailnet policy (`go run ./tools/tailnet -check`, `TestRepositoryPolicyKeepsItsRules`); `TestCloseOpenSSHOnlyFromTheTailnet`; rule "no address range but the internet" |
-| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants the machine's port 22 alone (and the owner's devices the three monitoring pages' and the world page's routes, each on its port), its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
+| Reaching the Kubernetes API or the kubelet | the firewall; the tailnet grants the machine's port 22 alone (and the owner's devices the three monitoring pages and the world page, each on the one port the machine serves it at, and on its route's), its own tests denying 6443 and 10250 | the tailnet policy's tests (run by Tailscale on every apply, and by `tools/tailnet -check`) |
 | A node port or host port | ServiceLB off; no NodePort service; the forward chain drops new connections from outside | rules "nothing exposed on production's node", "fixed addresses for the forwards alone"; `TestProductionTraefik`; verify "Check the firewall drops…" |
 | Secrets in the repository or GitHub | none kept there: Infisical and Tailscale reached with GitHub's short-lived tokens, External Secrets brings the rest | rules "no Secret in the manifests", "production's Secrets from Infisical", "every Secret a workload needs is made"; `TestNoSecretInInfra`; gitleaks (`pr.secrets`); push protection (`tools/github -check`); `TestPlanGivesTheCredentialsOnlyToTofu`, `TestPlanShowsNoValue` |
 | A stolen GitHub session changing production | production's jobs in the `production` environment, approved by the owner, `main` only; Infisical and Tailscale trust that environment's identity alone | `TestLoadRepositorySettings`, `TestEnvironmentDrift`; `TestPromoteRefuses`. The identities' bindings are set by hand (infra/MANUAL-STEPS.md) |
