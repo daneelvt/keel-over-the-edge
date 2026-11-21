@@ -2995,7 +2995,7 @@ for (const text of TEXT_SIZES) {
   });
 }
 
-test('a link’s parts on the player’s own panel fit every screen: a refused link’s words and ☆ Follow at its head, Set sail in view, the share within reach', async ({
+test('a refused link on the player’s own panel fits every screen: its words and ☆ Follow at its head, Set sail in view, and no link to share', async ({
   page,
 }) => {
   test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
@@ -3056,22 +3056,10 @@ test('a link’s parts on the player’s own panel fit every screen: a refused l
         found.push(`${s.name}: ${k} is out of view (${JSON.stringify(b)})`);
       }
     }
-    // The share and Make a new link within the screen's width, in view as the panel scrolls to them.
-    for (const name of ['Share a link to watch me', 'Make a new link']) {
-      const key = page.getByRole('button', { name, exact: true });
-      await key.scrollIntoViewIfNeeded();
-      const b = await key.boundingBox();
-      if (
-        b === null ||
-        b.y < -0.5 ||
-        b.y + b.height > s.height + 0.5 ||
-        b.x + b.width > s.width + 0.5
-      ) {
-        found.push(`${s.name}: ${name} is out of reach (${JSON.stringify(b)})`);
-      } else if (b.height < 39.5) {
-        found.push(`${s.name}: ${name} is ${b.height} px tall`);
-      }
-    }
+    // No link to share on it: Invite friends' at sea.
+    await expect(page.locator('.your-sailor').getByRole('button', { name: /link/i })).toHaveCount(
+      0,
+    );
   }
   expect(found).toEqual([]);
 });
@@ -4839,4 +4827,548 @@ test('a race’s replay on the chart: its head under the strip and its time at t
     await alone.getByRole('button', { name: 'Close' }).click();
   }
   expect(found).toEqual([]);
+});
+
+/** The start screen's sizes: a small phone either way, and a desktop. */
+const START_SIZES = [
+  { name: 'small Android phone upright', width: 360, height: 640 },
+  { name: 'small Android phone sideways', width: 640, height: 360 },
+  { name: 'a desktop', width: 1280, height: 800 },
+] as const;
+
+/**
+ * The account's machine sailors as GET /api/machines lists them, n of them
+ * in turn at sea (a crowd watching, its boat named), ashore, never
+ * connected and stopped, under a cap of cap.
+ */
+function machinesPage(n: number, cap: number) {
+  const now = Date.now();
+  const look = {
+    version: data.machine.versions[0]?.id ?? '',
+    finish: data.machine.finishes[0]?.id ?? '',
+    colour: data.sailorOptions.colours[0]?.id ?? '',
+    words: 'Machine',
+    srgb: '#b5532a',
+  };
+  const app = {
+    id: 'g',
+    name: 'Claude',
+    returnHost: 'claude.ai',
+    approved: now - 86_400_000,
+    lastUsed: now,
+    ends: now + 30 * 86_400_000,
+  };
+  const states = [
+    { name: 'Iron Mary', atSea: true, watchers: 1200, apps: [app] },
+    { name: LONG, atSea: false, apps: [app] },
+    { name: 'Rover', atSea: false, apps: [] },
+    { name: 'Brass Polly', atSea: false, apps: [], stopped: now - 2 * 86_400_000 },
+  ];
+  return {
+    mcp: 'http://localhost/mcp',
+    cap,
+    fleet: {},
+    looks: { ...data.machine, colours: data.sailorOptions.colours },
+    confirmedUntil: 0,
+    fleetCode: 'abcdefgh23',
+    machines: Array.from({ length: n }, (_, i) => ({
+      id: `0000000000000000000000000000000${i}`,
+      token: null,
+      look,
+      watchCode: 'k3x7q2mbwa',
+      ...(states[i % states.length] ?? states[0]),
+      ...(i >= states.length ? { name: `Cog ${i}` } : {}),
+    })),
+  };
+}
+
+// The start screen with AI sailors, one, two and as many as the account
+// may have, on a small phone held either way and a desktop: no word of a
+// link anywhere on it; each AI sailor's row a grid of its portrait, its
+// name and one line, and no more than one key and Log, every key a 44 px
+// touch within the screen's width; and no key's box over a line of words.
+test('the start screen holds no link, and each AI sailor one key in a row no words wrap round, at three sizes', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(150_000);
+  const o = data.sailorOptions;
+  let shown = machinesPage(1, 3);
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (r) =>
+      r.fulfill({
+        json: {
+          name: LONG,
+          look: data.sailors[0]?.id,
+          version: data.sailors[0]?.versions[0]?.id,
+          skin: o.skins[0]?.id,
+          hair: o.hairs[0]?.id,
+          colour: o.colours[0]?.id,
+          lookChosen: true,
+          kind: data.boats[0]?.id,
+          spectators: 'no',
+          atSea: false,
+          machines: shown.machines.length,
+          watchCode: 'k3x7q2mbwa',
+          fleetCode: 'abcdefgh23',
+        },
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/fleet',
+    (r) => r.fulfill({ json: longFleet() }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/machines',
+    (r) => r.fulfill({ json: shown }),
+  );
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const found: string[] = [];
+  for (const [n, cap] of [
+    [1, 3],
+    [2, 3],
+    [6, 6],
+  ] as const) {
+    shown = machinesPage(n, cap);
+    await page.setViewportSize({ width: START_SIZES[0].width, height: START_SIZES[0].height });
+    await page.goto(GAME);
+    await expect(page.locator('.ai-panel .machine-row')).toHaveCount(n, { timeout: 90_000 });
+    for (const s of START_SIZES) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width: s.width, height: s.height },
+      );
+      await page.waitForTimeout(100);
+      const where = `${s.name}, ${n} AI sailor${n === 1 ? '' : 's'}`;
+      const faults = await page.evaluate(() => {
+        const out: string[] = [];
+        const start = document.querySelector<HTMLElement>('.start');
+        if (start === null) {
+          return ['no start screen'];
+        }
+        if (/link/i.test(start.innerText)) {
+          out.push(
+            `the word “link” on the start screen: ${start.innerText.match(/.*link.*/i)?.[0]}`,
+          );
+        }
+        for (const b of start.querySelectorAll('button')) {
+          const n = b.getAttribute('aria-label') ?? '';
+          if (/link/i.test(n)) {
+            out.push(`a key named “${n}”`);
+          }
+        }
+        const covers = (a: DOMRect, b: DOMRect) =>
+          Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+        // Every line of words not in a key, as its boxes.
+        const lines: { text: string; r: DOMRect }[] = [];
+        const walk = document.createTreeWalker(start, NodeFilter.SHOW_TEXT);
+        for (let t = walk.nextNode(); t !== null; t = walk.nextNode()) {
+          if ((t.textContent ?? '').trim() === '' || t.parentElement?.closest('button') != null) {
+            continue;
+          }
+          const range = document.createRange();
+          range.selectNodeContents(t);
+          for (const r of range.getClientRects()) {
+            lines.push({ text: (t.textContent ?? '').trim(), r });
+          }
+        }
+        const keys = [...start.querySelectorAll('button')].filter((b) => b.offsetParent !== null);
+        for (const k of keys) {
+          const r = k.getBoundingClientRect();
+          for (const l of lines) {
+            if (covers(r, l.r)) {
+              out.push(`“${k.textContent}” stands over the words “${l.text}”`);
+            }
+          }
+          if (r.right > innerWidth + 0.5 || r.left < -0.5) {
+            out.push(`“${k.textContent}” runs off the screen`);
+          }
+          if (r.height < 43.5) {
+            out.push(`“${k.textContent}” is ${Math.round(r.height)} px tall`);
+          }
+        }
+        for (const row of document.querySelectorAll<HTMLElement>('.ai-panel .machine-row')) {
+          const name = row.dataset.machine ?? '';
+          if (getComputedStyle(row).display !== 'grid') {
+            out.push(`${name}: its row is not a grid`);
+          }
+          const rowKeys = [...row.querySelectorAll('button')].map((b) => b.textContent ?? '');
+          if (rowKeys.length > 2 || rowKeys[rowKeys.length - 1] !== 'Log') {
+            out.push(`${name}: its keys are ${JSON.stringify(rowKeys)}`);
+          }
+          const parts = ['.machine-row-picture', '.machine-row-words', '.machine-row-keys'].map(
+            (p) => row.querySelector(p)?.getBoundingClientRect(),
+          );
+          for (let i = 0; i < parts.length; i++) {
+            for (let j = i + 1; j < parts.length; j++) {
+              const a = parts[i];
+              const b = parts[j];
+              if (a === undefined || b === undefined) {
+                out.push(`${name}: a part is missing`);
+              } else if (covers(a, b)) {
+                out.push(`${name}: its parts ${i} and ${j} overlap`);
+              }
+            }
+          }
+          if (row.querySelectorAll('.machine-row-line').length !== 1) {
+            out.push(`${name}: not one line`);
+          }
+        }
+        return out;
+      });
+      for (const f of faults) {
+        found.push(`${where}: ${f}`);
+      }
+      // Set sail in view as the screen opens.
+      await page.locator('.your-sailor').evaluate((e) => e.scrollTo(0, 0));
+      const go = await page.locator('.your-sailor-go').boundingBox();
+      if (go === null || go.y < -0.5 || go.y + go.height > s.height + 0.5) {
+        found.push(`${where}: Set sail is out of view (${JSON.stringify(go)})`);
+      }
+      await test.info().attach(`${where}.png`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      });
+    }
+    // Make another while the account may, and not at its cap.
+    await expect(page.getByRole('button', { name: 'Make another', exact: true })).toHaveCount(
+      n < cap ? 1 : 0,
+    );
+  }
+  expect(found).toEqual([]);
+});
+
+// The watch plate with how many watch, at a small phone upright: a long
+// name shortens and the count stays whole, at 1, 12 and 1,200, the plate
+// one row; and the plate's label says both whole.
+test('the watch plate’s count stays whole after a long name, the name shortening, on a small phone', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the plate is the same on either back end');
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  const found: string[] = [];
+  for (const machine of [false, true]) {
+    for (const [n, words] of [
+      [1, '1 watching'],
+      [12, '12 watching'],
+      [1200, '1,200 watching'],
+    ] as const) {
+      await page.evaluate(
+        ({ name, machine, n }) => globalThis.keel.watchPlate(name, machine, false, false, n),
+        { name: LONG, machine, n },
+      );
+      const plate = page.locator('.watch-plate');
+      await expect(plate).toHaveAttribute('aria-label', `Watching ${LONG}, ${words}`);
+      const f = await page.evaluate((words) => {
+        const out: string[] = [];
+        const p = document.querySelector('.watch-plate')?.getBoundingClientRect();
+        const count = document.querySelector<HTMLElement>('.watch-plate-count');
+        const name = document.querySelector<HTMLElement>('.watch-plate-name strong');
+        if (p === undefined || count === null || name === null) {
+          return ['no plate, count or name'];
+        }
+        if (p.height > 56) {
+          out.push(`the plate is ${p.height} px tall`);
+        }
+        const c = count.getBoundingClientRect();
+        if (count.textContent !== ` · ${words}` || count.scrollWidth > c.width + 0.5) {
+          out.push(`the count reads “${count.textContent}”, ${count.scrollWidth} in ${c.width}`);
+        }
+        if (c.width < 1 || c.right > p.right + 0.5 || c.left < p.left - 0.5) {
+          out.push(
+            `the count is not on the plate (${Math.round(c.left)} to ${Math.round(c.right)})`,
+          );
+        }
+        if (name.scrollWidth <= name.clientWidth) {
+          out.push('the long name is not shortened');
+        }
+        const words2 = document.querySelector('.watch-plate-words')?.getBoundingClientRect();
+        for (const b of document.querySelectorAll('.watch-plate button')) {
+          const r = b.getBoundingClientRect();
+          if (
+            words2 !== undefined &&
+            Math.min(r.right, words2.right) - Math.max(r.left, words2.left) > 0.5
+          ) {
+            out.push(`“${b.textContent}” stands over the words`);
+          }
+        }
+        return out;
+      }, words);
+      for (const x of f) {
+        found.push(`${machine ? 'a machine sailor' : 'a player'}, ${n}: ${x}`);
+      }
+    }
+    await test.info().attach(`the plate, ${machine ? 'a machine sailor' : 'a player'}.png`, {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+  }
+  await page.evaluate(() => globalThis.keel.watchPlate(null));
+  expect(found).toEqual([]);
+});
+
+/** The routes Invite friends asks while watching the player's own AI sailor, as a player who has answered asks or not. */
+async function standInInvite(
+  page: Page,
+  me: { born: boolean; rules: boolean },
+): Promise<{ asked: string[] }> {
+  const asked: string[] = [];
+  const state = { ...me };
+  const expires = new Date(Date.now() + 24 * 3_600_000).toISOString();
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (r) => r.fulfill({ json: { name: 'Ann Bonny', born: state.born, rules: state.rules } }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/watch/sailor',
+    (r) => r.fulfill({ json: { name: LONG, machine: true, code: 'k3x7q2mbwa' } }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/me/rules',
+    (r) => {
+      asked.push('rules');
+      state.rules = true;
+      return r.fulfill({ status: 204 });
+    },
+  );
+  await page.route(
+    (url) => url.pathname === '/api/me/born',
+    (r) => {
+      const b = JSON.parse(r.request().postData() ?? '{}') as { year?: number };
+      asked.push(`born ${b.year}`);
+      if ((b.year ?? 0) > new Date().getFullYear() - 13) {
+        return r.fulfill({ status: 403, json: { error: 'young' } });
+      }
+      state.born = true;
+      return r.fulfill({ status: 204 });
+    },
+  );
+  await page.route(
+    (url) => url.pathname === '/api/sail/link',
+    (r) => {
+      if (r.request().method() === 'GET') {
+        return r.fulfill({ json: { live: false } });
+      }
+      asked.push(`link ${r.request().postData()}`);
+      if (!state.born) {
+        return r.fulfill({ status: 403, json: { error: 'born' } });
+      }
+      if (!state.rules) {
+        return r.fulfill({ status: 403, json: { error: 'rules' } });
+      }
+      return r.fulfill({
+        status: 201,
+        json: { url: 'http://localhost/?s=abcdefghijklmnop', expires },
+      });
+    },
+  );
+  await page.route(
+    (url) => url.pathname === '/api/sail/ashore',
+    (r) => {
+      asked.push(`ashore ${r.request().postData()}`);
+      return r.fulfill({ status: 204 });
+    },
+  );
+  return { asked };
+}
+
+// Invite friends while watching the player's own AI sailor: its two parts,
+// to watch it and to sail with it, each its line and its keys, fit every
+// screen, keys a 44 px touch. Get a link with the Rules not yet accepted
+// opens their card, which says what they are; I'll keep to them makes the
+// link at once. The age question first where it is not answered; an
+// under-age answer gets no link; Cancel goes back with nothing made. Call
+// ashore while it is crew aboard another's boat. No sailing: the screen's
+// parts from a scene and the server's answers stood in for.
+test('Invite friends while watching the player’s own AI sailor: its two links, the Rules asked where they are needed, on every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(150_000);
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const server = await standInInvite(page, { born: true, rules: false });
+  await openScene(page, '', true);
+  const sheet = page.locator('.menu-page.invite');
+  const open = async (scene: string) => {
+    await page.evaluate(() => globalThis.keel.deckScene(null));
+    await page.evaluate(
+      (name) => globalThis.keel.deckScene(name as 'invite-machine', 'Lady Pollux'),
+      scene,
+    );
+    await expect(sheet.locator('[data-part=sail-machine] .deck-keys').first()).toBeVisible();
+  };
+  await open('invite-machine');
+  const found: string[] = [];
+  for (const s of [...START_SIZES, SCREENS[0], SCREENS[4]]) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await expect(sheet.getByRole('heading', { name: 'Watch Lady Pollux sail' })).toBeVisible();
+    await expect(sheet.getByRole('heading', { name: 'Sail with Lady Pollux' })).toBeVisible();
+    const f = await page.evaluate(() => {
+      const out: string[] = [];
+      const p = document.querySelector('.menu-page.invite');
+      if (p === null) {
+        return ['no Invite friends'];
+      }
+      const box = p.getBoundingClientRect();
+      if (
+        box.left < -0.5 ||
+        box.right > innerWidth + 0.5 ||
+        box.top < -0.5 ||
+        box.bottom > innerHeight + 0.5
+      ) {
+        out.push('the page is off the screen');
+      }
+      for (const b of p.querySelectorAll('.invite-part button')) {
+        const r = b.getBoundingClientRect();
+        // The instruments' height, 38 px on a small phone, its reach 3 px
+        // beyond its face above and below: 44 px a touch.
+        const reach = Number.parseFloat(getComputedStyle(b, '::after').top) || 0;
+        if (r.width < 43.5 || r.height < 37.5 || r.height - 2 * reach < 43.5) {
+          out.push(`“${b.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)}`);
+        }
+        if (r.right > box.right + 0.5) {
+          out.push(`“${b.textContent}” runs out of the page`);
+        }
+      }
+      return out;
+    });
+    for (const x of f) {
+      found.push(`${s.name}: ${x}`);
+    }
+    await test.info().attach(`Invite friends, ${s.name}.png`, {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+  }
+  expect(found).toEqual([]);
+  await page.setViewportSize({ width: 360, height: 640 });
+  // The link to watch it: its line, the link, Copy.
+  const watching = sheet.locator('[data-part=watch-machine]');
+  await expect(watching).toContainText('Whoever opens the link can watch Lady Pollux sail.');
+  await expect(watching.locator('.deck-url')).toHaveValue(/\?w=k3x7q2mbwa$/);
+  await expect(watching.getByRole('button', { name: 'Copy', exact: true })).toBeVisible();
+  // To sail with it: what it does, Get a link; the Rules' card, then the link.
+  const sail = sheet.locator('[data-part=sail-machine]');
+  await expect(sail).toContainText('Whoever opens the link can send an AI sailor of theirs aboard');
+  await expect(sail).not.toContainText('You have no link out.');
+  await sail.getByRole('button', { name: 'Get a link', exact: true }).click();
+  const card = sheet.locator('.rules-card');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(
+    'A few simple rules for sailing with others. You accept them once.',
+  );
+  await test.info().attach('the Rules’ card in Invite friends.png', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  await card.getByRole('button', { name: 'I’ll keep to them' }).click();
+  await expect(sail.locator('.deck-url')).toHaveValue('http://localhost/?s=abcdefghijklmnop');
+  await expect(sail.getByRole('button', { name: 'Copy', exact: true })).toBeVisible();
+  expect(server.asked).toEqual(['rules', 'link {"machine":"Lady Pollux"}']);
+  await expect(sheet.getByRole('button', { name: 'Call Lady Pollux ashore' })).toHaveCount(0);
+
+  // The age question first, where it is not answered; then the Rules; Cancel makes nothing.
+  await page.unrouteAll({ behavior: 'wait' });
+  const asking = await standInInvite(page, { born: false, rules: false });
+  await open('invite-machine');
+  await sail.getByRole('button', { name: 'Get a link', exact: true }).click();
+  await expect(sheet.getByRole('heading', { name: 'When were you born?' })).toBeVisible();
+  await sheet.getByRole('button', { name: 'Not now', exact: true }).click();
+  await expect(sail.getByRole('button', { name: 'Get a link', exact: true })).toBeVisible();
+  await sail.getByRole('button', { name: 'Get a link', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Month' }).selectOption({ label: 'April' });
+  await page.getByRole('combobox', { name: 'Year' }).selectOption('2001');
+  await sheet.getByRole('button', { name: 'Go on', exact: true }).click();
+  await expect(sheet.locator('.rules-card')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(sail.getByRole('button', { name: 'Get a link', exact: true })).toBeVisible();
+  expect(asking.asked).toEqual(['born 2001']);
+
+  // An under-age answer: no link, and the window's Close.
+  await page.unrouteAll({ behavior: 'wait' });
+  const young = await standInInvite(page, { born: false, rules: false });
+  await open('invite-machine');
+  await sail.getByRole('button', { name: 'Get a link', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Month' }).selectOption({ label: 'April' });
+  await page
+    .getByRole('combobox', { name: 'Year' })
+    .selectOption(String(new Date().getFullYear() - 8));
+  await sheet.getByRole('button', { name: 'Go on', exact: true }).click();
+  await expect(sheet).toContainText('Sorry, this sailor can’t sail.');
+  await expect(sheet.locator('.deck-url')).toHaveCount(1);
+  expect(young.asked.filter((a) => a.startsWith('link'))).toEqual([]);
+
+  // Crew aboard another's boat: Call ashore.
+  await page.unrouteAll({ behavior: 'wait' });
+  const aboard = await standInInvite(page, { born: true, rules: true });
+  await open('invite-machine-aboard');
+  await sheet.getByRole('button', { name: 'Call Lady Pollux ashore' }).click();
+  await expect(sheet.getByRole('button', { name: 'Call Lady Pollux ashore' })).toHaveCount(0);
+  expect(aboard.asked).toEqual(['ashore {"machine":"Lady Pollux"}']);
+  await page.evaluate(() => globalThis.keel.deckScene(null));
+});
+
+// The chart's Log tab, watching: a player's log, a machine sailor's, with
+// My log at its head, and the reader's own with the way back to theirs;
+// watching no one, the reader's own.
+test('the chart’s Log tab opens the log of the sailor watched, My log at its head, and the reader’s own watching no one', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the log is the same on either back end');
+  test.setTimeout(120_000);
+  const asked: string[] = [];
+  await standInLogs(page);
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.pathname.endsWith('/log') && !u.searchParams.has('part')) {
+      asked.push(
+        `${u.pathname}${u.searchParams.has('name') ? ` ${u.searchParams.get('name')}` : ''}`,
+      );
+    }
+  });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  const tab = page.locator('.chart-tabs').getByRole('button', { name: 'Log', exact: true });
+  const sheet = page.locator('.log-sheet');
+  for (const [who, machine] of [
+    ['Ann Bonny', false],
+    ['Lady Pollux', true],
+  ] as const) {
+    asked.length = 0;
+    await page.evaluate(({ who, machine }) => globalThis.keel.watchPlate(who, machine), {
+      who,
+      machine,
+    });
+    await page.evaluate(() => globalThis.keel.openChart('chart'));
+    await tab.click();
+    await expect(sheet).toHaveAttribute('data-log', `s:${who}`);
+    await expect(sheet.getByRole('button', { name: 'My log', exact: true })).toBeVisible();
+    await sheet.getByRole('button', { name: 'My log', exact: true }).click();
+    await expect(sheet).toHaveAttribute('data-log', 'own');
+    await sheet.getByRole('button', { name: `‹ ${who}’s log` }).click();
+    await expect(sheet).toHaveAttribute('data-log', `s:${who}`);
+    await expect
+      .poll(() => asked)
+      .toEqual([`/api/log ${who}`, '/api/me/log', `/api/log ${who}`]);
+    await page.evaluate(() => globalThis.keel.openChart(null));
+  }
+  // Watching no one: the reader's own, with no way to another.
+  await page.evaluate(() => globalThis.keel.watchPlate(null));
+  await page.evaluate(() => globalThis.keel.openChart('chart'));
+  await tab.click();
+  await expect(sheet).toHaveAttribute('data-log', 'own');
+  await expect(sheet.locator('.log-back')).toHaveCount(0);
+  await page.evaluate(() => globalThis.keel.openChart(null));
 });

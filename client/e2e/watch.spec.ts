@@ -125,7 +125,7 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(GAME);
   const row = page.locator('.machine-list li', { hasText: name });
-  await expect(row).toContainText('at sea', { timeout: 30_000 });
+  await expect(row).toContainText('At sea', { timeout: 30_000 });
   await row.getByRole('button', { name: 'Watch', exact: true }).click();
 
   // At sea, watching it: the bar, whose boat, and the cog.
@@ -431,16 +431,13 @@ test('a stranger opens a sailor’s link: refused while unticked, follows, is to
   page,
 }) => {
   test.setTimeout(240_000);
-  // The sailor shares their link from Set sail, unticked, and sails.
+  // The sailor sails, unticked; their link to share is Invite friends', at sea.
   const them = await sailor(context, 'Linked');
   await holdPasskeys(context, them.passkey);
   await page.goto(GAME);
   const yours = page.locator('.your-sailor');
   await expect(yours).toContainText(them.name, { timeout: 90_000 });
-  await expect(yours.getByRole('button', { name: 'Share a link to watch me' })).toBeVisible();
-  await expect(yours.locator('[data-readout="shown-when-watched"]')).toHaveText(
-    'Your link shows your boat only on voyages you let others watch.',
-  );
+  await expect(yours.getByRole('button', { name: /link/i })).toHaveCount(0);
   await setSail(page);
   await page.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
     timeout: 60_000,
@@ -694,7 +691,7 @@ test('a hidden tab: shown again, the boat where it is now at its true pace, unde
   await holdPasskeys(context, made.passkey);
   await page.goto(GAME);
   const row = page.locator('.machine-list li', { hasText: name });
-  await expect(row).toContainText('at sea', { timeout: 30_000 });
+  await expect(row).toContainText('At sea', { timeout: 30_000 });
   await row.getByRole('button', { name: 'Watch', exact: true }).click();
   await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 60_000 });
   await page.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, name, {

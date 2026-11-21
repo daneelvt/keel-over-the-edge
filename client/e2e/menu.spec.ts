@@ -187,7 +187,7 @@ test('every page of the menu stands in the menu’s place, its name and close at
       }
       if (p.key === 'Machine sailors') {
         // How to connect, opened under its machine sailor: the same margin.
-        await page.locator(p.sel).getByRole('button', { name: 'How to connect' }).click();
+        await page.locator(p.sel).getByRole('button', { name: 'Connect', exact: true }).click();
         await expect(page.locator(p.sel).locator('[data-mcp]')).toBeVisible();
         for (const f of await pageFaults(page, p.sel, p.title, menu)) {
           found.push(`${s.name}, How to connect: ${f}`);
@@ -248,10 +248,11 @@ test('Invite friends is the one place a link is shared: to watch me, and to sail
     watch.getByRole('checkbox', { name: 'Let others watch me sail (this voyage)' }),
   ).toBeVisible();
   await expect(watch.getByRole('button', { name: 'Share a link to watch me' })).toBeVisible();
-  // Sail with me: no link out, and one key that gets it.
+  // Sail with me: no link out, what one does, and one key that gets it.
   const with_ = sheet.locator('[data-part=sail]');
   await expect(with_.getByRole('heading', { name: 'Sail with me' })).toBeVisible();
-  await expect(with_).toContainText('You have no link out.');
+  await expect(with_).toContainText('Whoever opens your link can ask to come aboard');
+  await expect(with_).not.toContainText('You have no link out.');
   await expect(with_.getByRole('button', { name: 'Get a link', exact: true })).toBeVisible();
   await expect(with_.getByRole('checkbox', { name: /Closed to knocks/ })).toBeVisible();
   await sheet.getByRole('button', { name: 'Close this window' }).click();

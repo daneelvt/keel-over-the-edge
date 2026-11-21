@@ -45,9 +45,8 @@ async function twoPanels(page: Page, player: string, machineName: string): Promi
   await expect(yours.getByRole('checkbox', { name: 'Let others watch me sail' })).toBeVisible();
   await expect(yours).not.toContainText(machineName);
   await expect(ai.getByRole('heading', { name: 'AI sailors' })).toBeVisible();
-  await expect(ai).toContainText(
-    'Sailed by your AI apps, not by you. Anyone can watch them while they sail.',
-  );
+  await expect(ai).toContainText('Sailed by your AI apps, not by you.');
+  await expect(ai).not.toContainText(/link/i);
   await expect(ai.getByRole('checkbox')).toHaveCount(0);
   await expect(ai.locator('.machine-list li', { hasText: machineName })).toBeVisible();
   await expect(ai.locator('.start-go')).toHaveCount(0);
@@ -208,12 +207,12 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   await twoPanels(page, player, name);
   await laidOut(page, player);
   const row = page.locator('.machine-list li', { hasText: name });
-  await expect(row).toContainText('not at sea');
-  await expect(row).toContainText('No AI app approved yet');
-  await row.getByRole('button', { name: 'How to connect' }).click();
+  await expect(row).toContainText('Not at sea');
+  // No AI app sails it yet: Connect, in Watch's place, shows how.
+  await row.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(row.locator('[data-mcp]')).toBeVisible();
   // The account may have one: no other to make.
-  await expect(page.getByRole('button', { name: 'Make another machine sailor' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Make another', exact: true })).toHaveCount(0);
   // Set sail sails the player's own sailor.
   await setSail(page);
   await sailingAs(page, player, name);
