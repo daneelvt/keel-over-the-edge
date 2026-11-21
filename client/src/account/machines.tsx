@@ -52,6 +52,7 @@ import type { BoatChooser } from './boatchooser';
 import type { LookChooser } from './chooser';
 import { Cog } from './cog';
 import { Connect } from './connect';
+import { dayOf } from './day';
 import {
   boatOf,
   boatTitle,
@@ -79,7 +80,6 @@ import type { Fetch, Me } from './me';
 import { call, confirmPasskey, type Outcome, reasonOf } from './passkeys';
 import { Portrait } from './portraits';
 import { lengthProblem, machineReasonText } from './reasons';
-import { dayOf } from './recovery';
 import type { TakeOut } from './takeout';
 import { YourSailor } from './yoursailor';
 
