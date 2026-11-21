@@ -101,8 +101,9 @@ func (s *Service) Harbour(ctx context.Context, lease int64, now time.Time) (int,
 }
 
 // The Harbourmaster's standing trials, made with the world's harbour
-// races: on each buoy course a newcomer is set to sail (the short
-// windward–leeward, the short triangle and the long windward–leeward),
+// races: on each buoy course a newcomer is set to sail (the reach, the
+// short windward–leeward, the short triangle and the long
+// windward–leeward),
 // for every kind of boat that races buoy courses, and on each island
 // course open, for every kind it is offered to. Each is made once, and
 // stays open for runs the whole world long, the course laid to the wind
@@ -110,7 +111,7 @@ func (s *Service) Harbour(ctx context.Context, lease int64, now time.Time) (int,
 var standingBuoys = []struct {
 	shape string
 	long  bool
-}{{ShapeWindwardLeeward, false}, {ShapeTriangle, false}, {ShapeWindwardLeeward, true}}
+}{{ShapeReach, false}, {ShapeWindwardLeeward, false}, {ShapeTriangle, false}, {ShapeWindwardLeeward, true}}
 
 // standing makes the standing trials not yet made, fenced by the lease's
 // epoch: how many it made.

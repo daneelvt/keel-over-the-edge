@@ -214,6 +214,9 @@ func parseCourse(id string) (courseRef, bool) {
 		if _, ok := shapeNames[parts[1]]; !ok || parts[2] != "short" && parts[2] != "long" {
 			return courseRef{}, false
 		}
+		if parts[1] == ShapeReach && parts[2] != "short" {
+			return courseRef{}, false
+		}
 		return courseRef{kind: CourseBuoy, shape: parts[1], long: parts[2] == "long"}, true
 	case len(parts) == 2 && parts[0] == CourseIsland:
 		n, err := strconv.Atoi(parts[1])
@@ -239,7 +242,10 @@ func (c *Courses) island(n int) *Course {
 // its boat.
 func (s *Service) minutesOf(r *store.Race, c *Courses) int {
 	if r.CourseKind == CourseBuoy {
-		if r.Long {
+		switch {
+		case r.Shape == ShapeReach:
+			return ReachMinutes
+		case r.Long:
 			return LongMinutes
 		}
 		return ShortMinutes
@@ -316,7 +322,8 @@ func (s *Service) making(by Sailor, m Making, now time.Time, limits store.RaceSe
 	var courseName string
 	switch ref.kind {
 	case CourseBuoy:
-		if !s.inAreas(b, &courses) {
+		// The reach is the Harbourmaster's standing trial's alone.
+		if !s.inAreas(b, &courses) || ref.shape == ShapeReach {
 			return nil, refuse(RefuseCourse)
 		}
 		r.Shape, r.Long = ref.shape, ref.long

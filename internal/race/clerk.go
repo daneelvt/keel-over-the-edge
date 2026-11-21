@@ -234,7 +234,7 @@ func (c *Clerk) callOf(r *store.Race, run int32) (*bus.RaceCall, bool) {
 		return nil, false
 	}
 	call := &bus.RaceCall{ID: r.ID, Run: run, Trial: r.Kind == KindTrial, Island: r.CourseKind == CourseIsland,
-		Course: int32(r.Course), Triangle: r.Shape == ShapeTriangle, Long: r.Long, Kind: uint16(kind)}
+		Course: int32(r.Course), Triangle: r.Shape == ShapeTriangle, Across: r.Shape == ShapeReach, Long: r.Long, Kind: uint16(kind)}
 	if !call.Trial {
 		call.Start = c.cfg.TickAt(r.StartsAt)
 	}
@@ -465,6 +465,8 @@ func recordCourse(row *store.Race) string {
 	switch {
 	case row.CourseKind == CourseIsland:
 		return store.CourseIsland
+	case row.Shape == ShapeReach:
+		return store.CourseReach
 	case row.Shape == ShapeTriangle && row.Long:
 		return store.CourseLongTriangle
 	case row.Shape == ShapeTriangle:

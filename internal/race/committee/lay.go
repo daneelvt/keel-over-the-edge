@@ -23,6 +23,16 @@ import (
 // leeward gate a little above the line. Every mark is left to port; the
 // finish is the start line, crossed coming down the wind.
 //
+// A reach is a beginner's course, sailed alone: its line lies along the
+// wind, the committee boat at its downwind end, and its one mark straight
+// across the wind from the line's middle, as far to one side of the
+// area's centre as the line is to the other. The way is out to the mark,
+// round it and back over the same line, so both legs are beam reaches
+// and nobody has to tack up a beat. It is sized by the boat's polar for
+// five minutes, or to what the area holds if that is less: it is never
+// sailed twice round. The mark is left to port, and lies to the side
+// that makes the turn round it a tack, through the wind, not a gybe.
+//
 // An island course lays only its lines: the start across the wind at its
 // start's site, or across the way out if the way leaves across the wind,
 // within the site's room; the finish across the way in at its finish's
@@ -59,6 +69,9 @@ func (s *Stage) Lay(f *bus.Frame, call *bus.RaceCall, speed, from float64, n int
 	a := s.areaFor(f, call)
 	if a == nil {
 		return nil
+	}
+	if call.Across {
+		return layReach(a, k, speed, from)
 	}
 	target := float64(ShortSeconds)
 	if call.Long {
@@ -138,6 +151,51 @@ func layBuoy(a *Area, k Kind, triangle bool, target, speed, from float64, n int)
 	}
 	c.Way = append(c.Way, mid)
 	c.Checks = append(c.Checks, lineCheck(c.FinishA, c.FinishB, 1, 0))
+	finishCourse(c, k.Polar)
+	return c
+}
+
+// layReach lays a reach in area a for boats k, n of them, in a wind of
+// speed from from.
+func layReach(a *Area, k Kind, speed, from float64) *bus.RaceCourse {
+	us, uc := physics.SinCos(from)
+	// u is up the wind, r to starboard looking up it: out to the mark. A
+	// boat sailing out has the wind over her port side, and leaves the
+	// mark to port by turning up through the wind.
+	ux, uy, rx, ry := us, uc, uc, -us
+	at := func(along, across float64) [2]float64 {
+		return [2]float64{a.X + float64(along*ux) + float64(across*rx), a.Y + float64(along*uy) + float64(across*ry)}
+	}
+	l := k.Length
+	halfLine := float64(lineLength(l, 1) * 0.5)
+	// The leg the area holds: the line's ends inside it, with room behind
+	// the line for the boat placed there.
+	room := a.Radius - float64(areaBehind*l)
+	if ends := float64(a.Radius*a.Radius) - float64(halfLine*halfLine); ends > 0 {
+		room = min(room, math.Sqrt(ends))
+	}
+	most := max(float64(2*room), float64(legLeast*l))
+	leg := float64(legLeast * l)
+	if k.Polar != nil {
+		// Out and back, each across the wind.
+		if perMetre := float64(2 * k.Polar.LegTime(speed, math.Pi/2, 1)); perMetre > 0 && !math.IsInf(perMetre, 0) {
+			leg = max(ReachSeconds/perMetre, leg)
+		}
+	}
+	leg = min(leg, most)
+	half := float64(leg * 0.5)
+	mid, mark := at(0, -half), at(0, half)
+	c := &bus.RaceCourse{
+		Number: a.Number, Across: true, Laps: 1, Wind: speed, From: from,
+		X: a.X, Y: a.Y, Reach: a.Radius,
+		Committee: at(-halfLine, -half), Pin: at(halfLine, -half),
+	}
+	c.FinishA, c.FinishB = c.Pin, c.Committee
+	c.Marks = append(c.Marks, bus.RaceMark{X: mark[0], Y: mark[1], Number: 1, Side: bus.MarkPort})
+	c.Way = append(c.Way, mid, mark, mid)
+	// Out over the line from its right to its left, round the mark by a
+	// ray on from it, and home over the line the other way.
+	c.Checks = append(c.Checks, lineCheck(c.Pin, c.Committee, -1, 0), rayCheck(mark, rx, ry, -1, 1), lineCheck(c.FinishA, c.FinishB, 1, 0))
 	finishCourse(c, k.Polar)
 	return c
 }
@@ -300,8 +358,9 @@ func pointAlong(way [][2]float64, along []float64, d float64) (float64, float64)
 // Spots are where a course's boats are placed, the best first: in rows
 // behind its start line, three of the boat's lengths apart, as many to a
 // row as fit two lengths clear across the line, each facing startOffWind
-// off the wind on starboard tack, at rest. The simulation takes the first
-// clear of land, shoal water and every other boat.
+// off the wind on starboard tack, at rest; on a reach, each facing the
+// mark. The simulation takes the first clear of land, shoal water and
+// every other boat.
 func Spots(c *bus.RaceCourse, length float64) []physics.State {
 	px, py := c.Pin[0], c.Pin[1]
 	cx, cy := c.Committee[0], c.Committee[1]
@@ -313,6 +372,9 @@ func Spots(c *bus.RaceCourse, length float64) []physics.State {
 	lineLen := hypot(cx-px, cy-py)
 	across := max(int(toInt32(lineLen/float64(rowBack*length)+0.01)), 1)
 	heading := wrap(c.From - startOffWind)
+	if c.Across && len(c.Way) > 1 {
+		heading = bearing(c.Way[1][0]-c.Way[0][0], c.Way[1][1]-c.Way[0][1])
+	}
 	out := make([]physics.State, 0, rows*across)
 	for row := 1; row <= rows; row++ {
 		back := float64(float64(row*rowBack) * length)

@@ -59,6 +59,10 @@ type harnessWith struct {
 	life        func(*catalog.Catalog) *life.Schedule
 	stage       *committee.Stage
 	races       Races
+	// terrain is the world's land and edge is its lip, nil for open sea
+	// with none.
+	terrain *sim.Terrain
+	edge    *sim.Edge
 }
 
 // newHarnessWith is a harness's world made with w.
@@ -77,12 +81,15 @@ func newHarnessWith(t *testing.T, hw harnessWith) *harness {
 		ls = hw.life(cat)
 	}
 	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000, Life: ls,
-		Capacities: crewed(cat), Races: hw.stage})
+		Capacities: crewed(cat), Races: hw.stage, Terrain: hw.terrain, Edge: hw.edge})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := &Sea{Number: 1, Epoch: time.Now(), Bus: w.Bus(), Boats: cat.Boats, Limit: limit, AICap: w.AICap(), AIReserve: w.AIReserve(),
 		Timeline: tl, Waves: waves, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc, Life: ls, Races: hw.races}
+	if hw.terrain != nil {
+		s.Ground, s.Shelter = hw.terrain.Ground, hw.terrain.Shelter
+	}
 	h := &harness{core: NewCore(CoreConfig{Silence: time.Minute, Log: slog.New(slog.DiscardHandler)}), sea: s, w: w, done: make(chan struct{})}
 	w.Record(h.core.Open(s))
 	ctx, cancel := context.WithCancel(context.Background())

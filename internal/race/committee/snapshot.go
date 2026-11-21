@@ -24,7 +24,7 @@ import (
 // boat's kind as a uvarint, the ticks of its warning and start as varints,
 // its phase as a uvarint, the ticks its first boat came home, its window
 // closes and it ended as varints, then its course: a uvarint of flags (1:
-// an island course, 2: a triangle), its number as a varint, its laps as a
+// an island course, 2: a triangle, 4: a reach), its number as a varint, its laps as a
 // uvarint, its wind's speed and direction, its place and reach, the start
 // line's ends and the finish line's as floats; its marks, a uvarint n
 // then each one's place as floats and its number and side as varints;
@@ -54,6 +54,7 @@ const (
 
 	courseIsland   = 1
 	courseTriangle = 2
+	courseAcross   = 4
 
 	checkLine = 1
 
@@ -119,6 +120,9 @@ func appendCourse(dst []byte, c *bus.RaceCourse) []byte {
 	}
 	if c.Triangle {
 		flags |= courseTriangle
+	}
+	if c.Across {
+		flags |= courseAcross
 	}
 	dst = binary.AppendUvarint(dst, flags)
 	dst = binary.AppendVarint(dst, int64(c.Number))
@@ -273,7 +277,7 @@ func (r *reader) race(race *bus.Race) {
 func (r *reader) course() *bus.RaceCourse {
 	c := &bus.RaceCourse{}
 	flags := r.uvarint()
-	c.Island, c.Triangle = flags&courseIsland != 0, flags&courseTriangle != 0
+	c.Island, c.Triangle, c.Across = flags&courseIsland != 0, flags&courseTriangle != 0, flags&courseAcross != 0
 	c.Number = int32(r.varint())
 	c.Laps = int32(r.limited(math.MaxInt32))
 	for _, v := range [...]*float64{&c.Wind, &c.From, &c.X, &c.Y, &c.Reach, &c.Committee[0], &c.Committee[1], &c.Pin[0], &c.Pin[1],
@@ -302,7 +306,7 @@ func (r *reader) course() *bus.RaceCourse {
 		c.Way = append(c.Way, [2]float64{r.f64(), r.f64()})
 	}
 	c.Length, c.Expected = r.f64(), r.f64()
-	if r.err == nil && (flags&^(courseIsland|courseTriangle) != 0 || len(c.Checks) < 2 || len(c.Way) < 2) {
+	if r.err == nil && (flags&^(courseIsland|courseTriangle|courseAcross) != 0 || len(c.Checks) < 2 || len(c.Way) < 2) {
 		r.err = fmt.Errorf("committee: snapshot: a course of %d checks and flags %d", len(c.Checks), flags)
 	}
 	return c

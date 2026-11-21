@@ -25,10 +25,12 @@ type RaceCall struct {
 	// Island is an island course, Course its number in the world; or a
 	// buoy course laid in the racing area of number Course (0 for a buoy
 	// trial's: the committee chooses), a triangle or a windward–leeward,
-	// long or short.
+	// long or short, or (Across) a reach: across the wind to one mark and
+	// back.
 	Island   bool
 	Course   int32
 	Triangle bool
+	Across   bool
 	Long     bool
 	// Kind is the boat's kind, an index into the world's kinds.
 	Kind uint16
@@ -65,10 +67,12 @@ const RaceSlots = 64
 type RaceCourse struct {
 	// Island is an island course, Number its number; or a buoy course in
 	// the racing area of Number, Triangle or windward–leeward, with Laps
-	// laps.
+	// laps, or (Across) a reach: its line along the wind, its one mark
+	// straight across the wind from it.
 	Island   bool
 	Number   int32
 	Triangle bool
+	Across   bool
 	Laps     int32
 	// Wind is the mean wind it was laid to, m/s 10 m up, and From where it
 	// came from, rad clockwise from north.

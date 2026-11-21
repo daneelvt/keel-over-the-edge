@@ -39,6 +39,7 @@ const Greenhorn = "the Greenhorn Cup"
 var standingNames = map[string][2]string{
 	ShapeWindwardLeeward: {"the Harbourmaster's Short Course", "the Harbourmaster's Long Course"},
 	ShapeTriangle:        {"the Harbourmaster's Triangle", "the Harbourmaster's Long Triangle"},
+	ShapeReach:           {"the Harbourmaster's Reach", "the Harbourmaster's Reach"},
 }
 
 // StandingName is the name of the Harbourmaster's standing trial on a
@@ -104,22 +105,28 @@ var anyPace = []string{"Dash", "Race", "Scramble", "Sprint", "Chase"}
 var shapeWords = map[string]string{
 	ShapeTriangle:        "Triangle",
 	ShapeWindwardLeeward: "Sausage",
+	ShapeReach:           "Reach",
 }
 
 // shapeNames are the buoy courses' shapes as a card says them.
 var shapeNames = map[string]string{
 	ShapeTriangle:        "triangle",
 	ShapeWindwardLeeward: "windward–leeward",
+	ShapeReach:           "reach",
 }
 
-// BuoyName is a buoy course's name: "Short triangle off Port Royal"; port
-// "" leaves the place off.
+// BuoyName is a buoy course's name: "Short triangle off Port Royal", and
+// the reach's, which has one length, "Reach off Port Royal"; port ""
+// leaves the place off.
 func BuoyName(shape string, long bool, port string) string {
 	length := "Short"
 	if long {
 		length = "Long"
 	}
 	name := length + " " + shapeNames[shape]
+	if shape == ShapeReach {
+		name = "Reach"
+	}
 	if port != "" {
 		name += " off " + port
 	}

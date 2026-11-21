@@ -275,6 +275,7 @@ type RaceRecord struct {
 // The courses a race record keeps, RaceRecord.Course: a buoy course's
 // shape and length, or an island course.
 const (
+	CourseReach        = "reach"         // the reach: across the wind to one mark and back
 	CourseShort        = "short"         // the short windward–leeward
 	CourseLong         = "long"          // the long windward–leeward
 	CourseTriangle     = "triangle"      // the short triangle
