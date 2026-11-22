@@ -149,10 +149,16 @@ func (w *World) readyControlsOff(f *bus.Frame, s int32, off float64) {
 	if len(w.start) == 0 {
 		return
 	}
+	w.readyControlsWith(f, s, w.startSheetOff(f, s, off), 0)
+}
+
+// readyControlsWith is readyControls with a sheet, in a control word's
+// steps, and a reef.
+func (w *World) readyControlsWith(f *bus.Frame, s int32, sheet uint16, reef uint8) {
 	word := f.Control[s]
-	f.Control[s] = bus.Pack(word.Seq(), bus.Steps/2, w.startSheetOff(f, s, off), f.Gen[s])
+	f.Control[s] = bus.Pack(word.Seq(), bus.Steps/2, sheet, f.Gen[s])
 	f.Pilot[s] = bus.HandPilot(f.Control[s])
-	f.Rig[s] = bus.HandRig(f.Control[s])
+	f.Rig[s] = bus.PackRig(f.Control[s].Seq(), reef, f.Gen[s])
 	if w.given == nil {
 		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s], f.Rig[s])
 	}

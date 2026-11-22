@@ -660,3 +660,99 @@ func TestCarefulEdge(t *testing.T) {
 	}
 	t.Logf("to the lip and back in a Jolly boat:\n%s", table.String())
 }
+
+// placedRun is what a boat placed for a race came to, left alone: its
+// speed through the water and its angle off the wind ten seconds and
+// thirty seconds after it was placed, and whether it had capsized by then.
+type placedRun struct {
+	surge10, off10       float64
+	surge30, off30       float64
+	capsized10, capsized bool
+}
+
+// underWay reports whether a boat left alone ten seconds after it was
+// placed is sailing: way on and gathering, upright, and far enough off
+// the wind to keep it.
+func (p placedRun) underWay() bool { return p.surge10 >= 0.3 && p.off10 >= 35 && !p.capsized10 }
+
+// carefulPlaced places a boat of name for a Dash in harness h, as a race
+// places it, touches nothing, and says what it came to.
+func carefulPlaced(t *testing.T, h *harness, cat *catalog.Catalog, name string, from float64) placedRun {
+	t.Helper()
+	a := sailor(1, "Careful Kate")
+	if text, refused := h.call(t, a, "observe", nil); refused {
+		t.Fatalf("no boat: %s", text)
+	}
+	kind := kindNamed(t, cat, name)
+	f := h.w.Bus().Frames.Acquire()
+	start := f.Tick + 120*committee.Second
+	f.Release()
+	call := bus.RaceCall{ID: [16]byte{0x9a, 0x1c}, Course: 1, Across: true, Dash: true, Kind: uint16(kind), Start: start,
+		Entrants: []bus.RaceEntrant{{Account: bus.Account(a.Account), Number: 1, Machine: true}}}
+	if err := h.w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RacePlace, Race: &call}); err != nil {
+		t.Fatal(err)
+	}
+	var out placedRun
+	look := func() (float64, float64) {
+		f := h.w.Bus().Frames.Acquire()
+		defer f.Release()
+		for _, s := range f.Live {
+			if f.Owner[s] == bus.Account(a.Account) {
+				st := f.State[s]
+				if st.SailorMode != physics.Sailing {
+					out.capsized = true
+				}
+				return st.Surge, math.Abs(wrapPi(st.Heading-radOf(from))) * 180 / math.Pi
+			}
+		}
+		t.Fatal("no boat")
+		return 0, 0
+	}
+	for range 10 {
+		time.Sleep(time.Second)
+		look()
+	}
+	out.surge10, out.off10 = look()
+	out.capsized10 = out.capsized
+	for range 20 {
+		time.Sleep(time.Second)
+		look()
+	}
+	out.surge30, out.off30 = look()
+	return out
+}
+
+// TestEveryPlacedBoatGetsUnderWay places every kind of boat that races in
+// the areas for a Dash, as a race places it, in winds from light to a
+// severe gale, just below a storm, and holds that each is sailing ten
+// seconds later, left alone; with -v, the table. The one exception is the
+// skiff in a severe gale: she capsizes within ten seconds however her sail
+// is set, and is let to.
+func TestEveryPlacedBoatGetsUnderWay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("sails half a minute of the world for each boat in each wind")
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var table strings.Builder
+	for i := range cat.Boats {
+		b := &cat.Boats[i]
+		if b.LengthOverall > cat.World.Courses.Areas.Longest {
+			continue
+		}
+		for _, knots := range []float64{6, 12, 20, 25, 30, 36, 40, 45} {
+			synctest.Test(t, func(t *testing.T) {
+				h, _ := carefulWorld(t, cat, knots, 0)
+				p := carefulPlaced(t, h, cat, b.Name, 0)
+				fmt.Fprintf(&table, "%-10s %2.0f kn  10 s: %4.1f m/s %3.0f° off  30 s: %4.1f m/s %3.0f° off  capsized by 10 s %-5v by 30 s %-5v under way %v\n",
+					b.Name, knots, p.surge10, p.off10, p.surge30, p.off30, p.capsized10, p.capsized, p.underWay())
+				if !p.underWay() && !(b.Name == "Skiff" && knots >= 40) {
+					t.Errorf("a %s placed in %.0f knots: %+v", b.Name, knots, p)
+				}
+			})
+		}
+	}
+	t.Logf("boats placed for a Dash, left alone:\n%s", table.String())
+}
