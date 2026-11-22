@@ -11,6 +11,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // raceWorld is a world of the catalog's boats with a racing area of 450 m
@@ -244,5 +245,96 @@ func TestAReachsBoatIsPlacedAcrossTheWind(t *testing.T) {
 			t.Error("the kind's start sheets for a beam reach and a broad one are the same: the test shows nothing")
 		}
 		w.Close()
+	}
+}
+
+// windRaceWorld is a world of the catalog's boats with a racing area of
+// 450 m about its centre, a start area for new boats, and a steady wind
+// of speed m/s from the north.
+func windRaceWorld(t *testing.T, speed float64) (*World, *catalog.Catalog) {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &committee.Stage{Areas: []committee.Area{{Number: 1, Radius: 450}}}
+	for i := range cat.Boats {
+		st.Kinds = append(st.Kinds, committee.Kind{Polar: cat.Polar(i), Length: cat.Boats[i].LengthOverall})
+	}
+	w, err := New(Config{Capacity: 4, Kinds: kinds(t), Workers: 1, Tick: 100, Capacities: cat.Capacities(), Races: st,
+		StartSheets: cat.StartSheets(), Weather: weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(speed, 0, 0)),
+		Terrain: &Terrain{Start: []physics.State{{X: 0, Y: -3000}}, Away: []float64{0}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(w.Close)
+	return w, cat
+}
+
+// TestABoatPlacedHasItsSailSet: a boat placed for a race lies with her
+// sail set as trimmed to her sheet, the boom out to leeward at its limit,
+// not on the centreline hauled in; her sheet eased as the wind rises, and
+// in a gale reefed.
+func TestABoatPlacedHasItsSailSet(t *testing.T) {
+	for _, knots := range []float64{8, 20, 32} {
+		w, cat := windRaceWorld(t, knots*physics.Knot)
+		r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+		for range 30 {
+			w.Tick()
+		}
+		call := &bus.RaceCall{ID: [16]byte{6}, Course: 1, Across: true, Dash: true, Start: w.Now() + committee.Warning,
+			Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}}}
+		if got := do(t, w, bus.Command{Op: bus.RacePlace, Race: call}); got.Result != bus.Done {
+			t.Fatalf("placing: %+v", got)
+		}
+		f := w.Latest()
+		st := &f.State[r.Slot]
+		start := StartSheet(cat.StartSheets()[f.Kind[r.Slot]]).At(90)
+		sheet := f.Control[r.Slot].Sheet()
+		// The wind from the north, the boat facing east: the boom to
+		// starboard, out to its limit.
+		if !(st.Boom > 0.1) || math.Abs(st.Boom-st.SheetLimit) > 0.05 {
+			t.Errorf("%.0f kn: the boom at %.2f rad, its limit %.2f", knots, st.Boom, st.SheetLimit)
+		}
+		switch {
+		case knots < placedEaseFrom && math.Abs(sheet-start) > 1.0/bus.Steps:
+			t.Errorf("%.0f kn: the sheet %.3f, her start sheet %.3f", knots, sheet, start)
+		case knots >= placedEaseTo && math.Abs(sheet-placedEased) > 1.0/bus.Steps:
+			t.Errorf("%.0f kn: the sheet %.3f, want it eased to %.2f", knots, sheet, placedEased)
+		}
+		if reefed := f.Rig[r.Slot].Reef() > 0; reefed != (knots >= placedReefFrom) {
+			t.Errorf("%.0f kn: reefed %v", knots, reefed)
+		}
+	}
+}
+
+// TestARaceInAStormIsCalledOff: a race whose place has a storm's mean
+// wind as it is handed over is called off: no boat moved, its entrants
+// kept, ended at once; a trial's run is sailed.
+func TestARaceInAStormIsCalledOff(t *testing.T) {
+	w, _ := windRaceWorld(t, 26)
+	r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+	for range 30 {
+		w.Tick()
+	}
+	before := w.Latest().State[r.Slot]
+	call := &bus.RaceCall{ID: [16]byte{7}, Course: 1, Across: true, Dash: true, Start: w.Now() + committee.Warning,
+		Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}, {Account: acct(2), Number: 2}}}
+	if got := do(t, w, bus.Command{Op: bus.RacePlace, Race: call}); got.Result != bus.Done {
+		t.Fatalf("handing over: %+v", got)
+	}
+	f := w.Latest()
+	if len(f.Races) != 1 || !f.Races[0].CalledOff || f.Races[0].Phase != bus.RaceEnded || len(f.Racers) != 2 {
+		t.Fatalf("a race in a storm: %+v, %d racers", f.Races, len(f.Racers))
+	}
+	if st := f.State[r.Slot]; math.Hypot(st.X-before.X, st.Y-before.Y) > 50 {
+		t.Errorf("a boat moved %.0f m for a race called off", math.Hypot(st.X-before.X, st.Y-before.Y))
+	}
+	trial := &bus.RaceCall{ID: [16]byte{8}, Run: 1, Trial: true, Across: true, Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}}}
+	if got := do(t, w, bus.Command{Op: bus.RacePlace, Race: trial}); got.Result != bus.Done {
+		t.Fatalf("a trial in a storm: %+v", got)
+	}
+	if f := w.Latest(); len(f.Races) != 2 || f.Races[1].CalledOff {
+		t.Errorf("a trial's run in a storm: %+v", f.Races)
 	}
 }
