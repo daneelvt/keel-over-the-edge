@@ -4948,9 +4948,10 @@ test('the start screen holds no link, and each AI sailor one key in a row no wor
         if (start === null) {
           return ['no start screen'];
         }
-        if (/link/i.test(start.innerText)) {
+        const said = start.textContent ?? '';
+        if (/link/i.test(said)) {
           out.push(
-            `the word “link” on the start screen: ${start.innerText.match(/.*link.*/i)?.[0]}`,
+            `the word “link” on the start screen: ${said.match(/.{0,30}link.{0,30}/i)?.[0]}`,
           );
         }
         for (const b of start.querySelectorAll('button')) {
@@ -5359,9 +5360,7 @@ test('the chart’s Log tab opens the log of the sailor watched, My log at its h
     await expect(sheet).toHaveAttribute('data-log', 'own');
     await sheet.getByRole('button', { name: `‹ ${who}’s log` }).click();
     await expect(sheet).toHaveAttribute('data-log', `s:${who}`);
-    await expect
-      .poll(() => asked)
-      .toEqual([`/api/log ${who}`, '/api/me/log', `/api/log ${who}`]);
+    await expect.poll(() => asked).toEqual([`/api/log ${who}`, '/api/me/log', `/api/log ${who}`]);
     await page.evaluate(() => globalThis.keel.openChart(null));
   }
   // Watching no one: the reader's own, with no way to another.
