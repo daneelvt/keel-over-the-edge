@@ -180,11 +180,12 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   await page.getByRole('button', { name: 'Menu' }).click();
   await expect(page.getByRole('button', { name: /Free camera/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Stop watching' })).toBeVisible();
-  // Their own link to watch, and who may: on Invite friends, a tap from the menu.
+  // Its links, to watch it and to sail with it: on Invite friends, a tap from the menu.
   await page.getByRole('button', { name: 'Invite friends' }).click();
-  await expect(
-    page.getByRole('checkbox', { name: 'Let others watch me sail (this voyage)' }),
-  ).toBeVisible();
+  const invite = page.locator('.menu-page.invite');
+  await expect(invite.getByRole('heading', { name: `Watch ${name} sail` })).toBeVisible();
+  await expect(invite.locator('[data-part=watch-machine] .deck-url')).toHaveValue(/\?w=/);
+  await expect(invite.getByRole('heading', { name: `Sail with ${name}` })).toBeVisible();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
 
   // The keys steer nothing, and the Inputs sent carry no controls: the
@@ -437,7 +438,7 @@ test('a stranger opens a sailor’s link: refused while unticked, follows, is to
   await page.goto(GAME);
   const yours = page.locator('.your-sailor');
   await expect(yours).toContainText(them.name, { timeout: 90_000 });
-  await expect(yours.getByRole('button', { name: /link/i })).toHaveCount(0);
+  await expect(yours.getByRole('button', { name: /a link|new link/i })).toHaveCount(0);
   await setSail(page);
   await page.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
     timeout: 60_000,
