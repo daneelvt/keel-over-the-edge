@@ -363,10 +363,12 @@ func TestAMachineSailorMakesEntersAndRaces(t *testing.T) {
 			t.Fatalf("listed: %s", text)
 		}
 
-		// Placed at the warning signal, the line before it.
+		// Placed at the warning signal, the line before it: the only boat,
+		// it sails the race alone, as a time trial, its clock from the line.
 		text = h.raceWait(t, a, "woke: race: placed on the line", 2*time.Minute)
-		for _, want := range []string{"Race: «Spar Dash» · No. 1 of 1 · on the line · the gun in", "Line: below the start line by",
-			"Course: Start: the line from the pin", "the committee boat (starboard end)"} {
+		for _, want := range []string{"Race: «Spar Dash» · No. 1 of 1 · on the line · cross the start line to start your clock, within 5:00",
+			"Line: below the start line by", "your clock starts as you do", "Course: Start: the line from the pin", "the committee boat (starboard end)",
+			"the only boat in the race: it is sailed alone, as a time trial, for a medal"} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("no %q on the line:\n%s", want, text)
 			}
@@ -374,10 +376,6 @@ func TestAMachineSailorMakesEntersAndRaces(t *testing.T) {
 		if strings.Contains(text, "Course: your pin") {
 			t.Fatalf("the course told on the line:\n%s", text)
 		}
-		// Hold below the line, head to wind, until the gun.
-		h.call(t, a, "steer", map[string]any{"heading": 90, "boom": 10})
-		h.raceWait(t, a, "the starting gun", time.Minute)
-
 		// Up the west side of the spar, round it to starboard, and home.
 		h.call(t, a, "steer", map[string]any{"heading": 352, "boom": 45})
 		for {
@@ -422,13 +420,16 @@ func TestAMachineSailorMakesEntersAndRaces(t *testing.T) {
 				break
 			}
 		}
-		if !strings.Contains(text, "your boat finished, 1st home") {
+		if !strings.Contains(text, "your boat finished its run in") {
 			t.Fatalf("no finish:\n%s", text)
 		}
-		if !strings.Contains(text, "the race is over: 1st of 1, home in") {
-			text = h.raceWait(t, a, "the race is over: 1st of 1, home in", time.Minute)
+		if !strings.Contains(text, "the race is over: home in") {
+			text = h.raceWait(t, a, "the race is over: home in", time.Minute)
 		}
-		if strings.Contains(text, "Race:") && !strings.Contains(text, "· over · 1st of 1") {
+		if !strings.Contains(text, "sailed alone") {
+			t.Fatalf("the race sailed alone not said so:\n%s", text)
+		}
+		if strings.Contains(text, "Race:") && !strings.Contains(text, "· over · home in") {
 			t.Fatalf("the race block after the race:\n%s", text)
 		}
 		if !strings.Contains(text, "Course: your pin") {

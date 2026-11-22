@@ -88,3 +88,30 @@ func TestNoTaskIsTooDifficult(t *testing.T) {
 		}
 	}
 }
+
+// TestNoCertificateNeedsAnUpwindCourse: sailing up the wind, in zigzags,
+// is the hardest sailing, and stays a choice: every certificate can be
+// earned with no task that wears the upwind sign, one whose every course
+// has a beat in it.
+func TestNoCertificateNeedsAnUpwindCourse(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cat.Certificates {
+		others := 0
+		for i := range c.Tasks {
+			if !UpwindTask(&c.Tasks[i]) {
+				others++
+			}
+		}
+		if others < c.Needs {
+			t.Errorf("%s needs %d tasks and has %d without the upwind sign", c.Name, c.Needs, others)
+		}
+	}
+	if !UpwindTask(&catalog.CertificateTask{Courses: []catalog.CertificateCourse{catalog.CertificateCourseShort}}) ||
+		UpwindTask(&catalog.CertificateTask{Courses: []catalog.CertificateCourse{catalog.CertificateCourseReach, catalog.CertificateCourseShort}}) ||
+		UpwindTask(&catalog.CertificateTask{Courses: []catalog.CertificateCourse{catalog.CertificateCourseIsland}}) {
+		t.Error("the upwind sign on the wrong tasks")
+	}
+}

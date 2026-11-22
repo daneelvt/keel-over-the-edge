@@ -386,6 +386,33 @@ func met(w *catalog.CertificateWay, courses []string, runs []store.TrialRun, byH
 	return count(w, courses, runs, byHand) >= runsOf(w)
 }
 
+// UpwindCourse reports whether a certificate's course wears the upwind
+// sign: a buoy course with a beat in it, its first mark straight up the
+// wind (the Short Course, the Long Course, the Triangle and the Long
+// Triangle).
+func UpwindCourse(c catalog.CertificateCourse) bool {
+	switch c {
+	case catalog.CertificateCourseShort, catalog.CertificateCourseLong, catalog.CertificateCourseTriangle,
+		catalog.CertificateCourseLongTriangle:
+		return true
+	}
+	return false
+}
+
+// UpwindTask reports whether a certificate's task wears the upwind sign: a
+// course's task every course of which does. No certificate needs one.
+func UpwindTask(t *catalog.CertificateTask) bool {
+	if len(t.Courses) == 0 {
+		return false
+	}
+	for _, c := range t.Courses {
+		if !UpwindCourse(c) {
+			return false
+		}
+	}
+	return true
+}
+
 // everyWeather is the weather every-weather asks met: a gale, a storm, a
 // landfall in fog and a night at sea.
 const everyWeather = store.LogMetGale | store.LogMetStorm | store.LogMetFog | store.LogMetNight
