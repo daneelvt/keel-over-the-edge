@@ -996,9 +996,11 @@
   right: calc(var(--edge-right) + 56px);
   left: auto;
   top: 50%;
-  /* Raised by translate alone, which also undoes a centred window's
-     own: a rule that sets transform too loses its translate when the
-     build minifies it, and the window stands half off the screen. */
+  /* Raised by translate alone, which replaces a centred window's own
+     translate (a window that takes this place centres itself by translate,
+     never transform, which this would not undo): a rule that sets
+     transform too loses its translate when the build minifies it, and the
+     window stands half off the screen. */
   translate: 0 -50%;
   box-sizing: border-box;
   width: min(300px, calc(100vw - var(--edge-right) - var(--edge-left) - 56px));

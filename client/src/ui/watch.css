@@ -123,7 +123,10 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  /* Centred by translate, not transform: in the menu's place (.at-side) the
+     window is raised by translate, which replaces this one; a transform
+     would be applied as well, and carry it off the screen. */
+  translate: -50% -50%;
   width: min(480px, calc(100vw - var(--edge-left) - var(--edge-right)));
   padding: 12px 16px;
   box-sizing: border-box;
