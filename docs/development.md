@@ -4234,9 +4234,51 @@ side that makes the turn round it a tack: the judge's rounding ray counts
 crossings one way, so a boat that rounds it the other way is told she missed
 it and goes back.
 
-A trial's run is ended at four times its course's expected time, a race at
-twice (`committee.TrialLimit`, `RaceLimit`): the expected time is the polar's,
-sailed perfectly, and a newcomer's first beat takes longer than twice that.
+A trial's run is ended at four times its course's expected time, and a
+race too (`committee.TrialLimit`, `RaceLimit`): the expected time is the
+polar's, sailed perfectly, and a newcomer's first beat, or first race, takes
+longer than twice that. Once a race's first boat is home the rest have as
+long again as it took, ten minutes at least (`committee.Window`).
+
+### Races anyone can sail
+
+No race starts upwind. Every harbour race, and every buoy race a sailor
+makes, is the Dash (`race.ShapeDash`, `committee.layDash`): its line along
+the wind, one mark straight across it, home to a finish line of its own,
+two buoys `committee.DashApart` of the boat's lengths up the wind of the
+start line's end, no leg closer than 70° to the wind, sized for six
+minutes. The triangle and the windward–leeward are made as time trials
+only (`race.RefuseUpwind`), and wear the upwind sign wherever they are
+listed (`race.UpwindShape`, `certs.UpwindTask`). A race with one boat as
+the boats are placed is sailed alone, judged as a trial is (`bus.Race`'s
+`Alone`); a race in a storm's mean wind at its warning signal is called off
+(`committee.CallOff`, the race written `cancelled` with `called_off`
+`storm`), counting toward no one's limits. An island race from Port Royal
+is laid with its first leg off the wind where it can be: the course the
+other way round, or its line moved near Port Royal to a start the stage
+found when the world was loaded (`worldgen.Bundle.RaceStage`,
+`committee.Stage.MoveStarts`); else it is marked upwind for the day.
+
+A boat placed for a race lies with her sail set as trimmed to her sheet
+(`physics.TrimmedAtRest`), the sheet eased as the wind rises and reefed in
+a gale (`sim`'s `placedSheet`, `placedReef`); set down with her boom on the
+centreline and her sail hauled in, a Jolly boat in 20 knots turned up into
+the wind and stopped there, and the small boats capsized in a gale.
+
+What each choice rests on is measured:
+
+```sh
+KEEL_CAREFUL_RUNS=1 go test ./internal/agentapi -run 'TestCarefulDash|TestCarefulFleet' -v
+go test ./internal/agentapi -run TestEveryPlacedBoatGetsUnderWay -v
+KEEL_ISLAND_STARTS=1 go test ./internal/worldgen -run TestIslandStartsTally -v
+```
+
+The first prints careful runs of the Dash in a Jolly boat, a skiff and a
+keelboat, and twelve Jolly boats round it for several distances of its
+finish up the wind; the second every kind of boat placed in winds to a
+severe gale, left alone; the third how often an island race from Port
+Royal starts upwind as made and after the committee's tries, over sixteen
+winds in each world of seeds 1 to 8.
 
 ### No task too difficult
 

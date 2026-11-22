@@ -348,6 +348,8 @@ func raceRecordWords(recs []store.RaceRecord, boatName func(id string) string) s
 			line += " · removed"
 		case r.Kind == race.KindTrial:
 			line += " · a time trial run"
+		case r.Fleet == 1:
+			line += " · sailed alone"
 		default:
 			line += fmt.Sprintf(" · %s of %d", ordinal(int32(r.Place)), r.Fleet)
 		}
