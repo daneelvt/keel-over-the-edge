@@ -263,7 +263,7 @@ func TestStillRacing(t *testing.T) {
 		start := w.cur.Races[0].Start
 		// Over the line, then far off away from the mark, then still.
 		mark := [2]float64{c.Marks[0].X, c.Marks[0].Y}
-		away := [2]float64{c.Way[0][0] - (mark[0]-c.Way[0][0]), c.Way[0][1] - (mark[1]-c.Way[0][1])}
+		away := [2]float64{c.Way[0][0] - (mark[0] - c.Way[0][0]), c.Way[0][1] - (mark[1] - c.Way[0][1])}
 		b := &sailor{speed: 3, way: [][2]float64{{(c.Way[0][0] + mark[0]) / 2, (c.Way[0][1] + mark[1]) / 2}, away}, hold: true}
 		asked, answered, retired := int64(0), false, false
 		w.until(func(s int, st *physics.State) {
