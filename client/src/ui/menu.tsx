@@ -14,7 +14,9 @@
 // one page of links to share, for what is on the screen (to watch the
 // player, alone or with a picture of the view, and, while their own boat
 // is in the water, to sail with them; or, watching a machine sailor of
-// theirs, to watch it and to sail with it); a sailor to watch; Back to Port Royal and Change boat, while the
+// theirs, to watch it and to sail with it); under it, while their own
+// boat is in the water, a key that copies the link to sail with them, or
+// gets one first; a sailor to watch; Back to Port Royal and Change boat, while the
 // player sails their own boat, which ask first; under Races, the next
 // harbour race the player may enter, with Enter (or why not), Make a
 // race, and the player's races ahead, each a tap from its card. It stands over everything at
@@ -28,7 +30,7 @@ import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
 import type { Countdown } from './countdown';
-import { type DeckView, machineShared } from './decklazy';
+import { canShareLink, type DeckView, machineShared, useDeck } from './decklazy';
 import { INVITE_FRIENDS, WHO_IS_ABOARD } from './deckwords';
 import type { HomeView } from './home';
 import { BACK_TO_PORT_ROYAL, CHANGE_BOAT } from './homewords';
@@ -363,6 +365,12 @@ export function SailingAs({ sailor }: { sailor: string | null }) {
   );
 }
 
+/** The key that copies the link to sail with the player, once its module is loaded. */
+function SailLink({ sailor, page }: { sailor: string; page: () => void }) {
+  const d = useDeck();
+  return d === null ? null : <d.SailLinkKey sailor={sailor} page={page} />;
+}
+
 export function Menu({
   settings,
   sailor,
@@ -466,6 +474,9 @@ export function Menu({
                 {INVITE_FRIENDS}
               </button>
             </div>
+          ) : null}
+          {invite !== null && sailor !== null && deck !== null && canShareLink(deck) ? (
+            <SailLink sailor={sailor} page={invite} />
           ) : null}
           {deck !== null && machineShared(deck) !== null && deck.crew.value !== null ? (
             <div class="menu-chart">
