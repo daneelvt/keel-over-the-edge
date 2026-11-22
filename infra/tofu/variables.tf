@@ -30,7 +30,7 @@ variable "cluster_project_id" {
 }
 
 variable "notify_email" {
-  description = "Where Cloudflare's tunnel alerts and certificate authorities' reports go: the owner's address, kept out of the repository."
+  description = "Where Cloudflare's alerts and the contact address's mail go: the owner's own address, kept out of the repository and out of DNS."
   type        = string
   sensitive   = true
 }
@@ -50,6 +50,8 @@ locals {
   domain = "keelovertheedge.com"
   play   = "play.${local.domain}"
   www    = "www.${local.domain}"
+  # The one address the domain receives mail at (mail.tf).
+  contact = "contact@${local.domain}"
   # The MCP address's host, where AI apps connect.
   agents = "agents.${local.domain}"
   # Every secret the cluster reads is in keel-cluster's one environment.
