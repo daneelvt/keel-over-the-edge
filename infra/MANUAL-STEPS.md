@@ -377,9 +377,10 @@ OpenTofu loses track of everything it made.
    digits, and save it as "keel OpenTofu state passphrase".
 2. In `keel-accounts`, Production, `accounts`, **Add Secret**
    `TOFU_PASSPHRASE` with the same value.
-3. **Add Secret** `NOTIFY_EMAIL`: the address Cloudflare's tunnel alerts and
-   certificate authorities' reports go to (it is published in the zone's
-   CAA record, as `iodef`; it is not written in the repository).
+3. **Add Secret** `NOTIFY_EMAIL`: your own address, where Cloudflare's
+   alerts go and where mail to `contact@keelovertheedge.com` is forwarded
+   (section 17). It is not written in the repository, nor in any DNS
+   record.
 
 Check:
 
@@ -424,6 +425,8 @@ Check:
      | Zone | Workers Routes | Edit | the website |
      | Zone | Dynamic URL Redirects | Edit | the website |
      | Account | Turnstile Sites | Edit | new sailors' human check |
+     | Zone | Email Routing Rules | Edit | the contact address (section 17) |
+     | Account | Email Routing Addresses | Edit | the contact address |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
      zone, `keelovertheedge.com`. The token's editor puts each permission
@@ -769,7 +772,7 @@ reads):
 | `GITHUB_APP_PRIVATE_KEY` | the `.pem` file's whole text, its `BEGIN` and `END` lines included |
 | `GITHUB_APP_WEBHOOK_SECRET` | the webhook's secret, from 15.2 |
 | `GITHUB_APP_CLIENT_SECRET` | the client secret |
-| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read; `contact@keelovertheedge.com` once its mailbox receives mail (section 17), and until then one elsewhere, as the game's domain receives none |
+| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read; `contact@keelovertheedge.com` once it receives mail (section 17), and until then one elsewhere |
 
 Then delete the `.pem` file and the webhook's secret from the password
 manager: Infisical holds them alone, and a new key or secret can always
@@ -949,25 +952,77 @@ To rotate only its secret (one that may have leaked): raise
 `website_token_generation` and set `website_token_old_until` an hour
 after you will apply; the old secret is let through until then.
 
-## 17. The contact mailbox: contact@keelovertheedge.com
+## 17. The contact address: contact@keelovertheedge.com
 
 The website's footer, the game's privacy page (`client/privacy.html`) and
 its safety page (`client/safety.html`) give `contact@keelovertheedge.com`
-for questions, privacy requests and anyone outside the game. Today the
-domain receives no mail at all: `infra/tofu/dns.tf` has a null MX, an SPF
-record that allows no sender and DMARC `p=reject`, so mail to that address
-bounces until this is done.
+for questions, privacy requests and anyone outside the game. Cloudflare's
+Email Routing receives its mail and forwards it to `NOTIFY_EMAIL`, your
+own address (section 10): there is no mailbox to keep, and your address is
+in no file and no DNS record. Mail to any other address in the domain is
+refused.
 
-1. Choose a mail service for the domain and make the mailbox (or an alias
-   forwarded to one you read) for `contact@keelovertheedge.com`.
-2. By a pull request, replace `null_mx` in `infra/tofu/dns.tf` with the
-   service's MX records, add its SPF include (or keep `-all` if it only
-   receives) and its DKIM records, and keep DMARC at `p=reject` once its
-   DKIM passes. Run `accounts` with `plan`, then `apply`.
-3. Send a message to the address from another account, and answer it, to
-   check both ways.
-4. If the agreement page's `CONTACT_EMAIL` (section 15.3) points
-   elsewhere, it may now point here.
+Only receiving: an answer you write goes out from your own address, which
+the person you answer then sees. Sending as `contact@` needs a sending
+service for the domain, with its SPF and DKIM records, by a later pull
+request.
+
+Once, after the pull request with `infra/tofu/mail.tf` is merged:
+
+1. Check that `NOTIFY_EMAIL` in `keel-accounts`, Production, `accounts`,
+   is the address the mail should reach. Changing it later moves the
+   tunnel's alerts too, and takes this section's steps 3 to 5 again.
+2. Edit the token `accounts` (**Manage Account → Account API Tokens →
+   `accounts` → Edit**) and add the two permissions section 11's table
+   ends with: **Zone → Email Routing Rules → Edit** and **Account → Email
+   Routing Addresses → Edit**. The token's value stays the same.
+3. Run **`accounts`** with `plan`, approve, and read its summary:
+   - to create: `cloudflare_email_routing_dns.zone`,
+     `cloudflare_email_routing_address.owner`,
+     `cloudflare_email_routing_rule.contact`;
+   - to update: `cloudflare_dns_record.spf` and
+     `cloudflare_dns_record.caa["iodef"]`;
+   - to delete: `cloudflare_dns_record.null_mx`.
+4. Run **`accounts`** with `apply`. Cloudflare sends `NOTIFY_EMAIL` a
+   message asking you to verify the address: follow its link. Nothing is
+   forwarded before that.
+5. That first apply may stop, having made part of it, for either of two
+   reasons, and the cure is the same: follow the link in step 4's message
+   if you have not, and run `accounts` with `apply` again.
+   - At `cloudflare_email_routing_dns.zone`, with Cloudflare's error 2008,
+     "Non-Cloudflare MX records exist": the null MX was not yet removed
+     when Email Routing was turned on; the same apply removed it.
+   - At `cloudflare_email_routing_rule.contact`, saying the destination
+     address is not verified: the link was not followed yet.
+6. Run **`accounts`** with `plan` again: no changes.
+
+Check:
+
+- [ ] In Cloudflare, the zone's Email Routing page: routing is enabled,
+      with its DNS records locked; the routing rules have
+      `contact@keelovertheedge.com` → your address, active; the
+      destination addresses show your address verified; the catch-all is
+      disabled.
+- [ ] `dig MX keelovertheedge.com +short` answers three hosts under
+      `mx.cloudflare.net`, and no `0 .`;
+      `dig TXT keelovertheedge.com +short` has
+      `v=spf1 include:_spf.mx.cloudflare.net ~all`;
+      `dig TXT _dmarc.keelovertheedge.com +short` still says `p=reject`.
+- [ ] `dig CAA keelovertheedge.com +short` has
+      `iodef "mailto:contact@keelovertheedge.com"` and your own address
+      nowhere.
+- [ ] A message sent to `contact@keelovertheedge.com` from another account
+      arrives at your address; one sent to
+      `nobody@keelovertheedge.com` comes back undelivered.
+- [ ] `go run ./tools/online` passes.
+
+Afterwards, the agreement page's `CONTACT_EMAIL` (section 15.3) may point
+here, if it points elsewhere.
+
+If mail stops arriving: the zone's Email Routing page counts what was
+received, forwarded and dropped, and its activity log names each
+message's fate. A destination address that reads unverified is sent its
+link again from the list of destination addresses.
 
 ## If something fails
 
