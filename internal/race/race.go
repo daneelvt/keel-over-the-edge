@@ -60,6 +60,17 @@ const (
 	// Harbourmaster's own, a standing trial's course only. Nobody makes a
 	// race or a trial on it.
 	ShapeReach = "reach"
+	// ShapeDash is across the wind to one mark and home to a finish line of
+	// its own: the race's buoy course, every harbour race's and every buoy
+	// race a sailor makes. No race starts up the wind: the triangle and the
+	// windward–leeward are sailed as time trials only.
+	ShapeDash = "dash"
+)
+
+// The reasons a buoy race is called off at its warning signal, Card's
+// CalledOff.
+const (
+	CalledOffStorm = "storm" // a storm's mean wind at its place
 )
 
 // The phases a race is in, as its card tells it.
@@ -105,8 +116,9 @@ const (
 const (
 	ShortMinutes = committee.ShortSeconds / 60
 	LongMinutes  = committee.LongSeconds / 60
-	// ReachMinutes are the reach's.
+	// ReachMinutes are the reach's, DashMinutes the Dash's.
 	ReachMinutes = committee.ReachSeconds / 60
+	DashMinutes  = committee.DashSeconds / 60
 )
 
 // Sailor is who asks: an account, a machine sailor's or a human's, and a
@@ -158,6 +170,9 @@ const (
 	RefuseBoat   = "boat"
 	RefuseKind   = "kind"
 	RefuseName   = "name"
+	// RefuseUpwind is a race asked on a course with a beat in it: sailed
+	// as a time trial only.
+	RefuseUpwind = "upwind"
 	// The owner's hand.
 	RefuseMoved       = "moved"
 	RefuseNotEntered  = "not-entered"
@@ -167,12 +182,14 @@ const (
 // Refusal is a race refused, and why: Until, if not zero, is when it
 // would not be (the next race may start then, the latest start allowed);
 // Name, for a name refused, the moderation's reason; Needs, for a boat
-// the sailor may not sail, the certificate that opens her.
+// the sailor may not sail, the certificate that opens her; Most, for a
+// limit reached, the limit, so that its words say the number in force.
 type Refusal struct {
 	Reason string
 	Until  time.Time
 	Name   string
 	Needs  string
+	Most   int
 }
 
 func (r *Refusal) Error() string {

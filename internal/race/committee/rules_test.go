@@ -185,7 +185,7 @@ func TestTheTimeLimit(t *testing.T) {
 	c := w.begin(s, &bus.RaceCall{ID: [16]byte{5}, Course: 1, Entrants: entrants(2)})
 	start := w.cur.Races[0].Start
 	w.until(nil, func() bool { return false })
-	if r := w.cur.Races[0]; r.Ended != start+limit(&r) || limit(&r) != int64(2*c.Expected*Second)+1 && limit(&r) != int64(2*c.Expected*Second) {
+	if r := w.cur.Races[0]; r.Ended != start+limit(&r) || limit(&r) != int64(4*c.Expected*Second)+1 && limit(&r) != int64(4*c.Expected*Second) {
 		t.Errorf("ended at %d: start %d, expected %.0f s", r.Ended, start, c.Expected)
 	}
 	if w.racer(1).Place != 1 || w.racer(2).Place != 2 {
@@ -197,9 +197,14 @@ func TestDriftingRetires(t *testing.T) {
 	defer func(a, b int64) { DriftAfter, DriftAnswer = a, b }(DriftAfter, DriftAnswer)
 	DriftAfter, DriftAnswer = 20*Second, 10*Second
 	s := stage(t)
-	w := newWorld(t, 1)
-	w.begin(s, &bus.RaceCall{ID: [16]byte{6}, Course: 1, Entrants: entrants(1)})
-	got := w.until(nil, func() bool { return false }, bus.RaceDrifting, bus.RaceRetired)
+	w := newWorld(t, 2)
+	w.begin(s, &bus.RaceCall{ID: [16]byte{6}, Course: 1, Entrants: entrants(2)})
+	var got []bus.RaceEvent
+	for _, e := range w.until(nil, func() bool { return false }, bus.RaceDrifting, bus.RaceRetired) {
+		if e.Number == 1 {
+			got = append(got, e)
+		}
+	}
 	if len(got) != 2 || got[0].Kind != bus.RaceDrifting || got[1].Kind != bus.RaceRetired || got[1].Tick-got[0].Tick != DriftAnswer {
 		t.Errorf("events %+v", got)
 	}

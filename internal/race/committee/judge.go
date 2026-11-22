@@ -17,7 +17,8 @@ import (
 // warning, each a gun. A boat on the course side of the line at the gun is
 // over early: ten seconds are added and it sails on. Every other boat
 // starts as it crosses the line. A trial's run has no sequence: its clock
-// starts as its boat crosses the line.
+// starts as its boat crosses the line. Nor has a race with one boat as its
+// boats are placed: it is sailed alone, judged as a trial is, for a medal.
 //
 // Each boat passes the course's checks in order, judged on its track from
 // each tick to the next: a line crossed the right way between its ends; a
@@ -28,15 +29,16 @@ import (
 // fault by the Articles, adds ten seconds to that boat; bumps with
 // passers-by are no one's business here.
 //
-// Once a boat is home the finishing window opens for the rest, for half
-// the winner's time or five minutes, whichever is longer; with no boat
-// home by twice the course's expected time (four times, a trial's run),
-// the race ends there. Either
-// way everyone is placed: those home by their time and the seconds added,
-// then those still racing by their progress, the marks rounded and then
-// the way still to go. A boat whose boat leaves the water, goes over the
-// lip, or makes no progress for five minutes and a minute more after being
-// asked, retires; a sailor may retire at any time.
+// Once a boat is home the finishing window opens for the rest, for as
+// long again as the winner took or ten minutes, whichever is longer; with
+// no boat home by four times the course's expected time, the race ends
+// there. Either way everyone is placed: those home by their time and the
+// seconds added, then those still racing by their progress, the marks
+// rounded and then the way still to go. A boat whose boat leaves the
+// water or goes over the lip retires; so does one that makes no progress
+// for five minutes, is asked whether it still races, and in the minute
+// after neither comes ten metres nearer than where it was asked nor says
+// it still races. A sailor may retire at any time.
 
 // Placing is an entrant as the simulation placed it: its boat's slot and
 // ID, and whether it was placed at all (it was at sea).
@@ -54,9 +56,6 @@ func Begin(f *bus.Frame, call *bus.RaceCall, c *bus.RaceCourse, placed []Placing
 	f.NextRace = key + 1
 	r := bus.Race{Key: key, ID: call.ID, Run: call.Run, Trial: call.Trial, Long: call.Long, Kind: call.Kind, Course: c,
 		Warning: f.Tick, Phase: bus.RaceWarning}
-	if !call.Trial {
-		r.Start = max(call.Start, f.Tick+Warning)
-	}
 	var accounts []bus.Account
 	n := 0
 	for i := range call.Entrants {
@@ -74,10 +73,15 @@ func Begin(f *bus.Frame, call *bus.RaceCall, c *bus.RaceCourse, placed []Placing
 	}
 	lo, hi := racersOf(f, key)
 	slices.SortFunc(f.Racers[lo:hi], func(a, b bus.Racer) int { return int(a.Number) - int(b.Number) })
-	r.Prizes = !call.Trial && len(accounts) >= 3
+	// A race of one is sailed alone, as a trial: its clock from the line.
+	r.Alone = !call.Trial && n == 1
+	if !timed(&r) {
+		r.Start = max(call.Start, f.Tick+Warning)
+	}
+	r.Prizes = !timed(&r) && len(accounts) >= 3
 	f.Races = append(f.Races, r)
 	event(f, bus.RaceEvent{Race: key, Kind: bus.RacePlaced, Number: int16(n)})
-	if !call.Trial && n > 0 {
+	if !timed(&r) && n > 0 {
 		event(f, bus.RaceEvent{Race: key, Kind: bus.RaceSignalled, Signal: bus.SignalWarning, Gun: true})
 	}
 	for j := lo; j < hi; j++ {
@@ -88,6 +92,27 @@ func Begin(f *bus.Frame, call *bus.RaceCall, c *bus.RaceCourse, placed []Placing
 	if n == 0 {
 		end(f, len(f.Races)-1)
 	}
+	return key
+}
+
+// timed reports whether race r is judged as a time trial: a trial's run,
+// or a race sailed alone.
+func timed(r *bus.Race) bool { return r.Trial || r.Alone }
+
+// Timed reports whether race r is judged as a time trial is: a trial's
+// run, or a race with one boat sailed alone; its clock runs from its
+// boat's crossing of the line, and it gives a medal.
+func Timed(r *bus.Race) bool { return timed(r) }
+
+// CallOff puts the race of call in f as called off at its warning signal,
+// for a storm at its place, laid as c: ended as it begins, no boat placed,
+// no one's start. It returns the race's key.
+func CallOff(f *bus.Frame, call *bus.RaceCall, c *bus.RaceCourse) uint32 {
+	key := max(f.NextRace, 1)
+	f.NextRace = key + 1
+	f.Races = append(f.Races, bus.Race{Key: key, ID: call.ID, Run: call.Run, Long: call.Long, Kind: call.Kind, Course: c,
+		Warning: f.Tick, Phase: bus.RaceEnded, Ended: f.Tick, CalledOff: true})
+	event(f, bus.RaceEvent{Race: key, Kind: bus.RaceOver})
 	return key
 }
 
@@ -108,7 +133,7 @@ func step(f, cur *bus.Frame, i int) {
 	c := r.Course
 	tick := f.Tick
 	lo, hi := racersOf(f, r.Key)
-	if !r.Trial {
+	if !timed(r) {
 		// The signals, each at its tick, or the first after it if the
 		// world skipped it.
 		if r.Phase == bus.RaceWarning && tick >= r.Start-Preparatory && tick < r.Start {
@@ -219,10 +244,11 @@ func judge(f *bus.Frame, r *bus.Race, rc *bus.Racer, ax, ay, bx, by float64) {
 	c := r.Course
 	last := int16(len(c.Checks) - 1)
 	if rc.State == bus.RacerPlaced {
-		if !r.Trial || lineCross(&c.Checks[0], ax, ay, bx, by) != c.Checks[0].Want {
+		if !timed(r) || lineCross(&c.Checks[0], ax, ay, bx, by) != c.Checks[0].Want {
 			return
 		}
-		// A trial's run starts as its boat crosses the line.
+		// A trial's run, or a race sailed alone, starts as its boat crosses
+		// the line.
 		r.Start, r.Phase = f.Tick, bus.RaceStarted
 		rc.State, rc.Crossed, rc.Next = bus.RacerRacing, f.Tick, 1
 		return
@@ -303,7 +329,7 @@ func finish(f *bus.Frame, r *bus.Race, rc *bus.Racer) {
 	}
 	if r.Home == 0 {
 		r.Home = f.Tick
-		r.Closes = f.Tick + max(elapsed(r, rc)/2, Window)
+		r.Closes = f.Tick + max(elapsed(r, rc), Window)
 	}
 	event(f, bus.RaceEvent{Race: r.Key, Kind: bus.RaceSignalled, Signal: bus.SignalFinish, Gun: true, Number: rc.Number, Place: place})
 	event(f, bus.RaceEvent{Race: r.Key, Kind: bus.RaceFinished, Number: rc.Number, Place: place, Added: float64(rc.Added) / Second})
@@ -311,7 +337,7 @@ func finish(f *bus.Frame, r *bus.Race, rc *bus.Racer) {
 
 // elapsed is racer rc's time from its start to its finish, ticks.
 func elapsed(r *bus.Race, rc *bus.Racer) int64 {
-	if r.Trial {
+	if timed(r) {
 		return rc.Home - rc.Crossed
 	}
 	return rc.Home - r.Start
@@ -331,7 +357,9 @@ func Elapsed(r *bus.Race, rc *bus.Racer) float64 {
 
 // progress reads racer rc's progress at (x, y), once a second: its way to
 // go, and whether it has made none for long enough to be asked whether it
-// still races, or to retire for want of an answer.
+// still races, or to retire for want of an answer. Asked, it answers by
+// coming DriftGain nearer than where it was asked, or by saying so
+// (StillRacing).
 func progress(f *bus.Frame, r *bus.Race, rc *bus.Racer, x, y float64) {
 	rc.ToGo = toGo(r.Course, rc.Next, x, y)
 	if rc.State != bus.RacerRacing || r.Start == 0 || f.Tick < r.Start {
@@ -341,7 +369,8 @@ func progress(f *bus.Frame, r *bus.Race, rc *bus.Racer, x, y float64) {
 	case rc.LeastAt == 0 || rc.ToGo < rc.Least-DriftGain:
 		rc.Least, rc.LeastAt, rc.Asked = rc.ToGo, f.Tick, 0
 	case rc.Asked == 0 && f.Tick-rc.LeastAt >= DriftAfter:
-		rc.Asked = f.Tick
+		// Its answer is measured from here, wherever it drifted to.
+		rc.Asked, rc.Least = f.Tick, rc.ToGo
 		event(f, bus.RaceEvent{Race: r.Key, Kind: bus.RaceDrifting, Number: rc.Number})
 	case rc.Asked != 0 && f.Tick-rc.Asked >= DriftAnswer:
 		retire(f, r, rc)
@@ -374,6 +403,23 @@ func Retire(f *bus.Frame, account bus.Account) bool {
 		return false
 	}
 	retire(f, &f.Races[i], rc)
+	return true
+}
+
+// StillRacing answers the question asked of the boat account skippers,
+// whether it still races, at its sailor's word: it does, and is asked
+// again only after DriftAfter more without progress. False if it races in
+// none or was not asked.
+func StillRacing(f *bus.Frame, account bus.Account) bool {
+	j := RacerOf(f, account)
+	if j < 0 {
+		return false
+	}
+	rc := &f.Racers[j]
+	if rc.Asked == 0 || rc.State != bus.RacerRacing {
+		return false
+	}
+	rc.Asked, rc.Least, rc.LeastAt = 0, rc.ToGo, f.Tick
 	return true
 }
 
@@ -427,7 +473,7 @@ func calls(f *bus.Frame) {
 			continue
 		}
 		r := &f.Races[i]
-		if r.Trial || r.Phase < bus.RacePreparatory || r.Phase == bus.RaceEnded {
+		if timed(r) || r.Phase < bus.RacePreparatory || r.Phase == bus.RaceEnded {
 			continue
 		}
 		at, other := &f.Racers[a], &f.Racers[o]
@@ -465,7 +511,7 @@ func ends(f *bus.Frame, r *bus.Race, lo, hi int) bool {
 	switch {
 	case !active:
 		return true
-	case r.Trial && r.Start == 0:
+	case timed(r) && r.Start == 0:
 		if tick-r.Warning >= TrialWait {
 			for j := lo; j < hi; j++ {
 				if f.Racers[j].State == bus.RacerPlaced {
@@ -483,10 +529,10 @@ func ends(f *bus.Frame, r *bus.Race, lo, hi int) bool {
 	return tick >= r.Start+limit(r)
 }
 
-// limit is race r's time limit from its start, ticks: twice its course's
-// expected time, and four times for a trial's run. The expected time is
-// the polar's, sailed perfectly; a trial holds nobody up, and a newcomer
-// tacking up a first beat must still be let to finish.
+// limit is race r's time limit from its start, ticks: four times its
+// course's expected time, a race's as a trial's run. The expected time is
+// the polar's, sailed perfectly, with no time lost in a turn: a newcomer's
+// first race must still end with their own gun.
 func limit(r *bus.Race) int64 {
 	times := RaceLimit
 	if r.Trial {
@@ -497,7 +543,7 @@ func limit(r *bus.Race) int64 {
 
 // The time limits, in the course's expected times.
 const (
-	RaceLimit  = 2.0
+	RaceLimit  = 4.0
 	TrialLimit = 4.0
 )
 
@@ -519,7 +565,7 @@ func end(f *bus.Frame, i int) {
 			place++
 			rc.Place = place
 		}
-		if r.Trial && rc.State == bus.RacerFinished {
+		if timed(r) && rc.State == bus.RacerFinished {
 			rc.Medal = Medal(float64(corrected(r, rc))/Second, r.Course.Expected)
 		}
 	}

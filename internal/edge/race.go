@@ -231,7 +231,7 @@ func raceTold(f *bus.Frame, i int, reader bus.Account, named *RaceNames) *pb.Ser
 		Line:   []int32{metres(c.Pin[0]), metres(c.Pin[1]), metres(c.Committee[0]), metres(c.Committee[1])},
 		Finish: []int32{metres(c.FinishA[0]), metres(c.FinishA[1]), metres(c.FinishB[0]), metres(c.FinishB[1])},
 		East:   metres(c.X), North: metres(c.Y), Reach: uint32(max(metres(c.Reach), 0)), Laps: uint32(max(c.Laps, 1)),
-		Expected: float32(c.Expected)}
+		Expected: float32(c.Expected), Alone: r.Alone, Upwind: c.Upwind}
 	if named != nil {
 		m.Code, m.Name, names = named.Code, named.Name, named.Names
 	}
@@ -390,11 +390,17 @@ func raceResults(f *bus.Frame, i int) *pb.ServerMessage {
 }
 
 // raceCommand does what a Command asks of a race, if it asks anything: a
-// retirement goes to the committee; a cheer waits for the encoder to count
-// it with the crowd's.
+// retirement, or the answer that the boat still races, goes to the
+// committee; a cheer waits for the encoder to count it with the crowd's.
 func (c *conn) raceCommand(cmd *pb.Command) {
 	if cmd.GetCheer() != nil && c.spectating.Load() {
 		c.cheering.Store(true)
+	}
+	if cmd.GetStillRacing() != nil {
+		if err := c.e.cfg.Bus.Commands.Players().TrySend(bus.Command{Op: bus.RaceStill, Account: c.account}); err != nil {
+			c.e.cfg.Log.Warn("still racing", "err", err)
+		}
+		return
 	}
 	if cmd.GetRaceRetire() == nil {
 		return

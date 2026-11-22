@@ -202,7 +202,7 @@ func TestATrialsTimeLimit(t *testing.T) {
 			t.Errorf("across %v: the boat left on the course in state %d", across, rc.State)
 		}
 	}
-	if RaceLimit != 2 || TrialLimit != 4 {
+	if RaceLimit != 4 || TrialLimit != 4 {
 		t.Errorf("limits of %.0f and %.0f expected times", RaceLimit, TrialLimit)
 	}
 }
@@ -229,6 +229,8 @@ func TestAReachInASnapshot(t *testing.T) {
 	for _, call := range []*bus.RaceCall{{Course: 1, Entrants: entrants(2)}, {Course: 1, Triangle: true, Long: true, Entrants: entrants(2)},
 		{Island: true, Course: 3, Entrants: entrants(2)}} {
 		old := s.Lay(bus.NewFrame(4), call, 5, 0, 2)
+		// As an older build laid it: no start was marked upwind then.
+		old.Upwind = false
 		enc := appendCourse(nil, old)
 		// Its flags are the two an older build wrote.
 		if enc[0]&^(courseIsland|courseTriangle) != 0 {
@@ -242,7 +244,7 @@ func TestAReachInASnapshot(t *testing.T) {
 	}
 	// A flag nobody writes is still refused.
 	enc := appendCourse(nil, c)
-	enc[0] |= 8
+	enc[0] |= 32
 	if r := (&reader{b: enc}); r.course() == nil || r.err == nil {
 		t.Error("a course with an unknown flag read")
 	}

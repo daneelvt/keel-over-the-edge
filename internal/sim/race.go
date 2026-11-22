@@ -24,6 +24,10 @@ import (
 // pairs begin afresh. An entrant whose boat is not at sea (ashore, waiting
 // for a boat, or aboard another's) did not start.
 //
+// A race (not a trial's run) whose place has a storm's mean wind as it is
+// handed over is called off: its course laid but no boat placed, and it
+// ends as it begins, for the server to tell its entrants.
+//
 // Then, in the rules phase, the committee runs every race one tick on.
 
 // racePlace hands the committee the race of c and places its boats.
@@ -45,6 +49,11 @@ func (w *World) racePlace(c *bus.Command) bus.Reply {
 	speed, from := physics.MeanWindAt(&w.wind, x, y)
 	course := w.stage.Lay(f, call, speed, from, len(call.Entrants))
 	if course == nil {
+		return r
+	}
+	if !call.Trial && speed >= committee.StormWind {
+		committee.CallOff(f, call, course)
+		r.Result = bus.Done
 		return r
 	}
 	length := 2 * physics.Radius(&w.kinds[call.Kind])

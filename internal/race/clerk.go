@@ -234,7 +234,8 @@ func (c *Clerk) callOf(r *store.Race, run int32) (*bus.RaceCall, bool) {
 		return nil, false
 	}
 	call := &bus.RaceCall{ID: r.ID, Run: run, Trial: r.Kind == KindTrial, Island: r.CourseKind == CourseIsland,
-		Course: int32(r.Course), Triangle: r.Shape == ShapeTriangle, Across: r.Shape == ShapeReach, Long: r.Long, Kind: uint16(kind)}
+		Course: int32(r.Course), Triangle: r.Shape == ShapeTriangle, Across: r.Shape == ShapeReach || r.Shape == ShapeDash,
+		Dash: r.Shape == ShapeDash, Long: r.Long, Kind: uint16(kind)}
 	if !call.Trial {
 		call.Start = c.cfg.TickAt(r.StartsAt)
 	}
@@ -310,6 +311,21 @@ func (c *Clerk) write(ctx context.Context) error {
 		r := &runs[i]
 		k := runKey{r.race.ID, r.race.Run}
 		now[k] = true
+		if r.race.CalledOff {
+			// Called off as it was handed over: written cancelled, for the
+			// storm, and let go; no one started.
+			if !c.written[k] {
+				if err := c.s.cfg.Store.CallOffRace(ctx, c.cfg.Lease, c.s.cfg.World.ID, r.race.ID, CalledOffStorm,
+					c.cfg.TimeOf(r.race.Warning)); err != nil {
+					return err
+				}
+				c.started[k], c.written[k] = true, true
+				if err := c.send.TrySend(bus.Command{Op: bus.RaceWritten, Race: &bus.RaceCall{ID: k.id, Run: k.run}}); err != nil {
+					c.written[k] = false
+				}
+			}
+			continue
+		}
 		if !c.started[k] {
 			if err := c.start(ctx, r); err != nil {
 				return err
@@ -444,7 +460,7 @@ func (c *Clerk) endOf(ctx context.Context, row *store.Race, r *run) (*store.Race
 				winnerCrew = append(winnerCrew, a.Account)
 			}
 		}
-		if r.race.Trial && (rc.Medal == bus.MedalGold || rc.Medal == bus.MedalHarbourmaster) {
+		if committee.Timed(&r.race) && (rc.Medal == bus.MedalGold || rc.Medal == bus.MedalHarbourmaster) {
 			e.Stories = append(e.Stories, c.trialStory(row, course, &res, r.names[i], [2]float64{r.race.Course.X, r.race.Course.Y}, at))
 		}
 	}
@@ -467,6 +483,8 @@ func recordCourse(row *store.Race) string {
 		return store.CourseIsland
 	case row.Shape == ShapeReach:
 		return store.CourseReach
+	case row.Shape == ShapeDash:
+		return store.CourseDash
 	case row.Shape == ShapeTriangle && row.Long:
 		return store.CourseLongTriangle
 	case row.Shape == ShapeTriangle:

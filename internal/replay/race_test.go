@@ -49,7 +49,7 @@ func TestARaceHandedReadsBack(t *testing.T) {
 		}
 		// A flag nobody writes.
 		bad := bytes.Clone(enc)
-		bad[17] |= 32
+		bad[17] |= 64
 		if p := (&payload{b: bad}); p.raceCall() == nil || p.err == nil {
 			t.Error("a race with an unknown flag read")
 		}

@@ -144,13 +144,13 @@ func (in *entering) refusedByLimits(start time.Time, mine []store.EntryStart) er
 	}
 	if len(ahead) >= in.limits.Ahead {
 		// Another may be entered once the soonest has started.
-		return refuseUntil(RefuseAhead, slices.MinFunc(ahead, func(a, b time.Time) int { return a.Compare(b) }))
+		return &Refusal{Reason: RefuseAhead, Until: slices.MinFunc(ahead, func(a, b time.Time) int { return a.Compare(b) }), Most: in.limits.Ahead}
 	}
 	if len(day) >= in.limits.Daily {
 		// The next may start a day after the oldest that must fall out of
 		// the day.
 		slices.SortFunc(day, func(a, b time.Time) int { return a.Compare(b) })
-		return refuseUntil(RefuseDaily, day[len(day)-in.limits.Daily].Add(Day))
+		return &Refusal{Reason: RefuseDaily, Until: day[len(day)-in.limits.Daily].Add(Day), Most: in.limits.Daily}
 	}
 	return nil
 }
@@ -162,10 +162,10 @@ func refusedMaking(m store.RaceMaking, limits store.RaceSettings) error {
 	if len(m.Made) >= limits.Made {
 		made := slices.Clone(m.Made)
 		slices.SortFunc(made, func(a, b time.Time) int { return a.Compare(b) })
-		return refuseUntil(RefuseMade, made[len(made)-limits.Made].Add(Day))
+		return &Refusal{Reason: RefuseMade, Until: made[len(made)-limits.Made].Add(Day), Most: limits.Made}
 	}
 	if m.Owned >= limits.Owned {
-		return refuse(RefuseOwned)
+		return &Refusal{Reason: RefuseOwned, Most: limits.Owned}
 	}
 	return nil
 }
