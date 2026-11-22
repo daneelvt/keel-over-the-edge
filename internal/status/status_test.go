@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -75,7 +76,7 @@ func newSea(t testing.TB) *sea {
 		t.Fatal(err)
 	}
 	waves, kinds := cat.Prepare()
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Tick: stormy})
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Tick: stormy, Capacities: cat.Capacities()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,6 +315,50 @@ func TestRounded(t *testing.T) {
 	})
 	if strings.Join(keys, ",") != "boat,east,heading,machine,north" {
 		t.Errorf("a boat's fields: %v", keys)
+	}
+}
+
+// TestCrewCounted: the sailors at sea are the people, not the boats: a
+// skipper with two aboard is three, a machine sailor aboard counted with
+// the machines.
+func TestCrewCounted(t *testing.T) {
+	s := newSea(t)
+	do := func(c bus.Command) bus.Reply {
+		t.Helper()
+		reply := make(chan bus.Reply, 1)
+		c.Reply = reply
+		if err := s.w.Bus().Commands.Developer().TrySend(c); err != nil {
+			t.Fatal(err)
+		}
+		s.w.Tick()
+		return <-reply
+	}
+	acct := func(n byte) (a bus.Account) {
+		a[15] = n
+		return a
+	}
+	// A kind of boat with room for three.
+	kind := slices.IndexFunc(s.cat.Boats, func(b catalog.Boat) bool { return b.Capacity >= 3 })
+	if kind < 0 {
+		t.Fatal("no boat carries three")
+	}
+	skipper := do(bus.Command{Op: bus.Join, Account: acct(1), Conn: 1, BoatKind: uint16(kind)})
+	if skipper.Result != bus.Joined {
+		t.Fatalf("join: %+v", skipper)
+	}
+	if r := do(bus.Command{Op: bus.Join, Account: acct(2), Conn: 2}); r.Result != bus.Joined {
+		t.Fatalf("join a second: %+v", r)
+	}
+	for _, c := range []bus.Command{
+		{Op: bus.Board, Boat: skipper.Boat, Account: acct(3), Conn: 3},
+		{Op: bus.Board, Boat: skipper.Boat, Account: acct(4), Conn: 4, Machine: true},
+	} {
+		if r := do(c); r.Result != bus.Crewed {
+			t.Fatalf("board: %+v", r)
+		}
+	}
+	if st := s.status(); st.AtSea != 4 || st.MachinesAtSea != 1 {
+		t.Errorf("at sea %d, machines %d; want 4 and 1", st.AtSea, st.MachinesAtSea)
 	}
 }
 
