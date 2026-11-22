@@ -10,10 +10,11 @@ import (
 
 // RaceStage is what the world's races are run on: its racing areas, its
 // island courses, each that starts off Port Royal with the starts a race's
-// line may be moved to along its way (committee.Stage.MoveStarts: within
-// the racing areas' reach of Port Royal, out of its harbour and clear of
-// its mouth as the areas are, with a site's room of water as deep as the
-// courses' ways keep), and the catalog's boats as races know them.
+// line may be moved to (committee.Stage.MoveStarts: within the racing
+// areas' reach of Port Royal, out of its harbour and clear of its mouth
+// and the start's fan as the areas are, with a site's room of water as
+// deep as the courses' ways keep), and the catalog's boats as races know
+// them.
 func (b *Bundle) RaceStage(cat *catalog.Catalog) *committee.Stage {
 	st := &committee.Stage{}
 	for i := range cat.Boats {
@@ -42,7 +43,9 @@ func (b *Bundle) RaceStage(cat *catalog.Catalog) *committee.Stage {
 		return st
 	}
 	cc := cat.World.Courses
-	port := committee.Port{X: b.MainPort().X, Y: b.MainPort().Y, Within: float64(cc.Areas.Within * nauticalMile), Mouth: cc.Areas.Mouth}
+	port := committee.Port{X: b.MainPort().X, Y: b.MainPort().Y, Within: float64(cc.Areas.Within * nauticalMile), Mouth: cc.Areas.Mouth,
+		Fan: cc.Areas.Fan}
+	port.Starts = b.Start.Places[:min(b.Start.Fan, len(b.Start.Places))]
 	if h, ok := b.Harbour(); ok {
 		port.Harbour = &h
 	}

@@ -36,7 +36,7 @@ import (
 // A Dash is the race's course with no beat in it: laid as a reach is, its
 // line along the wind and its one mark straight across the wind from the
 // line's middle, but home to a finish line of its own, two buoys along the
-// wind as the start line is, up the wind of it by dashApart of the boat's
+// wind as the start line is, up the wind of it by DashApart of the boat's
 // lengths beyond its end, so that the boats coming home are clear of the
 // boats going out. No leg lies closer to the wind than dashOff: where the
 // legs are too short for the finish to lie so far up the wind, it lies
@@ -221,13 +221,14 @@ func layReach(a *Area, k Kind, speed, from float64) *bus.RaceCourse {
 	return c
 }
 
-// The Dash's numbers: how far up the wind of the start line's end its
-// finish line's begins, in the boat's lengths, and how near the wind its
-// way home may lie, rad.
-const (
-	dashApart = 8
-	dashOff   = 70 * math.Pi / 180
-)
+// DashApart is how far up the wind of a Dash's start line's end its
+// finish line's begins, in the boat's lengths: a variable only so that a
+// test may measure how far is enough.
+var DashApart = 8.0
+
+// dashOff is how near the wind a Dash's way home may lie, rad, and an
+// island race's first leg.
+const dashOff = 70 * math.Pi / 180
 
 // layDash lays a Dash in area a for boats k, n of them, in a wind of speed
 // from from.
@@ -244,7 +245,7 @@ func layDash(a *Area, k Kind, speed, from float64, n int) *bus.RaceCourse {
 	// the way home keeps dashOff off the wind.
 	ts, tc := physics.SinCos(math.Pi/2 - dashOff)
 	upOf := func(leg float64) float64 {
-		return min(float64(halfLine+float64(dashApart*l))+halfFinish, float64(leg*ts)/tc)
+		return min(float64(halfLine+float64(DashApart*l))+halfFinish, float64(leg*ts)/tc)
 	}
 	// The course's points, for a leg of leg, along and across the wind from
 	// the start line's middle; and the middle of what they span, so the

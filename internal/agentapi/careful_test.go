@@ -48,11 +48,12 @@ import (
 
 // carefulBoat is what the careful sailor knows of a boat: the handbook's
 // fastest boom by angle off the wind in 6, 12 and 20 knots, the wind she
-// reefs from, knots, and how near the wind she sails close-hauled,
-// degrees.
+// reefs from, knots, the reef she takes then (0 for 1), and how near the
+// wind she sails close-hauled, degrees.
 type carefulBoat struct {
 	boom     [7][3]float64
 	reefFrom float64
+	reef     int
 	close    float64
 }
 
@@ -66,6 +67,8 @@ var carefulWinds = [3]float64{6, 12, 20}
 var carefulBoats = map[string]carefulBoat{
 	"Jolly boat": {boom: [7][3]float64{{4, 4, 5}, {4, 10, 15}, {20, 25, 30}, {45, 50, 50}, {75, 80, 70}, {80, 80, 80}, {85, 85, 85}}, reefFrom: 19, close: 45},
 	"Yacht":      {boom: [7][3]float64{{4, 4, 4}, {4, 5, 10}, {25, 25, 30}, {45, 50, 50}, {75, 75, 65}, {75, 75, 75}, {75, 75, 75}}, reefFrom: 30, close: 45},
+	"Keelboat":   {boom: [7][3]float64{{4, 4, 10}, {4, 15, 20}, {20, 30, 30}, {45, 50, 55}, {75, 80, 65}, {80, 80, 80}, {80, 80, 80}}, reefFrom: 13, close: 45},
+	"Skiff":      {boom: [7][3]float64{{4, 4, 10}, {4, 10, 20}, {15, 15, 35}, {20, 25, 45}, {65, 70, 65}, {75, 75, 75}, {75, 75, 75}}, reefFrom: 13, reef: 2, close: 45},
 }
 
 // boomFor is the boom for an angle off the wind, degrees, in a wind of
@@ -258,7 +261,7 @@ func (cs *carefulSailor) toward(st *physics.State, x, y float64) {
 	if cs.knots >= cs.boat.reefFrom {
 		// The handbook's breeze: reefed, no tighter than 18° close-hauled
 		// and about 40° reaching.
-		reef = 1
+		reef = max(cs.boat.reef, 1)
 		boom = max(boom, 18+(40-18)*min(max((angle*180/math.Pi-45)/45, 0), 1))
 	}
 	if cs.eased {
@@ -320,6 +323,16 @@ func carefulPoints(c *bus.RaceCourse, k int, l float64) [][2]float64 {
 	// A ray toward (S, C) crossed anticlockwise about its start (Want
 	// −1): past the mark on the ray's right, across it, and back.
 	rx, ry := ch.C*-float64(ch.Want), -ch.S*-float64(ch.Want)
+	if c.Dash {
+		// A Dash's mark, its ray on along the way out: she passes it close,
+		// half a length off, and tacks round it in one turn for the way
+		// home, as a sailor does, without coming up to a point first.
+		near := 0.5 * l
+		return [][2]float64{
+			{ch.X + near*rx + 2*clear*ch.S, ch.Y + near*ry + 2*clear*ch.C},
+			{ch.X - 6*clear*ch.S - clear*rx, ch.Y - 6*clear*ch.C - clear*ry},
+		}
+	}
 	return [][2]float64{
 		{ch.X + clear*rx + clear*ch.S, ch.Y + clear*ry + clear*ch.C},
 		{ch.X - clear*rx + clear*ch.S, ch.Y - clear*ry + clear*ch.C},
@@ -423,6 +436,12 @@ func carefulStage(cat *catalog.Catalog) *committee.Stage {
 // wind of knots from from degrees.
 func carefulWorld(t *testing.T, cat *catalog.Catalog, knots, from float64) (*harness, *worldgen.Bundle) {
 	t.Helper()
+	return carefulWorldOf(t, cat, knots, from, 8)
+}
+
+// carefulWorldOf is carefulWorld holding up to limit boats.
+func carefulWorldOf(t *testing.T, cat *catalog.Catalog, knots, from float64, limit int) (*harness, *worldgen.Bundle) {
+	t.Helper()
 	b, err := seed1()
 	if err != nil {
 		t.Fatal(err)
@@ -443,7 +462,7 @@ func carefulWorld(t *testing.T, cat *catalog.Catalog, knots, from float64) (*har
 		st.Courses = append(st.Courses, ic)
 	}
 	e := cat.World.Edge
-	return newHarnessWith(t, harnessWith{limit: 8, knots: knots, from: from, stage: st, terrain: b.Terrain(cat.PrepareGround()), sheets: cat.StartSheets(),
+	return newHarnessWith(t, harnessWith{limit: limit, knots: knots, from: from, stage: st, terrain: b.Terrain(cat.PrepareGround()), sheets: cat.StartSheets(),
 		edge: &sim.Edge{Fall: int64(math.Round(e.Fall * physics.StepsPerSecond)), Clear: e.Clear}}), b
 }
 
@@ -497,6 +516,39 @@ func TestACarefulRunOfTheReach(t *testing.T) {
 			t.Errorf("a careful run of the Reach: %+v", run)
 		}
 	})
+}
+
+// TestCarefulDash sails the Dash in a Jolly boat, a skiff and a keelboat,
+// in light, middling and fresh wind, and prints the table of multiples of
+// its expected time: with KEEL_CAREFUL_RUNS=1.
+func TestCarefulDash(t *testing.T) {
+	if os.Getenv("KEEL_CAREFUL_RUNS") == "" {
+		t.Skip("set KEEL_CAREFUL_RUNS=1 to sail the Dash and print the table")
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var table strings.Builder
+	only := strings.Split(os.Getenv("KEEL_CAREFUL_ONLY"), ",")
+	for _, boat := range []string{"Jolly boat", "Skiff", "Keelboat"} {
+		for _, knots := range carefulWinds {
+			if len(only) == 2 && (only[0] != boat || only[1] != fmt.Sprint(knots)) {
+				continue
+			}
+			synctest.Test(t, func(t *testing.T) {
+				h, _ := carefulWorld(t, cat, knots, 0)
+				run := carefulTrial(t, h, cat, boat, knots, 0, bus.RaceCall{Across: true, Dash: true})
+				if !run.finished {
+					fmt.Fprintf(&table, "the Dash  %-10s %2.0f kn  not finished, %d capsizes\n", boat, knots, run.capsizes)
+					return
+				}
+				fmt.Fprintf(&table, "the Dash  %-10s %2.0f kn  %5.0f s of %5.0f  ×%.2f  %s, %d capsizes\n",
+					boat, knots, run.elapsed, run.expected, run.multiple(), medalWord(run.medal), run.capsizes)
+			})
+		}
+	}
+	t.Logf("careful runs of the Dash:\n%s", table.String())
 }
 
 // TestCarefulRuns sails every standing course in a Jolly boat and a
@@ -755,4 +807,185 @@ func TestEveryPlacedBoatGetsUnderWay(t *testing.T) {
 		}
 	}
 	t.Logf("boats placed for a Dash, left alone:\n%s", table.String())
+}
+
+// fleetMeeting is how near a Dash's boats going out came to its boats
+// coming home: the least distance between one going out and one coming
+// home, each further than three lengths (the mark's own rounding, its
+// zone) from the mark, m; how many seconds two such were within two
+// lengths of each other, there and further than ten lengths from the
+// mark; and how many boats came home.
+type fleetMeeting struct {
+	least           float64
+	meetings, clear int
+	finished        int
+}
+
+// carefulFleet sails a Dash of n Jolly boats as a race, in harness h: each
+// sailor lies on her spot as placed, her sheet let fly, until twenty
+// seconds before the gun, then sails for the line straight ahead and on
+// round the course as the careful sailor does. It says how near the boats
+// going out came to those coming home.
+func carefulFleet(t *testing.T, h *harness, cat *catalog.Catalog, knots, from float64, n int) fleetMeeting {
+	t.Helper()
+	kind := kindNamed(t, cat, "Jolly boat")
+	length := cat.Boats[kind].LengthOverall
+	var sailors []*carefulSailor
+	call := bus.RaceCall{ID: [16]byte{0xf1, 0xee}, Course: 1, Across: true, Dash: true, Kind: uint16(kind)}
+	for i := range n {
+		a := sailor(byte(10+i), fmt.Sprintf("Careful %d", i+1))
+		if text, refused := h.call(t, a, "observe", nil); refused {
+			t.Fatalf("no boat: %s", text)
+		}
+		call.Entrants = append(call.Entrants, bus.RaceEntrant{Account: bus.Account(a.Account), Number: int16(i + 1), Machine: true})
+		sailors = append(sailors, &carefulSailor{t: t, h: h, a: a, boat: carefulBoats["Jolly boat"], knots: knots, from: radOf(from),
+			ease: 25, lead: 15})
+	}
+	f := h.w.Bus().Frames.Acquire()
+	call.Start = f.Tick + 125*committee.Second
+	f.Release()
+	if err := h.w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RacePlace, Race: &call}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second)
+	out := fleetMeeting{least: math.Inf(1)}
+	type way struct {
+		next int16
+		at   int
+		pts  [][2]float64
+		held float64
+	}
+	ways := make([]way, n)
+	for i := range ways {
+		ways[i].next = -1
+	}
+	for range 3600 {
+		f := h.w.Bus().Frames.Acquire()
+		tick := f.Tick
+		f.Release()
+		type boat struct {
+			st   physics.State
+			next int16
+			on   bool
+		}
+		boats := make([]boat, n)
+		var c *bus.RaceCourse
+		var race bus.Race
+		for i, cs := range sailors {
+			st, rc, r, ok := cs.state()
+			if !ok || r.Course == nil {
+				t.Fatalf("boat %d: no boat or no race", i+1)
+			}
+			c, race = r.Course, r
+			boats[i] = boat{st, rc.Next, rc.State == bus.RacerPlaced || rc.State == bus.RacerRacing}
+		}
+		if race.Phase == bus.RaceEnded {
+			for i := range sailors {
+				_, rc, _, _ := sailors[i].state()
+				if rc.State == bus.RacerFinished {
+					out.finished++
+				}
+			}
+			return out
+		}
+		// How near the ways out come to the ways home, away from the mark.
+		mark := c.Marks[0]
+		zone := 3 * length
+		for i := range boats {
+			for j := range boats {
+				a, b := &boats[i], &boats[j]
+				if !a.on || !b.on || a.next > 1 || b.next != 2 {
+					continue
+				}
+				if math.Hypot(a.st.X-mark.X, a.st.Y-mark.Y) < zone || math.Hypot(b.st.X-mark.X, b.st.Y-mark.Y) < zone {
+					continue
+				}
+				d := math.Hypot(a.st.X-b.st.X, a.st.Y-b.st.Y)
+				out.least = min(out.least, d)
+				if d < 2*length {
+					out.meetings++
+					if math.Hypot(a.st.X-mark.X, a.st.Y-mark.Y) > 10*length && math.Hypot(b.st.X-mark.X, b.st.Y-mark.Y) > 10*length {
+						out.clear++
+					}
+				}
+			}
+		}
+		for i, cs := range sailors {
+			b := &boats[i]
+			w := &ways[i]
+			if !b.on {
+				cs.h.call(t, cs.a, "observe", map[string]any{"detail": "brief"})
+				continue
+			}
+			if tick < race.Start-20*committee.Second {
+				// Lying on her spot until it is time to go, the sheet let
+				// fly.
+				if w.held == 0 {
+					w.held = b.st.Heading
+				}
+				cs.h.call(t, cs.a, "steer", map[string]any{"heading": (int(math.Round(w.held*180/math.Pi)) + 360) % 360, "boom": 95})
+				continue
+			}
+			if b.next != w.next {
+				w.next, w.at = b.next, 0
+				k := min(int(w.next), len(c.Checks)-1)
+				if k == 0 {
+					// Straight ahead for the line, from where she lies.
+					ch := &c.Checks[0]
+					dx, dy := ch.X2-ch.X, ch.Y2-ch.Y
+					d := math.Hypot(dx, dy)
+					nx, ny := dy/d*float64(ch.Want), -dx/d*float64(ch.Want)
+					along := ((b.st.X-ch.X)*dx + (b.st.Y-ch.Y)*dy) / (d * d)
+					along = min(max(along, 0.1), 0.9)
+					px, py := ch.X+along*dx, ch.Y+along*dy
+					w.pts = [][2]float64{{px + 30*nx, py + 30*ny}}
+				} else {
+					w.pts = carefulPoints(c, k, length)
+				}
+			}
+			for w.at < len(w.pts)-1 && math.Hypot(w.pts[w.at][0]-b.st.X, w.pts[w.at][1]-b.st.Y) < max(1.5*length, 8) {
+				w.at++
+			}
+			cs.toward(&b.st, w.pts[w.at][0], w.pts[w.at][1])
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatal("the race never ended")
+	return out
+}
+
+// TestCarefulFleet sails a Dash with twelve Jolly boats for each of
+// several distances of its finish line up the wind of its start line's
+// end, and prints how near the boats going out came to those coming
+// home: with KEEL_CAREFUL_RUNS=1.
+func TestCarefulFleet(t *testing.T) {
+	if os.Getenv("KEEL_CAREFUL_RUNS") == "" {
+		t.Skip("set KEEL_CAREFUL_RUNS=1 to sail a fleet round the Dash and print the table")
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func(a float64) { committee.DashApart = a }(committee.DashApart)
+	var table strings.Builder
+	for _, knots := range carefulWinds {
+		for _, apart := range []float64{0, 4, 8, 12, 16} {
+			committee.DashApart = apart
+			var sum fleetMeeting
+			sum.least = math.Inf(1)
+			for _, from := range []float64{0, 120, 240} {
+				synctest.Test(t, func(t *testing.T) {
+					h, _ := carefulWorldOf(t, cat, knots, from, 32)
+					m := carefulFleet(t, h, cat, knots, from, 12)
+					sum.least = min(sum.least, m.least)
+					sum.meetings += m.meetings
+					sum.clear += m.clear
+					sum.finished += m.finished
+				})
+			}
+			fmt.Fprintf(&table, "%2.0f kn  apart %2.0f lengths  nearest out to home %4.1f m  seconds within two lengths %4d, beyond ten lengths of the mark %3d  home %2d of 36\n",
+				knots, apart, sum.least, sum.meetings, sum.clear, sum.finished)
+		}
+	}
+	t.Logf("twelve Jolly boats round the Dash:\n%s", table.String())
 }

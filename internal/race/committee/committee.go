@@ -91,23 +91,22 @@ type Area struct {
 // its rounding rays in the order its way crosses them, its way from the
 // start to the finish, m east and north, and the way's length, m. Home is
 // a course that starts off Port Royal, Loop one that finishes where it
-// starts; Starts are where a race's start may be moved to along its way,
-// and BackStarts along its way back (Stage.MoveStarts).
+// starts; Moves are where a race's start may be moved to, onto its way,
+// and BackMoves onto its way back (Stage.MoveStarts).
 type Course struct {
-	Number             int32
-	Start, Finish      Site
-	Rays               []Ray
-	Way                [][2]float64
-	Length             float64
-	Home, Loop         bool
-	Starts, BackStarts []Site
+	Number           int32
+	Start, Finish    Site
+	Rays             []Ray
+	Way              [][2]float64
+	Length           float64
+	Home, Loop       bool
+	Moves, BackMoves []Move
 }
 
 // Site is a course's start or finish: its middle, and the room of clear
-// water about it, m; a start moved along the way, how far along it, m.
+// water about it, m.
 type Site struct {
 	X, Y, Room float64
-	Along      float64
 }
 
 // Ray is a rounding ray: from (X, Y) toward Bearing, rad clockwise from

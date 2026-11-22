@@ -105,13 +105,20 @@ func timed(r *bus.Race) bool { return r.Trial || r.Alone }
 func Timed(r *bus.Race) bool { return timed(r) }
 
 // CallOff puts the race of call in f as called off at its warning signal,
-// for a storm at its place, laid as c: ended as it begins, no boat placed,
-// no one's start. It returns the race's key.
+// for a storm at its place, laid as c: ended as it begins, its entrants
+// kept, no boat placed, no one's start. It returns the race's key.
 func CallOff(f *bus.Frame, call *bus.RaceCall, c *bus.RaceCourse) uint32 {
 	key := max(f.NextRace, 1)
 	f.NextRace = key + 1
 	f.Races = append(f.Races, bus.Race{Key: key, ID: call.ID, Run: call.Run, Long: call.Long, Kind: call.Kind, Course: c,
 		Warning: f.Tick, Phase: bus.RaceEnded, Ended: f.Tick, CalledOff: true})
+	for i := range call.Entrants {
+		e := &call.Entrants[i]
+		f.Racers = append(f.Racers, bus.Racer{Race: key, Account: e.Account, Number: e.Number, Machine: e.Machine, Crew: e.Crew, Slot: -1,
+			State: bus.RacerDNS})
+	}
+	lo, hi := racersOf(f, key)
+	slices.SortFunc(f.Racers[lo:hi], func(a, b bus.Racer) int { return int(a.Number) - int(b.Number) })
 	event(f, bus.RaceEvent{Race: key, Kind: bus.RaceOver})
 	return key
 }
