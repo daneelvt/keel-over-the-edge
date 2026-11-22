@@ -640,6 +640,9 @@ func TestARaceInAStormIsCalledOffKindly(t *testing.T) {
 	if err != nil || len(mine) != 0 {
 		t.Errorf("entries counted toward the limits: %+v, %v", mine, err)
 	}
+	if made, owned, err := s.db.RacesBy(s.ctx, owner.ID, s.now.Add(-Day)); err != nil || len(made) != 0 || owned != 0 {
+		t.Errorf("counted toward its owner's: %d made, %d owned, %v", len(made), owned, err)
+	}
 	// An hour after its start, off the board.
 	s.now = start.Add(time.Hour + time.Minute)
 	if b, err := s.svc.Board(s.ctx, sailors[0]); err != nil || len(b.Mine) != 0 {

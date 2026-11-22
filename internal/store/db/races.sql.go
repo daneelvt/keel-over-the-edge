@@ -1650,7 +1650,8 @@ const racesBy = `-- name: RacesBy :many
 SELECT r.made_at, (CASE WHEN w.state = 'active' THEN r.state ELSE 'finished' END)::text AS state, r.kind
 FROM race r
 JOIN world w ON w.id = r.world_id
-WHERE r.owner_id = $1 AND (r.made_at > $2 OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'))
+WHERE r.owner_id = $1 AND r.called_off IS NULL
+  AND (r.made_at > $2 OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'))
 `
 
 type RacesByParams struct {
@@ -1665,7 +1666,8 @@ type RacesByRow struct {
 }
 
 // The races an owner made in any world since a time, or has not finished
-// in the world sailed (a race of a world ended is over).
+// in the world sailed (a race of a world ended is over); not those a storm
+// called off, which count toward no one's limits.
 func (q *Queries) RacesBy(ctx context.Context, arg RacesByParams) ([]RacesByRow, error) {
 	rows, err := q.db.Query(ctx, racesBy, arg.OwnerID, arg.Since)
 	if err != nil {

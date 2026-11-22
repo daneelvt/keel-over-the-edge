@@ -65,11 +65,13 @@ WHERE world_id = @world_id AND id = @id AND NOT moved AND state IN ('open', 'clo
 
 -- name: RacesBy :many
 -- The races an owner made in any world since a time, or has not finished
--- in the world sailed (a race of a world ended is over).
+-- in the world sailed (a race of a world ended is over); not those a storm
+-- called off, which count toward no one's limits.
 SELECT r.made_at, (CASE WHEN w.state = 'active' THEN r.state ELSE 'finished' END)::text AS state, r.kind
 FROM race r
 JOIN world w ON w.id = r.world_id
-WHERE r.owner_id = @owner_id AND (r.made_at > @since OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'));
+WHERE r.owner_id = @owner_id AND r.called_off IS NULL
+  AND (r.made_at > @since OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'));
 
 -- name: BuoyRacesNear :many
 -- A world's buoy races, not cancelled, starting between two times: the
