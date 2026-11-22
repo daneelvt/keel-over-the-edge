@@ -94,6 +94,8 @@ test.describe('dirty air', () => {
     await settle(page);
     const e = await page.evaluate(() => globalThis.keel.encounters());
     expect(e.wedges).toBe(2);
+    // The player's own says what it is: it is the wind's, and no shadow.
+    expect(e.wedgeLabel).toBe('Disturbed wind');
     for (const a of e.axes) {
       // Wind from the north at 12 knots, the boat east at 2.5 m/s: the air
       // it feels moves south and west, turned a few degrees more toward
@@ -107,7 +109,9 @@ test.describe('dirty air', () => {
     }
     await page.evaluate(() => globalThis.keel.settings({ windOverlay: false }));
     await settle(page);
-    expect((await page.evaluate(() => globalThis.keel.encounters())).wedges).toBe(0);
+    const off = await page.evaluate(() => globalThis.keel.encounters());
+    expect(off.wedges).toBe(0);
+    expect(off.wedgeLabel).toBeNull();
   });
 });
 

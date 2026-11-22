@@ -1769,6 +1769,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         knocks: game.sound.knocks,
         bumps: game.bumps,
         wedges: dirt.drawn,
+        wedgeLabel:
+          [...document.querySelectorAll<HTMLElement>('.dirty-air-label')]
+            .filter((el) => !el.hidden)
+            .map((el) => el.textContent ?? '')[0] ?? null,
         axes: dirt.axes.slice(0, dirt.drawn).map((a) => ({ ...a })),
       };
     },

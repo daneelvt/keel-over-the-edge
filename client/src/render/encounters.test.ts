@@ -10,7 +10,7 @@ import { KNOCK, knockOf } from '../audio/knock';
 import { catalog } from '../catalog';
 import { ARTICLES, articleName, bumpLine, tackText } from '../ui/verdict';
 import { ChaseCamera, SHAKE_TIME } from './camera';
-import { wedgeOutline } from './dirtyair';
+import { STREAKS, streaksGeometry, wedgeOutline } from './dirtyair';
 import { type Approach, approaching, type Seen } from './rightofway';
 
 describe('a bump’s verdict', () => {
@@ -138,5 +138,53 @@ describe('dirty air', () => {
     const widest = Math.max(...w.c);
     expect(widest).toBeGreaterThan(0.3);
     expect(widest).toBeLessThan(2);
+  });
+
+  test('is drawn as streaks that keep the wedge’s shape, from its sides to its middle', () => {
+    const n = catalog.encounters.shadow;
+    const w = wedgeOutline(n, catalog.encounters.overlay.wedgeDeficit);
+    const g = streaksGeometry(w);
+    const p = g.getAttribute('position');
+    expect(p.count).toBeGreaterThan(STREAKS.across * 2 * (STREAKS.steps + 1));
+    const slack = STREAKS.waver + STREAKS.width;
+    let widest = 0;
+    let left = 0;
+    let right = 0;
+    for (let i = 0; i < p.count; i++) {
+      const s = -p.getZ(i);
+      const x = p.getX(i);
+      // Flat on the water, within the wedge's reach.
+      expect(p.getY(i)).toBe(0);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThanOrEqual(n.reach);
+      // Within the outline, but for its wavering: the station either side of s.
+      const at = (s / n.reach) * (w.s.length - 1);
+      const c = Math.max(w.c[Math.floor(at)] ?? 0, w.c[Math.ceil(at)] ?? 0);
+      expect(Math.abs(x)).toBeLessThanOrEqual(c + slack);
+      widest = Math.max(widest, Math.abs(x));
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+    }
+    // As wide as the wedge is, to both sides alike.
+    expect(widest).toBeGreaterThan(Math.max(...w.c) - slack);
+    expect(right + left).toBeCloseTo(0, 1);
+    // Streaks, not a patch: they cover a small share of the wedge.
+    const index = g.getIndex();
+    let area = 0;
+    for (let i = 0; index !== null && i < index.count; i += 3) {
+      const [a, b, c] = [index.getX(i), index.getX(i + 1), index.getX(i + 2)];
+      area +=
+        0.5 *
+        Math.abs(
+          (p.getX(b) - p.getX(a)) * (p.getZ(c) - p.getZ(a)) -
+            (p.getX(c) - p.getX(a)) * (p.getZ(b) - p.getZ(a)),
+        );
+    }
+    let wedge = 0;
+    for (let i = 0; i + 1 < w.s.length; i++) {
+      wedge += ((w.c[i] ?? 0) + (w.c[i + 1] ?? 0)) * ((w.s[i + 1] ?? 0) - (w.s[i] ?? 0));
+    }
+    expect(area).toBeGreaterThan(0);
+    expect(area / wedge).toBeLessThan(0.1);
   });
 });
