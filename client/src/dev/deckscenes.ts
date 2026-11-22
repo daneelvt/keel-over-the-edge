@@ -57,6 +57,8 @@ export const DECK_SCENES = [
   'list-more',
   'ashore',
   'link',
+  'invite-machine',
+  'invite-machine-aboard',
   'chat',
   'chat-open',
   'chat-crew',
@@ -239,6 +241,9 @@ export function deckScene(
   // with a person aboard.
   const spectator = name === 'chat-spectator' || name === 'chat-spectator-person';
   const watcher = owner || spectator;
+  // Watching their own machine sailor, Invite friends open: alone on its
+  // boat, or crew aboard another's.
+  const inviting = name === 'invite-machine' || name === 'invite-machine-aboard';
   const aboard =
     name.startsWith('aboard') ||
     name === 'handed' ||
@@ -252,7 +257,7 @@ export function deckScene(
     name === 'link' ||
     (chatting && !aboard && !watcher);
   const away = name === 'skipper-away' || name === 'list-skipper';
-  const holding = watcher ? false : !aboard ? !away : name === 'aboard-holding';
+  const holding = watcher || inviting ? false : !aboard ? !away : name === 'aboard-holding';
   const person = (seat: number, n: number, who: string, you: boolean): PersonTold => ({
     seat,
     look: look(n),
@@ -273,9 +278,17 @@ export function deckScene(
     people[2] = person(2, 0.8, 'Bosun Bly', false);
   }
   const crew: CrewTold | null =
-    aboard || skipper || watcher
-      ? { people, holder: name === 'aboard-holding' ? 2 : away ? 1 : 0 }
-      : null;
+    name === 'invite-machine-aboard'
+      ? {
+          people: [
+            person(0, 0.1, 'Saltpeter Sue', false),
+            { ...person(1, 0.9, sailor, false), machine: true },
+          ],
+          holder: 0,
+        }
+      : aboard || skipper || watcher
+        ? { people, holder: name === 'aboard-holding' ? 2 : away ? 1 : 0 }
+        : null;
   const knocks: KnockCardTold[] =
     name === 'knocks'
       ? [
@@ -291,9 +304,11 @@ export function deckScene(
   const told: AboardTold | null = aboard ? { skipper: sailor, look: look(0.1), seat: 2 } : null;
   const watching: WatchingTold | null = owner
     ? { sailor: 'Gull', machine: true, mine: true, look: look(0.9) }
-    : spectator
-      ? { sailor, machine: true, mine: false, look: look(0.1) }
-      : null;
+    : inviting
+      ? { sailor, machine: true, mine: true, look: look(0.9) }
+      : spectator
+        ? { sailor, machine: true, mine: false, look: look(0.1) }
+        : null;
   const closed = signal(false);
   const now = Date.now();
   const statements = name === 'chat-statement' ? [statementOf(now)] : [];
@@ -310,7 +325,7 @@ export function deckScene(
     kind: signal(1),
     boatName: computed(() => ''),
     closed,
-    link: signal(name === 'link'),
+    link: signal(name === 'link' || inviting),
     list: signal(
       name === 'list' ||
         name === 'list-skipper' ||

@@ -716,6 +716,8 @@ export class Online {
           break;
         }
         this.watching.value = null;
+        // The watched boat's count goes with it.
+        this.watchers.value = 0;
         this.#lamp.value = null;
         this.#away = true;
         break;
@@ -953,10 +955,12 @@ export class Online {
         this.#lamp.value = null;
         this.ended.value = null;
         this.watchPlace.value = null;
+        // Each boat's count is told afresh after its Welcome: the own
+        // boat's, or the one watched.
+        this.watchers.value = 0;
         if (m.watching !== null || m.aboard !== null) {
           // Another boat's headers: none of the last one's, and no
           // prediction until the connection holds the controls.
-          this.watchers.value = 0;
           this.#watcher.reset();
           if (!this.watched) {
             this.#watcher.holdFrom(this.#predictor);

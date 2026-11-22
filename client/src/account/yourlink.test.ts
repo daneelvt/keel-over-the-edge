@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // A link to watch, opened once signed in: the sailor it opens, or why
-// none, for a sailor's link and a fleet's. On the player's own panel:
-// their link to share, with its faint line while the box is unticked; a
-// link that opened no watch, in words, with ☆ Follow for a sailor's, and
+// none, for a sailor's link and a fleet's. On the player's own panel: no
+// link to share; a link that opened no watch, in words, with ☆ Follow for a sailor's, and
 // word once the sailor followed may be watched. And a link taken out of
 // the address once used, the rest kept.
 
@@ -13,7 +12,7 @@ import { voyage } from './letwatch';
 import { withoutParams } from './links';
 import type { Fetch, LinkNote, Me } from './me';
 import { openLink } from './openlink';
-import { LinkRefused, refusedState, toggleFollow, YourLink } from './yourlink';
+import { LinkRefused, refusedState, toggleFollow } from './yourlink';
 import { YourSailor } from './yoursailor';
 
 vi.stubGlobal('location', { origin: 'https://play.example' });
@@ -129,27 +128,12 @@ function findAll(node: ComponentChildren, keep: (v: Node) => boolean): Node[] {
 
 const buttons = (t: ComponentChildren) => findAll(t, (v) => v.type === 'button').map(textOf);
 
-describe('the player’s own link', () => {
-  test('Share a link to watch me and Make a new link, the faint line while unticked', () => {
-    const unticked = expand(YourLink({ me: daneel, ticked: false }));
-    expect(buttons(unticked)).toEqual(['Share a link to watch me', 'Make a new link']);
-    expect(textOf(unticked)).toContain(
-      'Your link shows your boat only on voyages you let others watch.',
-    );
-    const ticked = expand(YourLink({ me: daneel, ticked: true }));
-    expect(textOf(ticked)).not.toContain('Your link shows your boat');
-    expect(YourLink({ me: { ...daneel, watchCode: '' }, ticked: false })).toBeNull();
-  });
-
-  test('on Your sailor, under Set sail, whether or not the box is ticked', () => {
+describe('the player’s own panel', () => {
+  test('shares no link: Set sail and Watch another sailor, with the code known or not', () => {
     const v = voyage(daneel, async () => new Response('{}'));
     const t = expand(YourSailor({ me: daneel, voyage: v, sail: () => {}, watch: null }));
-    expect(buttons(t)).toEqual([
-      'Set sail as Daneel',
-      'Share a link to watch me',
-      'Make a new link',
-      'Watch another sailor',
-    ]);
+    expect(buttons(t)).toEqual(['Set sail as Daneel', 'Watch another sailor']);
+    expect(textOf(t)).not.toMatch(/link/i);
   });
 });
 

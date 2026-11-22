@@ -32,7 +32,7 @@ import type { Me } from './me';
 import { Picker } from './picker';
 import { Portrait } from './portraits';
 import { type TakeOut, TakeOutQuestion } from './takeout';
-import { LinkRefused, YourLink } from './yourlink';
+import { LinkRefused } from './yourlink';
 
 /** The button that sails the player's own sailor, by its name. */
 export function setSailAs(name: string): string {
@@ -81,8 +81,8 @@ const now = (act: () => void, tap?: () => void): void => {
  * while it cannot yet. With out, a boat still in the water: the question
  * before it is taken out, in the panel's place while it is asked. At its head, a link to watch the page was opened at
  * that opened no watch, and why; watchName watches a sailor followed from
- * it once it may be watched. Under Set sail, the player's own link to
- * watch them, to share: below it, so that Set sail stays in view. With a chooser, their portrait beside their name
+ * it once it may be watched. No link is shared here: the player's own is
+ * Invite friends' at sea. With a chooser, their portrait beside their name
  * and, ashore, Change your look; or the picker, as the chooser has it.
  * With boats, the boat they sail and, ashore, Your boat and Change boat;
  * or the boat's look chosen, or the fleet's boats, as boats has it.
@@ -176,7 +176,6 @@ export function YourSailor({
           {START_AGAIN}
         </button>
       ) : null}
-      <YourLink me={me} ticked={voyage.on.value} />
       <button
         type="button"
         class="start-sign-in"

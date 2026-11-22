@@ -648,6 +648,80 @@ func TestWatchersTold(t *testing.T) {
 	})
 }
 
+// TestSpectatorsToldWatchers: a spectator is told how many watch the boat
+// it watches, itself among them, as the sailor is: two on Bob's boat read
+// 2, and once one moves to Dan's both boats' readers read 1. Each count is
+// sent once as it changes, so the sends are counted: none more than the
+// changes.
+func TestSpectatorsToldWatchers(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv := NewServer(t, Config{})
+		bobToken, bob := srv.Sailor("Bob")
+		danToken, dan := srv.Sailor("Dan")
+		annToken, _ := srv.Sailor("Ann")
+		catToken, _ := srv.Sailor("Cat")
+		srv.Edge.SetVoyage(bus.Account(bob), true)
+		srv.Edge.SetVoyage(bus.Account(dan), true)
+		sent := func() float64 {
+			return testutil.ToFloat64(srv.Metrics.EdgeMessages.WithLabelValues("out", "watchers"))
+		}
+		bobs := dial(t, srv, bobToken, client.Hello())
+		bobs.welcomed()
+		dans := dial(t, srv, danToken, client.Hello())
+		dans.welcomed()
+		ann := dial(t, srv, annToken, client.HelloWatch("Bob"))
+		ann.welcomed()
+		told := func(v *viewer, n uint32) bool {
+			return v.watchers != nil && v.watchers.GetCount() == n
+		}
+		if !ann.read(3*time.Second, func() bool { return told(ann, 1) }) {
+			t.Fatalf("Ann, alone on Bob's boat, was told %v", ann.watchers)
+		}
+		cat := dial(t, srv, catToken, client.HelloWatch("Bob"))
+		cat.welcomed()
+		for _, v := range []*viewer{ann, cat, bobs} {
+			if !v.read(3*time.Second, func() bool { return told(v, 2) }) {
+				t.Fatalf("two on Bob's boat: told %v", v.watchers)
+			}
+		}
+		// Ann 1 then 2, Cat 2, Bob 1 then 2.
+		if n := sent(); n != 5 {
+			t.Fatalf("%v counts sent for two on one boat", n)
+		}
+		cat.send(client.Watch("Dan"))
+		cat.welcomed()
+		cat.watchers = nil
+		for _, v := range []*viewer{cat, dans, ann, bobs} {
+			if !v.read(3*time.Second, func() bool { return told(v, 1) }) {
+				t.Fatalf("one on each boat: told %v", v.watchers)
+			}
+		}
+		// Each of the four told 1 once.
+		if n := sent(); n != 9 {
+			t.Fatalf("%v counts sent after one moved", n)
+		}
+		// Nothing more while nothing changes.
+		ann.read(5*time.Second, nil)
+		cat.read(time.Second, nil)
+		if n := sent(); n != 9 {
+			t.Fatalf("%v counts sent with nothing changed", n)
+		}
+		// Cat stops watching: Dan is told 0, Cat nothing of Dan's boat again.
+		cat.watchers = nil
+		cat.send(client.Unwatch())
+		if !dans.read(3*time.Second, func() bool { return told(dans, 0) }) {
+			t.Fatalf("Dan was told %v", dans.watchers)
+		}
+		cat.read(3*time.Second, nil)
+		if cat.watchers != nil {
+			t.Fatalf("Cat, watching no longer, was told %v", cat.watchers)
+		}
+		if n := sent(); n != 10 {
+			t.Fatalf("%v counts sent after one stopped", n)
+		}
+	})
+}
+
 // TestStoppedSpectator: a spectator stopped by the game's operator is
 // closed with 4003, and an AI account cannot watch.
 func TestStoppedSpectator(t *testing.T) {

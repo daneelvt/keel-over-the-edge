@@ -136,7 +136,7 @@ func (enc *encoder) frame() {
 	if enc.told == math.MinInt64 || f.Tick-enc.told >= watchersEvery {
 		enc.told = f.Tick
 		for _, c := range enc.active {
-			if c.active && !c.w.on {
+			if c.active {
 				c.tellWatchers()
 			}
 		}

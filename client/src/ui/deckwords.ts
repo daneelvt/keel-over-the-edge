@@ -48,11 +48,12 @@ export const NEW_LINK = 'New link';
 export const LINKS_OFF = 'Links off';
 export const CLOSE = 'Close';
 export const READING_LINK = 'Reading your link…';
-export const NO_LINK = 'You have no link out.';
 export const LINK_NOT_HERE =
   'Your link is out, but this device does not have it. A new link ends the old one.';
 export const LINK_ENDED = 'Your link has ended. No one can knock with it now.';
 export const LINKS_RESTING = 'Links are resting for now.';
+/** Too many links made lately: the link route's own limit, not a new sailor's. */
+export const LINKS_OFTEN = 'You’ve made lots of links lately. Try again in a while.';
 export const LINK_UNREADABLE = 'Your link cannot be read just now. Try again.';
 export const CLOSED_TO_KNOCKS = 'Closed to knocks';
 export const CLOSED_DETAIL = 'For this voyage: no one can ask to come aboard.';

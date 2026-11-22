@@ -87,6 +87,9 @@ export const NOT_NOW = 'Not now';
 /** The Rules of the sea, in short, on the card a sailor accepts them on. */
 export const RULES_TITLE = 'The Rules of the sea';
 
+/** The card's first line: what the Rules are, and that they are accepted once. */
+export const RULES_WHAT = 'A few simple rules for sailing with others. You accept them once.';
+
 export const RULES_LINES: readonly string[] = [
   'Be decent to everyone you meet.',
   'No contact details or links: nobody needs yours, and nobody should ask for them.',

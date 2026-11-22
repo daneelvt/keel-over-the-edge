@@ -30,9 +30,9 @@ import {
   LINK_NOT_HERE,
   LINK_UNREADABLE,
   LINKS_OFF,
+  LINKS_OFTEN,
   LINKS_RESTING,
   NEW_LINK,
-  NO_LINK,
   READING_LINK,
   SAIL_WITH_ME,
   SAIL_WITH_ME_DETAIL,
@@ -212,7 +212,11 @@ export function shownLink(
 
 /** The words of a link not made: the server's reason. */
 export function madeProblem(error: string): string {
-  return error === 'links-off' ? LINKS_RESTING : reasonText(error);
+  if (error === 'links-off') {
+    return LINKS_RESTING;
+  }
+  // The link's own limit, not the new sailors' that shares its code.
+  return error === 'often' ? LINKS_OFTEN : reasonText(error);
 }
 
 const defaultServer = linkServer();
@@ -370,7 +374,8 @@ export function SailWithMe({
       <p class="deck-faint">{detail}</p>
       {shown.kind === 'reading' ? <p aria-live="polite">{READING_LINK}</p> : null}
       {shown.kind === 'unread' ? <p aria-live="polite">{LINK_UNREADABLE}</p> : null}
-      {shown.kind === 'none' ? <p>{shown.ended ? LINK_ENDED : NO_LINK}</p> : null}
+      {/* With none out, the line above says what a link does, and Get a link makes one. */}
+      {shown.kind === 'none' && shown.ended ? <p>{LINK_ENDED}</p> : null}
       {shown.kind === 'elsewhere' ? (
         <>
           <p>{LINK_NOT_HERE}</p>

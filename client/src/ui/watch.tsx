@@ -25,19 +25,22 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Fetch, Me } from '../account/me';
 import { call, reasonOf } from '../account/passkeys';
 import { reasonText } from '../account/reasons';
-import { SHARE } from './deckwords';
+import { COPIED, COPY, LINK_UNREADABLE, READING_LINK, SHARE } from './deckwords';
 import { COME_ABOARD, comeAboardText } from './machinewords';
 import { useModal } from './modal';
 import { PlayerText } from './player';
 import { queueLines } from './queue';
 import { loadSettings, saveWatchChoice, type WatchSort, type WatchWho } from './settings';
 import {
+  browserSharer,
   type Capture,
   linkState,
   NewLink,
   preloadPicture,
   ShareLink,
   SharePicture,
+  type Sharer,
+  shareLink,
 } from './sharelink';
 import { SheetHead } from './sheet';
 import {
@@ -78,8 +81,6 @@ import {
 import {
   CLOSE,
   endedText,
-  fleetLink,
-  fleetShareText,
   LEAVE,
   LEAVE_DETAIL,
   LEAVE_QUESTION,
@@ -88,7 +89,6 @@ import {
   READING,
   SAIL,
   SEARCH,
-  SHARE_FLEET,
   SHARE_ME,
   SHARE_SAILOR,
   SHOWN_WHEN_WATCHED,
@@ -103,7 +103,10 @@ import {
   WATCH_A_SAILOR,
   WATCH_ANOTHER,
   WATCHING,
+  watchersText,
   watchLink,
+  watchSailorDetail,
+  watchSailText,
 } from './watchwords';
 
 export { Cog, CopyWatchLink, kindName, type WatchRow } from './watchcard';
@@ -777,11 +780,12 @@ export function WatchList({
 /**
  * The plate at the foot of the screen while a boat is watched, where the
  * controls are while sailing, one row in the control head's brass: whose
- * boat it is, Watch another and Sail, and Come aboard the player's own
- * machine sailor's; or, with none watched, why the last
+ * boat it is and how many watch it, the reader among them, Watch another
+ * and Sail, and Come aboard the player's own machine sailor's; or, with
+ * none watched, why the last
  * watch ended or the place in the spectators' queue, with the same.
- * Nothing while the own boat sails. A long name ends in an ellipsis, and
- * the plate's label says it whole.
+ * Nothing while the own boat sails. A long name ends in an ellipsis, the
+ * count whole after it, and the plate's label says both whole.
  */
 export function WatchBar({
   view,
@@ -798,6 +802,8 @@ export function WatchBar({
   if (!view.spectating.value && w === null && place === null && view.status.value !== 'idle') {
     return null;
   }
+  // How many watch the boat, the reader among them, as the sailor reads it.
+  const count = w === null ? '' : watchersText(view.watchers.value);
   const another = (
     <button type="button" class="head-key" onClick={() => (view.list.value = true)}>
       {WATCH_ANOTHER}
@@ -840,7 +846,9 @@ export function WatchBar({
   return (
     <section
       class="watch-plate"
-      aria-label={w === null ? WATCHING : `${WATCHING} ${w.sailor}`}
+      aria-label={
+        w === null ? WATCHING : `${WATCHING} ${w.sailor}${count === '' ? '' : `, ${count}`}`
+      }
       data-readout="watching"
     >
       <div class="watch-plate-words">
@@ -852,6 +860,11 @@ export function WatchBar({
                 <PlayerText text={w.sailor} />
               </strong>
               {w.machine ? <Cog /> : null}
+              {count !== '' ? (
+                <span class="watch-plate-count" data-readout="watchers">
+                  {` · ${count}`}
+                </span>
+              ) : null}
             </span>
           </p>
         ) : place !== null ? (
@@ -889,7 +902,6 @@ export function SeaWatchList({ view, side = true }: { view: WatchView; side?: bo
     return (
       <WatchShare
         name={w.sailor}
-        mine={w.mine}
         capture={view.capture ?? null}
         close={() => {
           if (view.sharing !== undefined) {
@@ -910,62 +922,28 @@ export function SeaWatchList({ view, side = true }: { view: WatchView; side?: bo
   ) : null;
 }
 
-/** GET /api/me's fleet's code, or '' if it is not read. */
-async function readFleetCode(f: Fetch): Promise<string> {
-  try {
-    const res = await f('/api/me', { cache: 'no-store', credentials: 'same-origin' });
-    return res.status === 200 ? (((await res.json()) as Me).fleetCode ?? '') : '';
-  } catch {
-    return '';
-  }
-}
-
 /**
- * The share of a machine sailor watched: its link, the view of it now as
- * a picture with the link, and, for the player's own, their fleet's link.
- * Nothing in it says whose the sailor is.
+ * The share of a machine sailor watched: its link, and the view of it now
+ * as a picture with the link. Nothing in it says whose the sailor is. The
+ * player's own machine sailor's links, and its fleet's, are Invite
+ * friends' and the account page's.
  */
 export function WatchShare({
   name,
-  mine,
   capture,
   close,
   read = readCard,
-  f = browserFetch,
 }: {
   name: string;
-  mine: boolean;
   capture: Capture | null;
   close: () => void;
   read?: (name: string) => Promise<CardAnswer>;
-  f?: Fetch;
 }) {
-  const [code, setCode] = useState('');
-  const [fleet, setFleet] = useState('');
-  useEffect(() => {
-    let live = true;
-    void read(name).then((a) => {
-      if (live && a !== null && 'card' in a) {
-        setCode(a.card.code ?? '');
-      }
-    });
-    if (mine) {
-      void readFleetCode(f).then((c) => {
-        if (live) {
-          setFleet(c);
-        }
-      });
-    }
-    return () => {
-      live = false;
-    };
-  }, [name]);
+  const code = useCardCode(name, read);
   useEffect(preloadPicture, []);
   // A machine sailor's link is the same wherever it is shared from.
-  const st = linkState(`watched:${name}`, code);
-  const fst = linkState('fleet', fleet);
-  const url = code === '' ? null : watchLink(location.origin, code);
-  const fleetUrl = fleet === '' ? null : fleetLink(location.origin, fleet);
+  const st = linkState(`watched:${name}`, code ?? '');
+  const url = code === null || code === '' ? null : watchLink(location.origin, st.code.value);
   return (
     <section class="panel watch-share-panel" aria-labelledby="watch-share-title">
       <h2 id="watch-share-title">
@@ -983,14 +961,6 @@ export function WatchShare({
         {capture !== null ? (
           <SharePicture name={name} url={url} capture={capture} cls="plate-key" state={st} />
         ) : null}
-        {fleetUrl !== null ? (
-          <ShareLink
-            label={SHARE_FLEET}
-            cls="plate-key"
-            copied={fst.copied}
-            shared={() => ({ url: fleetUrl, text: fleetShareText(fleetUrl) })}
-          />
-        ) : null}
         {st.said.value !== '' ? (
           <p class="watch-faint" role="status">
             {st.said.value}
@@ -1001,6 +971,86 @@ export function WatchShare({
         {CLOSE}
       </button>
     </section>
+  );
+}
+
+/** A machine sailor's code of its link to watch, from its card: null while read, '' if none can be. */
+function useCardCode(name: string, read: (name: string) => Promise<CardAnswer>): string | null {
+  const [code, setCode] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setCode(null);
+    void read(name).then((a) => {
+      if (live) {
+        setCode(a !== null && 'card' in a ? (a.card.code ?? '') : '');
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [name]);
+  return code;
+}
+
+/**
+ * Invite friends' part for the player's own machine sailor, watched: what
+ * its link to watch does, the link, and Share (the phone's own sheet,
+ * where it has one) and Copy, as the link to sail with it beside it.
+ */
+export function WatchSailorLink({
+  name,
+  read = readCard,
+  sharer = browserSharer(),
+}: {
+  name: string;
+  read?: (name: string) => Promise<CardAnswer>;
+  sharer?: Sharer;
+}) {
+  const code = useCardCode(name, read);
+  const st = linkState(`watched:${name}`, code ?? '');
+  const url = code === null || code === '' ? null : watchLink(location.origin, st.code.value);
+  return (
+    <div class="deck-part deck-link">
+      <p class="deck-faint">{watchSailorDetail(name)}</p>
+      {code === null ? <p aria-live="polite">{READING_LINK}</p> : null}
+      {code === '' ? <p aria-live="polite">{LINK_UNREADABLE}</p> : null}
+      {url !== null ? (
+        <>
+          <input
+            class="deck-url"
+            type="text"
+            name="watch-link"
+            readOnly
+            aria-label={watchSailText(name)}
+            value={url}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+          <div class="deck-keys">
+            {sharer.share !== undefined ? (
+              <button
+                type="button"
+                class="plate-key key-main"
+                onClick={() => void shareLink({ url, text: shareText(name, url) }, sharer)}
+              >
+                {SHARE}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              class={`plate-key${sharer.share === undefined ? ' key-main' : ''}`}
+              onClick={() =>
+                void sharer.copy(url).then(
+                  () => (st.copied.value = true),
+                  () => (st.copied.value = false),
+                )
+              }
+            >
+              {st.copied.value ? COPIED : COPY}
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 

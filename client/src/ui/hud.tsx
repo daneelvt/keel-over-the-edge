@@ -42,7 +42,7 @@ import type { ClearView } from './clearview';
 import type { ShipsClock } from './clock';
 import { Helm, Reef, type ReefActions, Sheet } from './controls';
 import type { Countdown } from './countdown';
-import { type DeckView, deckPlate, deckShown, machineShared, useDeck } from './decklazy';
+import { type DeckView, deckPlate, deckShown, useDeck } from './decklazy';
 import { ChangeQuestion, HomeQuestion, type HomeView } from './home';
 import { canInvite, InvitePanel } from './invite';
 import { Menu } from './menu';
@@ -327,10 +327,8 @@ function Screen(props: ScreenProps) {
   // Aboard without the controls, or the skipper while another holds
   // them: the plate of sailing together stands where the watch plate would.
   const decked = deck !== null && deckPlate(deck);
-  // Invite friends, opened from the menu, or by the player's own link asked for.
-  const inviting =
-    account === 'invite' ||
-    (account === '' && deck !== null && deck.link.value && machineShared(deck) === null);
+  // Invite friends, opened from the menu, or by a link asked for.
+  const inviting = account === 'invite' || (account === '' && deck !== null && deck.link.value);
   const full = props.fullScreen ?? null;
   const camera = props.camera ?? null;
   const clear = props.clear ?? null;
@@ -369,7 +367,10 @@ function Screen(props: ScreenProps) {
             sea.chart.show(null);
             watch.watch(name);
           };
-    return <ChartScreen sea={sea} end={end} notices={notices} watch={fromLog} />;
+    // Watching, the Log tab opens the log of the sailor watched.
+    const watched =
+      watch !== null && watch.spectating.value ? watch.watching.value?.sailor || null : null;
+    return <ChartScreen sea={sea} end={end} notices={notices} watch={fromLog} watched={watched} />;
   }
   if (flying && fly !== null) {
     // The free camera's picture is clean; a tap shows the way back a moment.
@@ -476,7 +477,7 @@ function Screen(props: ScreenProps) {
           sailor={props.sailor}
           close={() => {
             setAccount('');
-            if (deck !== null && machineShared(deck) === null) {
+            if (deck !== null) {
               deck.link.value = false;
             }
           }}

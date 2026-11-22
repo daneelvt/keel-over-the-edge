@@ -22,13 +22,19 @@ import {
 import {
   AI_SAILORS,
   AI_SAILORS_LINE,
+  CONNECT,
+  connected,
   fleetLine,
+  LOG,
+  MAKE_ANOTHER,
+  type Machine,
   MachineList,
   type MachinesPage,
+  machineLine,
+  NOT_AT_SEA,
   picture,
   StartPair,
 } from './machines';
-import { MachineShare } from './machineshare';
 import { type Fetch, type Me, resolveSailor } from './me';
 import { Portrait, portraitFiles } from './portraits';
 import { MACHINE_REASONS, machineReasonText, REASONS } from './reasons';
@@ -226,10 +232,6 @@ function expand(node: ComponentChildren): ComponentChildren {
     return node;
   }
   const v = node as VNode<{ children?: ComponentChildren }>;
-  if (v.type === MachineShare) {
-    // Its own state: tested apart.
-    return null;
-  }
   if (typeof v.type === 'function') {
     return expand((v.type as (p: unknown) => ComponentChildren)(v.props));
   }
@@ -362,10 +364,13 @@ describe('the start screen with machine sailors', () => {
     expect(checkboxes(ai)).toEqual([]);
     expect(buttons(ai)).toEqual([
       { text: WATCH, gold: false },
-      { text: 'How to connect', gold: false },
-      { text: 'Its log', gold: false },
-      { text: 'Make another machine sailor', gold: false },
+      { text: LOG, gold: false },
+      { text: MAKE_ANOTHER, gold: false },
     ]);
+    // Nothing of links, nor the look's settings beside its portrait.
+    expect(textOf(ai)).not.toMatch(/link/i);
+    expect(textOf(ai)).not.toContain('Machine, female');
+    expect(textOf(ai)).toContain('At sea');
   });
 
   test('says so when the player’s own boat is in the water', () => {
@@ -389,6 +394,103 @@ describe('the start screen with machine sailors', () => {
     expect(ticked({ ...ann, spectators: 'voyage' })).toBe(false);
     expect(ticked({ ...ann, atSea: true, spectators: 'no' })).toBe(false);
     expect(ticked({ ...ann, atSea: true, spectators: 'voyage' })).toBe(true);
+  });
+});
+
+describe('an AI sailor’s row', () => {
+  const look = { version: 'v', finish: 'f', colour: 'c', words: 'Machine', srgb: '#b5532a' };
+  const now = Date.now();
+  const app = {
+    id: 'g',
+    name: 'Claude',
+    returnHost: 'claude.ai',
+    approved: now - DAY,
+    lastUsed: now,
+    ends: now + 30 * DAY,
+  };
+  const base: Machine = {
+    id: 'm1',
+    name: 'Lady Pollux',
+    look,
+    atSea: false,
+    apps: [app],
+    token: null,
+  };
+  const rows = (machines: Machine[]) => {
+    const page: MachinesPage = {
+      mcp: 'https://keel.example/mcp',
+      cap: 6,
+      machines,
+      fleet: {},
+      looks: machineLooks,
+      confirmedUntil: 0,
+    };
+    return findAll(
+      expand(
+        MachineList({
+          page,
+          heading: AI_SAILORS,
+          open: '',
+          toggle: () => {},
+          make: () => {},
+          watch: () => {},
+        }),
+      ),
+      'li',
+    ).map((li) => ({
+      line: textOf(findAll(li, 'span').filter((x) => x.props.class?.includes('machine-row-line'))),
+      keys: findAll(li, 'button').map((b) => textOf(b.props.children)),
+    }));
+  };
+
+  test('at sea: how many watch, Watch and Log', () => {
+    expect(rows([{ ...base, atSea: true, watchers: 1 }])).toEqual([
+      { line: 'At sea · 1 watching', keys: [WATCH, LOG] },
+    ]);
+    expect(rows([{ ...base, atSea: true }])[0]?.line).toBe('At sea');
+  });
+
+  test('ashore: no key but Log', () => {
+    expect(rows([base])).toEqual([{ line: NOT_AT_SEA, keys: [LOG] }]);
+  });
+
+  test('never connected: Connect in Watch’s place; a live token counts as connected', () => {
+    expect(rows([{ ...base, apps: [] }])).toEqual([{ line: NOT_AT_SEA, keys: [CONNECT, LOG] }]);
+    const ended = { ...app, ended: true };
+    expect(rows([{ ...base, apps: [ended] }])[0]?.keys).toEqual([CONNECT, LOG]);
+    const token = { id: 't', made: now - DAY, lastUsed: 0, ends: now + DAY };
+    expect(rows([{ ...base, apps: [], token }])[0]?.keys).toEqual([LOG]);
+  });
+
+  test('stopped: the operator’s stop, and no key', () => {
+    const r = rows([{ ...base, atSea: true, stopped: now - DAY, apps: [] }]);
+    expect(r[0]?.line).toMatch(/^Stopped on /);
+    expect(r[0]?.keys).toEqual([LOG]);
+  });
+
+  test('its line in words', () => {
+    expect(machineLine({ ...base, atSea: true, watchers: 3 }, 'Keelboat 5', now)).toBe(
+      'At sea · Keelboat 5 · 3 watching',
+    );
+    expect(machineLine(base, 'Keelboat 5', now)).toBe(NOT_AT_SEA);
+    expect(connected({ ...base, apps: [] }, now)).toBe(false);
+  });
+
+  test('another made under the rows, while under the cap', () => {
+    const page: MachinesPage = {
+      mcp: '',
+      cap: 1,
+      machines: [base],
+      fleet: {},
+      looks: machineLooks,
+      confirmedUntil: 0,
+    };
+    const list = (p: MachinesPage) =>
+      buttons(
+        expand(MachineList({ page: p, heading: null, open: '', toggle: () => {}, make: () => {} })),
+      ).map((b) => b.text);
+    expect(list(page)).not.toContain(MAKE_ANOTHER);
+    expect(list({ ...page, cap: 2 })).toContain(MAKE_ANOTHER);
   });
 });
 
@@ -457,7 +559,7 @@ describe('Sail to, at sea', () => {
     const rows = keys(() => closed++);
     expect(rows.map((r) => [r.name, r.keys[0]])).toEqual([
       ['Iron Mary', SAIL_TO],
-      ['Copper Kate', 'How to connect'],
+      ['Copper Kate', CONNECT],
     ]);
     press(rows[0]?.button);
     expect(asked).toEqual(['m1 Iron Mary true']);
@@ -493,7 +595,7 @@ describe('the machine sailors’ portraits', () => {
     expect(canvas.props.colours).toEqual({ main: colour.colour, skin: finish.colour });
   });
 
-  test('one in each AI sailor’s row, a row’s size, unnamed beside its look in words', () => {
+  test('one in each AI sailor’s row, a row’s size, unnamed, with no look in words beside it', () => {
     const m: MachineItem = {
       id: 'm1',
       name: 'AILA',
@@ -516,13 +618,13 @@ describe('the machine sailors’ portraits', () => {
     const rows = findAll(t, 'li');
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      const who = findAll(row, 'span').filter((s) => s.props.class === 'machine-who');
+      const who = findAll(row, 'span').filter((s) => s.props.class === 'machine-row-picture');
       expect(who).toHaveLength(1);
       const canvases = findAll(who, 'canvas');
       expect(canvases).toHaveLength(1);
       expect(props(canvases[0]).class).toBe('portrait portrait-40');
       expect(props(canvases[0])['aria-hidden']).toBe('true');
-      expect(textOf(who)).toContain('Machine, female');
+      expect(textOf(row)).not.toContain('Machine, female');
     }
   });
 

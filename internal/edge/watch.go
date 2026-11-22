@@ -366,6 +366,9 @@ func (enc *encoder) endWatch(c *conn, why pb.WatchEnd, name string) {
 	e.watchers.set(c, c.w.boat, false)
 	c.w = watching{}
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
+	// The watched boat's count, which the client puts away as the watch
+	// ends: its own is told afresh.
+	c.toldWatchers = 0
 	c.spectating.Store(false)
 	c.watched.Store(nil)
 	if why != pb.WatchEnd_WATCH_END_UNSPECIFIED {
@@ -416,6 +419,8 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 	c.toldLook = f.Look[s]
 	c.toldBoat(f, s)
 	c.toldDeck, c.toldCrew = toldDeck{}, false
+	// The client starts each boat's count afresh at its Welcome.
+	c.toldWatchers = 0
 	c.rmu.Lock()
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
@@ -452,13 +457,19 @@ func (c *conn) marginNow() int16 {
 	return c.margin.take()
 }
 
-// watchersEvery is how often a sailor is told how many watch, at most.
+// watchersEvery is how often a sailor, or a spectator, is told how many
+// watch, at most.
 const watchersEvery = 60 // ticks
 
-// tellWatchers tells a sailing connection how many watch its boat, if it
-// has changed.
+// tellWatchers tells a connection how many watch the boat it is about, if
+// it has changed: a sailing one its own boat, a watching one the sailor it
+// watches, itself among them, as the list of sailors to watch counts.
 func (c *conn) tellWatchers() {
-	n := c.e.spect.count(c.account)
+	a := c.account
+	if c.w.on {
+		a = bus.Account(c.w.target.ID)
+	}
+	n := c.e.spect.count(a)
 	if n == c.toldWatchers {
 		return
 	}

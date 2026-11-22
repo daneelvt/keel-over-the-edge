@@ -109,8 +109,8 @@ type conn struct {
 	seated                 bool
 	wants                  *watch.Target
 	toldSpect, toldSpectOf int32
-	// toldWatchers is how many watch its boat, as the client was last
-	// told: the encoder's. toldLamp is what it was last told of the agent
+	// toldWatchers is how many watch its boat, or the boat it watches,
+	// as the client was last told: the encoder's. toldLamp is what it was last told of the agent
 	// of its own machine sailor it watches: the encoder's.
 	toldWatchers int32
 	// look is the account's sailor's look, as it joins; toldLook the look

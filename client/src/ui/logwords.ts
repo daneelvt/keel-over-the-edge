@@ -33,6 +33,12 @@ export const NOT_HAD = 'The log cannot be had just now.';
 /** The player's own log without a sailor. */
 export const NO_SAILOR = 'A log is kept by a sailor: make yours and set sail.';
 export const YOUR_LOG = 'Your log';
+/** While watching: the reader's own log, from the log of the sailor watched. */
+export const MY_LOG = 'My log';
+/** While watching: back to the log of the sailor watched, from the reader's own. */
+export function theirLogText(name: string): string {
+  return `${name}’s log`;
+}
 /** Said of the winner's cockade on a log's portrait. */
 export const COCKADE = 'Wears the winner’s cockade, for a race won in this world';
 

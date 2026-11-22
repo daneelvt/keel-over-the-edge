@@ -11,9 +11,10 @@
 // page can take it, with how to install the game where that gives more of
 // the screen, an Install key once the browser has offered to. Online, at
 // the top with the other keys, the player's shipmates; Invite friends, the
-// one page of links to share (to watch the player, alone or with a picture
-// of the view, and, while their own boat is in the water, to sail with
-// them); a sailor to watch; Back to Port Royal and Change boat, while the
+// one page of links to share, for what is on the screen (to watch the
+// player, alone or with a picture of the view, and, while their own boat
+// is in the water, to sail with them; or, watching a machine sailor of
+// theirs, to watch it and to sail with it); a sailor to watch; Back to Port Royal and Change boat, while the
 // player sails their own boat, which ask first; Make a race, and the
 // player's races ahead, each a tap from its card. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
@@ -30,7 +31,6 @@ import { INVITE_FRIENDS, WHO_IS_ABOARD } from './deckwords';
 import type { HomeView } from './home';
 import { BACK_TO_PORT_ROYAL, CHANGE_BOAT } from './homewords';
 import { INSTALL, INSTALL_CHROME, INSTALL_HOME_SCREEN } from './installwords';
-import { sailWithMeFor } from './machinewords';
 import { Modal } from './modal';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
@@ -363,28 +363,17 @@ export function Menu({
               </button>
             </div>
           ) : null}
-          {deck !== null && machineShared(deck) !== null ? (
+          {deck !== null && machineShared(deck) !== null && deck.crew.value !== null ? (
             <div class="menu-chart">
               <button
                 type="button"
                 onClick={() => {
-                  deck.link.value = true;
+                  deck.list.value = true;
                   close();
                 }}
               >
-                {sailWithMeFor(machineShared(deck) ?? '')}
+                {WHO_IS_ABOARD}
               </button>
-              {deck.crew.value !== null ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    deck.list.value = true;
-                    close();
-                  }}
-                >
-                  {WHO_IS_ABOARD}
-                </button>
-              ) : null}
             </div>
           ) : null}
           {watch !== null && deck?.aboard.value == null ? (

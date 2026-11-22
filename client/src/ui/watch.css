@@ -77,9 +77,18 @@
 
 .watch-plate-name strong {
   overflow: hidden;
+  min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
+}
+
+/* How many watch, after the name: whole, the name shortening first. */
+.watch-plate-count {
+  flex: none;
+  color: var(--faint);
+  font-size: 14px;
+  white-space: pre;
 }
 
 .watch-whose .player-text {

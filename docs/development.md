@@ -5896,7 +5896,14 @@ is not open: it is behind Cloudflare Access, and `TestOpenRoutes` finds it
 registered behind keel's check of Access's token (`accessRoutes`).
 
 Errors are `{"error": "<code>"}`; the client puts codes into words
-(`client/src/account/reasons.ts`). A session held to adding a passkey is
+(`client/src/account/reasons.ts`). A refusal the player can put right
+themselves (the Rules of the sea, the age question, a name, the human
+check, a lapsed confirmation…) is never shown by its words alone:
+`CURES` names what puts each right on every page that can meet it (the
+Rules' and the age question's cards open where the refusal arose, and
+what was asked goes on once answered; the others' words stand with their
+field or key), and `reasons.test.ts` sweeps every page that turns a code
+into words and fails on one that is not listed with what it can meet. A session held to adding a passkey is
 answered 403 `add-passkey` everywhere but `GET /api/me`, adding a passkey
 and `POST /logout`; removing a passkey, a new recovery code and deleting
 are 403 `confirm` without a passkey confirmed in the last 5 minutes. Nothing
@@ -6023,7 +6030,20 @@ Facebook, TikTok… by the marks in its user agent, kept in that one module)
 is asked to open the game in the phone's browser, with "Try here anyway"; a
 browser without WebAuthn is told so; one that offers neither a passkey of
 its own nor a phone by QR code is warned, never stopped. The account page
-is a page from the menu, "Account".
+is a page from the menu, "Account", and from the cog at the head of the
+start screen's AI sailors.
+
+Signed in, the start screen is for going to sea, and holds no link: the
+player's own sailor (its boat, "Let others watch me sail", Set sail,
+Watch another sailor) and, with machine sailors, "AI sailors" beside it,
+each a row laid out as a grid (`client/src/account/machines.tsx`): its
+portrait, its name and one line (at sea with its boat and how many watch
+it, not at sea, or the operator's stop), one key (Watch while it sails;
+Connect, which shows how, for one no AI app sails yet) and a faint Log;
+"Make another" under them. The menu's machine sailors' panel shows the
+same rows, with Sail to or Clear course for the key. Their apps, tokens,
+links to watch, the fleet's link and how to connect each are the account
+page's.
 
 **The menu's pages** (`client/src/ui/sheet.tsx`). Every page and window
 the menu opens stands where the menu stood: at the right beside its
@@ -6034,7 +6054,7 @@ and the menu's margin round what it holds; Escape and a tap beside a page
 close it. `Sheet` draws a whole page so (the account, the machine sailors,
 Invite friends); `SheetHead` and the class `at-side` put a window that
 keeps its own frame there (the shipmates, who is aboard, the sailors to
-watch, a machine sailor's link), and `at-side` alone the questions the
+watch), and `at-side` alone the questions the
 menu asks (Back to Port Royal, Change boat). A new page of the menu uses
 one of the two. The race's windows and the chart are screens of their
 own. `e2e/menu.spec.ts` holds each page to the menu's place, its close and
@@ -6873,7 +6893,10 @@ A watch **ends** with `WatchEnded{why}` when the boat leaves the water
 unseen ("… cannot be watched now."), or when a watch asked for is refused;
 the connection stays open, **idle**: no snapshots, pings answered. A
 sailor is told how many watch their boat (`Watchers{count}`, on change, at
-most every 2 s), never who; agents are told nothing.
+most every 2 s), never who, and so is a spectator of the boat it watches,
+itself among them, as the list of sailors to watch counts; the count
+starts afresh at each Welcome and when a watch ends. Agents are told
+nothing.
 
 **The spectator limit** (`internal/edge/spectators.go`) is the edge's, in
 memory, apart from the boat limit: `KEEL_SPECTATOR_LIMIT`, 1,000 by
@@ -6951,8 +6974,10 @@ are drawn on one timeline, its instruments from one step of the physics
 module from each header, never ahead; no prediction runs, and the page
 sends only acknowledgements and pings. The screen loses every control that
 acts (helm, sheet, the autopilot's controls, the keys, the free camera);
-a bar names the boat ("Watching Iron Mary ⚙") with "Watch another" and
-"Sail"; the camera does not ease back astern, and "Behind the boat" brings
+a bar names the boat and how many watch it ("Watching Iron Mary ⚙ · 3
+watching", the name shortening first) with "Watch another" and "Sail";
+the chart's Log tab opens the watched sailor's log, with "My log" at its
+head and the way back to theirs from the reader's own; the camera does not ease back astern, and "Behind the boat" brings
 it there. The list, the bar and the setting are loaded only when needed.
 Every word is in `client/src/ui/watchwords.ts`.
 
@@ -6993,13 +7018,14 @@ fewer than two to watch it leaves the list as it is. Anything else after
 and you will be watching." first; the link is forgotten once seen, so a
 reload just sails (`listFromQuery`, `listLink` in `watchwords.ts`).
 
-On the phone (`client/src/account/yourlink.tsx`, `ui/sharelink.tsx`),
-"Share a link to watch me" sits under Set sail on "Your sailor" (with "Your
-link shows your boat only on voyages you let others watch." while the box
-is unticked) and, at sea, on the menu's **Invite friends** page
-(`ui/invite.tsx`), under "Watch me sail" with the spectators switch and
-"Share with a picture"; the machine sailors' panel shares each one's and
-the fleet's. Each goes through
+On the phone (`ui/sharelink.tsx`) no link is shared from the start
+screen: at sea, the menu's **Invite friends** page (`ui/invite.tsx`)
+shares what is on the screen. In the player's own boat, "Share a link to
+watch me" under "Watch me sail", with the spectators switch, "Share with
+a picture" and "Your link shows your boat only on voyages you let others
+watch." while the switch is off; watching a machine sailor of their own,
+"Watch ‹machine› sail", its link to watch with Share and Copy. The account
+page shares each machine sailor's link and the fleet's. Each goes through
 `navigator.share` with the link at the end of its text, or is copied
 ("Copied"); "Make a new link" asks first. A visitor opening a link with no
 session is told "Make a sailor, and you will be watching." on the start
@@ -7393,9 +7419,11 @@ sailor's line reach its own human and the boat's skipper's.
 (`POST /api/sail/link {"machine"}`, the machine sailor by its ID or its
 name; `GET /api/sail/link?machine=`, `POST /api/sail/link/end
 {"machine"}`; the store's `MakeMachineSailLink`, its owner's alone),
-under links' rules and lifetime: from its row on the start screen
-(`client/src/account/machineshare.tsx`) or, watching it, the menu's "Sail
-with me for ‹machine›" (`client/src/ui/machinelink.tsx`). An agent never
+under links' rules and lifetime: watching it, in Invite friends, under
+"Sail with ‹machine›" (`client/src/ui/machinelink.tsx`), where the age
+question and the Rules of the sea are asked on their cards first and the
+link made once they are answered, and "Call ashore" while it is crew
+aboard another's boat. An agent never
 makes a link. `GET /api/sail/{token}` for a machine sailor's link says
 `machine`, `can` "closed" for the player (or "own" for its owner), and
 `send`: each of the player's machine sailors and whether it may be sent

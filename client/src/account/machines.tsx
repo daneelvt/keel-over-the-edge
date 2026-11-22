@@ -5,21 +5,24 @@
 // app (the app opens the approval page, where the player approves it with
 // a passkey). The start screen shows them to a player who has any, before
 // the sea, as "AI sailors" in a panel of their own, apart from the
-// player's own sailor and its Set sail: each one at sea or not, how to
-// connect it, its approved apps, and another made while the account is
-// under its cap. Nothing there sails them. The menu shows the same. The account page manages them: each approved app
-// revoked, a connection token made (shown once) or revoked, a machine
-// sailor deleted. A connection token hands the machine sailor out, and
-// deleting cannot be undone, so both first ask for one of the account's
-// own passkeys, as the account page's own deletions do. A machine sailor
-// the game's operator stopped says so: its apps are revoked, and it may
-// only be deleted.
+// player's own sailor and its Set sail: each one's portrait, name and one
+// line (at sea with its boat and how many watch it, not at sea, or
+// stopped), the one key for it, its log, and another made while the
+// account is under its cap. Nothing there sails them, and no link is
+// shared there: sharing is Invite friends' at sea, or the account page's.
+// The menu shows the same rows. The account page manages them: the
+// fleet's link to watch, each approved app revoked, a connection token
+// made (shown once) or revoked, its link to watch, how to connect it, a
+// machine sailor deleted. A connection token hands the machine sailor out,
+// and deleting cannot be undone, so both first ask for one of the
+// account's own passkeys, as the account page's own deletions do. A
+// machine sailor the game's operator stopped says so: its apps are
+// revoked, and it may only be deleted.
 //
 // A machine sailor can be watched by anyone whenever it sails: by its
-// owner from the start screen, with how many watch it, and by anyone from
-// the list of sailors to watch; and the account page copies a link that
-// opens the game watching it. At sea, the menu's panel offers Sail to for
-// each one in the water: its boat becomes the course, found always, as the
+// owner from the start screen, and by anyone from the list of sailors to
+// watch or by its link. At sea, the menu's panel offers Sail to for each
+// one in the water: its boat becomes the course, found always, as the
 // player's own; for the one sailed to, Clear course.
 //
 // Loaded only when shown: none of it is in the game's first download.
@@ -48,6 +51,7 @@ import {
   watchersText,
   watchLink,
 } from '../ui/watchwords';
+import { AccountPanel } from './account';
 import type { BoatChooser } from './boatchooser';
 import type { LookChooser } from './chooser';
 import { Cog } from './cog';
@@ -75,7 +79,6 @@ import {
   MachineSummary,
   useDraft,
 } from './machineform';
-import { MachineShare } from './machineshare';
 import type { Fetch, Me } from './me';
 import { call, confirmPasskey, type Outcome, reasonOf } from './passkeys';
 import { Portrait } from './portraits';
@@ -328,12 +331,46 @@ export function FleetWatchLink({ code, cls }: { code: string; cls: string }) {
   );
 }
 
+/** Whether a machine sailor has an AI app approved, or a connection token, that can sail it. */
+export function connected(m: MachineItem, now = Date.now()): boolean {
+  const t = m.token;
+  return liveApps(m).length > 0 || (t !== null && t.ended !== true && t.ends > now);
+}
+
 /**
- * The machine sailors' list under its heading and line, with how to
- * connect each and another made. open is the one whose connecting is
- * shown, toggled by toggle. On the start screen, watch is given the
- * sailor chosen to watch, and each at sea offers it. At sea, each one in
- * the water offers Sail to, and sailed is told once it is the course.
+ * An AI sailor's one line: at sea, its boat and how many watch it ("At
+ * sea · Keelboat 5 · 1 watching"), not at sea, or the operator's stop.
+ */
+export function machineLine(m: Machine, boat: string, now = Date.now()): string {
+  const stopped = stoppedOn(m, now);
+  if (stopped !== '') {
+    return stopped;
+  }
+  if (!m.atSea) {
+    return NOT_AT_SEA;
+  }
+  return [AT_SEA, boat, watchersText(m.watchers ?? 0)].filter((w) => w !== '').join(' · ');
+}
+
+/** The rows' words. */
+export const AT_SEA = 'At sea';
+export const NOT_AT_SEA = 'Not at sea';
+export const CONNECT = 'Connect';
+export const LOG = 'Log';
+export const MAKE_ANOTHER = 'Make another';
+export const MAKE_FIRST = 'Make a machine sailor';
+export const HOW_TO_CONNECT = 'How to connect';
+
+/**
+ * The machine sailors' list under its heading and line, and another made
+ * under it. Each row is a grid, never words round a key: its portrait, its
+ * name, its one line, the one key for it, and Log. The key: on the start
+ * screen, Watch while it sails (watch is given the sailor chosen); at sea,
+ * Sail to each one in the water, sailed told once it is the course, and
+ * Clear course for the one sailed to; and Connect, which shows how to
+ * connect it, for one no AI app sails yet (open is the one shown, toggled
+ * by toggle). A stopped one has no key. Whatever else a machine sailor
+ * has, its apps, its token and its links, is on the account page.
  */
 export function MachineList({
   page,
@@ -345,6 +382,7 @@ export function MachineList({
   watch = null,
   fleet = null,
   sailed = () => {},
+  account = null,
 }: {
   page: MachinesPage;
   heading: ComponentChildren;
@@ -356,87 +394,99 @@ export function MachineList({
   /** The account's fleet, which names each one's boat; null while it is not known. */
   fleet?: Fleet | null;
   sailed?: () => void;
+  /** Opens the account page from the heading's cog; null for a plain cog, or none. */
+  account?: (() => void) | null;
 }) {
   const host = sailTo();
   return (
     <section aria-labelledby="machines-title">
-      {heading === null ? null : <h2 id="machines-title">{heading}</h2>}
+      {heading === null ? null : (
+        <h2 id="machines-title" class="machines-title">
+          {heading}
+          {account === null ? null : (
+            <button type="button" class="machines-cog" aria-label={ACCOUNT} onClick={account}>
+              <Cog />
+            </button>
+          )}
+        </h2>
+      )}
       {line !== '' ? <p class="start-text start-faint">{line}</p> : null}
-      {page.machines.length > 0 && (page.fleetCode ?? '') !== '' ? (
-        <FleetWatchLink code={page.fleetCode ?? ''} cls="start-sign-in" />
-      ) : null}
       {page.machines.length === 0 ? (
         <p class="start-text start-faint">None yet.</p>
       ) : (
         <ul class="machine-list">
-          {page.machines.map((m) => (
-            <li key={m.id} data-machine={m.name}>
-              <MachineSummary m={m} picture={picture} boat={machineBoat(fleet, m.name)} />
-              {watch !== null && m.atSea && stoppedOn(m) === '' ? (
-                <span class="machine-watch">
-                  <button type="button" class="start-sign-in" onClick={() => watch(m.name)}>
-                    {WATCH}
-                  </button>
-                  {watchersText(m.watchers ?? 0) !== '' ? (
-                    <span class="machine-faint" data-readout="watchers">
-                      {watchersText(m.watchers ?? 0)}
-                    </span>
-                  ) : null}
-                  <MachineShare name={m.name} id={m.id} aboard={m.aboard === true} />
-                </span>
-              ) : null}
-              {stoppedOn(m) !== '' ? (
-                <p class="start-text start-faint">{stoppedOn(m)}.</p>
-              ) : (
-                <>
-                  {host?.is(m.id) ? (
-                    <button
-                      type="button"
-                      class="start-sign-in"
-                      data-course="clear"
-                      onClick={() => host.clear()}
-                    >
-                      {CLEAR_COURSE}
-                    </button>
-                  ) : host !== null && m.atSea ? (
-                    <button
-                      type="button"
-                      class="start-sign-in"
-                      data-course="set"
-                      onClick={() => {
-                        host.sail(m.id, m.name, true);
-                        sailed();
-                      }}
-                    >
-                      {SAIL_TO}
-                    </button>
-                  ) : null}
-                  <MachineWatchLink m={m} cls="start-sign-in" />
-                  <button
-                    type="button"
-                    class="start-sign-in"
-                    aria-expanded={open === m.id}
-                    onClick={() => toggle(m.id)}
-                  >
-                    How to connect
-                  </button>
-                </>
-              )}
+          {page.machines.map((m) => {
+            const stopped = stoppedOn(m) !== '';
+            const key = stopped ? null : host?.is(m.id) ? (
               <button
                 type="button"
-                class="start-sign-in"
-                onClick={() => openLog({ kind: 'machine', id: m.id, name: m.name })}
+                class="start-sign-in machine-key"
+                data-course="clear"
+                onClick={() => host.clear()}
               >
-                {ITS_LOG}
+                {CLEAR_COURSE}
               </button>
-              {open === m.id ? <Connect mcp={page.mcp} name={m.name} /> : null}
-            </li>
-          ))}
+            ) : host !== null && m.atSea ? (
+              <button
+                type="button"
+                class="start-sign-in machine-key"
+                data-course="set"
+                onClick={() => {
+                  host.sail(m.id, m.name, true);
+                  sailed();
+                }}
+              >
+                {SAIL_TO}
+              </button>
+            ) : watch !== null && m.atSea ? (
+              <button type="button" class="start-sign-in machine-key" onClick={() => watch(m.name)}>
+                {WATCH}
+              </button>
+            ) : !m.atSea && !connected(m) ? (
+              <button
+                type="button"
+                class="start-sign-in machine-key"
+                aria-expanded={open === m.id}
+                onClick={() => toggle(m.id)}
+              >
+                {CONNECT}
+              </button>
+            ) : null;
+            return (
+              <li key={m.id} class="machine-row" data-machine={m.name}>
+                <span class="machine-row-picture">{picture(m.look, 40)}</span>
+                <span class="machine-row-words">
+                  <strong class="machine-name">
+                    <bdi>{m.name}</bdi>
+                  </strong>
+                  <span class="machine-faint machine-row-line" data-readout="machine-line">
+                    <bdi>{machineLine(m, machineBoat(fleet, m.name))}</bdi>
+                  </span>
+                </span>
+                <span class="machine-row-keys">
+                  {key}
+                  <button
+                    type="button"
+                    class="start-link machine-log"
+                    aria-label={`${ITS_LOG}: ${m.name}`}
+                    onClick={() => openLog({ kind: 'machine', id: m.id, name: m.name })}
+                  >
+                    {LOG}
+                  </button>
+                </span>
+                {open === m.id ? (
+                  <div class="machine-row-more">
+                    <Connect mcp={page.mcp} name={m.name} />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
       {page.machines.length < page.cap ? (
-        <button type="button" class="start-sign-in" onClick={make}>
-          {page.machines.length === 0 ? 'Make a machine sailor' : 'Make another machine sailor'}
+        <button type="button" class="start-link machine-make" onClick={make}>
+          {page.machines.length === 0 ? MAKE_FIRST : MAKE_ANOTHER}
         </button>
       ) : null}
     </section>
@@ -457,6 +507,7 @@ function MachinesBody({
   watch = null,
   fleet = null,
   sailed = () => {},
+  account = null,
 }: {
   page: MachinesPage;
   setPage: (p: MachinesPage) => void;
@@ -466,6 +517,7 @@ function MachinesBody({
   watch?: ((name: string) => void) | null;
   fleet?: Fleet | null;
   sailed?: () => void;
+  account?: (() => void) | null;
 }) {
   const [view, setView] = useState<View>({ kind: first ? 'form' : 'list' });
   const [open, setOpen] = useState('');
@@ -503,6 +555,7 @@ function MachinesBody({
       watch={watch}
       fleet={fleet}
       sailed={sailed}
+      account={account}
     />
   );
 }
@@ -536,8 +589,10 @@ function StartWatchList({
  * the player's to sail.
  */
 export const AI_SAILORS = 'AI sailors';
-export const AI_SAILORS_LINE =
-  'Sailed by your AI apps, not by you. Anyone can watch them while they sail.';
+export const AI_SAILORS_LINE = 'Sailed by your AI apps, not by you.';
+
+/** The heading's cog: the account page, where each one's apps, token and more are. */
+export const ACCOUNT = 'Account: your AI sailors’ apps and tokens';
 
 /**
  * The start screen's two panels, apart: the player's own sailor, with
@@ -614,8 +669,9 @@ export function MachineStart({
   /** Opened by a link into the list of sailors to watch: the list, or one picked from it. */
   opening?: ListLink | undefined;
 }) {
-  const { page, setPage, problem, fleet } = usePage(boats?.fleet.value);
+  const { page, setPage, problem, fleet, load } = usePage(boats?.fleet.value);
   const [listing, setListing] = useState(opening !== undefined);
+  const [accounting, setAccounting] = useState(false);
   if (listing) {
     return (
       <StartWatchList
@@ -626,37 +682,47 @@ export function MachineStart({
     );
   }
   return (
-    <StartPair
-      me={me}
-      voyage={voyage}
-      sail={() => done()}
-      list={() => setListing(true)}
-      watchName={(name) => done(name)}
-      chooser={chooser}
-      boats={boats}
-      out={out}
-    >
-      {page === null ? (
-        <p class="start-text start-faint" aria-live="polite">
-          {problem || 'Reading your machine sailors…'}
-        </p>
-      ) : (
-        <MachinesBody
-          page={page}
-          setPage={setPage}
-          first={first}
-          heading={
-            <>
-              <Cog />
-              {AI_SAILORS}
-            </>
-          }
-          line={AI_SAILORS_LINE}
-          watch={(name) => done(name)}
-          fleet={fleet}
-        />
-      )}
-    </StartPair>
+    <>
+      <StartPair
+        me={me}
+        voyage={voyage}
+        sail={() => done()}
+        list={() => setListing(true)}
+        watchName={(name) => done(name)}
+        chooser={chooser}
+        boats={boats}
+        out={out}
+      >
+        {page === null ? (
+          <p class="start-text start-faint" aria-live="polite">
+            {problem || 'Reading your machine sailors…'}
+          </p>
+        ) : (
+          <MachinesBody
+            page={page}
+            setPage={setPage}
+            first={first}
+            heading={AI_SAILORS}
+            line={AI_SAILORS_LINE}
+            watch={(name) => done(name)}
+            fleet={fleet}
+            account={() => setAccounting(true)}
+          />
+        )}
+      </StartPair>
+      {accounting ? (
+        // In the screen at sea's frame, as the menu's own page is.
+        <div class="hud start-account">
+          <AccountPanel
+            close={() => {
+              setAccounting(false);
+              // A machine sailor deleted, or an app revoked, there.
+              void load();
+            }}
+          />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -702,13 +768,19 @@ type Shown =
   | { kind: 'token'; m: MachineItem; token: string; ends: number }
   | { kind: 'delete'; m: MachineItem };
 
-/** The account page's section: each machine sailor's apps, token and deletion. */
+/**
+ * The account page's section: the fleet's link to watch at its head; each
+ * machine sailor's apps, token, link to watch, how to connect it, and
+ * deletion.
+ */
 export function MachinesAccount({ now = Date.now() }: { now?: number }) {
   const { page, setPage, problem, load, fleet } = usePage();
   const [shown, setShown] = useState<Shown>({ kind: 'page' });
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [typed, setTyped] = useState('');
+  // The one whose How to connect is open, by id; '' for none.
+  const [connecting, setConnecting] = useState('');
 
   /** Runs what hands a machine sailor out or cannot be undone, a passkey confirmed first unless one was lately. */
   const confirmed = async <T,>(action: () => Promise<Outcome<T>>): Promise<Outcome<T>> => {
@@ -839,6 +911,8 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
       <h3 id="machines-account-title">Machine sailors</h3>
       {page.machines.length === 0 ? (
         <p class="account-faint">None: make one from the menu’s Machine sailors.</p>
+      ) : (page.fleetCode ?? '') !== '' ? (
+        <FleetWatchLink code={page.fleetCode ?? ''} cls="" />
       ) : null}
       <ul class="machine-list">
         {page.machines.map((m) =>
@@ -901,6 +975,16 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
               <div class="account-row">
                 <MachineWatchLink m={m} cls="" />
               </div>
+              <div class="account-row">
+                <button
+                  type="button"
+                  aria-expanded={connecting === m.id}
+                  onClick={() => setConnecting(connecting === m.id ? '' : m.id)}
+                >
+                  {HOW_TO_CONNECT}
+                </button>
+              </div>
+              {connecting === m.id ? <Connect mcp={page.mcp} name={m.name} /> : null}
               <div class="account-row">
                 <button
                   type="button"

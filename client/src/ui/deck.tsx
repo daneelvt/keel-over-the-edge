@@ -78,7 +78,10 @@ import {
   YOU,
   YOU_HOLD,
 } from './deckwords';
-import { MachineCrew, MachineLink } from './machinelink';
+import { MachineCrew } from './machinelink';
+
+export { MachineSailWith } from './machinelink';
+
 import { machineAsksWords, machineKnockingWords } from './machinewords';
 import { useModal } from './modal';
 import { PlayerText } from './player';
@@ -766,9 +769,6 @@ export function DeckWindows({ deck, sailor }: { deck: DeckView; sailor: string |
   const machine = machineShared(deck);
   if (machine !== null && deck.list.value && deck.crew.value !== null) {
     return <MachineCrew deck={deck} machine={machine} />;
-  }
-  if (machine !== null && deck.link.value) {
-    return <MachineLink machine={machine} deck={deck} close={() => (deck.link.value = false)} />;
   }
   return null;
 }
