@@ -300,15 +300,16 @@
   padding: 0;
 }
 
-/* The heading's cog: the account page, a touch wide round the mark; the
-   heading as tall as the touch, so it stands over no words. */
+/* The heading's cog: the account page, at the heading's right end where
+   a setting is looked for, a touch wide round the mark; the heading as
+   tall as the touch, so it stands over no words. */
 .machines-cog {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
-  margin: 0 -6px 0 -12px;
+  margin: 0 -12px 0 auto;
   padding: 0;
   border: 0;
   border-radius: 8px;

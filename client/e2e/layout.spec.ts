@@ -4976,6 +4976,26 @@ test('the start screen holds no link, and each AI sailor one key in a row no wor
             lines.push({ text: (t.textContent ?? '').trim(), r });
           }
         }
+        // The heading's cog at its right end, after the words, where a
+        // setting is looked for.
+        const title = start.querySelector<HTMLElement>('.ai-panel .machines-title');
+        const cog = title?.querySelector('.machines-cog')?.getBoundingClientRect();
+        const words = title?.firstChild;
+        if (title == null || cog === undefined || words == null) {
+          out.push('no AI sailors’ heading with its cog');
+        } else {
+          const range = document.createRange();
+          range.selectNodeContents(words);
+          const said = range.getBoundingClientRect();
+          if (
+            cog.left < said.right - 0.5 ||
+            cog.right < title.getBoundingClientRect().right - 0.5
+          ) {
+            out.push(
+              `the heading’s cog is not at its right end (${Math.round(cog.left)}–${Math.round(cog.right)} px)`,
+            );
+          }
+        }
         const keys = [...start.querySelectorAll('button')].filter((b) => b.offsetParent !== null);
         for (const k of keys) {
           const r = k.getBoundingClientRect();

@@ -402,12 +402,12 @@ export function MachineList({
     <section aria-labelledby="machines-title">
       {heading === null ? null : (
         <h2 id="machines-title" class="machines-title">
+          {heading}
           {account === null ? null : (
             <button type="button" class="machines-cog" aria-label={ACCOUNT} onClick={account}>
               <Cog />
             </button>
           )}
-          {heading}
         </h2>
       )}
       {line !== '' ? <p class="start-text start-faint">{line}</p> : null}
