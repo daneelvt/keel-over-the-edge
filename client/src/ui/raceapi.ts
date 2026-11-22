@@ -19,7 +19,7 @@ export interface CourseTold {
   id: string;
   kind: 'buoy' | 'island';
   /** A buoy course's shape. */
-  shape?: 'triangle' | 'windward-leeward' | 'reach';
+  shape?: 'triangle' | 'windward-leeward' | 'reach' | 'dash';
   /** A buoy course's long form. */
   long?: boolean;
   name: string;
@@ -31,6 +31,14 @@ export interface CourseTold {
   number?: number;
   /** The boats it is offered to, by id, with the minutes each is expected to take. */
   boats?: Record<string, number>;
+  /**
+   * Whether part of it is sailed up the wind: the triangle's and the
+   * upwind-and-back's always; an island course's when its start lies up
+   * the wind today.
+   */
+  upwind?: boolean;
+  /** On Make a race's choices: offered for a time trial only, never a race. */
+  trialOnly?: boolean;
 }
 
 /** Whether the player may enter, and why not. */
@@ -41,6 +49,8 @@ export interface EnterTold {
   until?: number;
   /** For a boat the player may not sail yet, the certificate that opens her. */
   needs?: string;
+  /** For a limit refused (ahead, daily, owned, made), the limit's number. */
+  most?: number;
 }
 
 /** An entrant on a card: a name, or null where the reader is not told it. */
@@ -74,6 +84,8 @@ export interface RaceCard {
   entrants: Entrant[];
   mine: { owner: boolean; entered: boolean; withCrew: boolean; number: number; moved: boolean };
   enter: EnterTold;
+  /** Why it was called off at its warning signal, where it was: a storm. */
+  calledOff?: 'storm';
 }
 
 /** A race on the board. */
@@ -94,6 +106,12 @@ export interface Summary {
   standing?: boolean;
   /** The certificate a run sailed alone counts toward, by name; none for none. */
   toward?: string;
+  /** A standing trial's course, as a certificate's task names it. */
+  course?: string;
+  /** Whether part of its course is sailed up the wind. */
+  upwind?: boolean;
+  /** Why it was called off at its warning signal, where it was: a storm. */
+  calledOff?: 'storm';
 }
 
 /** A boat a race may be made for. */
@@ -125,6 +143,8 @@ export interface RacesBoard {
   trials?: Summary[];
   mine: Summary[];
   make: MakeChoices;
+  /** Whether the player wears the green ribbon: fewer than five races sailed. */
+  newcomer?: boolean;
 }
 
 /** A refusal: the reason, when it lifts, and for a name refused why. */
@@ -134,6 +154,8 @@ export interface Refusal {
   until?: number;
   name?: string;
   needs?: string;
+  /** For a limit refused, the limit's number. */
+  most?: number;
 }
 
 /** An answer: what was asked for, or why not. */
@@ -177,7 +199,13 @@ async function told<T>(res: Response, ok: number[]): Promise<Told<T>> {
   if (ok.includes(res.status) && body !== null && typeof body === 'object') {
     return { ok: true, value: body as T };
   }
-  const b = (body ?? {}) as { error?: unknown; until?: unknown; name?: unknown; needs?: unknown };
+  const b = (body ?? {}) as {
+    error?: unknown;
+    until?: unknown;
+    name?: unknown;
+    needs?: unknown;
+    most?: unknown;
+  };
   const refusal: Refusal = {
     status: res.status,
     reason: typeof b.error === 'string' ? b.error : 'unread',
@@ -190,6 +218,9 @@ async function told<T>(res: Response, ok: number[]): Promise<Told<T>> {
   }
   if (typeof b.needs === 'string') {
     refusal.needs = b.needs;
+  }
+  if (typeof b.most === 'number' && b.most > 0) {
+    refusal.most = b.most;
   }
   return { ok: false, refusal };
 }

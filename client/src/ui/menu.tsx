@@ -15,11 +15,13 @@
 // player, alone or with a picture of the view, and, while their own boat
 // is in the water, to sail with them; or, watching a machine sailor of
 // theirs, to watch it and to sail with it); a sailor to watch; Back to Port Royal and Change boat, while the
-// player sails their own boat, which ask first; Make a race, and the
-// player's races ahead, each a tap from its card. It stands over everything at
+// player sails their own boat, which ask first; under Races, the next
+// harbour race the player may enter, with Enter (or why not), Make a
+// race, and the player's races ahead, each a tap from its card. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
+import { useState } from 'preact/hooks';
 import type { FullScreen } from '../boot/fullscreen';
 import { type HomeScreen, homeScreen } from '../boot/homescreen';
 import type { ChartMode } from '../chart/chart';
@@ -34,8 +36,18 @@ import { INSTALL, INSTALL_CHROME, INSTALL_HOME_SCREEN } from './installwords';
 import { Modal } from './modal';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
+import { raceAct, type Summary } from './raceapi';
+import { RowReason } from './racerow';
 import type { RacesView } from './raceslazy';
-import { MAKE_A_RACE, whenLine } from './racewords';
+import {
+  boatsText,
+  CALLED_OFF,
+  ENTER,
+  enteredLine,
+  enterRefusalText,
+  MAKE_A_RACE,
+  whenLine,
+} from './racewords';
 import type { SettingsSignal } from './settings';
 import { SHIPMATES } from './shipmatewords';
 import { percentText, SEA_AND_WIND, SOUND, SOUNDS, VOLUME } from './soundwords';
@@ -215,12 +227,100 @@ function FullScreenRows({
   return install;
 }
 
-/** Make a race, and the player's own races ahead under it, each opening its card. */
+/**
+ * The next harbour race for the menu: the first the player may enter and
+ * has not; else the first still to sail, with why not; null for none.
+ */
+export function nextHarbourRace(harbour: readonly Summary[]): Summary | null {
+  const ahead = harbour.filter((s) => s.phase === 'open' || s.phase === 'closed');
+  return ahead.find((s) => s.enter.ok && !s.mine.entered) ?? ahead[0] ?? null;
+}
+
+/** The menu's line of the next harbour race: "Next harbour race: the Noon Gun · 4:00 PM · Jolly boats". */
+export function nextHarbourLine(s: Summary, now: number, locale?: string, zone?: string): string {
+  const when = whenLine(s.startsAt, now, locale, zone);
+  return `Next harbour race: ${s.name} · ${when} · ${boatsText(s.boat.name)}`;
+}
+
+/** The next harbour race, with Enter where the player may, or why not; its card a tap on its words. */
+function NextHarbourRace({
+  races,
+  race,
+  close,
+}: {
+  races: RacesView;
+  race: Summary;
+  close: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState('');
+  const now = races.now();
+  const enter = () => {
+    setBusy(true);
+    setSaid('');
+    void raceAct(race.code, 'enter', { crew: false }, races.fetch).then((a) => {
+      setBusy(false);
+      setSaid(
+        a.ok
+          ? enteredLine(race.name)
+          : enterRefusalText(a.refusal.reason, {
+              until: a.refusal.until,
+              needs: a.refusal.needs,
+              most: a.refusal.most,
+              now: races.now(),
+            }),
+      );
+      void races.refresh();
+    });
+  };
+  return (
+    <>
+      <div class="menu-race-next race-row" data-race={race.code} data-readout="menu-next-race">
+        <button
+          type="button"
+          class="menu-race menu-race-mine menu-race-words"
+          onClick={() => {
+            races.card.value = race.code;
+            close();
+          }}
+        >
+          <span class="menu-race-name">{nextHarbourLine(race, now)}</span>
+        </button>
+        {race.mine.entered ? (
+          <span class="race-row-reason">Entered</span>
+        ) : race.enter.ok ? (
+          <button
+            type="button"
+            class="menu-race menu-race-enter"
+            disabled={busy}
+            aria-label={`${ENTER} ${race.name}`}
+            onClick={enter}
+          >
+            {ENTER}
+          </button>
+        ) : (
+          <RowReason enter={race.enter} />
+        )}
+      </div>
+      {said !== '' ? (
+        <p class="menu-note" role="status" data-readout="menu-race-said">
+          {said}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** Under Races: the next harbour race, Make a race, and the player's own races ahead under it, each opening its card. */
 function MenuRaces({ races, close }: { races: RacesView; close: () => void }) {
-  const mine = races.board.value?.mine ?? [];
+  const board = races.board.value;
+  const mine = board?.mine ?? [];
+  const next = nextHarbourRace(board?.harbour ?? []);
   const now = races.now();
   return (
-    <div class="menu-races">
+    <fieldset class="menu-races" aria-label="Races">
+      <h3>Races</h3>
+      {next !== null ? <NextHarbourRace races={races} race={next} close={close} /> : null}
       <button
         type="button"
         class="menu-race"
@@ -243,10 +343,14 @@ function MenuRaces({ races, close }: { races: RacesView; close: () => void }) {
           }}
         >
           <span class="menu-race-name">{r.name}</span>
-          <span class="menu-race-when">{whenLine(r.startsAt, now)}</span>
+          <span class="menu-race-when">
+            {r.phase === 'cancelled' && r.calledOff === 'storm'
+              ? CALLED_OFF
+              : whenLine(r.startsAt, now)}
+          </span>
         </button>
       ))}
-    </div>
+    </fieldset>
   );
 }
 

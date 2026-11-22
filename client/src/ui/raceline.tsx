@@ -28,6 +28,8 @@ import {
   ordinal,
   RaceLive,
   resultWords,
+  STILL_RACING,
+  timed,
 } from './racelinewords';
 import type { RacesView } from './raceslazy';
 import { entrantName, type Racing } from './racestate';
@@ -94,7 +96,7 @@ function Cells({ v }: { v: LineView }) {
     case 'trial':
       return (
         <>
-          <span class="rl-clock">Trial</span>
+          <span class="rl-clock">{v.alone ? 'Alone' : 'Trial'}</span>
           <span class="rl-side" data-readout="race-side">
             Cross the line to start · {v.line}
           </span>
@@ -215,6 +217,7 @@ export function RaceLine({ src }: { src: RaceSource }) {
   const el = useRef<HTMLDivElement | null>(null);
   useSideways(el);
   const call = src.racing.call.value;
+  const asked = src.racing.asked.value > 0 && src.retire !== null;
   // Its events alone are said, each once; the rest stays on the screen.
   const live = useRef<RaceLive | null>(null);
   live.current ??= new RaceLive();
@@ -253,6 +256,16 @@ export function RaceLine({ src }: { src: RaceSource }) {
           <Cells v={v} />
         )}
       </button>
+      {asked ? (
+        <button
+          type="button"
+          class="rl-still"
+          data-readout="race-still"
+          onClick={() => src.racing.answer()}
+        >
+          {STILL_RACING}
+        </button>
+      ) : null}
       <button
         type="button"
         class="rl-more"
@@ -291,6 +304,16 @@ export function CourseCard({
     add(told.pin);
     add(told.committee);
   }
+  // A finish line of its own, where it lies apart from the start.
+  const finishApart =
+    told.finish !== null &&
+    told.pin !== null &&
+    told.committee !== null &&
+    Math.hypot(told.finish[0].east - told.pin.east, told.finish[0].north - told.pin.north) > 5;
+  if (finishApart && told.finish !== null) {
+    add(told.finish[0]);
+    add(told.finish[1]);
+  }
   for (let i = 0; i + 1 < track.length; i += 2) {
     add({ east: track[i] ?? 0, north: track[i + 1] ?? 0 });
   }
@@ -307,6 +330,7 @@ export function CourseCard({
   const way = take(told.way.length);
   const marks = take(told.marks.length);
   const line = told.pin !== null && told.committee !== null ? take(2) : [];
+  const finish = finishApart ? take(2) : [];
   const trackPts = take(Math.floor(track.length / 2));
   const me = at !== null ? take(1)[0] : undefined;
   const path = (ps: Pt[]) =>
@@ -330,6 +354,15 @@ export function CourseCard({
           y1={line[0]?.y}
           x2={line[1]?.x}
           y2={line[1]?.y}
+        />
+      ) : null}
+      {finish.length === 2 ? (
+        <line
+          class="rl-startline rl-finishline"
+          x1={finish[0]?.x}
+          y1={finish[0]?.y}
+          x2={finish[1]?.x}
+          y2={finish[1]?.y}
         />
       ) : null}
       {trackPts.length > 1 ? <path class="rl-track" d={path(trackPts)} /> : null}
@@ -381,7 +414,8 @@ function MoreWindow({ src }: { src: RaceSource }) {
     <Window name="race-more" title={told.name === '' ? 'The race' : told.name} close={close}>
       <p class="rl-faint" data-readout="race-clock">
         {clock}
-        {fleet > 0 && !told.trial ? ` · ${fleet} boats` : ''}
+        {fleet > 0 && !timed(told) ? ` · ${fleet} boats` : ''}
+        {told.alone === true ? ' · sailed alone' : ''}
         {told.laps > 1 ? ` · ${told.laps} laps` : ''}
       </p>
       <div class="rl-card-row">
@@ -394,8 +428,8 @@ function MoreWindow({ src }: { src: RaceSource }) {
         />
         <ul class="rl-facts">
           <li>
-            Leave every mark {told.marks.every((m) => m.side >= 0) ? 'to starboard' : 'to port'}, in
-            order
+            Go round each mark in turn, keeping it on your{' '}
+            {told.marks.length > 0 && told.marks.every((m) => m.side > 0) ? 'right' : 'left'}
           </li>
           <li>A bump at fault or over early: 10 seconds added</li>
           {me !== null && me.added > 0 ? (
@@ -467,14 +501,17 @@ function FinishCard({ src }: { src: RaceSource }) {
   const fleet = fleetOf(r.picture.value?.racers ?? []);
   const first = [...r.homes.values()].find((h) => h.place === 1);
   const gap =
-    told.trial || f.place === 1 || first === undefined
+    timed(told) || f.place === 1 || first === undefined
       ? ''
       : ` · ${clockOf((f.elapsedMs + f.added * 1000 - (first.elapsedMs + first.added * 1000)) / 1000)} behind the winner`;
-  const words = told.trial
-    ? 'Your run is home'
-    : f.place === 1
-      ? 'First home!'
-      : `${ordinal(f.place)} home${fleet > 1 ? ` of ${fleet}` : ''}`;
+  const words =
+    told.alone === true
+      ? 'Home, sailed alone'
+      : told.trial
+        ? 'Your run is home'
+        : f.place === 1
+          ? 'First home!'
+          : `${ordinal(f.place)} home${fleet > 1 ? ` of ${fleet}` : ''}`;
   const share = () => {
     if (told.code === '') {
       return;
@@ -483,7 +520,7 @@ function FinishCard({ src }: { src: RaceSource }) {
     void shareLink(
       {
         url,
-        text: `${told.trial ? 'I sailed' : `I came ${ordinal(f.place)} in`} ${told.name} on Keel Over the Edge: ${url}`,
+        text: `${timed(told) ? 'I sailed' : `I came ${ordinal(f.place)} in`} ${told.name} on Keel Over the Edge: ${url}`,
       },
       browserSharer(),
     ).then((res) => setSaid(res === 'copied' ? 'The link is copied.' : ''));
@@ -492,7 +529,7 @@ function FinishCard({ src }: { src: RaceSource }) {
     <Window name="race-finish" title={words} close={close}>
       <div class="rl-card-row">
         <Prize
-          place={told.trial ? 0 : f.place}
+          place={timed(told) ? 0 : f.place}
           of={fleet}
           colour={raceColour(told.code)}
           size={56}
@@ -510,7 +547,11 @@ function FinishCard({ src }: { src: RaceSource }) {
       </div>
       <CourseCard told={told} size={150} track={r.tracks().get(f.number) ?? []} />
       <CertifiedLine racing={r} />
-      <p class="rl-faint">The results come as the race ends.</p>
+      <p class="rl-faint">
+        {told.alone === true
+          ? 'Sailed alone: your medal is measured against the course’s par.'
+          : 'The results come as the race ends.'}
+      </p>
       {said !== '' ? (
         <p class="rl-faint" role="status">
           {said}
@@ -594,7 +635,11 @@ function ResultsWindow({ src }: { src: RaceSource }) {
   return (
     <Window name="race-results" title={told.name === '' ? 'The results' : told.name} close={close}>
       <p class="rl-faint">
-        {told.trial ? 'A time trial’s run' : `The results · ${placed} placed`}
+        {told.alone === true
+          ? 'Sailed alone · a medal against par'
+          : told.trial
+            ? 'A time trial’s run'
+            : `The results · ${placed} placed`}
         {told.laps > 1 ? ` · ${told.laps} laps` : ''}
       </p>
       <ol class="rl-results" data-readout="race-results">
@@ -629,8 +674,12 @@ function ResultsWindow({ src }: { src: RaceSource }) {
             <li key={a}>{a}</li>
           ))}
         </ul>
+      ) : told.alone === true ? (
+        <p class="rl-faint">A ribbon for your log, and a medal against par.</p>
       ) : !told.trial && !results.prizes ? (
-        <p class="rl-faint">No prizes this time: they need three boats sailed by three sailors.</p>
+        <p class="rl-faint">
+          A ribbon for your log. Pennants and awards come with three boats or more.
+        </p>
       ) : null}
       {spooned && spoon === 'ask' ? (
         <div class="rl-spoon" data-readout="race-spoon">

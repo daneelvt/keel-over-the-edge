@@ -1024,6 +1024,13 @@ export class Session {
     });
   }
 
+  /** Answers the committee's question: the boat still races. */
+  stillRacingCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'stillRacing', value: {} } } },
+    });
+  }
+
   /** Goes ashore (who 0), or puts the person in seat who ashore. */
   ashoreCommand(now: number, who: number): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
@@ -1346,6 +1353,8 @@ export function raceToldIn(v: {
   expected: number;
   entrants: { number: number; name: string; boat: string; machine: boolean; me: boolean }[];
   gone: boolean;
+  alone?: boolean;
+  upwind?: boolean;
 }): RaceToldIn {
   const point = (xs: number[], at: number) =>
     xs.length >= at + 2 ? { east: xs[at] ?? 0, north: xs[at + 1] ?? 0 } : null;
@@ -1383,5 +1392,7 @@ export function raceToldIn(v: {
       me: e.me,
     })),
     gone: v.gone,
+    alone: v.alone === true,
+    upwind: v.upwind === true,
   };
 }

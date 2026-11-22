@@ -820,6 +820,11 @@
 }
 
 .log-task-after,
+/* The upwind sign beside a task's name: the paper's smallest words. */
+.log-task-name .upwind-sign {
+  font-size: 0.8125rem;
+}
+
 .log-task-how {
   color: rgb(59 46 34 / 78%);
   font-size: 0.875rem;

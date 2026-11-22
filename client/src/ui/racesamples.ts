@@ -64,3 +64,31 @@ export function racer(over: Partial<RacerAtIn>): RacerAtIn {
     ...over,
   };
 }
+
+/**
+ * A dash: the line along a wind from the north, from (0, −30) to (0, 30),
+ * the mark 300 m east across it, home to a finish of its own up the wind,
+ * from (0, 70) to (0, 100), on the line's own line.
+ */
+export function dash(over: Partial<RaceToldIn> = {}): RaceToldIn {
+  return course({
+    pin: { east: 0, north: 30 },
+    committee: { east: 0, north: -30 },
+    finish: [
+      { east: 0, north: 70 },
+      { east: 0, north: 100 },
+    ],
+    marks: [{ east: 300, north: 0, number: 1, side: -1 }],
+    way: [
+      { east: 0, north: 0 },
+      { east: 300, north: 0 },
+      { east: 0, north: 85 },
+    ],
+    legs: [
+      { mark: 0, east: 0, north: 0 },
+      { mark: 1, east: 300, north: 0 },
+      { mark: 0, east: 0, north: 85 },
+    ],
+    ...over,
+  });
+}

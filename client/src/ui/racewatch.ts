@@ -32,6 +32,7 @@ import type {
   RaceToldIn,
   RaceWatchAsk,
 } from '../net/messages';
+import { timed } from './racelinewords';
 import { entrantName, type Racing } from './racestate';
 import {
   cheeredLine,
@@ -450,7 +451,7 @@ export class RaceWatch {
   /** A signal: the start's gun has the crier's word. */
   signal(s: RaceSignalIn): void {
     const told = this.#d.racing.told.peek();
-    if (told !== null && told.race === s.race && s.signal === 'start' && !told.trial) {
+    if (told !== null && told.race === s.race && s.signal === 'start' && !timed(told)) {
       this.say('And they’re off!');
     }
   }

@@ -1251,7 +1251,10 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
   margin: 6px 0;
+  padding: 0;
+  border: 0;
 }
 
 .hud .menu-race {
@@ -1299,6 +1302,37 @@
 .menu-race-when {
   flex: none;
   color: var(--faint);
+}
+
+.menu-races h3 {
+  margin-bottom: 0;
+}
+
+/* The next harbour race: its words a quiet key, Enter or the reason
+   beside it at the end. */
+.menu-race-next {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud .menu-race-next .menu-race-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  min-height: var(--key);
+  padding: 4px 10px;
+  justify-content: flex-start;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.menu-race-next .menu-race-name {
+  white-space: normal;
+}
+
+.hud .menu-race-enter {
+  flex: none;
 }
 
 /* The free camera's way back to the boat: hidden, and shown a moment after
@@ -2459,6 +2493,50 @@
 .race-row-ribbon {
   color: #5fbf72;
   font-size: 13px;
+}
+
+/* Why a row cannot be entered, where its key would be: a few faint words;
+   a cure (a certificate) a quiet key of the head keys' size. */
+.race-row-reason {
+  flex: none;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.hud .board .race-row .race-row-cure,
+.hud .menu .race-row-cure {
+  border: 0;
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--plate-line);
+  border-radius: 7px;
+  color: var(--ink);
+}
+
+/* The upwind sign: a small zigzag and the word, on a course sailed partly
+   against the wind. The same wherever a course is listed. */
+.upwind-sign {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px currentcolor;
+  color: #e0a84c;
+  font:
+    500 12px / 16px "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.upwind-sign svg {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .board .race-greenhorn {

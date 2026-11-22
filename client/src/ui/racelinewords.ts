@@ -19,6 +19,20 @@ import { STEPS_PER_SECOND } from '../game/clock';
 import type { RaceCallIn, RaceFinishIn, RacePoint, RacerAtIn, RaceToldIn } from '../net/messages';
 import { ARTICLES } from './verdict';
 
+/** A newcomer's hints on the race line: placed on the line, at the start, and nearing the first mark. */
+export const HINT_LINE = 'Stay behind the line. Go at the gun.';
+export const HINT_LINE_ALONE = 'Cross the line when you’re ready: your clock starts there.';
+export const HINT_GO = 'Go! Steer for Mark 1: the arrow shows the way.';
+export const HINT_MARK = 'Round it, then steer for the finish.';
+
+/** The key that answers the committee's question. */
+export const STILL_RACING = 'Still racing';
+
+/** Whether a race is sailed against the clock alone: a time trial's run, or a race of one boat. */
+export function timed(t: RaceToldIn): boolean {
+  return t.trial || t.alone === true;
+}
+
 /** "1st", "2nd", "3rd", "11th", "22nd". */
 export function ordinal(n: number): string {
   const tens = n % 100;
@@ -70,7 +84,7 @@ export type LineView =
   /** Before the start: the flag up (the class's, then P), the countdown, the line's distance and side. */
   | { kind: 'before'; flag: 'class' | 'P'; clock: string; line: string; over: boolean }
   /** A time trial not yet begun: the line's distance and side. */
-  | { kind: 'trial'; line: string; over: boolean }
+  | { kind: 'trial'; line: string; over: boolean; alone?: boolean }
   /** Racing: the place of how many or a trial's clock, the gap ahead, the next mark. */
   | {
       kind: 'racing';
@@ -244,6 +258,12 @@ export function lineView(i: LineInput): LineView {
         : told.start > 0
           ? ` · ${clockOf((tick - told.start) / STEPS_PER_SECOND)}`
           : '';
+    if (told.alone === true) {
+      return {
+        kind: 'done',
+        text: `Home${time}${added > 0 ? ` · ${added} s added` : ''} · sailed alone`,
+      };
+    }
     if (told.trial) {
       return { kind: 'done', text: `Home${time}${added > 0 ? ` · ${added} s added` : ''}` };
     }
@@ -265,8 +285,13 @@ export function lineView(i: LineInput): LineView {
   }
   const side = lineSide(told, i.boat);
   const started = told.start > 0 && tick >= told.start && me?.state !== 'placed';
-  if (told.trial && !started) {
-    return { kind: 'trial', line: lineWords(side), over: false };
+  if (timed(told) && !started) {
+    return {
+      kind: 'trial',
+      line: lineWords(side),
+      over: false,
+      ...(told.alone === true ? { alone: true } : {}),
+    };
   }
   if (!started) {
     const left = (told.start - tick) / STEPS_PER_SECOND;
@@ -285,7 +310,7 @@ export function lineView(i: LineInput): LineView {
   const bearing = (Math.atan2(dx, dy) * 180) / Math.PI;
   const heading = (i.boat.heading * 180) / Math.PI;
   const turn = ((((bearing - heading) % 360) + 540) % 360) - 180;
-  const place = told.trial
+  const place = timed(told)
     ? clockOf((tick - told.start) / STEPS_PER_SECOND)
     : me !== null && me.place > 0
       ? `${me.place}/${fleet}`
@@ -293,7 +318,7 @@ export function lineView(i: LineInput): LineView {
   return {
     kind: 'racing',
     place,
-    gap: told.trial || me === null ? '' : gapWords(me, i.racers),
+    gap: timed(told) || me === null ? '' : gapWords(me, i.racers),
     next: {
       label: legLabel(told, leg),
       bearing: bearingOf(bearing),
@@ -365,9 +390,9 @@ export function callLine(c: RaceCallIn, me: number, name: (n: number) => string)
     case 'drifting':
       return mine
         ? words(
-            'Still racing? Make for the next mark, or you retire in a minute',
+            'Still racing? Sail on for the next mark, or tap Still racing',
             true,
-            'Still racing? Make for the next mark',
+            'Still racing? Sail on, or tap',
           )
         : null;
     case 'retired':
@@ -465,7 +490,7 @@ export function resultWords(r: {
     case 'ret':
       return 'Retired';
     case 'dns':
-      return 'Did not start';
+      return 'Missed it';
     case 'removed':
       return 'Removed';
     default:

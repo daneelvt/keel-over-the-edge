@@ -116,6 +116,7 @@ message Command {
     Cheer cheer = 19;
     CourseTo course_to = 20;
     Home home = 21;
+    StillRacing still_racing = 22;
   }
 }
 
@@ -129,6 +130,12 @@ message Home {}
 // RaceRetire retires the connection's boat from the race it sails in, at
 // its skipper's word. The race's next messages say so (RaceCall retired).
 message RaceRetire {}
+
+// StillRacing answers the committee's question to the connection's boat,
+// asked after five minutes without progress in its race (RaceCall
+// drifting): it still races. Asked again after five minutes more without
+// progress.
+message StillRacing {}
 
 // Cheer cheers the boat the connection watches in a race: one gesture, no
 // words. At most one every ten seconds counts, from the warning signal
@@ -426,7 +433,11 @@ message Lifted {
 // each one's name as the reader may be told it ("" for one not named:
 // show their boat's name and number), their boat's name, and whether a
 // machine sailor's, or the reader's own. gone: the race is over and its
-// course taken up.
+// course taken up. alone: a race with one boat as its boats were placed,
+// sailed as a time trial: no sequence, its clock running from its boat's
+// crossing of the line, a medal against its expected time. upwind: its
+// first leg lies up the wind today (an island course whose start could not
+// be laid off the wind).
 message RaceTold {
   uint32 race = 1;
   string code = 2;
@@ -448,6 +459,8 @@ message RaceTold {
   float expected = 18;
   repeated RaceEntrant entrants = 19;
   bool gone = 20;
+  bool alone = 21;
+  bool upwind = 22;
 }
 
 // RaceMark is a mark laid: where, its number, and the side it is left to:

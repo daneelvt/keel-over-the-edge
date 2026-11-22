@@ -64,11 +64,12 @@ import (
 //	            result Gone, and someone put ashore as their boat left the water or their
 //	            grace ended an Ashore of why 3 or 4, which the tick makes itself too;
 //	            a RacePlace its race's ID (16 bytes) and run, a byte of flags (1: a
-//	            trial, 2: an island course, 4: a triangle, 8: long, 16: a reach), its course,
+//	            trial, 2: an island course, 4: a triangle, 8: long, 16: across the wind,
+//	            32: a Dash), its course,
 //	            its boat's kind and its start's tick, then its entrants (count, then
 //	            each one's account, number, a byte of flags, 1 for a machine sailor's
 //	            and 2 with its crew, and its boat's look code and name); a RaceRetire
-//	            its account; a RaceWritten its race's ID and run; a RaceCheer
+//	            its account; a RaceStill its account; a RaceWritten its race's ID and run; a RaceCheer
 //	            its account and its cheers; a Certify its account, the
 //	            certificate's and the task's places as varints, then the
 //	            tasks done, needed and the way, the venture's runs and
@@ -295,7 +296,7 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, e.Account[:]...)
 	case bus.RacePlace:
 		dst = appendRaceCall(dst, e.Race)
-	case bus.RaceRetire:
+	case bus.RaceRetire, bus.RaceStill:
 		dst = append(dst, e.Account[:]...)
 	case bus.RaceWritten:
 		var id [16]byte
@@ -348,7 +349,8 @@ const (
 	raceTriangle = 4
 	raceLong     = 8
 	raceAcross   = 16
-	raceFlags    = raceTrial | raceIsland | raceTriangle | raceLong | raceAcross
+	raceDash     = 32
+	raceFlags    = raceTrial | raceIsland | raceTriangle | raceLong | raceAcross | raceDash
 
 	entrantMachine = 1
 	entrantCrew    = 2
@@ -365,7 +367,7 @@ func appendRaceCall(dst []byte, c *bus.RaceCall) []byte {
 	for _, f := range [...]struct {
 		on  bool
 		bit byte
-	}{{c.Trial, raceTrial}, {c.Island, raceIsland}, {c.Triangle, raceTriangle}, {c.Long, raceLong}, {c.Across, raceAcross}} {
+	}{{c.Trial, raceTrial}, {c.Island, raceIsland}, {c.Triangle, raceTriangle}, {c.Long, raceLong}, {c.Across, raceAcross}, {c.Dash, raceDash}} {
 		if f.on {
 			flags |= f.bit
 		}
@@ -793,7 +795,7 @@ func (p *payload) event(e *bus.Event) {
 		p.bytes(e.Account[:])
 	case bus.RacePlace:
 		e.Race = p.raceCall()
-	case bus.RaceRetire:
+	case bus.RaceRetire, bus.RaceStill:
 		p.bytes(e.Account[:])
 	case bus.RaceWritten:
 		c := &bus.RaceCall{}
@@ -844,7 +846,7 @@ func (p *payload) raceCall() *bus.RaceCall {
 	}
 	c.Run, c.Course, c.Kind, c.Start = int32(run), int32(course), uint16(kind), start
 	c.Trial, c.Island, c.Triangle, c.Long = flags&raceTrial != 0, flags&raceIsland != 0, flags&raceTriangle != 0, flags&raceLong != 0
-	c.Across = flags&raceAcross != 0
+	c.Across, c.Dash = flags&raceAcross != 0, flags&raceDash != 0
 	n := p.count(bus.MaxEntrants)
 	for range n {
 		var e bus.RaceEntrant

@@ -533,6 +533,11 @@ export class Online {
     this.#port.postMessage({ type: 'raceRetire' });
   }
 
+  /** Tells the committee, which asked, that the boat still races. */
+  stillRacing(): void {
+    this.#port.postMessage({ type: 'stillRacing' });
+  }
+
   /** Lifts the own boat home to the start off Port Royal: lifted counts it in, or unlifted counts it refused. */
   home(): void {
     this.#homing = true;

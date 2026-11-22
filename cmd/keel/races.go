@@ -14,6 +14,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -61,6 +62,24 @@ func (p *process) racesOf(h *worldHalf) *race.Service {
 	}
 	cfg.Standing = func(ctx context.Context, id store.AccountID) (certs.Standing, error) {
 		return p.ladder.Of(ctx, p.db.Exam(), id)
+	}
+	// An island course's upwind sign today: by the mean wind at its start
+	// now, as the committee would lay it.
+	if st := raceStage(p.cat, h.ready.bundle); st != nil && h.ready.timeline != nil {
+		cfg.StartsUpwind = func(course int, _ time.Time) bool {
+			x, y, ok := st.CourseStart(int32(course))
+			if !ok || h.bus == nil {
+				return false
+			}
+			w := physics.Weather{Prepared: h.ready.timeline.Prepared()}
+			f := h.bus.Frames.Acquire()
+			w.Set(f.SpellsInPlay())
+			var wt physics.WeatherTick
+			physics.WeatherAt(&w, &wt, float64(f.Tick))
+			f.Release()
+			_, from := physics.MeanWindAt(&wt, x, y)
+			return st.StartsUpwind(int32(course), from)
+		}
 	}
 	cfg.BoatOf = func(id store.AccountID) string {
 		f := h.bus.Frames.Acquire()
@@ -128,25 +147,7 @@ func raceStage(cat *catalog.Catalog, b *worldgen.Bundle) *committee.Stage {
 	if b == nil {
 		return nil
 	}
-	st := &committee.Stage{}
-	for i := range cat.Boats {
-		st.Kinds = append(st.Kinds, committee.Kind{Polar: cat.Polar(i), Length: cat.Boats[i].LengthOverall})
-	}
-	for _, a := range b.Records.Areas {
-		st.Areas = append(st.Areas, committee.Area{Number: a.Number, X: a.X, Y: a.Y, Radius: a.Radius})
-	}
-	for i := range b.Records.Courses {
-		wc := &b.Records.Courses[i]
-		ic := committee.Course{Number: wc.Number, Way: wc.Way, Length: wc.Length,
-			Start:  committee.Site{X: wc.Start.X, Y: wc.Start.Y, Room: wc.Start.Room},
-			Finish: committee.Site{X: wc.Finish.X, Y: wc.Finish.Y, Room: wc.Finish.Room}}
-		for _, r := range wc.Rays {
-			ic.Rays = append(ic.Rays, committee.Ray{X: r.X, Y: r.Y, Bearing: r.Bearing, Crossings: int8(r.Crossings), Along: r.Along,
-				Mark: int16(r.Round + 1)})
-		}
-		st.Courses = append(st.Courses, ic)
-	}
-	return st
+	return b.RaceStage(cat)
 }
 
 // clerkOf is the races' clerk of a world half: it hands the world's

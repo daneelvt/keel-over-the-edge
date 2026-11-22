@@ -20,11 +20,13 @@ import (
 //	racers            uvarint n, then n × the boat below, by race, then number
 //
 // A race is its key as a uvarint, its ID's 16 bytes, its run as a varint,
-// a uvarint of flags (1: a trial, 2: a long course, 4: with prizes), its
+// a uvarint of flags (1: a trial, 2: a long course, 4: with prizes, 8:
+// sailed alone, 16: called off), its
 // boat's kind as a uvarint, the ticks of its warning and start as varints,
 // its phase as a uvarint, the ticks its first boat came home, its window
 // closes and it ended as varints, then its course: a uvarint of flags (1:
-// an island course, 2: a triangle, 4: a reach), its number as a varint, its laps as a
+// an island course, 2: a triangle, 4: across the wind, 8: a Dash, 16: an
+// upwind start), its number as a varint, its laps as a
 // uvarint, its wind's speed and direction, its place and reach, the start
 // line's ends and the finish line's as floats; its marks, a uvarint n
 // then each one's place as floats and its number and side as varints;
@@ -48,13 +50,17 @@ import (
 
 // The flags of a race, a course, a check and a boat in a snapshot.
 const (
-	raceTrial  = 1
-	raceLong   = 2
-	racePrizes = 4
+	raceTrial     = 1
+	raceLong      = 2
+	racePrizes    = 4
+	raceAlone     = 8
+	raceCalledOff = 16
 
 	courseIsland   = 1
 	courseTriangle = 2
 	courseAcross   = 4
+	courseDash     = 8
+	courseUpwind   = 16
 
 	checkLine = 1
 
@@ -102,6 +108,12 @@ func appendRace(dst []byte, r *bus.Race) []byte {
 	if r.Prizes {
 		flags |= racePrizes
 	}
+	if r.Alone {
+		flags |= raceAlone
+	}
+	if r.CalledOff {
+		flags |= raceCalledOff
+	}
 	dst = binary.AppendUvarint(dst, flags)
 	dst = binary.AppendUvarint(dst, uint64(r.Kind))
 	dst = binary.AppendVarint(dst, r.Warning)
@@ -123,6 +135,12 @@ func appendCourse(dst []byte, c *bus.RaceCourse) []byte {
 	}
 	if c.Across {
 		flags |= courseAcross
+	}
+	if c.Dash {
+		flags |= courseDash
+	}
+	if c.Upwind {
+		flags |= courseUpwind
 	}
 	dst = binary.AppendUvarint(dst, flags)
 	dst = binary.AppendVarint(dst, int64(c.Number))
@@ -263,11 +281,12 @@ func (r *reader) race(race *bus.Race) {
 	race.Run = int32(r.varint())
 	flags := r.uvarint()
 	race.Trial, race.Long, race.Prizes = flags&raceTrial != 0, flags&raceLong != 0, flags&racePrizes != 0
+	race.Alone, race.CalledOff = flags&raceAlone != 0, flags&raceCalledOff != 0
 	race.Kind = uint16(r.limited(math.MaxUint16))
 	race.Warning, race.Start = r.varint(), r.varint()
 	phase := r.uvarint()
 	race.Home, race.Closes, race.Ended = r.varint(), r.varint(), r.varint()
-	if r.err == nil && (flags&^(raceTrial|raceLong|racePrizes) != 0 || phase < uint64(bus.RaceWarning) || phase > uint64(bus.RaceEnded)) {
+	if r.err == nil && (flags&^(raceTrial|raceLong|racePrizes|raceAlone|raceCalledOff) != 0 || phase < uint64(bus.RaceWarning) || phase > uint64(bus.RaceEnded)) {
 		r.err = fmt.Errorf("committee: snapshot: a race in phase %d with flags %d", phase, flags)
 	}
 	race.Phase = uint8(phase)
@@ -278,6 +297,7 @@ func (r *reader) course() *bus.RaceCourse {
 	c := &bus.RaceCourse{}
 	flags := r.uvarint()
 	c.Island, c.Triangle, c.Across = flags&courseIsland != 0, flags&courseTriangle != 0, flags&courseAcross != 0
+	c.Dash, c.Upwind = flags&courseDash != 0, flags&courseUpwind != 0
 	c.Number = int32(r.varint())
 	c.Laps = int32(r.limited(math.MaxInt32))
 	for _, v := range [...]*float64{&c.Wind, &c.From, &c.X, &c.Y, &c.Reach, &c.Committee[0], &c.Committee[1], &c.Pin[0], &c.Pin[1],
@@ -306,7 +326,7 @@ func (r *reader) course() *bus.RaceCourse {
 		c.Way = append(c.Way, [2]float64{r.f64(), r.f64()})
 	}
 	c.Length, c.Expected = r.f64(), r.f64()
-	if r.err == nil && (flags&^(courseIsland|courseTriangle|courseAcross) != 0 || len(c.Checks) < 2 || len(c.Way) < 2) {
+	if r.err == nil && (flags&^(courseIsland|courseTriangle|courseAcross|courseDash|courseUpwind) != 0 || len(c.Checks) < 2 || len(c.Way) < 2) {
 		r.err = fmt.Errorf("committee: snapshot: a course of %d checks and flags %d", len(c.Checks), flags)
 	}
 	return c

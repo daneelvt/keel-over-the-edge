@@ -39,7 +39,7 @@ ON CONFLICT (world_id, starts_at) WHERE harbour IS NOT NULL DO NOTHING;
 -- number and how many are entered.
 SELECT r.world_id, r.id, r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
   r.kind, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
-  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, w.number AS world,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, coalesce(r.called_off, '')::text AS called_off, w.number AS world,
   (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
      AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
 FROM race r
@@ -65,11 +65,13 @@ WHERE world_id = @world_id AND id = @id AND NOT moved AND state IN ('open', 'clo
 
 -- name: RacesBy :many
 -- The races an owner made in any world since a time, or has not finished
--- in the world sailed (a race of a world ended is over).
+-- in the world sailed (a race of a world ended is over); not those a storm
+-- called off, which count toward no one's limits.
 SELECT r.made_at, (CASE WHEN w.state = 'active' THEN r.state ELSE 'finished' END)::text AS state, r.kind
 FROM race r
 JOIN world w ON w.id = r.world_id
-WHERE r.owner_id = @owner_id AND (r.made_at > @since OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'));
+WHERE r.owner_id = @owner_id AND r.called_off IS NULL
+  AND (r.made_at > @since OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'));
 
 -- name: BuoyRacesNear :many
 -- A world's buoy races, not cancelled, starting between two times: the
@@ -136,7 +138,7 @@ WHERE account_id = @account_id AND kind = 'race' AND role IN ('skipper', 'crew')
 -- A world's races of the ids given, with how many are entered.
 SELECT r.id, r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, r.kind,
   r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
-  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, coalesce(r.called_off, '')::text AS called_off,
   (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
      AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
 FROM race r
@@ -151,9 +153,11 @@ ORDER BY starts_at
 LIMIT @most;
 
 -- name: RaceIDsOf :many
--- The races of a world an account owns or is entered in, not over.
+-- The races of a world an account owns or is entered in, not over, and
+-- those a storm called off that were to start after a time.
 SELECT r.id FROM race r
-WHERE r.world_id = @world_id AND r.state IN ('open', 'closed', 'racing')
+WHERE r.world_id = @world_id
+  AND (r.state IN ('open', 'closed', 'racing') OR r.state = 'cancelled' AND r.called_off IS NOT NULL AND r.starts_at > @called_since)
   AND (r.owner_id = @account_id OR EXISTS (
     SELECT 1 FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.account_id = @account_id
       AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed))
@@ -191,6 +195,12 @@ WHERE e.world_id = @world_id AND r.kind = 'trial' AND r.state = 'open' AND e.run
       AND NOT EXISTS (SELECT 1 FROM race_result y
                       WHERE y.world_id = x.world_id AND y.race_id = x.race_id AND y.account_id = x.account_id AND y.run = x.run))
 ORDER BY e.entered_at, e.account_id;
+
+-- name: CallOffRace :exec
+-- A race called off at its warning signal, for why: cancelled, from open
+-- or closed. Its entries stay, counting toward no one's limits.
+UPDATE race SET state = 'cancelled', called_off = @why, ended_at = @at
+WHERE world_id = @world_id AND id = @id AND state IN ('open', 'closed');
 
 -- name: RacingState :exec
 -- A race under way: racing, from open or closed.
@@ -261,7 +271,7 @@ WHERE world_id = @world_id AND id = @id AND state IN ('open', 'closed', 'racing'
 -- A world's race of an ID, with how many are entered.
 SELECT r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
   r.kind, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
-  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, coalesce(r.called_off, '')::text AS called_off,
   (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
      AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
 FROM race r

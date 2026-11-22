@@ -356,7 +356,7 @@ describe('watching a race’s words', () => {
     expect(rows.map((r) => [r.number, r.place, r.mark, r.gap])).toEqual([
       [1, '1', 'Home', '—'],
       [2, '2', 'Mk 1', '+2:10 · +10 s'],
-      [3, '', '', 'RET'],
+      [3, '', '', 'Retired'],
     ]);
   });
 

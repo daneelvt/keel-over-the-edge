@@ -37,6 +37,7 @@ import {
 } from './raceapi';
 import { courseShape, pathData, shapeText } from './racecourse';
 import { drawPicture, pictureWords, shareRace } from './racepicture';
+import { UpwindSign } from './racerow';
 import { type RacesView, racesShown } from './raceslazy';
 import {
   ADD_TO_CALENDAR,
@@ -60,13 +61,15 @@ import {
   minutesText,
   NEWCOMERS_DETAIL,
   ownerText,
-  phaseText,
+  phaseLine,
   REPLAY,
   REPLAY_RUNS,
   STARTS,
   startChoiceText,
   startOf,
   startsInText,
+  TRIAL_LINE,
+  UPWIND_LINE,
   WATCH_LATER,
   WATCH_WHEN_STARTS,
   WITHDRAW,
@@ -98,6 +101,15 @@ export function CoursePicture({ course, size }: { course: CourseTold; size: numb
           y1={s.line[0].y}
           x2={s.line[1].x}
           y2={s.line[1].y}
+        />
+      ) : null}
+      {s.finish != null ? (
+        <line
+          class="race-line race-finish"
+          x1={s.finish[0].x}
+          y1={s.finish[0].y}
+          x2={s.finish[1].x}
+          y2={s.finish[1].y}
         />
       ) : null}
       {s.marks.map((m) => (
@@ -191,11 +203,21 @@ function Choice<T extends string | number>({
   );
 }
 
-/** The courses offered to a boat, buoy courses first. */
-export function coursesFor(make: MakeChoices, boat: string): CourseTold[] {
+/**
+ * The courses offered to a boat, in the server's order, the easy first; for
+ * a race, none that is a time trial's only (no race starts up the wind).
+ */
+export function coursesFor(
+  make: MakeChoices,
+  boat: string,
+  kind: 'race' | 'trial' = 'trial',
+): CourseTold[] {
   const b = make.boats.find((x) => x.id === boat);
   return make.courses.filter(
-    (c) => c.boats?.[boat] !== undefined && (c.kind === 'island' || b?.buoys !== false),
+    (c) =>
+      c.boats?.[boat] !== undefined &&
+      (c.kind === 'island' || b?.buoys !== false) &&
+      (kind === 'trial' || c.trialOnly !== true),
   );
 }
 
@@ -233,6 +255,7 @@ export function MakeRace({ view, close }: { view: RacesView; close: () => void }
           <p class="race-refused" role="status" data-readout="race-refused">
             {makeRefusalText(board.make.can.reason ?? '', {
               until: board.make.can.until,
+              most: board.make.can.most,
               now: view.now(),
             })}
           </p>
@@ -262,7 +285,7 @@ function MakeForm({
   const [boat, setBoat] = useState(() =>
     make.boats.some((b) => b.id === make.boat) ? make.boat : (make.boats[0]?.id ?? ''),
   );
-  const offered = useMemo(() => coursesFor(make, boat), [make, boat]);
+  const offered = useMemo(() => coursesFor(make, boat, kind), [make, boat, kind]);
   const [course, setCourse] = useState(() => offered[0]?.id ?? '');
   const [when, setWhen] = useState<number>(10);
   const [later, setLater] = useState(() =>
@@ -326,7 +349,7 @@ function MakeForm({
       ? ''
       : makeRefusalText(
           refusal.reason,
-          { until: refusal.until, needs: refusal.needs, now: view.now() },
+          { until: refusal.until, needs: refusal.needs, most: refusal.most, now: view.now() },
           refusal.name,
         );
   return (
@@ -379,6 +402,7 @@ function MakeForm({
             >
               <CoursePicture course={c} size={56} />
               <span class="race-course-name">{c.name}</span>
+              {c.upwind === true ? <UpwindSign today={c.kind === 'island'} /> : null}
             </button>
           ))}
         </fieldset>
@@ -424,7 +448,7 @@ function MakeForm({
           </p>
         </>
       ) : (
-        <p class="race-faint">A time trial opens at once and runs to the world’s last hours.</p>
+        <p class="race-faint">A time trial is open at once, for the rest of the week.</p>
       )}
       <label class="race-label" for="race-who">
         Who may enter
@@ -738,7 +762,12 @@ export function RaceCardPanel({
         void view.refresh();
         return;
       }
-      const t = { until: a.refusal.until, needs: a.refusal.needs, now: view.now() };
+      const t = {
+        until: a.refusal.until,
+        needs: a.refusal.needs,
+        most: a.refusal.most,
+        now: view.now(),
+      };
       setSaid(
         verb === 'enter'
           ? enterRefusalText(a.refusal.reason, t)
@@ -776,14 +805,20 @@ export function RaceCardPanel({
     );
   }
   const before = beforeStart(card);
-  const phase = phaseText(card.phase);
+  const phase = phaseLine(card);
   const enter = card.enter;
   const mine = card.mine;
   const crew = view.crew();
   const refused =
     before && !mine.entered && !enter.ok
-      ? enterRefusalText(enter.reason ?? '', { until: enter.until, needs: enter.needs, now })
+      ? enterRefusalText(enter.reason ?? '', {
+          until: enter.until,
+          needs: enter.needs,
+          most: enter.most,
+          now,
+        })
       : '';
+  const upwind = card.course.upwind === true;
   return (
     <section
       class="panel race-window race-card"
@@ -818,6 +853,7 @@ export function RaceCardPanel({
           <p class="race-faint">
             {card.course.name}
             {minutesText(card.minutes) === '' ? '' : ` · ${minutesText(card.minutes)}`}
+            {upwind ? <UpwindSign today={card.course.kind === 'island'} /> : null}
           </p>
           <p class="race-faint">
             Made by{' '}
@@ -843,6 +879,11 @@ export function RaceCardPanel({
       ) : (
         <p class="race-start">Open now: sail it whenever you like.</p>
       )}
+      {upwind ? (
+        <p class="race-faint race-upwind" data-readout="race-upwind">
+          {UPWIND_LINE}
+        </p>
+      ) : null}
       {card.who !== 'everyone' ? (
         <p class="race-who">
           {whoText(card.who)}
@@ -860,7 +901,8 @@ export function RaceCardPanel({
       {before && mine.entered ? (
         <p class="race-entered" data-readout="race-entered">
           You’re entered{mine.number > 0 ? `, No. ${mine.number}` : ''}
-          {mine.withCrew ? ', with your crew' : ''}.
+          {mine.withCrew ? ', with your crew' : ''}.{' '}
+          {card.kind === 'race' ? ENTER_LINE : TRIAL_LINE}
         </p>
       ) : null}
       {refused !== '' ? (
@@ -877,6 +919,9 @@ export function RaceCardPanel({
         <>
           {!mine.entered && enter.ok ? (
             <>
+              <p class="race-faint" data-readout="race-enter-line">
+                {card.kind === 'race' ? ENTER_LINE : TRIAL_LINE}
+              </p>
               <div class="race-keys">
                 <button
                   type="button"
@@ -896,7 +941,6 @@ export function RaceCardPanel({
                   </button>
                 ) : null}
               </div>
-              <p class="race-faint">{ENTER_LINE}</p>
             </>
           ) : null}
           <div class="race-keys">

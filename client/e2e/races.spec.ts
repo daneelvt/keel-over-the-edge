@@ -83,9 +83,9 @@ test('a race made on a phone, entered by its link from a private window; the nin
   const board = await (await page.request.get('/api/races')).json();
   const boat: string = board.make.boat;
   const course: string =
-    (board.make.courses as { id: string; boats: Record<string, number> }[]).find(
-      (c) => c.boats[boat] !== undefined,
-    )?.id ?? '';
+    (
+      board.make.courses as { id: string; boats: Record<string, number>; trialOnly?: boolean }[]
+    ).find((c) => c.boats[boat] !== undefined && c.trialOnly !== true)?.id ?? '';
   expect(course).not.toBe('');
   const now = Date.now();
   for (let i = 1; ; i++) {
@@ -115,7 +115,7 @@ test('a race made on a phone, entered by its link from a private window; the nin
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
   await expect(page.locator('[data-panel=make-race] [data-readout=race-refused]')).toContainText(
-    'You’ve made as many races as a day allows. You can make the next after',
+    /You’ve made (\w+ races today|as many races as a day allows)\. You can make the next after/,
     { timeout: 30_000 },
   );
   expect(errors).toEqual([]);

@@ -17,6 +17,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // course is a sea's world to race in: the catalog's boats, ticking from
@@ -571,4 +572,80 @@ func card2ID(t *testing.T, s *sea, code string) [16]byte {
 		t.Fatal(err)
 	}
 	return r.ID
+}
+
+// TestARaceInAStormIsCalledOffKindly: a race whose area has a storm's
+// mean wind at its warning signal is called off: no boat is placed, it is
+// written cancelled for the storm, its card and its entrants' board say
+// so for its hour, it counts toward no one's limits, and the committee
+// lets it go.
+func TestARaceInAStormIsCalledOffKindly(t *testing.T) {
+	s := newSea(t)
+	const first = 3_000_000
+	c := &course{sea: s, epoch: s.now.Add(-first * time.Second / physics.StepsPerSecond)}
+	_, kinds := s.cat.Prepare()
+	st := &committee.Stage{Areas: []committee.Area{{Number: 1, Radius: 450}, {Number: 2, X: 2000, Radius: 450}}}
+	for i := range s.cat.Boats {
+		st.Kinds = append(st.Kinds, committee.Kind{Polar: s.cat.Polar(i), Length: s.cat.Boats[i].LengthOverall})
+	}
+	w, err := sim.New(sim.Config{Capacity: 16, Kinds: kinds, Workers: 1, Tick: first, Capacities: s.cat.Capacities(), Races: st,
+		Weather: weather.Fixed(physics.SteadySpell(committee.StormWind+1, 0, 0))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(w.Close)
+	c.w = w
+	c.clerk = c.newClerk()
+	owner := s.human()
+	card := s.make(owner, 10*time.Minute, WhoEveryone)
+	sailors := []Sailor{s.human(), s.human()}
+	for i, sl := range sailors {
+		if _, err := s.svc.Enter(s.ctx, sl, card.Code, false); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.w.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.Join, Account: bus.Account(sl.ID), Conn: uint64(i + 1)}); err != nil {
+			t.Fatal(err)
+		}
+		c.tick(1, nil)
+	}
+	start := time.UnixMilli(card.StartsAt).UTC()
+	c.skipTo(start.Add(-Warning))
+	c.once()
+	c.tick(1, nil)
+	if f := c.w.Latest(); len(f.Races) != 1 || !f.Races[0].CalledOff {
+		t.Fatalf("the race in a storm: %+v", f.Races)
+	}
+	c.once()
+	c.tick(2, nil)
+	if f := c.w.Latest(); len(f.Races) != 0 {
+		t.Errorf("the committee keeps the race called off: %+v", f.Races)
+	}
+	r, err := s.db.RaceByCode(s.ctx, card.Code)
+	if err != nil || r.State != store.RaceCancelled || r.CalledOff != CalledOffStorm {
+		t.Fatalf("written %q, called off %q: %v", r.State, r.CalledOff, err)
+	}
+	s.now = c.now
+	got, err := s.svc.Card(s.ctx, sailors[0], card.Code)
+	if err != nil || got.Phase != PhaseCancelled || got.CalledOff != CalledOffStorm {
+		t.Errorf("the card: %+v, %v", got, err)
+	}
+	b, err := s.svc.Board(s.ctx, sailors[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Mine) != 1 || b.Mine[0].CalledOff != CalledOffStorm {
+		t.Errorf("the board's own races: %+v", b.Mine)
+	}
+	mine, err := s.db.EntriesOf(s.ctx, sailors[0].ID, s.now.Add(-Day))
+	if err != nil || len(mine) != 0 {
+		t.Errorf("entries counted toward the limits: %+v, %v", mine, err)
+	}
+	if made, owned, err := s.db.RacesBy(s.ctx, owner.ID, s.now.Add(-Day)); err != nil || len(made) != 0 || owned != 0 {
+		t.Errorf("counted toward its owner's: %d made, %d owned, %v", len(made), owned, err)
+	}
+	// An hour after its start, off the board.
+	s.now = start.Add(time.Hour + time.Minute)
+	if b, err := s.svc.Board(s.ctx, sailors[0]); err != nil || len(b.Mine) != 0 {
+		t.Errorf("the board an hour on: %+v, %v", b.Mine, err)
+	}
 }

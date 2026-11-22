@@ -75,11 +75,36 @@
     sans-serif;
 }
 
+/* Still racing, while the committee waits for an answer: a slim key of
+   its own before the ⋯, in the gold of a question. */
+.hud .racer-line .rl-still {
+  position: relative;
+  flex: none;
+  padding: 0 10px;
+  border-left: 1px solid var(--plate-line);
+  color: var(--gold);
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+}
+
+.hud .rl-still::after {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
 /* The ⋯'s touch reaches a little above and below its face. */
 .hud .rl-more::after {
   content: "";
   position: absolute;
   inset: -6px 0;
+}
+
+.rl-finishline {
+  stroke-dasharray: 2 2;
 }
 
 .rl-flag {

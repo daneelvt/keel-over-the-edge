@@ -106,6 +106,11 @@ func (w *World) apply(c *bus.Command) {
 		if committee.Retire(f, c.Account) {
 			r.Result = bus.Done
 		}
+	case bus.RaceStill:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if committee.StillRacing(f, c.Account) {
+			r.Result = bus.Done
+		}
 	case bus.RaceWritten:
 		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
 		if c.Race != nil && committee.Drop(f, c.Race.ID, c.Race.Run) {

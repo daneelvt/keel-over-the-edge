@@ -11,13 +11,14 @@ import (
 )
 
 // TestARaceHandedReadsBack: a race handed to the committee is written and
-// read back the same, a reach among them; a race written before the reach
+// read back the same, a reach and a Dash among them; a race written before the reach
 // was, its flags the four an older build knew, still reads, as no reach;
 // and a flag nobody writes is refused.
 func TestARaceHandedReadsBack(t *testing.T) {
 	entrants := []bus.RaceEntrant{{Account: account(1), Number: 1, Machine: true, BoatLook: 7, BoatName: "Gull"}, {Account: account(2), Number: 2, Crew: true}}
 	for _, c := range []*bus.RaceCall{
 		{ID: [16]byte{1}, Run: 3, Trial: true, Across: true, Kind: 2, Entrants: entrants[:1]},
+		{ID: [16]byte{5}, Course: 2, Across: true, Dash: true, Start: 7000, Entrants: entrants},
 		{ID: [16]byte{2}, Course: 1, Triangle: true, Long: true, Kind: 1, Start: 9000, Entrants: entrants},
 		{ID: [16]byte{3}, Island: true, Course: 4, Start: 12000, Entrants: entrants},
 		{ID: [16]byte{4}, Run: 1, Trial: true, Long: true},
@@ -49,7 +50,7 @@ func TestARaceHandedReadsBack(t *testing.T) {
 		}
 		// A flag nobody writes.
 		bad := bytes.Clone(enc)
-		bad[17] |= 32
+		bad[17] |= 64
 		if p := (&payload{b: bad}); p.raceCall() == nil || p.err == nil {
 			t.Error("a race with an unknown flag read")
 		}

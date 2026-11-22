@@ -10,8 +10,13 @@ import { describe, expect, test } from 'vitest';
 import type { Entrant } from './raceapi';
 import {
   actRefusalText,
+  bareName,
   boatsText,
+  CALLED_OFF,
+  calledOffFill,
   clockText,
+  ENTER_LINE,
+  enteredLine,
   enterRefusalText,
   entrantLabel,
   entrantText,
@@ -22,7 +27,9 @@ import {
   localInput,
   makeRefusalText,
   ownerText,
+  phaseLine,
   raceShareText,
+  rowReasonText,
   startOf,
   startsInText,
   whenLine,
@@ -117,6 +124,7 @@ describe('refusals, told kindly', () => {
       'not-entered',
       'offline',
       'certificate',
+      'upwind',
     ]) {
       expect(enterRefusalText(r, t()), r).not.toBe(fallback);
     }
@@ -135,6 +143,7 @@ describe('refusals, told kindly', () => {
       'boat',
       'name',
       'certificate',
+      'upwind',
     ]) {
       expect(makeRefusalText(r, t()), r).not.toBe(fallback);
     }
@@ -151,11 +160,14 @@ describe('refusals, told kindly', () => {
     expect(enterRefusalText('daily', t(at))).toBe(
       'You’ve raced as often as a day allows. Your next race can start after 4:10 PM.',
     );
+    expect(enterRefusalText('daily', { ...t(at), most: 8 })).toBe(
+      'You’ve raced eight times today. Your next race can start after 4:10 PM.',
+    );
     expect(makeRefusalText('made', t(at))).toBe(
       'You’ve made as many races as a day allows. You can make the next after 4:10 PM.',
     );
-    expect(enterRefusalText('ahead', t(NOW + 30 * HOUR))).toBe(
-      'You’re entered in as many races ahead as you can be. You can enter another after tomorrow 3:00 PM.',
+    expect(enterRefusalText('ahead', { ...t(NOW + 30 * HOUR), most: 2 })).toBe(
+      'You’re in two races already. You can enter another after tomorrow 3:00 PM.',
     );
     expect(makeRefusalText('late', t(NOW + 72 * HOUR))).toBe(
       'That’s too near the world’s end. The latest start is Tuesday 9:00 AM.',
@@ -167,6 +179,24 @@ describe('refusals, told kindly', () => {
       'You’ve raced as often as a day allows. Rest a while, and race again later.',
     );
     expect(makeRefusalText('made', t())).toMatch(/Make the next one later\.$/);
+  });
+
+  test('the plain words: entry closed, two races ahead, three of your own, a course up the wind', () => {
+    expect(enterRefusalText('started', t())).toBe(
+      'Entry closed two minutes before the start. You can still watch.',
+    );
+    expect(enterRefusalText('ahead', { ...t(), most: 2 })).toBe(
+      'You’re in two races already. Enter another once one has started.',
+    );
+    expect(makeRefusalText('owned', { ...t(), most: 3 })).toBe(
+      'Three of your races are still to be sailed. Make another once one is over.',
+    );
+    expect(makeRefusalText('owned', { ...t(), most: 1 })).toBe(
+      'One of your races is still to be sailed. Make another once it is over.',
+    );
+    // The numbers are the settings', never the words'.
+    expect(makeRefusalText('owned', { ...t(), most: 5 })).toMatch(/^Five of your races/);
+    expect(makeRefusalText('upwind', t())).toMatch(/time trial/);
   });
 
   test('a name refused says why', () => {
@@ -239,5 +269,48 @@ describe('a start chosen', () => {
     const now = Date.UTC(2026, 10, 14, 3, 7);
     expect(laterDefault(now, now, now + 10 * HOUR)).toBe(Date.UTC(2026, 10, 14, 5, 15));
     expect(laterDefault(now, now, now + HOUR)).toBe(now + HOUR);
+  });
+});
+
+describe('what entering means', () => {
+  test('one line says what will happen, on the card and in the answer to Enter', () => {
+    expect(ENTER_LINE).toBe(
+      'Keep sailing. Two minutes before the start your boat is taken to the start line, wherever you are.',
+    );
+    expect(enteredLine('the Noon Gun')).toBe(`You’re entered in the Noon Gun. ${ENTER_LINE}`);
+  });
+
+  test('a row that cannot be entered says why in a few words', () => {
+    expect(rowReasonText({ ok: false, reason: 'certificate', needs: 'Deckhand' })).toBe(
+      'For Deckhands',
+    );
+    expect(rowReasonText({ ok: false, reason: 'newcomers' })).toBe('For newcomers');
+    expect(rowReasonText({ ok: false, reason: 'full' })).toBe('Full');
+    expect(rowReasonText({ ok: false, reason: 'ahead', most: 2 })).toBe('In two races already');
+    expect(rowReasonText({ ok: true })).toBe('');
+  });
+});
+
+describe('a race called off for a storm', () => {
+  const harbour = [
+    { startsAt: NOW + HOUR, phase: 'cancelled' as const },
+    { startsAt: NOW + 4 * HOUR, phase: 'open' as const },
+  ];
+
+  test('its notice names it bare, and the next harbour race after it', () => {
+    expect(bareName('the Noon Gun')).toBe('Noon Gun');
+    expect(bareName('Tuesday Triangle')).toBe('Tuesday Triangle');
+    expect(
+      calledOffFill({ name: 'the Noon Gun', startsAt: NOW + HOUR }, harbour, NOW, LOCALE, ZONE),
+    ).toEqual({ name: 'Noon Gun', next: 'The next harbour race is at 1:00 PM.' });
+    expect(calledOffFill({ name: 'the Noon Gun', startsAt: NOW + HOUR }, [], NOW)).toEqual({
+      name: 'Noon Gun',
+      next: '',
+    });
+  });
+
+  test('its card and its row say so', () => {
+    expect(phaseLine({ phase: 'cancelled', calledOff: 'storm' })).toBe(CALLED_OFF);
+    expect(phaseLine({ phase: 'cancelled' })).toBe('This race was called off.');
   });
 });

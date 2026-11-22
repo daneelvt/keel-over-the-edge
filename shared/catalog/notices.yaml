@@ -18,6 +18,9 @@
 # its boats ("Jolly boats"); a race the player entered, {name}; both
 # {left}, the time to its start, at each time before it given. The
 # harbour board and the race's card say the same, so neither is lost. A
+# race the player entered that a storm called off fills in {name}, the
+# race's without its article ("Noon Gun"), and {next}, the next harbour
+# race's time as a sentence, or nothing for none. A
 # task of the player's next certificate done fills in {cert}, the
 # certificate's name, {task}, the task's, and {done} and {of}, the tasks
 # done of those it needs; a certificate earned, {cert} and {boats}, the
@@ -111,6 +114,14 @@ notices:
       stays: 8
       text: "{name} starts in {left}"
       folded: "{name} starts in {left}"
+    - id: races-called-off
+      name: Races called off
+      on: race-called-off
+      level: active
+      switchable: false
+      stays: 10
+      text: "A storm over Port Royal: no {name} today. {next}"
+      folded: "A storm over Port Royal: no {name} today. {next}"
     - id: tasks-done
       name: Toward your next certificate
       on: task-done

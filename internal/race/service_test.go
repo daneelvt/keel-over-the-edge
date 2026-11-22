@@ -113,11 +113,11 @@ func (s *sea) machine() Sailor {
 
 func (s *sea) jolly() string { return string(s.cat.Boats[0].ID) }
 
-// make makes a race of the jolly boat on a short triangle starting in
+// make makes a race of the jolly boat on the Dash starting in
 // in, by by, or fails the test.
 func (s *sea) make(by Sailor, in time.Duration, who string) Card {
 	s.t.Helper()
-	c, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: s.jolly(), At: s.now.Add(in), Who: who})
+	c, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(in), Who: who})
 	if err != nil {
 		s.t.Fatalf("making a race: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestMakingLimits(t *testing.T) {
 			for i := range 3 {
 				cards = append(cards, s.make(by, time.Duration(10+15*i)*time.Minute, WhoEveryone))
 			}
-			_, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
+			_, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
 			refused(t, err, RefuseOwned)
 			// Cancelled, they make room among those owned but not in the day.
 			for made := 3; made < 8; made++ {
@@ -210,15 +210,15 @@ func TestCutOff(t *testing.T) {
 	s := newSea(t)
 	by := s.human()
 	latest := s.ends.Add(-3 * time.Hour)
-	_, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:windward-leeward:long", Boat: s.jolly(), At: latest.Add(time.Second), Who: WhoEveryone})
+	_, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: latest.Add(time.Second), Who: WhoEveryone})
 	if r := refused(t, err, RefuseLate); !r.Until.Equal(latest) {
 		t.Errorf("latest %s, want %s", r.Until, latest)
 	}
-	_, err = s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: s.jolly(), At: s.now.Add(Lead - time.Second), Who: WhoEveryone})
+	_, err = s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(Lead - time.Second), Who: WhoEveryone})
 	refused(t, err, RefuseSoon)
-	if c, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:windward-leeward:long", Boat: s.jolly(), At: latest, Who: WhoEveryone}); err != nil {
+	if c, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: latest, Who: WhoEveryone}); err != nil {
 		t.Fatal(err)
-	} else if c.Course.Name != "Long windward–leeward off Port Royal" || c.Minutes != LongMinutes || c.Phase != PhaseOpen {
+	} else if c.Course.Name != "Dash off Port Royal" || c.Minutes != DashMinutes || c.Phase != PhaseOpen {
 		t.Errorf("the card %+v", c)
 	}
 	s.now = latest.Add(time.Minute)
@@ -245,17 +245,17 @@ func TestMakingRefused(t *testing.T) {
 	}{
 		{by, Making{Kind: KindRace, Course: "island:3", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "island:9", Boat: tall, Who: WhoEveryone}, RefuseCourse},
-		{by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: tall, Who: WhoEveryone}, RefuseCourse},
+		{by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: tall, Who: WhoEveryone}, RefuseCourse},
 		// The reach is the Harbourmaster's own: nobody makes a race on it,
 		// nor a trial, and it has no long form.
 		{by, Making{Kind: KindRace, Course: "buoy:reach:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindTrial, Course: "buoy:reach:short", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:reach:long", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:square:short", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
-		{by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: "no-boat", Who: WhoEveryone}, RefuseBoat},
-		{engine, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoHumans}, RefuseWho},
-		{engine, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoNewcomers}, RefuseWho},
-		{by, Making{Kind: KindRace, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoEveryone, Name: "x"}, RefuseName},
+		{by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: "no-boat", Who: WhoEveryone}, RefuseBoat},
+		{engine, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), Who: WhoHumans}, RefuseWho},
+		{engine, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), Who: WhoNewcomers}, RefuseWho},
+		{by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), Who: WhoEveryone, Name: "x"}, RefuseName},
 	} {
 		m.making.At = s.now.Add(time.Hour)
 		_, err := s.svc.Make(s.ctx, m.by, m.making)
@@ -266,7 +266,7 @@ func TestMakingRefused(t *testing.T) {
 	other := s.human()
 	s.make(by, time.Hour, WhoEveryone)
 	s.make(other, time.Hour+time.Minute, WhoEveryone)
-	_, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindRace, Course: "buoy:triangle:long", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
+	_, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
 	refused(t, err, RefuseAreas)
 	s.make(by, time.Hour+AreaApart, WhoEveryone)
 	// A trial's area is laid at each run: never busy.
@@ -554,8 +554,18 @@ func TestHarbourJob(t *testing.T) {
 			t.Errorf("the newcomers' race named %q", h.Name)
 		}
 	}
-	if len(b.Make.Courses) != 5 || !b.Make.Can.OK {
+	// The Dash, the island course, then the four with a beat in them, for
+	// time trials only.
+	if len(b.Make.Courses) != 6 || !b.Make.Can.OK {
 		t.Errorf("make: %d courses, %+v", len(b.Make.Courses), b.Make.Can)
+	} else if c := b.Make.Courses; c[0].Shape != ShapeDash || c[0].TrialOnly || c[0].Upwind || c[1].Kind != CourseIsland || c[1].TrialOnly {
+		t.Errorf("make's first courses: %+v, %+v", c[0], c[1])
+	} else {
+		for _, x := range c[2:] {
+			if !x.TrialOnly || !x.Upwind || !UpwindShape(x.Shape) {
+				t.Errorf("a course with a beat in it offered as %+v", x)
+			}
+		}
 	}
 	var names []string
 	for _, tr := range b.Trials {

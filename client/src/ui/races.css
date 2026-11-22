@@ -266,6 +266,11 @@ fieldset.race-owner-row {
   stroke-width: 2.5;
 }
 
+/* A finish line of its own, a dash's: chequered, as a finish is. */
+.race-finish {
+  stroke-dasharray: 2 2;
+}
+
 .race-mark {
   fill: #e0742c;
   stroke: #2a2620;

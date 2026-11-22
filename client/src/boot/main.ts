@@ -609,6 +609,8 @@ async function start(): Promise<void> {
       });
       if (screen.racing != null) {
         screen.racing.races = races;
+        const r = screen.racing.racing;
+        r.newcomer = () => races.board.value?.newcomer === true;
       }
       if (screen.harbour != null) {
         screen.harbour.races = races;
@@ -958,6 +960,7 @@ async function start(): Promise<void> {
   // A race under way: its course laid in the sea, its committee boat's
   // flags, and its gun; the race the boat sails in on the race line.
   const racing = new Racing();
+  racing.stillRacing = () => online.stillRacing();
   const raceInSea = raceSea({
     lay: (id, c) => world.race.lay(id, c),
     drop: (id) => world.race.drop(id),
@@ -1148,6 +1151,8 @@ async function start(): Promise<void> {
   });
   races.board.value = startRaces.board.value;
   races.replay = (code) => parts.replay.open(code);
+  // A newcomer's hints on the race line, while the board says the green ribbon is theirs.
+  racing.newcomer = () => races.board.value?.newcomer === true;
   // A race asked to be watched as it starts: Watch on its notice watches
   // the closest battle at the front, following the action.
   pollRaces(races, parts.notices, catalog.notices.kinds, (code) => {

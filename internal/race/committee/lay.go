@@ -33,6 +33,18 @@ import (
 // sailed twice round. The mark is left to port, and lies to the side
 // that makes the turn round it a tack, through the wind, not a gybe.
 //
+// A Dash is the race's course with no beat in it: laid as a reach is, its
+// line along the wind and its one mark straight across the wind from the
+// line's middle, but home to a finish line of its own, two buoys along the
+// wind as the start line is, up the wind of it by DashApart of the boat's
+// lengths beyond its end, so that the boats coming home are clear of the
+// boats going out. No leg lies closer to the wind than dashOff: where the
+// legs are too short for the finish to lie so far up the wind, it lies
+// less far. It is sized by the boat's polar for six minutes, or to what
+// the area holds, and laid across the area's middle with room behind the
+// line for the boats placed there; the committee boat stays at the start,
+// and fires each finisher's gun from there.
+//
 // An island course lays only its lines: the start across the wind at its
 // start's site, or across the way out if the way leaves across the wind,
 // within the site's room; the finish across the way in at its finish's
@@ -64,13 +76,22 @@ func (s *Stage) Lay(f *bus.Frame, call *bus.RaceCall, speed, from float64, n int
 		if c == nil || len(c.Way) < 2 {
 			return nil
 		}
-		return layIsland(c, k, speed, from, n)
+		if call.Trial {
+			return layIsland(c, k, speed, from, n)
+		}
+		at, upwind := islandStart(c, from)
+		laid := layIsland(at, k, speed, from, n)
+		laid.Upwind = upwind
+		return laid
 	}
 	a := s.areaFor(f, call)
 	if a == nil {
 		return nil
 	}
-	if call.Across {
+	switch {
+	case call.Across && call.Dash:
+		return layDash(a, k, speed, from, n)
+	case call.Across:
 		return layReach(a, k, speed, from)
 	}
 	target := float64(ShortSeconds)
@@ -195,6 +216,85 @@ func layReach(a *Area, k Kind, speed, from float64) *bus.RaceCourse {
 	c.Way = append(c.Way, mid, mark, mid)
 	// Out over the line from its right to its left, round the mark by a
 	// ray on from it, and home over the line the other way.
+	c.Checks = append(c.Checks, lineCheck(c.Pin, c.Committee, -1, 0), rayCheck(mark, rx, ry, -1, 1), lineCheck(c.FinishA, c.FinishB, 1, 0))
+	finishCourse(c, k.Polar)
+	return c
+}
+
+// DashApart is how far up the wind of a Dash's start line's end its
+// finish line's begins, in the boat's lengths: a variable only so that a
+// test may measure how far is enough.
+var DashApart = 8.0
+
+// dashOff is how near the wind a Dash's way home may lie, rad, and an
+// island race's first leg.
+const dashOff = 70 * math.Pi / 180
+
+// layDash lays a Dash in area a for boats k, n of them, in a wind of speed
+// from from.
+func layDash(a *Area, k Kind, speed, from float64, n int) *bus.RaceCourse {
+	us, uc := physics.SinCos(from)
+	// u is up the wind, r to starboard looking up it: out to the mark, the
+	// wind over the boats' port side, the mark left to port by a tack.
+	ux, uy, rx, ry := us, uc, uc, -us
+	l := k.Length
+	halfLine := float64(lineLength(l, n) * 0.5)
+	halfFinish := float64(lineLength(l, 1) * 0.5)
+	// How far up the wind of the start line's middle the finish line's
+	// middle lies, for a leg of leg: as far as it should, no further than
+	// the way home keeps dashOff off the wind.
+	ts, tc := physics.SinCos(math.Pi/2 - dashOff)
+	upOf := func(leg float64) float64 {
+		return min(float64(halfLine+float64(DashApart*l))+halfFinish, float64(leg*ts)/tc)
+	}
+	// The course's points, for a leg of leg, along and across the wind from
+	// the start line's middle; and the middle of what they span, so the
+	// course lies across the area's.
+	behind := float64(areaBehind * l)
+	fits := func(leg float64) (bool, float64, float64) {
+		up := upOf(leg)
+		lo, hi := -halfLine, float64(up+halfFinish)
+		midAlong := float64((lo + hi) * 0.5)
+		midAcross := float64((float64(-behind) + leg) * 0.5)
+		for _, p := range [...][2]float64{{lo, -behind}, {hi, -behind}, {lo, 0}, {hi, 0}, {0, leg}} {
+			da, dc := p[0]-midAlong, p[1]-midAcross
+			if hypot(da, dc) > a.Radius {
+				return false, midAlong, midAcross
+			}
+		}
+		return true, midAlong, midAcross
+	}
+	leg := float64(legLeast * l)
+	if k.Polar != nil {
+		// Out and home, each across the wind, near enough.
+		if perMetre := float64(2 * k.Polar.LegTime(speed, math.Pi/2, 1)); perMetre > 0 && !math.IsInf(perMetre, 0) {
+			leg = max(DashSeconds/perMetre, leg)
+		}
+	}
+	// Cut to what the area holds, a twentieth at a time.
+	for range 64 {
+		if ok, _, _ := fits(leg); ok || leg <= float64(legLeast*l) {
+			break
+		}
+		leg = max(float64(leg*0.95), float64(legLeast*l))
+	}
+	_, midAlong, midAcross := fits(leg)
+	at := func(along, across float64) [2]float64 {
+		along, across = along-midAlong, across-midAcross
+		return [2]float64{a.X + float64(along*ux) + float64(across*rx), a.Y + float64(along*uy) + float64(across*ry)}
+	}
+	up := upOf(leg)
+	start, mark, home := at(0, 0), at(0, leg), at(up, 0)
+	c := &bus.RaceCourse{
+		Number: a.Number, Across: true, Dash: true, Laps: 1, Wind: speed, From: from,
+		X: a.X, Y: a.Y, Reach: a.Radius,
+		Committee: at(-halfLine, 0), Pin: at(halfLine, 0),
+		FinishA: at(float64(up+halfFinish), 0), FinishB: at(float64(up-halfFinish), 0),
+	}
+	c.Marks = append(c.Marks, bus.RaceMark{X: mark[0], Y: mark[1], Number: 1, Side: bus.MarkPort})
+	c.Way = append(c.Way, start, mark, home)
+	// Out over the start line from its right to its left, round the mark
+	// by a ray on from it, and home over the finish line the other way.
 	c.Checks = append(c.Checks, lineCheck(c.Pin, c.Committee, -1, 0), rayCheck(mark, rx, ry, -1, 1), lineCheck(c.FinishA, c.FinishB, 1, 0))
 	finishCourse(c, k.Polar)
 	return c

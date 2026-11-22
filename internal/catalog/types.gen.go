@@ -2398,8 +2398,8 @@ type NoticeKind struct {
 	// the player follows setting sail, a harbour race about to start, a race the
 	// player entered about to start, a task of the player's next certificate done, a
 	// certificate earned, the course the player set reached, a shipmate sailing to
-	// the player, the player alongside a boat they sailed to, or a course to a boat
-	// ended.
+	// the player, the player alongside a boat they sailed to, a course to a boat
+	// ended, or a race the player entered called off for a storm.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -2412,7 +2412,8 @@ type NoticeKind struct {
 	// player's own time), {left} (the time left), for a gale warning {wind}, {when}
 	// and {where}, and for a certificate {cert} (its name), {task} (the task's),
 	// {done} and {of} (the tasks done of those it needs) and {boats} (the boats it
-	// opens, as a sentence opens) are filled in.
+	// opens, as a sentence opens), and for a race called off {next} (the next harbour
+	// race, as a sentence) are filled in.
 	Text string `json:"text"`
 }
 
@@ -2444,6 +2445,7 @@ const OnFollowedSailed On = "followed-sailed"
 const OnGaleWarned On = "gale-warned"
 const OnHarbourRace On = "harbour-race"
 const OnNewWorld On = "new-world"
+const OnRaceCalledOff On = "race-called-off"
 const OnRaceSoon On = "race-soon"
 const OnShipmateCourse On = "shipmate-course"
 const OnTaskDone On = "task-done"
@@ -6182,4 +6184,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "d62bca3881c1b72d"
+const Version = "f408be1c18d84706"

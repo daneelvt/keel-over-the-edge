@@ -39,11 +39,15 @@ type Card struct {
 	Entrants []Entrant `json:"entrants"`
 	Mine     Mine      `json:"mine"`
 	Enter    Can       `json:"enter"`
+	// CalledOff is why a race was called off at its warning signal
+	// (CalledOffStorm), "" for one that was not.
+	CalledOff string `json:"calledOff,omitempty"`
 }
 
 // CourseCard is a race's course: its ID and kind; a buoy course's shape
 // and length; an island course's number, length, m, and way, m east and
-// north in pairs; and its name.
+// north in pairs; its name; and whether it wears the upwind sign: a beat
+// in it, or an island course's start up the wind that day.
 type CourseCard struct {
 	ID     string  `json:"id"`
 	Kind   string  `json:"kind"`
@@ -53,6 +57,7 @@ type CourseCard struct {
 	Name   string  `json:"name"`
 	Length float64 `json:"length,omitempty"`
 	Way    []int32 `json:"way,omitempty"`
+	Upwind bool    `json:"upwind,omitempty"`
 }
 
 // BoatRef is a kind of boat: the catalog's id and name.
@@ -93,12 +98,13 @@ type Mine struct {
 
 // Can is whether the reader may do something now, and if not, why and
 // until when; for a boat the reader may not sail, the certificate that
-// opens her.
+// opens her; for a limit reached, the limit.
 type Can struct {
 	OK     bool   `json:"ok"`
 	Reason string `json:"reason,omitempty"`
 	Until  int64  `json:"until,omitempty"`
 	Needs  string `json:"needs,omitempty"`
+	Most   int    `json:"most,omitempty"`
 }
 
 // canOf is what an error refusing something says of it.
@@ -107,7 +113,7 @@ func canOf(err error) Can {
 		return Can{OK: true}
 	}
 	if r, ok := RefusalOf(err); ok {
-		c := Can{Reason: r.Reason, Needs: r.Needs}
+		c := Can{Reason: r.Reason, Needs: r.Needs, Most: r.Most}
 		if !r.Until.IsZero() {
 			c.Until = r.Until.UnixMilli()
 		}
@@ -138,6 +144,10 @@ type Summary struct {
 	Standing bool   `json:"standing,omitempty"`
 	Toward   string `json:"toward,omitempty"`
 	Course   string `json:"course,omitempty"`
+	// Upwind: its course wears the upwind sign. CalledOff is why it was
+	// called off at its warning signal, "" for none.
+	Upwind    bool   `json:"upwind,omitempty"`
+	CalledOff string `json:"calledOff,omitempty"`
 }
 
 // SummaryMine is the reader's part in a race on a list.
@@ -148,14 +158,16 @@ type SummaryMine struct {
 
 // Board is a sailor's races: the next harbour races, the week's
 // newcomers' harbour races' starts, the Harbourmaster's standing trials
-// in the boat they sail, their own races not over, and what they may
-// make.
+// in the boat they sail, their own races not over (and those of the last
+// hour a storm called off), what they may make, and whether they are a
+// newcomer, wearing the green ribbon.
 type Board struct {
 	Harbour   []Summary   `json:"harbour"`
 	Greenhorn []int64     `json:"greenhorn"`
 	Trials    []Summary   `json:"trials"`
 	Mine      []Summary   `json:"mine"`
 	Make      MakeChoices `json:"make"`
+	Newcomer  bool        `json:"newcomer"`
 }
 
 // MakeChoices are what a sailor may make a race of: whether they may make
@@ -182,10 +194,12 @@ type BoatChoice struct {
 }
 
 // CourseChoice is a course to race on, as CourseCard, with the boats it
-// is offered to and their expected minutes.
+// is offered to and their expected minutes; TrialOnly, a course with a
+// beat in it, made as a time trial only.
 type CourseChoice struct {
 	CourseCard
-	Boats map[string]int `json:"boats"`
+	Boats     map[string]int `json:"boats"`
+	TrialOnly bool           `json:"trialOnly,omitempty"`
 }
 
 // wayOf is a course's way, m east and north in pairs, rounded.
@@ -197,13 +211,14 @@ func wayOf(way [][2]float64) []int32 {
 	return out
 }
 
-// courseCard is race r's course as its card shows it.
-func (s *Service) courseCard(r *store.Race, c *Courses) CourseCard {
+// courseCard is race r's course as its card shows it, its upwind sign
+// as it stands at at.
+func (s *Service) courseCard(r *store.Race, c *Courses, at time.Time) CourseCard {
 	if r.CourseKind == CourseBuoy {
 		return CourseCard{ID: CourseID(CourseBuoy, r.Shape, r.Long, 0), Kind: CourseBuoy, Shape: r.Shape, Long: r.Long,
-			Name: BuoyName(r.Shape, r.Long, s.port)}
+			Name: BuoyName(r.Shape, r.Long, s.port), Upwind: UpwindShape(r.Shape)}
 	}
-	out := CourseCard{ID: CourseID(CourseIsland, "", false, r.Course), Kind: CourseIsland, Number: r.Course}
+	out := CourseCard{ID: CourseID(CourseIsland, "", false, r.Course), Kind: CourseIsland, Number: r.Course, Upwind: s.upwind(r, at)}
 	if ic := c.island(r.Course); ic != nil {
 		out.Name, out.Length, out.Way = ic.Name, math.Round(ic.Length), wayOf(ic.Way)
 	}
@@ -232,8 +247,8 @@ func (s *Service) Card(ctx context.Context, by Sailor, code string) (Card, error
 	boat, most := s.boatRef(r.Boat)
 	c := Card{Code: r.Code, Link: s.link(r.Code), Name: r.Name, Kind: r.Kind,
 		Phase: phaseOf(&r, now, s.cfg.World.Number, s.latest(limits)), Harbour: r.Harbour >= 0, Who: r.Who,
-		Course: s.courseCard(&r, &courses), Boat: boat, StartsAt: r.StartsAt.UnixMilli(), Minutes: s.minutesOf(&r, &courses),
-		Most: most, Entrants: []Entrant{}, Standing: !r.HasOwner && r.Kind == KindTrial}
+		Course: s.courseCard(&r, &courses, signAt(&r, now)), Boat: boat, StartsAt: r.StartsAt.UnixMilli(), Minutes: s.minutesOf(&r, &courses),
+		Most: most, Entrants: []Entrant{}, Standing: !r.HasOwner && r.Kind == KindTrial, CalledOff: r.CalledOff}
 	entrants, err := s.cfg.Store.RaceEntrants(ctx, &r)
 	if err != nil {
 		return Card{}, err
@@ -283,6 +298,15 @@ func (s *Service) Card(ctx context.Context, by Sailor, code string) (Card, error
 	return c, nil
 }
 
+// signAt is when race r's upwind sign is read: a race's at its start, a
+// trial's now.
+func signAt(r *store.Race, now time.Time) time.Time {
+	if r.Kind == KindRace && r.StartsAt.After(now) {
+		return r.StartsAt
+	}
+	return now
+}
+
 // CardOf is the card of the race of an ID in the world sailed, as the
 // sailor by is shown it: a race under way in the world, by its row's ID.
 func (s *Service) CardOf(ctx context.Context, by Sailor, id [16]byte) (Card, error) {
@@ -319,7 +343,8 @@ func (s *Service) person(reader logbook.Reader, id store.AccountID, people map[s
 func (s *Service) summary(ctx context.Context, r *store.Race, by Sailor, now time.Time, latest time.Time, mine []store.EntryStart) (Summary, error) {
 	boat, most := s.boatRef(r.Boat)
 	out := Summary{Code: r.Code, Name: r.Name, Kind: r.Kind, Phase: phaseOf(r, now, s.cfg.World.Number, latest),
-		Harbour: r.Harbour >= 0, Who: r.Who, Boat: boat, StartsAt: r.StartsAt.UnixMilli(), Entered: r.Entered, Most: most}
+		Harbour: r.Harbour >= 0, Who: r.Who, Boat: boat, StartsAt: r.StartsAt.UnixMilli(), Entered: r.Entered, Most: most,
+		Upwind: s.upwind(r, signAt(r, now)), CalledOff: r.CalledOff}
 	out.Mine.Owner = r.HasOwner && r.Owner == by.ID
 	for _, m := range mine {
 		if m.Race == r.ID && m.World == r.World {
@@ -373,7 +398,9 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 	for _, d := range days {
 		out.Greenhorn = append(out.Greenhorn, at(d.Day, d.Hour, s.cfg.Zone).UnixMilli())
 	}
-	own, err := s.cfg.Store.RacesOf(ctx, w.ID, w.Number, by.ID)
+	// A race a storm called off stays on the list for its hour, so its
+	// entrants hear of it.
+	own, err := s.cfg.Store.RacesOf(ctx, w.ID, w.Number, by.ID, now.Add(-time.Hour))
 	if err != nil {
 		return Board{}, err
 	}
@@ -387,6 +414,11 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 		}
 		out.Mine = append(out.Mine, sm)
 	}
+	n, err := s.cfg.Store.RacesSailed(ctx, by.ID)
+	if err != nil {
+		return Board{}, err
+	}
+	out.Newcomer = n < Newcomer
 	out.Make, err = s.choices(ctx, by, now, limits, latest)
 	return out, err
 }
@@ -419,6 +451,8 @@ func (s *Service) trials(ctx context.Context, by Sailor, now, latest time.Time, 
 		sm.Toward = st.Toward(sm.Course)
 		out = append(out, sm)
 	}
+	// Easy first: the courses with the upwind sign last, each in its order.
+	slices.SortStableFunc(out, func(a, b Summary) int { return boolOrder(a.Upwind) - boolOrder(b.Upwind) })
 	return out, nil
 }
 
@@ -448,23 +482,34 @@ func (s *Service) CourseTrials(ctx context.Context, id store.AccountID) (map[str
 	return out, nil
 }
 
+// boolOrder is 1 for true: what sorts it after false.
+func boolOrder(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // standingOrder is a standing trial's place on the board: the reach, the
-// short windward–leeward, the short triangle, the long windward–leeward,
-// the long triangle, then the island courses by number.
+// Dash, the short windward–leeward, the short triangle, the long
+// windward–leeward, the long triangle, then the island courses by number;
+// the board puts those with the upwind sign last.
 func standingOrder(r *store.Race) int {
 	switch recordCourse(r) {
 	case store.CourseReach:
 		return 0
-	case store.CourseShort:
+	case store.CourseDash:
 		return 1
-	case store.CourseTriangle:
+	case store.CourseShort:
 		return 2
-	case store.CourseLong:
+	case store.CourseTriangle:
 		return 3
-	case store.CourseLongTriangle:
+	case store.CourseLong:
 		return 4
+	case store.CourseLongTriangle:
+		return 5
 	}
-	return 5 + r.Course
+	return 6 + r.Course
 }
 
 // sailorBoat is the catalog's id of the boat each sailor brings to the
@@ -495,12 +540,13 @@ func (s *Service) choices(ctx context.Context, by Sailor, now time.Time, limits 
 	courses := s.cfg.Courses()
 	buoys := map[string]int{}
 	long := map[string]int{}
+	dash := map[string]int{}
 	for i := range s.cfg.Catalog.Boats {
 		b := &s.cfg.Catalog.Boats[i]
 		in := s.inAreas(b, &courses)
 		out.Boats = append(out.Boats, BoatChoice{ID: string(b.ID), Name: b.Name, Most: b.Racers, Buoys: in})
 		if in {
-			buoys[string(b.ID)], long[string(b.ID)] = ShortMinutes, LongMinutes
+			buoys[string(b.ID)], long[string(b.ID)], dash[string(b.ID)] = ShortMinutes, LongMinutes, DashMinutes
 		}
 	}
 	if s.cfg.BoatOf != nil {
@@ -509,31 +555,44 @@ func (s *Service) choices(ctx context.Context, by Sailor, now time.Time, limits 
 	if s.boat(out.Boat) == nil && len(out.Boats) > 0 {
 		out.Boat = out.Boats[0].ID
 	}
+	// Easy first: the Dash, then the island courses (those whose start is
+	// up the wind today last), then the courses with a beat in them, made
+	// as time trials only.
 	if len(buoys) > 0 {
-		for _, shape := range []string{ShapeTriangle, ShapeWindwardLeeward} {
-			for _, l := range []bool{false, true} {
+		out.Courses = append(out.Courses, CourseChoice{
+			CourseCard: CourseCard{ID: CourseID(CourseBuoy, ShapeDash, false, 0), Kind: CourseBuoy, Shape: ShapeDash,
+				Name: BuoyName(ShapeDash, false, "")},
+			Boats: dash})
+	}
+	island := slices.Clone(courses.Island)
+	slices.SortStableFunc(island, func(a, b Course) int { return a.Number - b.Number })
+	var islands []CourseChoice
+	for _, ic := range island {
+		boats := map[string]int{}
+		for id, e := range ic.Boats {
+			boats[id] = int(math.Round(e / 60))
+		}
+		islands = append(islands, CourseChoice{
+			CourseCard: CourseCard{ID: CourseID(CourseIsland, "", false, ic.Number), Kind: CourseIsland, Number: ic.Number,
+				Name: ic.Name, Length: math.Round(ic.Length), Way: wayOf(ic.Way),
+				Upwind: s.cfg.StartsUpwind != nil && s.cfg.StartsUpwind(ic.Number, now)},
+			Boats: boats})
+	}
+	slices.SortStableFunc(islands, func(a, b CourseChoice) int { return boolOrder(a.Upwind) - boolOrder(b.Upwind) })
+	out.Courses = append(out.Courses, islands...)
+	if len(buoys) > 0 {
+		for _, l := range []bool{false, true} {
+			for _, shape := range []string{ShapeWindwardLeeward, ShapeTriangle} {
 				minutes := buoys
 				if l {
 					minutes = long
 				}
 				out.Courses = append(out.Courses, CourseChoice{
 					CourseCard: CourseCard{ID: CourseID(CourseBuoy, shape, l, 0), Kind: CourseBuoy, Shape: shape, Long: l,
-						Name: BuoyName(shape, l, "")},
-					Boats: minutes})
+						Name: BuoyName(shape, l, ""), Upwind: true},
+					Boats: minutes, TrialOnly: true})
 			}
 		}
-	}
-	island := slices.Clone(courses.Island)
-	slices.SortStableFunc(island, func(a, b Course) int { return a.Number - b.Number })
-	for _, ic := range island {
-		boats := map[string]int{}
-		for id, e := range ic.Boats {
-			boats[id] = int(math.Round(e / 60))
-		}
-		out.Courses = append(out.Courses, CourseChoice{
-			CourseCard: CourseCard{ID: CourseID(CourseIsland, "", false, ic.Number), Kind: CourseIsland, Number: ic.Number,
-				Name: ic.Name, Length: math.Round(ic.Length), Way: wayOf(ic.Way)},
-			Boats: boats})
 	}
 	return out, nil
 }

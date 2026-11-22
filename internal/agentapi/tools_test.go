@@ -132,11 +132,12 @@ func TestHandbookPages(t *testing.T) {
 		// the beach cat's hulls and bows and the catamaran's reefing by the
 		// wind, about 1,255. By this estimate charting is about 800 and
 		// tools 765 with the course (602 and 646 o200k tokens); races
-		// about 775 with the reach and a trial's time limit.
+		// about 815 with the Dash, the upwind courses as time trials, a
+		// race sailed alone and a storm's call-off.
 		most := 700
 		switch topic {
 		case "races":
-			most = 790
+			most = 830
 		case "charting", "tools":
 			most = 820
 		case "aboard":

@@ -102,6 +102,9 @@ type Race struct {
 	Harbour     int
 	MadeAt      time.Time
 	Entered     int
+	// CalledOff is why the race was called off at its warning signal, ""
+	// for one that was not.
+	CalledOff string
 }
 
 // NewRace is a race to make: its world's ID, and the rest as a Race's.
@@ -272,7 +275,7 @@ func (s *Store) RaceByCode(ctx context.Context, code string) (Race, error) {
 	return Race{World: r.WorldID.Bytes, WorldNumber: int(r.World), ID: r.ID.Bytes, Code: r.Code, Owner: r.OwnerID.Bytes,
 		HasOwner: r.OwnerID.Bytes != [16]byte{}, Kind: r.Kind, CourseKind: r.CourseKind, Course: int(r.Course),
 		Shape: r.Shape, Long: r.Long, Boat: r.Boat, Who: r.Who, Name: r.Name, StartsAt: r.StartsAt.UTC(), Moved: r.Moved,
-		State: r.State, Harbour: int(r.Harbour), MadeAt: r.MadeAt.UTC(), Entered: int(r.Entered)}, nil
+		State: r.State, Harbour: int(r.Harbour), MadeAt: r.MadeAt.UTC(), Entered: int(r.Entered), CalledOff: r.CalledOff}, nil
 }
 
 // racesOf are a world's races of the IDs given, by their starts.
@@ -289,7 +292,7 @@ func (s *Store) racesOf(ctx context.Context, world [16]byte, number int, ids []p
 		out[i] = Race{World: world, WorldNumber: number, ID: r.ID.Bytes, Code: r.Code, Owner: r.OwnerID.Bytes,
 			HasOwner: r.OwnerID.Bytes != [16]byte{}, Kind: r.Kind, CourseKind: r.CourseKind, Course: int(r.Course),
 			Shape: r.Shape, Long: r.Long, Boat: r.Boat, Who: r.Who, Name: r.Name, StartsAt: r.StartsAt.UTC(),
-			Moved: r.Moved, State: r.State, Harbour: int(r.Harbour), MadeAt: r.MadeAt.UTC(), Entered: int(r.Entered)}
+			Moved: r.Moved, State: r.State, Harbour: int(r.Harbour), MadeAt: r.MadeAt.UTC(), Entered: int(r.Entered), CalledOff: r.CalledOff}
 	}
 	return out, nil
 }
@@ -307,8 +310,9 @@ func (s *Store) HarbourRaces(ctx context.Context, world [16]byte, number int, af
 
 // RacesOf are the races of a world an account owns or is entered in,
 // not over, the soonest first.
-func (s *Store) RacesOf(ctx context.Context, world [16]byte, number int, id AccountID) ([]Race, error) {
-	ids, err := s.q.RaceIDsOf(ctx, db.RaceIDsOfParams{WorldID: pgtype.UUID{Bytes: world, Valid: true}, AccountID: uuidOf(id)})
+func (s *Store) RacesOf(ctx context.Context, world [16]byte, number int, id AccountID, calledSince time.Time) ([]Race, error) {
+	ids, err := s.q.RaceIDsOf(ctx, db.RaceIDsOfParams{WorldID: pgtype.UUID{Bytes: world, Valid: true}, AccountID: uuidOf(id),
+		CalledSince: calledSince})
 	if err != nil {
 		return nil, err
 	}
