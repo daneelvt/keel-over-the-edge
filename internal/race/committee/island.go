@@ -71,7 +71,7 @@ const (
 // course's own length first.
 func (s *Stage) MoveStarts(port Port, room float64, deep func(x, y float64) bool) {
 	var sites []Site
-	n := int(math.Floor(port.Within / siteStep))
+	n := int(toInt32(math.Floor(port.Within / siteStep)))
 	for j := -n; j <= n; j++ {
 		for i := -n; i <= n; i++ {
 			x, y := port.X+float64(float64(i)*siteStep), port.Y+float64(float64(j)*siteStep)
@@ -143,7 +143,7 @@ func movesOnto(c *Course, sites []Site, deep func(x, y float64) bool) []Move {
 // deep water all the way, looked at every clearStep.
 func clearLeg(ax, ay, bx, by float64, deep func(x, y float64) bool) bool {
 	d := hypot(bx-ax, by-ay)
-	n := max(int(math.Ceil(d/clearStep)), 1)
+	n := max(int(toInt32(math.Ceil(d/clearStep))), 1)
 	for k := 0; k <= n; k++ {
 		t := float64(k) / float64(n)
 		if !deep(ax+float64(t*(bx-ax)), ay+float64(t*(by-ay))) {
