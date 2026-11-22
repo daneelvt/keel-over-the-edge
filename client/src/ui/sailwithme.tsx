@@ -131,7 +131,8 @@ export interface LinkStore {
   setItem(key: string, value: string): void;
 }
 
-function defaultStore(): LinkStore | null {
+/** The device's own store, or null where the browser keeps none. */
+export function defaultStore(): LinkStore | null {
   try {
     return globalThis.localStorage ?? null;
   } catch {

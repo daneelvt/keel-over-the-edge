@@ -89,6 +89,7 @@ import { SheetHead } from './sheet';
 import { ShipmateNotices, ShipmatesWindows, Star } from './shipmates';
 import { BE_SHIPMATES, endWords, KEEP, NO_LONGER } from './shipmatewords';
 
+export { SailLinkKey } from './sailkey';
 export { SailWithMe } from './sailwithme';
 
 /** Words with a player's text among them, that text as player text. */

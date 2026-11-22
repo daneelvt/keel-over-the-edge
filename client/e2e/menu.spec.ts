@@ -5,8 +5,11 @@
 // shipmates, the sailors to watch) stands where the menu stood, never
 // over the middle of the screen where the boat is, with its name and its
 // close at the top and a margin round what it holds, and nothing in it
-// wider than it. Invite friends is the one place a link is shared: to
-// watch the player, and to sail with them. Change boat, beside Back to
+// wider than it. Invite friends is where a link is shared: to watch the
+// player, and to sail with them; under it the menu has one key of its own,
+// which copies the link to sail with them, getting one first where none
+// is out, and opens Invite friends where that takes more than a tap.
+// Change boat, beside Back to
 // Port Royal, asks first, takes the boat out of the water and opens the
 // start screen on the boats to choose from; the boat chosen sails afresh
 // from the start.
@@ -41,7 +44,7 @@ async function menuBox(page: Page): Promise<Box> {
     return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
   });
   await page.getByRole('button', { name: 'Close the menu' }).click();
-  await expect(menu).toHaveCount(0);
+  await expect(page.locator('.menu:not(.menu-page)')).toHaveCount(0);
   return b;
 }
 
@@ -212,16 +215,28 @@ test('every page of the menu stands in the menu’s place, its name and close at
   await expect(page.locator('.menu-page')).toHaveCount(0);
 });
 
-test('Invite friends is the one place a link is shared: to watch me, and to sail with me', async ({
+test('Invite friends is where a link is shared, to watch me and to sail with me; the menu’s own key copies the link to sail with me', async ({
   context,
   page,
 }) => {
   await sailor(context, 'Invite');
+  // The clipboard, kept where the test can read it.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (t: string) => {
+          (globalThis as { copied?: string }).copied = t;
+        },
+      },
+    });
+  });
   await sail(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   const menu = page.locator('.menu');
   // One key for every link, with the other keys at the top: above the
-  // device's switches, and no share or link key of its own in the menu.
+  // device's switches; and under it, the one that copies the link to sail
+  // with me. No other share or link key in the menu.
   const invite = menu.getByRole('button', { name: 'Invite friends', exact: true });
   await expect(invite).toBeVisible();
   const order = await menu.evaluate((e) => {
@@ -230,11 +245,15 @@ test('Invite friends is the one place a link is shared: to watch me, and to sail
     const key = [...e.querySelectorAll('button')].find((b) => b.textContent === 'Invite friends');
     return {
       invite: key?.getBoundingClientRect().top ?? Number.NaN,
+      link: e.querySelector('[data-key=sail-link]')?.getBoundingClientRect().top ?? Number.NaN,
       device: Math.min(...top('h3')),
-      keys: [...e.querySelectorAll('button')].map((b) => b.textContent ?? ''),
+      keys: [...e.querySelectorAll('button:not([data-key=sail-link])')].map(
+        (b) => b.textContent ?? '',
+      ),
     };
   });
-  expect(order.invite).toBeLessThan(order.device);
+  expect(order.invite).toBeLessThan(order.link);
+  expect(order.link).toBeLessThan(order.device);
   for (const k of order.keys) {
     expect(k).not.toMatch(/link|Sail with me|picture/i);
   }
@@ -257,6 +276,40 @@ test('Invite friends is the one place a link is shared: to watch me, and to sail
   await expect(with_.getByRole('checkbox', { name: /Closed to knocks/ })).toBeVisible();
   await sheet.getByRole('button', { name: 'Close this window' }).click();
   await expect(sheet).toHaveCount(0);
+
+  // The menu's own key: no link out, so it gets one. The Rules of the sea
+  // are not yet accepted, which takes more than a tap: Invite friends opens.
+  const menuKey = page.getByRole('button', { name: 'Menu', exact: true });
+  const copied = () => page.evaluate(() => (globalThis as { copied?: string }).copied ?? '');
+  await menuKey.click();
+  await menu.getByRole('button', { name: 'Get a Sail with me link', exact: true }).click();
+  await expect(sheet.locator('[data-part=sail]')).toBeVisible();
+  await expect(page.locator('.menu:not(.menu-page)')).toHaveCount(0);
+  expect(await copied()).toBe('');
+  await sheet.getByRole('button', { name: 'Close this window' }).click();
+  // The Rules accepted: one tap gets the link and copies it, the menu still open.
+  expect((await context.request.post('/api/me/rules', { data: {} })).status()).toBe(204);
+  await menuKey.click();
+  await menu.getByRole('button', { name: 'Get a Sail with me link', exact: true }).click();
+  await expect(
+    menu.getByRole('button', { name: 'Sail with me link copied', exact: true }),
+  ).toBeVisible();
+  const link = await copied();
+  expect(link).toMatch(/\/\?s=[\w-]+$/);
+  await menu.getByRole('button', { name: 'Close the menu' }).click();
+  // The link out and kept on this device: the key copies it again, and
+  // Invite friends shows the same one.
+  await page.evaluate(() => {
+    (globalThis as { copied?: string }).copied = '';
+  });
+  await menuKey.click();
+  await menu.getByRole('button', { name: 'Copy my Sail with me link', exact: true }).click();
+  await expect(
+    menu.getByRole('button', { name: 'Sail with me link copied', exact: true }),
+  ).toBeVisible();
+  expect(await copied()).toBe(link);
+  await menu.getByRole('button', { name: 'Invite friends', exact: true }).click();
+  await expect(sheet.getByRole('textbox', { name: 'Sail with me' })).toHaveValue(link);
 });
 
 test('Change boat: asked first, the boat out of the water, the boats to choose from, and the one chosen sailed afresh from the start', async ({

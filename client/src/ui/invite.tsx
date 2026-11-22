@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Invite friends: the one page of the menu where a player shares a link,
-// for what is on the screen, each kind under its own name. At sea in
+// Invite friends: the page of the menu where a player shares a link,
+// for what is on the screen, each kind under its own name (the menu has
+// one key of its own besides, which copies the link to sail with them). At sea in
 // their own boat, Watch me sail: whether others may watch this voyage, the
 // link to watch, shared alone or with a picture of the view, and a new
 // link made; and Sail with me, while the boat is in the water: the link by
