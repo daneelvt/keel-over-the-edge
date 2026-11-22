@@ -272,6 +272,16 @@ describe('the ribbons', () => {
     expect(ribbonLines({ ...r, how: 'ret', role: 'skipper', awards: [] }, 'Jolly boat')[0]).toBe(
       'Tuesday Triangle · Jolly boats · retired',
     );
+    // A race with one boat at its start: sailed alone, a medal against par.
+    expect(
+      ribbonLines(
+        { ...r, fleet: 1, place: 1, medal: 'bronze', role: 'skipper', awards: [] },
+        'Jolly boat',
+      )[0],
+    ).toBe('Tuesday Triangle · Jolly boats · sailed alone, a bronze medal');
+    expect(
+      ribbonLines({ ...r, fleet: 1, place: 1, role: 'skipper', awards: [] }, 'Jolly boat')[0],
+    ).toBe('Tuesday Triangle · Jolly boats · sailed alone');
   });
 });
 

@@ -8,7 +8,7 @@
 
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { RaceCallIn, RaceFinishIn, RacerAtIn, RaceToldIn } from '../net/messages';
-import { clockOf, ordinal } from './racelinewords';
+import { clockOf, ordinal, timed } from './racelinewords';
 
 /** The race bar's words: the line over (the race, the leg, the gap) and the place and name of the boat watched. */
 export interface BarWords {
@@ -33,7 +33,7 @@ export function barWords(
   const race = told.name !== '' ? told.name : 'The race';
   const r = racers.find((x) => x.number === n);
   const before = told.start <= 0 || tick < told.start;
-  if (before && !told.trial) {
+  if (before && !timed(told)) {
     const left =
       told.start > 0 ? `The start in ${clockOf((told.start - tick) / STEPS_PER_SECOND)} · ` : '';
     return { over: `${left}${race}`, place: `No. ${n}`, name: name(n) };
@@ -49,7 +49,7 @@ export function barWords(
         name: name(n),
       };
     case 'retired':
-      return { over: `Retired · ${race}`, place: 'Ret', name: name(n) };
+      return { over: `Retired · ${race}`, place: 'Retired', name: name(n) };
     case 'dns':
       return { over: race, place: `No. ${n}`, name: name(n) };
     default: {
@@ -96,9 +96,9 @@ export function standingRows(told: RaceToldIn, racers: readonly RacerAtIn[]): St
           : '';
     const gap =
       r.state === 'retired'
-        ? 'RET'
+        ? 'Retired'
         : r.state === 'dns'
-          ? 'DNS'
+          ? 'Missed it'
           : r.place === 1
             ? '—'
             : r.place > 1
@@ -199,7 +199,7 @@ export function cheeringText(watching: string, crowd: number): string {
 
 /** The cheer key's words. */
 export const CHEER = 'Cheer';
-export const CHEER_WAIT = 'Cheered: the crowd draws breath';
+export const CHEER_WAIT = 'Cheered';
 
 /** The race bar's keys' words. */
 export const AHEAD = 'The boat ahead';

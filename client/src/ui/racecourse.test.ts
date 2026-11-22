@@ -48,7 +48,7 @@ describe('a buoy course', () => {
     const wl = courseShape({ ...triangle, shape: 'windward-leeward' }, 100, 100);
     expect(wl.marks).toHaveLength(3);
     expect(shapeText({ ...triangle, shape: 'windward-leeward', long: true })).toBe(
-      'Windward–leeward, long',
+      'Upwind and back, long',
     );
   });
 
@@ -79,6 +79,40 @@ describe('a buoy course', () => {
     expect(Math.max(...s.legs.map((p) => p.x))).toBeGreaterThan(mark?.x ?? 0);
     expect(s.wind).not.toBeNull();
     expect(shapeText(reach)).toBe('Reach: across the wind to one mark and back');
+  });
+
+  test('a dash: the start line upright, the mark across the wind, a finish line of its own up the wind', () => {
+    const dash: CourseTold = {
+      id: 'buoy:dash:short',
+      kind: 'buoy',
+      shape: 'dash',
+      long: false,
+      name: 'Dash off Port Royal',
+    };
+    const s = courseShape(dash, 100, 100, 10);
+    expect(s.marks).toHaveLength(1);
+    const [a, b] = s.line ?? [];
+    const [fa, fb] = s.finish ?? [];
+    // Both lines run with the wind, the finish above the start: up the wind of it.
+    expect(a?.x).toBeCloseTo(b?.x ?? -1, 5);
+    expect(fa?.x).toBeCloseTo(fb?.x ?? -1, 5);
+    expect(Math.max(fa?.y ?? 0, fb?.y ?? 0)).toBeLessThan(Math.min(a?.y ?? 0, b?.y ?? 0));
+    // The mark straight across the wind from the start line's middle.
+    const mark = s.marks[0];
+    expect(mark?.y).toBeCloseTo(((a?.y ?? 0) + (b?.y ?? 0)) / 2, 5);
+    expect((mark?.x ?? 0) - (a?.x ?? 0)).toBeGreaterThan(40);
+    // Home to the finish's middle, no nearer the wind than 70°.
+    const home = s.legs.at(-1);
+    const last = s.legs.at(-2);
+    expect(home?.y).toBeCloseTo(((fa?.y ?? 0) + (fb?.y ?? 0)) / 2, 5);
+    const up = Math.atan2(
+      Math.abs((home?.x ?? 0) - (last?.x ?? 0)),
+      (last?.y ?? 0) - (home?.y ?? 0),
+    );
+    expect((up * 180) / Math.PI).toBeGreaterThanOrEqual(70);
+    expect(shapeText(dash)).toBe('Dash: across the wind to a mark and home');
+    // The other shapes have no finish of their own.
+    expect(courseShape(triangle, 100, 100).finish ?? null).toBeNull();
   });
 
   test('a wide box keeps the course square, centred', () => {

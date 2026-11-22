@@ -3,9 +3,11 @@
 // A race in the sea: its course laid as the server tells it (the
 // committee boat at the start line's starboard end, the pin, the marks; an
 // island course's finish line, where it lies apart from the start, laid
-// with a committee boat of its own), the flags her signals hoist (those of
-// the moment for a race first told late), and her gun fired at each signal
-// and for every finisher, from the finish line's boat, the winner's the
+// with a committee boat of its own; a dash's, along the line of its start
+// up the wind, two buoys, the committee boat staying at the start), the
+// flags her signals hoist (those of the moment for a race first told
+// late), and her gun fired at each signal and for every finisher, from
+// the finish line's boat (a dash's from the start's), the winner's the
 // loudest. The race the boat sails in goes to the race line's store too.
 
 import { catalog } from '../catalog';
@@ -27,8 +29,15 @@ export interface RaceSeaDeps {
 /** The finish line's course in the sea, beside its race's: where it lies apart from the start. */
 export const FINISH_LAID = 0x4000_0000;
 
+/** A dash's finish line's second buoy, beside its race's: the first is FINISH_LAID's pin. */
+export const FINISH_END = 0x2000_0000;
+
 /** How far apart the start and the finish lines' ends may be and still be one line, m. */
 const ONE_LINE = 5;
+
+/** How far off the start line's own line a dash's finish's buoys may lie, m; and how far beyond its ends, at most. */
+const IN_LINE = 3;
+const DASH_APART = 600;
 
 /** The flags a race's committee boat flies after a signal: the class's pennant from the warning, P too from the preparatory, none from the start, X for a recall. */
 export function raceFlags(
@@ -71,19 +80,53 @@ function finishApart(t: RaceToldIn): boolean {
   return !((near(f[0], a) && near(f[1], b)) || (near(f[0], b) && near(f[1], a)));
 }
 
+/**
+ * Whether a race's finish is a dash's: apart from its start, its two ends
+ * on the start line's own line, near beyond it: two buoys, no boat.
+ */
+export function dashFinish(t: RaceToldIn): boolean {
+  const f = t.finish;
+  const a = t.pin;
+  const b = t.committee;
+  if (f === null || a === null || b === null || !finishApart(t)) {
+    return false;
+  }
+  const dx = b.east - a.east;
+  const dy = b.north - a.north;
+  const len = Math.hypot(dx, dy);
+  if (!(len > 0)) {
+    return false;
+  }
+  for (const p of f) {
+    // Off the line's own line, and along it from its middle.
+    const off = Math.abs((p.east - a.east) * dy - (p.north - a.north) * dx) / len;
+    const along = ((p.east - a.east) * dx + (p.north - a.north) * dy) / len - len / 2;
+    if (off > IN_LINE || Math.abs(along) > len / 2 + DASH_APART) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** Lays races in the sea and fires their guns, as they are told. */
 export function raceSea(d: RaceSeaDeps): {
   told: (t: RaceToldIn) => void;
   signal: (s: RaceSignalIn) => void;
   clear: () => void;
 } {
-  const laid = new Map<number, { boat: string | undefined; flags: number[]; apart: boolean }>();
+  const laid = new Map<
+    number,
+    { boat: string | undefined; flags: number[]; apart: boolean; dash: boolean }
+  >();
   const drop = (race: number) => {
     const r = laid.get(race);
     laid.delete(race);
     d.drop(race);
     if (r?.apart === true) {
       d.drop(race + FINISH_LAID);
+    }
+    if (r?.dash === true) {
+      d.drop(race + FINISH_END);
     }
   };
   return {
@@ -94,15 +137,22 @@ export function raceSea(d: RaceSeaDeps): {
       }
       const boat = catalog.boats[t.boat]?.id;
       const apart = finishApart(t);
+      const dash = dashFinish(t);
       const known = laid.get(t.race) ?? {
         boat,
         flags: raceFlags(signalAt(t, d.tick()), boat),
         apart,
+        dash,
       };
       known.apart = apart;
+      known.dash = dash;
       laid.set(t.race, known);
       d.lay(t.race, { committee: t.committee, pin: t.pin, marks: t.marks, flags: known.flags });
-      if (apart && t.finish !== null) {
+      if (dash && t.finish !== null) {
+        // A dash's finish: a buoy at each end, the guns from the start's boat.
+        d.lay(t.race + FINISH_LAID, { committee: null, pin: t.finish[0], marks: [], flags: [] });
+        d.lay(t.race + FINISH_END, { committee: null, pin: t.finish[1], marks: [], flags: [] });
+      } else if (apart && t.finish !== null) {
         // The finish's boat at the line's starboard end as the boats come
         // in: the second end as told.
         d.lay(t.race + FINISH_LAID, {
@@ -121,7 +171,12 @@ export function raceSea(d: RaceSeaDeps): {
       }
       if (s.gun) {
         const loud = s.signal === 'start' || (s.signal === 'finish' && s.place === 1) ? 1.6 : 1;
-        d.fire(s.signal === 'finish' && r?.apart === true ? s.race + FINISH_LAID : s.race, loud);
+        d.fire(
+          s.signal === 'finish' && r?.apart === true && r.dash !== true
+            ? s.race + FINISH_LAID
+            : s.race,
+          loud,
+        );
       }
     },
     clear() {

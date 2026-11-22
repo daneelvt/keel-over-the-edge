@@ -30,6 +30,7 @@ import {
   isCourse,
   MEDALS_MEAN,
   opensLine,
+  upwindTask,
 } from './certtasks';
 import type { CertTask } from './certwords';
 import {
@@ -109,6 +110,7 @@ import { PendantInk, PendantMark } from './pendantink';
 import { PlayerText } from './player';
 import { Prize, raceColour } from './prize';
 import { hangSpoon } from './raceapi';
+import { UpwindSign } from './racerow';
 
 /** The log's inked portrait, the look's drawing on the log's paper; nothing for a look the build has not. With the winner's cockade pinned where the look wears it, for a race won in the world sailed now; and the pendant of the highest certificate held (pendant, 0 none) at the neck. */
 function Ink({ look, cockade, pendant }: { look: Look; cockade: boolean; pendant: number }) {
@@ -614,6 +616,7 @@ function TaskLine({
   code,
   done,
   faint,
+  upwind = false,
 }: {
   mark: string;
   name: string;
@@ -623,6 +626,8 @@ function TaskLine({
   code: string;
   done: boolean;
   faint: boolean;
+  /** The task asks a course sailed partly up the wind: the upwind sign. */
+  upwind?: boolean;
 }) {
   const words = (
     <>
@@ -632,6 +637,7 @@ function TaskLine({
       <span class="log-task-words">
         <span class="log-task-name">
           {name}
+          {upwind ? <UpwindSign /> : null}
           {done ? <span class="log-unseen">, done</span> : null}
           {after !== '' ? <span class="log-task-after"> · {after}</span> : null}
         </span>
@@ -715,6 +721,7 @@ function CertTasks({
                 code=""
                 done={way !== undefined}
                 faint={way === undefined && counted.size > 0}
+                upwind={upwindTask(t)}
               />
             );
           }
@@ -731,6 +738,7 @@ function CertTasks({
               code={k?.code ?? ''}
               done={done}
               faint={false}
+              upwind={upwindTask(t)}
             />
           );
         })}

@@ -4211,7 +4211,7 @@ for (const text of TEXT_SIZES) {
       await page.getByRole('button', { name: 'Menu' }).click();
       await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
       const make = page.locator('[data-panel=make-race]');
-      await expect(make.locator('#race-name')).toHaveValue('Saturday Triangle');
+      await expect(make.locator('#race-name')).toHaveValue('Saturday Dash');
       await check(`${s.name}, Make a race`, '[data-panel=make-race]');
       await make.getByRole('button', { name: 'Later' }).click();
       await make.locator('[data-course="island:3"]').click();
@@ -4250,6 +4250,117 @@ for (const text of TEXT_SIZES) {
     expect(found).toEqual([]);
   });
 }
+
+test('Port Royal’s board stands its races above the weather, each row saying why it cannot be entered; the menu’s Races: the next harbour race with Enter, on a phone', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(120_000);
+  await standInRaces(page, Date.now());
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1&races', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate(() => globalThis.keel.render());
+  await expect(page.locator('[data-pusher=board]')).toBeVisible({ timeout: 15_000 });
+  // The board: its races first, under the gale warning if any, above the weather.
+  await page.locator('[data-pusher=board]').click();
+  const board = page.locator('.board');
+  const races = board.locator('.board-races');
+  await expect(races.locator('[data-readout=harbour-races] .race-row')).toHaveCount(3);
+  const order = await page.evaluate(() => {
+    const b = document.querySelector('.board');
+    const r = b?.querySelector('.board-races');
+    const w = b?.querySelector('[aria-label="General situation"]');
+    const first = r?.querySelector('.race-row')?.getBoundingClientRect();
+    return {
+      before:
+        r !== null &&
+        r !== undefined &&
+        w !== null &&
+        w !== undefined &&
+        (r.compareDocumentPosition(w) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+      firstInView: first !== undefined && first.bottom <= innerHeight,
+    };
+  });
+  expect(order).toEqual({ before: true, firstInView: true });
+  // The Greenhorn Cup for newcomers says so where Enter would be; the
+  // Triangle, for Deckhands, opens the Certificates; it wears the sign.
+  await expect(
+    races.locator('.race-row[data-race=harbourtwo] [data-readout=row-reason]'),
+  ).toHaveText('For newcomers');
+  const forDeckhands = races.locator('.race-row[data-race=trialskiff] [data-readout=row-reason]');
+  await expect(forDeckhands).toHaveText('For Deckhands');
+  await expect(races.locator('.race-row[data-race=trialskiff] [data-readout=upwind]')).toHaveText(
+    'Upwind',
+  );
+  await expect(races.locator('.race-row[data-race=trialreach] [data-readout=upwind]')).toHaveCount(
+    0,
+  );
+  // Every key the head keys' size, its words 14 px.
+  const keys = await page.evaluate(() => {
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    const out: string[] = [];
+    for (const b of document.querySelectorAll<HTMLElement>(
+      '.board-races .race-row button:not(.race-row-words)',
+    )) {
+      const r = b.getBoundingClientRect();
+      if (Math.abs(r.height - key) > 0.5 || getComputedStyle(b).fontSize !== '14px') {
+        out.push(`“${b.textContent}” is ${r.height.toFixed(1)} px tall`);
+      }
+      if (r.right > innerWidth + 0.5) {
+        out.push(`“${b.textContent}” runs off the screen`);
+      }
+    }
+    return out;
+  });
+  expect(keys).toEqual([]);
+  // Enter, and the line that says what happens.
+  await races
+    .locator('.race-row[data-race=harbourone]')
+    .getByRole('button', { name: /^Enter/ })
+    .click();
+  await expect(board.locator('[data-readout=harbour-said]')).toContainText(
+    'Two minutes before the start your boat is taken to the start line',
+  );
+  await board.getByRole('button', { name: 'Close', exact: true }).click();
+  // The menu: Races, the next harbour race first with Enter, then Make a race.
+  await page.getByRole('button', { name: 'Menu' }).click();
+  const menu = page.locator('.menu');
+  const next = menu.locator('[data-readout=menu-next-race]');
+  await expect(next).toContainText('Next harbour race: the Teatime Trophy');
+  const fit = await page.evaluate(() => {
+    const m = document.querySelector('.menu')?.getBoundingClientRect();
+    const n = document.querySelector('[data-readout=menu-next-race]');
+    const out: string[] = [];
+    if (m === undefined || n === null) {
+      return ['no menu or no next race'];
+    }
+    for (const b of n.querySelectorAll<HTMLElement>('button')) {
+      const r = b.getBoundingClientRect();
+      if (r.left < m.left - 0.5 || r.right > m.right + 0.5) {
+        out.push(`“${b.textContent}” runs out of the menu`);
+      }
+    }
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    const enter = n.querySelector<HTMLElement>('.menu-race-enter');
+    const r = enter?.getBoundingClientRect();
+    if (r === undefined || Math.abs(r.height - key) > 0.5) {
+      out.push(`Enter is ${r?.height} px tall`);
+    }
+    return out;
+  });
+  expect(fit).toEqual([]);
+  await expect(menu.locator('.menu-races h3')).toHaveText('Races');
+  await next.getByRole('button', { name: /^Enter/ }).click();
+  await expect(menu.locator('[data-readout=menu-race-said]')).toContainText('You’re entered in');
+});
 
 /** What is wrong with the race line: not 32 pixels tall, or a word cut short or run out of it. */
 async function raceLineFaults(page: Page): Promise<string[]> {

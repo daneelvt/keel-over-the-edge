@@ -318,12 +318,30 @@ export class RaceLayer {
       out.push({ el, east: m.east, north: m.north });
     }
     if (d.told.pin !== null && d.told.committee !== null) {
-      const el = document.createElement('span');
-      el.className = 'race-chart-line';
-      el.textContent = d.told.finish === null ? 'Start' : 'Start · finish';
       const a = d.told.pin;
       const b = d.told.committee;
+      const f = d.told.finish;
+      // A finish of its own (a dash's, an island course's) has its own word.
+      const apart =
+        f !== null &&
+        Math.min(
+          Math.hypot(f[0].east - a.east, f[0].north - a.north),
+          Math.hypot(f[0].east - b.east, f[0].north - b.north),
+        ) > 5;
+      const el = document.createElement('span');
+      el.className = 'race-chart-line';
+      el.textContent = f === null || apart ? 'Start' : 'Start · finish';
       out.push({ el, east: (a.east + b.east) / 2, north: (a.north + b.north) / 2 });
+      if (apart && f !== null) {
+        const fin = document.createElement('span');
+        fin.className = 'race-chart-line';
+        fin.textContent = 'Finish';
+        out.push({
+          el: fin,
+          east: (f[0].east + f[1].east) / 2,
+          north: (f[0].north + f[1].north) / 2,
+        });
+      }
     }
     let tags = 0;
     for (const b of d.boats) {

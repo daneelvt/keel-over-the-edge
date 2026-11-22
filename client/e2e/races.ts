@@ -3,10 +3,13 @@
 // Races ashore's routes stood in for, for the sandbox's screen (?races):
 // the board, with the next harbour races (the first ten minutes off, so
 // its notice comes at once), the Greenhorn Cup and what a race may be made
-// with; a suggested name; a race made, or refused as one too many today;
-// and three cards: the race made (its owner entered), another's on an
-// island course with a machine sailor, a newcomer and entrants not named
-// to the reader, and one the reader may not enter today.
+// with (the Dash first, an island course, then the courses sailed partly
+// up the wind, for a time trial only); the Harbourmaster's courses, the
+// Reach first and the upwind ones last, one for Deckhands; a suggested
+// name; a race made, or refused as one too many today; and three cards:
+// the race made (its owner entered), another's on an island course with a
+// machine sailor, a newcomer and entrants not named to the reader, and one
+// the reader may not enter today. The reader wears the green ribbon.
 
 import type { Page } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -58,6 +61,34 @@ export function raceBoard(now: number) {
       }),
       harbour('harbourthr', 'the Lantern Race, a long name for a race', now + 370 * MINUTE),
     ],
+    trials: [
+      {
+        ...harbour('trialreach', 'the Harbourmaster’s Reach', now - 60 * MINUTE),
+        harbour: false,
+        kind: 'trial',
+        standing: true,
+        course: 'reach',
+        toward: 'Deckhand',
+      },
+      {
+        ...harbour('trialshort', 'the Harbourmaster’s Short Course', now - 60 * MINUTE),
+        harbour: false,
+        kind: 'trial',
+        standing: true,
+        course: 'short',
+        upwind: true,
+      },
+      {
+        ...harbour('trialskiff', 'the Harbourmaster’s Triangle', now - 60 * MINUTE),
+        harbour: false,
+        kind: 'trial',
+        standing: true,
+        course: 'triangle',
+        upwind: true,
+        enter: { ok: false, reason: 'certificate', needs: 'Deckhand' },
+      },
+    ],
+    newcomer: true,
     greenhorn: [now + 190 * MINUTE, now + 26 * 60 * MINUTE, now + 50 * 60 * MINUTE],
     mine: [
       { ...harbour(OTHERS, 'the Gannet Holm Gallop', now + 40 * MINUTE), harbour: false },
@@ -80,16 +111,14 @@ export function raceBoard(now: number) {
       boat: first.id,
       boats: boats.map((b) => ({ ...b, buoys: true })),
       courses: [
-        ...['triangle', 'windward-leeward'].flatMap((shape) =>
-          [false, true].map((long) => ({
-            id: `buoy:${shape}:${long ? 'long' : 'short'}`,
-            kind: 'buoy',
-            shape,
-            long,
-            name: `${long ? 'Long' : 'Short'} ${shape === 'triangle' ? 'triangle' : 'windward–leeward'}`,
-            boats: offered,
-          })),
-        ),
+        {
+          id: 'buoy:dash:short',
+          kind: 'buoy',
+          shape: 'dash',
+          long: false,
+          name: 'Dash',
+          boats: offered,
+        },
         {
           id: 'island:3',
           kind: 'island',
@@ -99,6 +128,18 @@ export function raceBoard(now: number) {
           way: WAY,
           boats: offered,
         },
+        ...['triangle', 'windward-leeward'].flatMap((shape) =>
+          [false, true].map((long) => ({
+            id: `buoy:${shape}:${long ? 'long' : 'short'}`,
+            kind: 'buoy',
+            shape,
+            long,
+            name: `${shape === 'triangle' ? 'Triangle' : 'Upwind and back'}, ${long ? 'long' : 'short'}`,
+            boats: offered,
+            upwind: true,
+            trialOnly: true,
+          })),
+        ),
       ],
     },
   };
@@ -109,17 +150,17 @@ export function raceCard(now: number, o: object = {}) {
   return {
     code: MADE,
     link: `https://keel.example/?r=${MADE}`,
-    name: 'Saturday Triangle',
+    name: 'Saturday Dash',
     kind: 'race',
     phase: 'open',
     harbour: false,
     who: 'everyone',
     course: {
-      id: 'buoy:triangle:short',
+      id: 'buoy:dash:short',
       kind: 'buoy',
-      shape: 'triangle',
+      shape: 'dash',
       long: false,
-      name: 'Short triangle off Port Royal',
+      name: 'Dash off Port Royal',
     },
     boat: { id: first.id, name: first.name },
     startsAt: now + 10 * MINUTE,
@@ -155,7 +196,14 @@ export async function standInRaces(page: Page, now: number): Promise<RaceStandIn
       name: 'the Gannet Holm Gallop',
       startsAt: now + 40 * MINUTE,
       minutes: 34,
-      course: { id: 'island:3', kind: 'island', name: 'Round Gannet Holm', length: 4400, way: WAY },
+      course: {
+        id: 'island:3',
+        kind: 'island',
+        name: 'Round Gannet Holm',
+        length: 4400,
+        way: WAY,
+        upwind: true,
+      },
       owner: { name: 'Grey Gull', machine: true },
       mine: reader,
       enter: { ok: true },
@@ -200,14 +248,26 @@ export async function standInRaces(page: Page, now: number): Promise<RaceStandIn
     (r) => {
       const path = new URL(r.request().url()).pathname;
       if (path === '/api/race/name') {
-        return r.fulfill({ json: { name: 'Saturday Triangle' } });
+        return r.fulfill({ json: { name: 'Saturday Dash' } });
       }
       if (path === '/api/race') {
         return state.make === 'ok'
           ? r.fulfill({ status: 201, json: cards[MADE] })
-          : r.fulfill({ status: 409, json: { error: 'made', until: now + 190 * MINUTE } });
+          : r.fulfill({ status: 409, json: { error: 'made', until: now + 190 * MINUTE, most: 8 } });
       }
       const code = path.split('/')[3] ?? '';
+      if (code.startsWith('harbour') && path.endsWith('/enter')) {
+        // A harbour race entered from the board, the menu or its notice.
+        return r.fulfill({
+          json: raceCard(now, {
+            code,
+            harbour: true,
+            owner: null,
+            mine: { ...reader, entered: true, number: 6 },
+            enter: { ok: false, reason: 'entered' },
+          }),
+        });
+      }
       const card = cards[code];
       return card === undefined
         ? r.fulfill({ status: 404, json: { error: 'not-found' } })

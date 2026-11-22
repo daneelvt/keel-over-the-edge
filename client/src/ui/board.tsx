@@ -11,7 +11,10 @@
 // water. The server checks the place again, and says why it refuses. In
 // Port Royal the board also posts the next three harbour races, each
 // entered in one tap, the newcomers' Greenhorn Cup marked as theirs, and
-// the week's Greenhorn Cups folded beneath.
+// the week's Greenhorn Cups folded beneath, with the Harbourmaster's
+// courses: above the weather, under a gale warning if one is in force. A
+// row that cannot be entered says why where its key would be; a course
+// sailed partly up the wind wears the upwind sign.
 
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
@@ -22,10 +25,12 @@ import type { Forecasting } from '../chart/forecasting';
 import type { ChartStore } from '../chart/store';
 import { type HarbourLook, HarbourPicker } from './harbourlook';
 import { raceAct } from './raceapi';
+import { RowReason, UpwindSign } from './racerow';
 import type { RacesView } from './raceslazy';
 import {
   boatsText,
   ENTER,
+  enteredLine,
   enterRefusalText,
   forNewcomers,
   greenhornText,
@@ -92,10 +97,11 @@ export function HarbourRaces({ races }: { races: RacesView }) {
       setBusy('');
       setSaid(
         a.ok
-          ? `You’re entered in ${name}.`
+          ? enteredLine(name)
           : enterRefusalText(a.refusal.reason, {
               until: a.refusal.until,
               needs: a.refusal.needs,
+              most: a.refusal.most,
               now: races.now(),
             }),
       );
@@ -108,7 +114,7 @@ export function HarbourRaces({ races }: { races: RacesView }) {
     <section class="board-races" aria-label="Harbour races">
       <h3>Harbour races</h3>
       {list.length === 0 ? (
-        <p>No harbour race is set before the world’s end.</p>
+        <p>No more harbour races this week.</p>
       ) : (
         <ul class="race-rows" data-readout="harbour-races">
           {list.map((s, i) => (
@@ -141,7 +147,9 @@ export function HarbourRaces({ races }: { races: RacesView }) {
                 >
                   {ENTER}
                 </button>
-              ) : null}
+              ) : (
+                <RowReason enter={s.enter} />
+              )}
             </li>
           ))}
         </ul>
@@ -159,7 +167,10 @@ export function HarbourRaces({ races }: { races: RacesView }) {
                     races.card.value = s.code;
                   }}
                 >
-                  <span class="race-row-name">{s.name}</span>
+                  <span class="race-row-name">
+                    {s.name}
+                    {s.upwind === true ? <UpwindSign /> : null}
+                  </span>
                   <span class="race-row-when">
                     {trialText(s.boat.name)}
                     {s.toward !== undefined && s.toward !== '' ? (
@@ -179,7 +190,9 @@ export function HarbourRaces({ races }: { races: RacesView }) {
                   >
                     {ENTER}
                   </button>
-                ) : null}
+                ) : (
+                  <RowReason enter={s.enter} />
+                )}
               </li>
             ))}
           </ul>
@@ -278,6 +291,9 @@ export function BoardPanel({
     return <HarbourPicker look={you} close={() => setPicking(false)} />;
   }
   const boat = boats?.mode.value ?? 'shown';
+  // Port Royal's races, above the weather: what a sailor in the harbour came for.
+  const races =
+    harbour.races !== undefined && royalPort(port) ? <HarbourRaces races={harbour.races} /> : null;
   if (boats !== undefined && boat === 'look') {
     return <BoatLookChooser chooser={boats} board className="panel board harbour-look" />;
   }
@@ -289,7 +305,10 @@ export function BoardPanel({
       <h2>{port.name}</h2>
       <p class="board-office">The harbourmaster's board</p>
       {board === null ? (
-        <p>No forecast posted yet.</p>
+        <>
+          {races}
+          <p>No forecast posted yet.</p>
+        </>
       ) : (
         <>
           {board.warning !== null ? (
@@ -298,6 +317,7 @@ export function BoardPanel({
               <p>{board.warning}.</p>
             </section>
           ) : null}
+          {races}
           <section aria-label="General situation">
             <h3>General situation</h3>
             {board.situation.map((line) => (
@@ -325,9 +345,6 @@ export function BoardPanel({
           </section>
         </>
       )}
-      {harbour.races !== undefined && royalPort(port) ? (
-        <HarbourRaces races={harbour.races} />
-      ) : null}
       {you?.royal.value === true ? (
         <button type="button" class="board-close board-you" onClick={() => setPicking(true)}>
           Your sailor
