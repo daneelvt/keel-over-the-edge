@@ -4,11 +4,13 @@
 // last gave and the world clock: the next harbour race, at each of its
 // kind's minutes before the start, for a sailor who may enter it and has
 // not; and each race the sailor has entered, at each of its kind's. Each
-// once, and only within the minute of its time, never late.
+// once, and only within the minute of its time, never late. A race the
+// sailor entered that a storm called off at its warning signal is told
+// once, within the half hour after its start, with the next harbour race.
 
 import { leftText } from './countdown';
 import type { RacesBoard, Summary } from './raceapi';
-import { boatsText } from './racewords';
+import { boatsText, calledOffFill } from './racewords';
 
 const MINUTE = 60_000;
 
@@ -21,6 +23,10 @@ export interface RaceNoticeKind {
 /** What raises the harbour's notice and the entered races'. */
 export const HARBOUR_RACE = 'harbour-race';
 export const RACE_SOON = 'race-soon';
+export const RACE_CALLED_OFF = 'race-called-off';
+
+/** How long after its start a race called off is still told of, ms. */
+const CALLED_OFF_TOLD = 30 * MINUTE;
 
 /** A notice due: what raises it, its words, and the race it is of. */
 export interface RaceNoticeDue {
@@ -73,6 +79,27 @@ export function dueNotices(
   for (const s of board.mine) {
     if (s.mine.entered && s.phase !== 'cancelled') {
       at(RACE_SOON, s, false);
+    }
+  }
+  // A race entered that a storm called off: once, soon after.
+  if (kinds.some((k) => k.on === RACE_CALLED_OFF)) {
+    for (const s of board.mine) {
+      const key = `${RACE_CALLED_OFF}:${s.code}`;
+      if (
+        s.mine.entered &&
+        s.phase === 'cancelled' &&
+        s.calledOff === 'storm' &&
+        now < s.startsAt + CALLED_OFF_TOLD &&
+        !shown.has(key)
+      ) {
+        shown.add(key);
+        out.push({
+          on: RACE_CALLED_OFF,
+          fill: calledOffFill(s, board.harbour, now, locale),
+          race: s,
+          enter: false,
+        });
+      }
     }
   }
   return out;

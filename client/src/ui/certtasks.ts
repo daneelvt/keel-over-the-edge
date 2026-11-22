@@ -153,6 +153,18 @@ export function isCourse(t: CertTask): boolean {
   return t.courses !== undefined && t.courses.length > 0;
 }
 
+/** The courses sailed partly up the wind: those with a beat in them. */
+const UPWIND = new Set(BUOYS);
+
+/**
+ * Whether a task asks a course sailed partly up the wind: a course's task
+ * whose every course has a beat in it. Such a task wears the upwind sign;
+ * no certificate needs one.
+ */
+export function upwindTask(t: CertTask): boolean {
+  return isCourse(t) && (t.courses ?? []).every((c) => UPWIND.has(c));
+}
+
 /** Whether a way of a certificate's course tasks asks a medal: its footnote on par is then owed. */
 export function asksMedal(tasks: readonly CertTask[]): boolean {
   return tasks.some(

@@ -47,6 +47,7 @@ type DeckAsk = Extract<
       | 'block'
       | 'report'
       | 'raceRetire'
+      | 'stillRacing'
       | 'home';
   }
 >;
@@ -81,6 +82,8 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
       return s.reportCommand(now, m.who, m.reason, m.note);
     case 'raceRetire':
       return s.raceRetireCommand(now);
+    case 'stillRacing':
+      return s.stillRacingCommand(now);
     case 'home':
       return s.homeCommand(now);
   }
@@ -247,6 +250,7 @@ export class NetWorker {
       case 'block':
       case 'report':
       case 'raceRetire':
+      case 'stillRacing':
       case 'home':
         if (this.#session !== null) {
           this.#send(deckCommand(this.#session, this.#d.now(), m));

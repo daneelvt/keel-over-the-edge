@@ -662,7 +662,10 @@ func TestSpectatorsToldWatchers(t *testing.T) {
 		catToken, _ := srv.Sailor("Cat")
 		srv.Edge.SetVoyage(bus.Account(bob), true)
 		srv.Edge.SetVoyage(bus.Account(dan), true)
+		// A message is counted after it is written, so its reader may have
+		// it before the count: every writer is let finish first.
 		sent := func() float64 {
+			synctest.Wait()
 			return testutil.ToFloat64(srv.Metrics.EdgeMessages.WithLabelValues("out", "watchers"))
 		}
 		bobs := dial(t, srv, bobToken, client.Hello())

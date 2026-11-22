@@ -5,7 +5,9 @@
 // mark at the top, the start line across the foot, a triangle's wing mark
 // to one side, a windward–leeward's gate above the line; a reach's line
 // upright at one side and its one mark out at the other, across the
-// wind) with the wind's arrow beside it; an island course as its way,
+// wind; a dash's the same, its finish line upright too, its own, above
+// the start up the wind) with the wind's arrow beside it; an island
+// course as its way,
 // fitted to the box with
 // its proportions kept. The same shape is drawn in the panels' pictures
 // and on the picture shared with a race's link.
@@ -17,11 +19,16 @@ export interface Pt {
   y: number;
 }
 
-/** A course's shape in a box: its legs, in order; its marks; the start line; the wind's arrow, from where it blows. */
+/**
+ * A course's shape in a box: its legs, in order; its marks; the start
+ * line; a finish line of its own, where it has one (a dash's); the wind's
+ * arrow, from where it blows.
+ */
 export interface CourseShape {
   legs: Pt[];
   marks: Pt[];
   line: [Pt, Pt] | null;
+  finish?: [Pt, Pt] | null;
   wind: [Pt, Pt] | null;
 }
 
@@ -37,6 +44,27 @@ function buoyUnit(shape: CourseTold['shape'], long: boolean): CourseShape {
     { x: 0.88, y: 0.08 },
     { x: 0.88, y: 0.34 },
   ];
+  if (shape === 'dash') {
+    // The start line along the wind, the mark straight across it; home to
+    // a finish line of its own, laid up the wind of the start, the way home
+    // no nearer the wind than 70°.
+    const start = { x: 0.14, y: 0.7 };
+    const mark = { x: 0.78, y: 0.7 };
+    const home = { x: 0.14, y: 0.46 };
+    return {
+      legs: [start, { x: 0.76, y: 0.77 }, { x: 0.88, y: 0.7 }, { x: 0.76, y: 0.63 }, home],
+      marks: [mark],
+      line: [
+        { x: 0.14, y: 0.6 },
+        { x: 0.14, y: 0.8 },
+      ],
+      finish: [
+        { x: 0.14, y: 0.38 },
+        { x: 0.14, y: 0.54 },
+      ],
+      wind,
+    };
+  }
   if (shape === 'reach') {
     // The line along the wind, the mark straight across it: out under the
     // mark, round it, and back above it.
@@ -136,6 +164,7 @@ export function courseShape(course: CourseTold, w: number, h: number, pad = 6): 
     legs: u.legs.map(at),
     marks: u.marks.map(at),
     line: u.line === null ? null : [at(u.line[0]), at(u.line[1])],
+    finish: u.finish === undefined || u.finish === null ? null : [at(u.finish[0]), at(u.finish[1])],
     wind: u.wind === null ? null : [at(u.wind[0]), at(u.wind[1])],
   };
 }
@@ -155,6 +184,9 @@ export function shapeText(course: CourseTold): string {
   if (course.shape === 'reach') {
     return 'Reach: across the wind to one mark and back';
   }
-  const shape = course.shape === 'windward-leeward' ? 'Windward–leeward' : 'Triangle';
+  if (course.shape === 'dash') {
+    return 'Dash: across the wind to a mark and home';
+  }
+  const shape = course.shape === 'windward-leeward' ? 'Upwind and back' : 'Triangle';
   return `${shape}, ${course.long === true ? 'long' : 'short'}`;
 }

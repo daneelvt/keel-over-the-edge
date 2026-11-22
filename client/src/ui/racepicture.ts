@@ -148,6 +148,18 @@ export function drawCourse(
       ctx.fill();
     }
   }
+  // A finish line of its own, a dash's: chequered.
+  if (s.finish != null) {
+    const [a, b] = [at(s.finish[0]), at(s.finish[1])];
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(3, side / 90);
+    ctx.setLineDash([side / 60, side / 60]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   // The marks.
   for (const m of s.marks) {
     const q = at(m);

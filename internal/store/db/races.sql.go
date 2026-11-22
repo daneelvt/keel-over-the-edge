@@ -51,6 +51,30 @@ func (q *Queries) BuoyRacesNear(ctx context.Context, arg BuoyRacesNearParams) ([
 	return items, nil
 }
 
+const callOffRace = `-- name: CallOffRace :exec
+UPDATE race SET state = 'cancelled', called_off = $1, ended_at = $2
+WHERE world_id = $3 AND id = $4 AND state IN ('open', 'closed')
+`
+
+type CallOffRaceParams struct {
+	Why     pgtype.Text
+	At      pgtype.Timestamptz
+	WorldID pgtype.UUID
+	ID      pgtype.UUID
+}
+
+// A race called off at its warning signal, for why: cancelled, from open
+// or closed. Its entries stay, counting toward no one's limits.
+func (q *Queries) CallOffRace(ctx context.Context, arg CallOffRaceParams) error {
+	_, err := q.db.Exec(ctx, callOffRace,
+		arg.Why,
+		arg.At,
+		arg.WorldID,
+		arg.ID,
+	)
+	return err
+}
+
 const dueRaces = `-- name: DueRaces :many
 SELECT id FROM race
 WHERE world_id = $1 AND kind = 'race' AND state IN ('open', 'closed') AND starts_at > $2 AND starts_at <= $3
@@ -784,7 +808,7 @@ func (q *Queries) PutRaceTrack(ctx context.Context, arg PutRaceTrackParams) erro
 const raceByCode = `-- name: RaceByCode :one
 SELECT r.world_id, r.id, r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
   r.kind, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
-  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, w.number AS world,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, coalesce(r.called_off, '')::text AS called_off, w.number AS world,
   (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
      AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
 FROM race r
@@ -812,6 +836,7 @@ type RaceByCodeRow struct {
 	State      string
 	Harbour    int16
 	MadeAt     time.Time
+	CalledOff  string
 	World      int32
 	Entered    int32
 }
@@ -839,6 +864,7 @@ func (q *Queries) RaceByCode(ctx context.Context, code string) (RaceByCodeRow, e
 		&i.State,
 		&i.Harbour,
 		&i.MadeAt,
+		&i.CalledOff,
 		&i.World,
 		&i.Entered,
 	)
@@ -1020,22 +1046,25 @@ func (q *Queries) RaceForUpdate(ctx context.Context, arg RaceForUpdateParams) (R
 
 const raceIDsOf = `-- name: RaceIDsOf :many
 SELECT r.id FROM race r
-WHERE r.world_id = $1 AND r.state IN ('open', 'closed', 'racing')
-  AND (r.owner_id = $2 OR EXISTS (
-    SELECT 1 FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.account_id = $2
+WHERE r.world_id = $1
+  AND (r.state IN ('open', 'closed', 'racing') OR r.state = 'cancelled' AND r.called_off IS NOT NULL AND r.starts_at > $2)
+  AND (r.owner_id = $3 OR EXISTS (
+    SELECT 1 FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.account_id = $3
       AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed))
 ORDER BY r.starts_at
 LIMIT 20
 `
 
 type RaceIDsOfParams struct {
-	WorldID   pgtype.UUID
-	AccountID pgtype.UUID
+	WorldID     pgtype.UUID
+	CalledSince time.Time
+	AccountID   pgtype.UUID
 }
 
-// The races of a world an account owns or is entered in, not over.
+// The races of a world an account owns or is entered in, not over, and
+// those a storm called off that were to start after a time.
 func (q *Queries) RaceIDsOf(ctx context.Context, arg RaceIDsOfParams) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, raceIDsOf, arg.WorldID, arg.AccountID)
+	rows, err := q.db.Query(ctx, raceIDsOf, arg.WorldID, arg.CalledSince, arg.AccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -1057,7 +1086,7 @@ func (q *Queries) RaceIDsOf(ctx context.Context, arg RaceIDsOfParams) ([]pgtype.
 const raceIn = `-- name: RaceIn :one
 SELECT r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
   r.kind, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
-  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, coalesce(r.called_off, '')::text AS called_off,
   (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
      AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
 FROM race r
@@ -1085,6 +1114,7 @@ type RaceInRow struct {
 	State      string
 	Harbour    int16
 	MadeAt     time.Time
+	CalledOff  string
 	Entered    int32
 }
 
@@ -1108,6 +1138,7 @@ func (q *Queries) RaceIn(ctx context.Context, arg RaceInParams) (RaceInRow, erro
 		&i.State,
 		&i.Harbour,
 		&i.MadeAt,
+		&i.CalledOff,
 		&i.Entered,
 	)
 	return i, err
@@ -1116,7 +1147,7 @@ func (q *Queries) RaceIn(ctx context.Context, arg RaceInParams) (RaceInRow, erro
 const raceList = `-- name: RaceList :many
 SELECT r.id, r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, r.kind,
   r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
-  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at, coalesce(r.called_off, '')::text AS called_off,
   (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
      AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
 FROM race r
@@ -1146,6 +1177,7 @@ type RaceListRow struct {
 	State      string
 	Harbour    int16
 	MadeAt     time.Time
+	CalledOff  string
 	Entered    int32
 }
 
@@ -1176,6 +1208,7 @@ func (q *Queries) RaceList(ctx context.Context, arg RaceListParams) ([]RaceListR
 			&i.State,
 			&i.Harbour,
 			&i.MadeAt,
+			&i.CalledOff,
 			&i.Entered,
 		); err != nil {
 			return nil, err
@@ -1617,7 +1650,8 @@ const racesBy = `-- name: RacesBy :many
 SELECT r.made_at, (CASE WHEN w.state = 'active' THEN r.state ELSE 'finished' END)::text AS state, r.kind
 FROM race r
 JOIN world w ON w.id = r.world_id
-WHERE r.owner_id = $1 AND (r.made_at > $2 OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'))
+WHERE r.owner_id = $1 AND r.called_off IS NULL
+  AND (r.made_at > $2 OR (r.state IN ('open', 'closed', 'racing') AND w.state = 'active'))
 `
 
 type RacesByParams struct {
@@ -1632,7 +1666,8 @@ type RacesByRow struct {
 }
 
 // The races an owner made in any world since a time, or has not finished
-// in the world sailed (a race of a world ended is over).
+// in the world sailed (a race of a world ended is over); not those a storm
+// called off, which count toward no one's limits.
 func (q *Queries) RacesBy(ctx context.Context, arg RacesByParams) ([]RacesByRow, error) {
 	rows, err := q.db.Query(ctx, racesBy, arg.OwnerID, arg.Since)
 	if err != nil {

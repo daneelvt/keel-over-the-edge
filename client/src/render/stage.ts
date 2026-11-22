@@ -277,6 +277,18 @@ export class Stage {
     return done;
   }
 
+  /**
+   * Resolves once every compile asked for so far has ended, and any asked
+   * for meanwhile: until then a frame leaves out what is still compiling.
+   */
+  async compiled(): Promise<void> {
+    let last: Promise<void> | null = null;
+    while (last !== this.#compiling) {
+      last = this.#compiling;
+      await last;
+    }
+  }
+
   /** The stage's size on the page, in CSS pixels. */
   size(): { width: number; height: number } {
     return {

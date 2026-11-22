@@ -791,13 +791,23 @@ export function awardWord(a: string): string {
 
 /**
  * A race's ribbon in a line and its details: "Tuesday Triangle · Jolly
- * boats · 2nd of 7"; then the course, a harbour or newcomers' race, a
+ * boats · 2nd of 7", "Noon Gun · Jolly boats · sailed alone, a bronze
+ * medal"; then the course, a harbour or newcomers' race, a
  * crew's skipper, how it ended and the awards: "Short triangle · a harbour
  * race · aboard Tom's boat · the wooden spoon".
  */
 export function ribbonLines(r: LogRibbon, boatName: string): [string, string] {
-  const result =
-    r.kind === 'trial'
+  const medal =
+    r.medal !== undefined && r.medal !== ''
+      ? `a ${r.medal === 'harbourmaster' ? 'harbourmaster’s time' : `${r.medal} medal`}`
+      : '';
+  // A race with one boat at its start is sailed as a time trial: alone, a medal against par.
+  const alone = r.kind !== 'trial' && r.fleet === 1 && r.how !== 'ret';
+  const result = alone
+    ? medal === ''
+      ? 'sailed alone'
+      : `sailed alone, ${medal}`
+    : r.kind === 'trial'
       ? r.medal !== undefined && r.medal !== ''
         ? `a ${r.medal === 'harbourmaster' ? 'harbourmaster’s time' : `${r.medal} medal`}`
         : 'a time trial'

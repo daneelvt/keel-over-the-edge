@@ -420,6 +420,7 @@ type Race struct {
 	AgainOf    pgtype.UUID
 	MadeAt     time.Time
 	EndedAt    pgtype.Timestamptz
+	CalledOff  pgtype.Text
 }
 
 type RaceEntry struct {

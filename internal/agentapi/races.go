@@ -149,10 +149,11 @@ func (c *Core) makeRace(ctx context.Context, s *Sea, by race.Sailor, a *raceArgs
 			return "", nil, refuse(refusedArgs, fmt.Sprintf("No course open called %s. The courses: %s.", playerText(a.Course), courseIDs(b.Make.Courses)))
 		}
 	case len(b.Make.Courses) > 0:
-		// The first a boat of the kind may race: a short triangle where
-		// buoy courses are laid.
+		// The first a boat of the kind may race: the Dash where buoy
+		// courses are laid. A time trial may be on any course; a race on
+		// none with a beat in it.
 		for _, cc := range b.Make.Courses {
-			if _, ok := cc.Boats[boat]; ok {
+			if _, ok := cc.Boats[boat]; ok && (a.Trial || !cc.TrialOnly) {
 				course = cc.ID
 				break
 			}
@@ -220,7 +221,7 @@ func (c *Core) retire(ctx context.Context, s *Sea, h *helm, by race.Sailor, name
 			name = raceNameWords(k.name, k.harbour)
 		}
 		h.mu.Unlock()
-		return fmt.Sprintf("Retired from %s: you are out of the order, written RET. Sail where you like; the race goes on without you.", name), nil, nil
+		return fmt.Sprintf("Retired from %s: you are out of the order, written as retired. Sail where you like; the race goes on without you.", name), nil, nil
 	}
 	code := ""
 	if named != "" {
@@ -349,8 +350,10 @@ func courseChoice(courses []race.CourseChoice, named string) string {
 	switch {
 	case strings.Contains(want, "triangle"):
 		shape = race.ShapeTriangle
-	case strings.Contains(want, "windward"), strings.Contains(want, "sausage"):
+	case strings.Contains(want, "windward"), strings.Contains(want, "sausage"), strings.Contains(want, "upwind"):
 		shape = race.ShapeWindwardLeeward
+	case strings.Contains(want, "dash"):
+		shape = race.ShapeDash
 	}
 	n, numbered := strconv.Atoi(strings.TrimPrefix(want, "island "))
 	for _, cc := range courses {
@@ -408,9 +411,9 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 	case race.RefuseClosed:
 		return "Its owner closed that race to entry."
 	case race.RefuseStarted:
-		return "Too late: entry closes at the warning signal, two minutes before the start."
+		return "Too late: entry closed two minutes before the start. You can still watch."
 	case race.RefuseCancelled:
-		return "That race was called off by its owner."
+		return "That race was called off."
 	case race.RefuseFinished:
 		return "That race is over, or its world has ended."
 	case race.RefuseHumans:
@@ -422,8 +425,14 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 	case race.RefuseBlocked:
 		return "You may not enter that race: there is a block between its owner and you or your owner."
 	case race.RefuseAhead:
+		if r.Most > 0 {
+			return fmt.Sprintf("You are in %s already, not yet started. You may enter another once the sooner of them starts%s.", racesCount(r.Most), spaced(until))
+		}
 		return "You are entered in as many races not yet started as a sailor may be. You may enter another once the sooner of them starts" + spaced(until) + "."
 	case race.RefuseDaily:
+		if r.Most > 0 {
+			return fmt.Sprintf("You have raced %d times in a day, as often as a sailor may. Your next race may start%s.", r.Most, spaced(until))
+		}
 		return "You have raced as often in a day as a sailor may. Your next race may start" + spaced(until) + "."
 	case race.RefuseEntered:
 		return "You are already entered in that race."
@@ -435,9 +444,17 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 		}
 		return "Too late: the world ends soon, and its last hours have no races."
 	case race.RefuseMade:
+		if r.Most > 0 {
+			return fmt.Sprintf("You have made %s in a day, as many as a sailor may. You may make another%s.", racesCount(r.Most), spaced(until))
+		}
 		return "You have made as many races in a day as a sailor may. You may make another" + spaced(until) + "."
 	case race.RefuseOwned:
+		if r.Most > 0 {
+			return fmt.Sprintf("You have %s of your own still to be sailed. Make another once one of them is over.", racesCount(r.Most))
+		}
 		return "You own as many races not yet finished as a sailor may. Make another once one of them is over."
+	case race.RefuseUpwind:
+		return "No race starts up the wind: a race is made on the Dash (buoy:dash:short) or an island course. A course with a beat in it, the triangle or the upwind and back, is sailed as a time trial (trial true)."
 	case race.RefuseSoon:
 		return fmt.Sprintf("Too soon: a race starts at least %d minutes after it is made. Give in %d or more.",
 			int(race.Lead/time.Minute), int(race.Lead/time.Minute))
@@ -464,6 +481,14 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 		return "Not now: that race cannot be changed so."
 	}
 	return "That race refused, for a reason with no words yet: " + r.Reason + "."
+}
+
+// racesCount is n races in words.
+func racesCount(n int) string {
+	if n == 1 {
+		return "1 race"
+	}
+	return fmt.Sprintf("%d races", n)
 }
 
 // nameRefusalWords are why a race's name was refused.
@@ -554,8 +579,17 @@ func summaryWords(sm *race.Summary, now time.Time) string {
 		}
 	case race.PhaseStarting:
 		parts = append(parts, "starting: the boats are on the line, the gun "+whenWords(start, now))
+	case race.PhaseCancelled:
+		if sm.CalledOff == race.CalledOffStorm {
+			parts = append(parts, "called off: a storm over Port Royal; it counts toward none of your limits")
+		} else {
+			parts = append(parts, "called off")
+		}
 	default:
 		parts = append(parts, sm.Phase)
+	}
+	if sm.Upwind {
+		parts = append(parts, "Upwind: part of it is sailed against the wind, in zigzags, the hardest sailing")
 	}
 	if sm.Kind != race.KindTrial {
 		parts = append(parts, fmt.Sprintf("%d of %d entered", sm.Entered, sm.Most))
@@ -644,10 +678,13 @@ func coursesWords(m *race.MakeChoices) string {
 	var buoys []string
 	var island []race.CourseChoice
 	for _, cc := range m.Courses {
-		if cc.Kind == race.CourseBuoy {
-			buoys = append(buoys, fmt.Sprintf("%s (%d min)", cc.ID, minutesOf(cc.Boats)))
-		} else {
+		switch {
+		case cc.Kind != race.CourseBuoy:
 			island = append(island, cc)
+		case cc.TrialOnly:
+			buoys = append(buoys, fmt.Sprintf("%s (%d min, Upwind, a time trial only)", cc.ID, minutesOf(cc.Boats)))
+		default:
+			buoys = append(buoys, fmt.Sprintf("%s (%d min)", cc.ID, minutesOf(cc.Boats)))
 		}
 	}
 	if len(buoys) > 0 {
@@ -673,7 +710,11 @@ func coursesWords(m *race.MakeChoices) string {
 		for _, id := range ids {
 			boats = append(boats, fmt.Sprintf("%s %d min", boatName(m.Boats, id), cc.Boats[id]))
 		}
-		fmt.Fprintf(&w, "%s: %s, %.1f NM · %s\n", cc.ID, cc.Name, cc.Length/nm, strings.Join(boats, ", "))
+		upwind := ""
+		if cc.Upwind {
+			upwind = " · Upwind: it starts upwind today"
+		}
+		fmt.Fprintf(&w, "%s: %s, %.1f NM · %s%s\n", cc.ID, cc.Name, cc.Length/nm, strings.Join(boats, ", "), upwind)
 	}
 	return w.String()
 }
@@ -716,6 +757,9 @@ func enteredWords(c *race.Card, now time.Time) string {
 	}
 	w.WriteString(" " + startWords(c, now))
 	w.WriteString(" Everyone can watch you while you race. handbook races tells how a race goes.")
+	if c.Course.Upwind {
+		w.WriteString(" Upwind: part of this course is sailed against the wind, in zigzags. It is the hardest sailing.")
+	}
 	return w.String()
 }
 

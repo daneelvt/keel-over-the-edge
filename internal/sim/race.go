@@ -3,6 +3,8 @@
 package sim
 
 import (
+	"math"
+
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
@@ -13,8 +15,13 @@ import (
 // its place. Each entrant's boat at sea is then placed behind the line, in
 // an order drawn by lot, at the first of the committee's spots clear of
 // land, shoal water and every other boat: at rest, its course cleared, its
-// controls ready to sail as a new boat's; on a reach, where it is placed
-// facing the mark across the wind, its sheet set for a beam reach. A skipper sailing another kind
+// controls ready to sail as a new boat's; on a reach or a Dash, where it is
+// placed facing the mark across the wind, its sheet set for a beam reach.
+// Its sheet is eased as the wind rises, and its sail set as if trimmed so,
+// its boom out to leeward: placed with its boom on the centreline and its
+// sail hauled in, a boat at rest in a fresh wind turns up into the wind
+// and stops there, and in a gale capsizes. In a gale it is reefed too.
+// Left alone, it sails off. A skipper sailing another kind
 // of boat changes to the race's, from their fleet, wherever they are: the
 // voyage in the old boat ends and one in the new begins, so the log keeps
 // the boat sailed. Those aboard stay if the skipper entered with them and
@@ -23,6 +30,10 @@ import (
 // log keeps the voyage; its odometer adds nothing for the move, and its
 // pairs begin afresh. An entrant whose boat is not at sea (ashore, waiting
 // for a boat, or aboard another's) did not start.
+//
+// A race (not a trial's run) whose place has a storm's mean wind as it is
+// handed over is called off: its course laid but no boat placed, and it
+// ends as it begins, for the server to tell its entrants.
 //
 // Then, in the rules phase, the committee runs every race one tick on.
 
@@ -47,6 +58,11 @@ func (w *World) racePlace(c *bus.Command) bus.Reply {
 	if course == nil {
 		return r
 	}
+	if !call.Trial && speed >= committee.StormWind {
+		committee.CallOff(f, call, course)
+		r.Result = bus.Done
+		return r
+	}
 	length := 2 * physics.Radius(&w.kinds[call.Kind])
 	spots := committee.Spots(course, length)
 	placed := make([]committee.Placing, len(call.Entrants))
@@ -56,7 +72,7 @@ func (w *World) racePlace(c *bus.Command) bus.Reply {
 		if s < 0 {
 			continue
 		}
-		w.raceSpot(f, s, spots, course.Across)
+		w.raceSpot(f, s, spots, course.Across, speed, from)
 		placed[i] = committee.Placing{Slot: s, Boat: f.Boat[s], Placed: true}
 	}
 	committee.Begin(f, call, course, placed)
@@ -99,9 +115,10 @@ func (w *World) raceBoat(f *bus.Frame, e *bus.RaceEntrant, kind uint16) int32 {
 }
 
 // raceSpot puts the boat in slot s of f at the first of spots where it
-// fits, at rest, ready to sail; at the first if none is clear. Across is
-// a reach's spots: the boat lies across the wind there.
-func (w *World) raceSpot(f *bus.Frame, s int32, spots []physics.State, across bool) {
+// fits, at rest, ready to sail in a mean wind of speed from from; at the
+// first if none is clear. Across is a reach's or a Dash's spots: the boat
+// lies across the wind there.
+func (w *World) raceSpot(f *bus.Frame, s int32, spots []physics.State, across bool, speed, from float64) {
 	if len(spots) == 0 {
 		return
 	}
@@ -119,12 +136,46 @@ func (w *World) raceSpot(f *bus.Frame, s int32, spots []physics.State, across bo
 		// The odometer adds nothing for the move.
 		lg.X, lg.Y = st.X, st.Y
 	}
+	off := startOffWind * 180 / math.Pi
 	if across {
-		w.readyControlsOff(f, s, 90)
-	} else {
-		w.readyControls(f, s)
+		off = 90
+	}
+	if len(w.start) > 0 {
+		sheet := placedSheet(w.startSheetOff(f, s, off), speed)
+		w.readyControlsWith(f, s, sheet, placedReef(speed))
+		if k := int(f.Kind[s]); k < len(w.kinds) {
+			physics.TrimmedAtRest(&w.kinds[k], &f.State[s], f.Control[s].Sheet(), from, placedReef(speed) > 0)
+		}
 	}
 	w.racePlaced = append(w.racePlaced, s)
+}
+
+// A boat placed for a race has its start sheet in a light or middling
+// wind, eased from placedEaseFrom knots on to placedEased at placedEaseTo
+// and above, and is reefed from placedReefFrom knots.
+const (
+	placedEaseFrom = 12
+	placedEaseTo   = 22
+	placedEased    = 0.85
+	placedReefFrom = 30
+)
+
+// placedSheet is the sheet, in a control word's steps, a boat placed for a
+// race has in a mean wind of speed, m/s, from its start sheet start.
+func placedSheet(start uint16, speed float64) uint16 {
+	knots := speed / physics.Knot
+	t := min(max((knots-placedEaseFrom)/(placedEaseTo-placedEaseFrom), 0), 1)
+	eased := uint16(math.Floor(float64(float64(t*placedEased)*bus.Steps) + 0.5))
+	return max(start, eased)
+}
+
+// placedReef is the reef a boat placed for a race has in a mean wind of
+// speed, m/s: in a gale, the deepest.
+func placedReef(speed float64) uint8 {
+	if speed/physics.Knot >= placedReefFrom {
+		return bus.MaxReef
+	}
+	return 0
 }
 
 // raceRules runs the races one tick on.

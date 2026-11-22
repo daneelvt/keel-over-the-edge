@@ -436,7 +436,9 @@ function RaceResults({ told, run, mine }: { told: ReplayTold; run: ReplayRun; mi
           ))}
         </ul>
       ) : !run.prizes ? (
-        <p class="rl-faint">No prizes this time: they need three boats sailed by three sailors.</p>
+        <p class="rl-faint">
+          A ribbon for your log. Pennants and awards come with three boats or more.
+        </p>
       ) : null}
     </>
   );

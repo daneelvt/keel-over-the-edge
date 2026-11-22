@@ -354,6 +354,10 @@ func howFar(t *certs.Task) string {
 	return ""
 }
 
+// upwindMark marks a task whose every course has a beat in it, the
+// hardest sailing, as the races' page says: never needed.
+const upwindMark = " (Upwind)"
+
 // ladderWords are the whole ladder for the handbook, written from the
 // catalog: each certificate with how many of its tasks it needs and the
 // boats it opens, and each task with how it is done. "" without a
@@ -374,6 +378,9 @@ func ladderWords(cat *catalog.Catalog) string {
 		for j := range ct.Tasks {
 			t := &ct.Tasks[j]
 			b.WriteString("\n- " + t.Name)
+			if certs.UpwindTask(t) {
+				b.WriteString(upwindMark)
+			}
 			if how := howTo(t); how != "" {
 				b.WriteString(": " + how)
 			}

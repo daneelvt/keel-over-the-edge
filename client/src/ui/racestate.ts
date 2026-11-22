@@ -8,6 +8,12 @@
 // A race the boat is not in is told too while its course is in sight (for
 // its marks in the sea); this keeps the one the boat races in, or, for a
 // page watching a boat, the race whose pictures come.
+//
+// A newcomer (the green ribbon) has three hints on the race line, each
+// once a race, as a call is shown: as the boats are placed, at the start
+// (the gun, or a trial's crossing of the line) and nearing the first mark.
+// When the committee asks whether the boat still races, the line offers
+// Still racing for the minute it has to answer.
 
 import { signal } from '@preact/signals';
 import type { RaceDrawing } from '../chart/racelayer';
@@ -19,7 +25,7 @@ import type {
   RacerAtIn,
   RaceToldIn,
 } from '../net/messages';
-import { callLine } from './racelinewords';
+import { callLine, HINT_GO, HINT_LINE, HINT_LINE_ALONE, HINT_MARK, timed } from './racelinewords';
 
 /** A call shown on the race line: its words, until when (ms, the page's clock), and whether it warns. */
 export interface CallShown {
@@ -33,6 +39,15 @@ export interface CallShown {
 /** How long a call stays on the race line, ms; a mark missed longer, until the boat goes back. */
 export const CALL_SHOWN = 6000;
 export const MISSED_SHOWN = 15000;
+
+/** How long a newcomer's hint stays on the race line, ms. */
+export const HINT_SHOWN = 8000;
+
+/** How long Still racing is offered after the committee asks, ms: the minute it has to answer. */
+export const ASKED_SHOWN = 60_000;
+
+/** How near the first mark a newcomer's hint to round it comes, m. */
+export const HINT_NEAR = 60;
 
 /** A race's results as the finish's windows show them, with the race as told. */
 export interface RaceEnded {
@@ -59,6 +74,15 @@ export class Racing {
   readonly finishOpen = signal(false);
   /** Whether the race line's ⋯ is open. */
   readonly more = signal(false);
+  /** Until when (ms, the page's clock) Still racing is offered, the committee having asked; 0 for not. */
+  readonly asked = signal(0);
+  /** Whether the player wears the green ribbon: the race line's hints are theirs. */
+  newcomer: () => boolean = () => false;
+  /** The hints given in this race, and the boat's state and leg at the last picture. */
+  #hinted = new Set<string>();
+  #was: RacerAtIn | null = null;
+  /** Answers the committee's question: the boat still races. */
+  stillRacing: (() => void) | null = null;
   /** Counts up with each picture and each race told: the charts draw again. */
   readonly version = signal(0);
   /** The boat the page sails or watches in the race, by number, as the latest picture says; 0 none. */
@@ -120,6 +144,48 @@ export class Racing {
     this.finishOpen.value = false;
     this.certified.value = null;
     this.more.value = false;
+    this.asked.value = 0;
+    this.#hinted.clear();
+    this.#was = null;
+  }
+
+  /** A newcomer's hint, once a race, as a call on the race line; none for a sailor past the green ribbon. */
+  #hint(key: string, text: string): void {
+    if (this.#hinted.has(key) || !this.newcomer()) {
+      return;
+    }
+    this.#hinted.add(key);
+    this.call.value = { text, short: text, warn: false, until: this.now() + HINT_SHOWN };
+  }
+
+  /** The boat's own state in a picture: the hints of the start and of the first mark. */
+  #hints(t: RaceToldIn, me: RacerAtIn): void {
+    const was = this.#was;
+    this.#was = me;
+    if (me.state === 'placed' && was === null) {
+      // Placed on the line: what to do in the two minutes.
+      this.#hint('line', timed(t) ? HINT_LINE_ALONE : HINT_LINE);
+    }
+    if (me.state === 'racing' && was !== null && was.state === 'placed') {
+      this.#hint('go', HINT_GO);
+    }
+    const leg = t.legs[me.leg];
+    if (me.state === 'racing' && leg !== undefined && leg.mark > 0) {
+      const m = t.marks.find((k) => k.number === leg.mark) ?? leg;
+      if (Math.hypot(m.east - me.east, m.north - me.north) < HINT_NEAR) {
+        this.#hint('mark', HINT_MARK);
+      }
+    }
+  }
+
+  /** Answers the committee's question, offered: the boat still races. */
+  answer(): void {
+    this.asked.value = 0;
+    this.stillRacing?.();
+    const c = this.call.peek();
+    if (c !== null && c.warn) {
+      this.call.value = null;
+    }
   }
 
   /** A race's picture: the boats where they stand; each racing one's track grows. */
@@ -159,6 +225,14 @@ export class Racing {
     this.picture.value = p;
     this.eye.value = p.eye;
     this.pictured = this.now();
+    const n = this.number();
+    const me = n > 0 ? p.racers.find((r) => r.number === n) : undefined;
+    if (me !== undefined) {
+      this.#hints(cur, me);
+      if (me.state !== 'racing' && me.state !== 'placed') {
+        this.asked.value = 0;
+      }
+    }
     this.version.value++;
   }
 
@@ -172,6 +246,13 @@ export class Racing {
     const line = callLine(c, me, (n) => entrantName(t, n));
     if (line === null) {
       return;
+    }
+    if (me > 0 && c.number === me) {
+      if (c.kind === 'drifting') {
+        this.asked.value = this.now() + ASKED_SHOWN;
+      } else if (c.kind === 'retired') {
+        this.asked.value = 0;
+      }
     }
     this.call.value = {
       text: line.text,
@@ -233,11 +314,15 @@ export class Racing {
     return this.#tracks;
   }
 
-  /** Whether the call shown has had its time; clears it. */
+  /** Whether the call shown, and Still racing, have had their time; clears them. */
   expire(): void {
     const c = this.call.peek();
     if (c !== null && this.now() >= c.until) {
       this.call.value = null;
+    }
+    const a = this.asked.peek();
+    if (a > 0 && this.now() >= a) {
+      this.asked.value = 0;
     }
   }
 

@@ -26,11 +26,13 @@ type RaceCall struct {
 	// buoy course laid in the racing area of number Course (0 for a buoy
 	// trial's: the committee chooses), a triangle or a windward–leeward,
 	// long or short, or (Across) a reach: across the wind to one mark and
-	// back.
+	// back; or (Across and Dash) a Dash: across the wind to one mark and
+	// home to a finish line of its own, laid up the wind of the start's.
 	Island   bool
 	Course   int32
 	Triangle bool
 	Across   bool
+	Dash     bool
 	Long     bool
 	// Kind is the boat's kind, an index into the world's kinds.
 	Kind uint16
@@ -68,11 +70,16 @@ type RaceCourse struct {
 	// Island is an island course, Number its number; or a buoy course in
 	// the racing area of Number, Triangle or windward–leeward, with Laps
 	// laps, or (Across) a reach: its line along the wind, its one mark
-	// straight across the wind from it.
+	// straight across the wind from it; a Dash (Across and Dash) as a
+	// reach, home to a finish line of its own up the wind of the start's.
+	// Upwind: an island course laid with its first leg closer to the wind
+	// than any start the committee could find off it.
 	Island   bool
 	Number   int32
 	Triangle bool
 	Across   bool
+	Dash     bool
+	Upwind   bool
 	Laps     int32
 	// Wind is the mean wind it was laid to, m/s 10 m up, and From where it
 	// came from, rad clockwise from north.
@@ -167,6 +174,13 @@ type Race struct {
 	// came from enough accounts for its prizes.
 	Ended  int64
 	Prizes bool
+	// Alone: a race with one boat as its boats were placed, judged as a
+	// time trial is: no sequence, its clock from its boat's crossing of the
+	// line, a medal against its expected time. CalledOff: a race called off
+	// at its warning signal, for a storm at its place: no boat placed, it
+	// ended as it began.
+	Alone     bool
+	CalledOff bool
 }
 
 // The states of a boat in a race, Racer.State.

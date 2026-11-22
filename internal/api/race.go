@@ -80,6 +80,7 @@ type raceRefusal struct {
 	Until int64  `json:"until,omitempty"`
 	Name  string `json:"name,omitempty"`
 	Needs string `json:"needs,omitempty"`
+	Most  int    `json:"most,omitempty"`
 }
 
 // answerRace answers what asking of a race came to: its card with
@@ -96,7 +97,7 @@ func (a *api) answerRace(w http.ResponseWriter, r *http.Request, status int, c r
 // refusedRace answers an error of asking of a race.
 func (a *api) refusedRace(w http.ResponseWriter, r *http.Request, err error) {
 	if ref, ok := race.RefusalOf(err); ok {
-		out := raceRefusal{Error: ref.Reason, Name: ref.Name, Needs: ref.Needs}
+		out := raceRefusal{Error: ref.Reason, Name: ref.Name, Needs: ref.Needs, Most: ref.Most}
 		if !ref.Until.IsZero() {
 			out.Until = ref.Until.UnixMilli()
 		}

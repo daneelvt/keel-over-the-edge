@@ -28,7 +28,7 @@ type Store interface {
 	StandingTrials(ctx context.Context, world [16]byte, number int, boat string) ([]store.Race, error)
 	RaceByCode(ctx context.Context, code string) (store.Race, error)
 	HarbourRaces(ctx context.Context, world [16]byte, number int, after time.Time, most int) ([]store.Race, error)
-	RacesOf(ctx context.Context, world [16]byte, number int, id store.AccountID) ([]store.Race, error)
+	RacesOf(ctx context.Context, world [16]byte, number int, id store.AccountID, calledSince time.Time) ([]store.Race, error)
 	RaceEntrants(ctx context.Context, r *store.Race) ([]store.RaceEntrant, error)
 	RaceEntryOf(ctx context.Context, r *store.Race, id store.AccountID) (store.RaceEntry, bool, error)
 	EntriesOf(ctx context.Context, id store.AccountID, since time.Time) ([]store.EntryStart, error)
@@ -48,6 +48,7 @@ type Store interface {
 	RaceIn(ctx context.Context, world [16]byte, number int, id [16]byte) (store.Race, error)
 	PendingRuns(ctx context.Context, world [16]byte) ([]store.PendingRun, error)
 	StartRace(ctx context.Context, lease int64, r *store.RaceStart) error
+	CallOffRace(ctx context.Context, lease int64, world, race [16]byte, why string, at time.Time) error
 	EndRace(ctx context.Context, lease int64, rules store.NewsRules, e *store.RaceEnd) error
 	// The wooden spoon hung by a sailor's choice.
 	HangSpoon(ctx context.Context, id store.AccountID, world int, code string, hung bool) error
@@ -116,6 +117,11 @@ type Config struct {
 	// Standing, if not nil, is where a sailor stands toward its next
 	// certificate: what a trial's run would count toward.
 	Standing func(ctx context.Context, id store.AccountID) (certs.Standing, error)
+	// StartsUpwind, if not nil, reports whether the island course of a
+	// number would be laid at a time with its first leg up the wind, every
+	// start the committee tries being closer to the wind than a reach's:
+	// the course's upwind sign that day.
+	StartsUpwind func(course int, at time.Time) bool
 	// Origin is the play origin a race's link is made at.
 	Origin string
 	// Zone is the world's schedule's zone: the harbour races' hours and
@@ -214,7 +220,7 @@ func parseCourse(id string) (courseRef, bool) {
 		if _, ok := shapeNames[parts[1]]; !ok || parts[2] != "short" && parts[2] != "long" {
 			return courseRef{}, false
 		}
-		if parts[1] == ShapeReach && parts[2] != "short" {
+		if (parts[1] == ShapeReach || parts[1] == ShapeDash) && parts[2] != "short" {
 			return courseRef{}, false
 		}
 		return courseRef{kind: CourseBuoy, shape: parts[1], long: parts[2] == "long"}, true
@@ -226,6 +232,24 @@ func parseCourse(id string) (courseRef, bool) {
 		return courseRef{kind: CourseIsland, number: n}, true
 	}
 	return courseRef{}, false
+}
+
+// UpwindShape reports whether a buoy course of a shape has a beat in it:
+// the triangle and the windward–leeward, each with its first mark straight
+// up the wind. Their courses wear the upwind sign, and are sailed as time
+// trials only.
+func UpwindShape(shape string) bool {
+	return shape == ShapeTriangle || shape == ShapeWindwardLeeward
+}
+
+// upwind reports whether race r's course has the upwind sign: a buoy
+// course with a beat in it, or an island course whose start is up the
+// wind at at.
+func (s *Service) upwind(r *store.Race, at time.Time) bool {
+	if r.CourseKind == CourseBuoy {
+		return UpwindShape(r.Shape)
+	}
+	return s.cfg.StartsUpwind != nil && s.cfg.StartsUpwind(r.Course, at)
 }
 
 // island is the open island course of a number, or nil.
@@ -245,6 +269,8 @@ func (s *Service) minutesOf(r *store.Race, c *Courses) int {
 		switch {
 		case r.Shape == ShapeReach:
 			return ReachMinutes
+		case r.Shape == ShapeDash:
+			return DashMinutes
 		case r.Long:
 			return LongMinutes
 		}
@@ -322,9 +348,14 @@ func (s *Service) making(by Sailor, m Making, now time.Time, limits store.RaceSe
 	var courseName string
 	switch ref.kind {
 	case CourseBuoy:
-		// The reach is the Harbourmaster's standing trial's alone.
+		// The reach is the Harbourmaster's standing trial's alone; and no
+		// race starts up the wind: a course with a beat in it is sailed as
+		// a time trial, alone.
 		if !s.inAreas(b, &courses) || ref.shape == ShapeReach {
 			return nil, refuse(RefuseCourse)
+		}
+		if m.Kind == KindRace && UpwindShape(ref.shape) {
+			return nil, refuse(RefuseUpwind)
 		}
 		r.Shape, r.Long = ref.shape, ref.long
 		courseName = BuoyName(ref.shape, ref.long, s.port)

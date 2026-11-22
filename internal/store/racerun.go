@@ -72,7 +72,7 @@ func (s *Store) RaceIn(ctx context.Context, world [16]byte, number int, id [16]b
 	return Race{World: world, WorldNumber: number, ID: id, Code: r.Code, Owner: r.OwnerID.Bytes,
 		HasOwner: r.OwnerID.Bytes != [16]byte{}, Kind: r.Kind, CourseKind: r.CourseKind, Course: int(r.Course),
 		Shape: r.Shape, Long: r.Long, Boat: r.Boat, Who: r.Who, Name: r.Name, StartsAt: r.StartsAt.UTC(),
-		Moved: r.Moved, State: r.State, Harbour: int(r.Harbour), MadeAt: r.MadeAt.UTC(), Entered: int(r.Entered)}, nil
+		Moved: r.Moved, State: r.State, Harbour: int(r.Harbour), MadeAt: r.MadeAt.UTC(), Entered: int(r.Entered), CalledOff: r.CalledOff}, nil
 }
 
 // PendingRun is a trial's sailor who asked for a run: the trial, the
@@ -151,6 +151,16 @@ func (s *Store) StartRace(ctx context.Context, lease int64, r *RaceStart) error 
 			ids[i] = uuidOf(p.Account)
 		}
 		return q.StartEntries(ctx, db.StartEntriesParams{WorldID: world, RaceID: race, Accounts: ids, At: stamp(r.At)})
+	})
+}
+
+// CallOffRace writes a race called off at its warning signal, for why (a
+// storm at its place), fenced: cancelled, its entries kept but counting
+// toward no one's limits. A race already under way or over stays as it is.
+func (s *Store) CallOffRace(ctx context.Context, lease int64, world, race [16]byte, why string, at time.Time) error {
+	return s.fenced(ctx, lease, func(q *db.Queries) error {
+		return q.CallOffRace(ctx, db.CallOffRaceParams{WorldID: pgtype.UUID{Bytes: world, Valid: true}, ID: pgtype.UUID{Bytes: race, Valid: true},
+			Why: pgtype.Text{String: why, Valid: true}, At: stamp(at)})
 	})
 }
 
@@ -276,6 +286,7 @@ type RaceRecord struct {
 // shape and length, or an island course.
 const (
 	CourseReach        = "reach"         // the reach: across the wind to one mark and back
+	CourseDash         = "dash"          // the Dash: across the wind to one mark and home
 	CourseShort        = "short"         // the short windward–leeward
 	CourseLong         = "long"          // the long windward–leeward
 	CourseTriangle     = "triangle"      // the short triangle

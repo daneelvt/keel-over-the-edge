@@ -9134,7 +9134,7 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, a certificate earned, the course the player set reached, a shipmate sailing to the player, the player alongside a boat they sailed to, or a course to a boat ended.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, a race the player entered about to start, a task of the player's next certificate done, a certificate earned, the course the player set reached, a shipmate sailing to the player, the player alongside a boat they sailed to, a course to a boat ended, or a race the player entered called off for a storm.
    */
   on:
     | "charted-own"
@@ -9151,7 +9151,8 @@ export interface NoticeKind {
     | "course-reached"
     | "shipmate-course"
     | "course-alongside"
-    | "course-ended";
+    | "course-ended"
+    | "race-called-off";
   /**
    * For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.
    *
@@ -9172,7 +9173,7 @@ export interface NoticeKind {
    */
   stays: number;
   /**
-   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), for a gale warning {wind}, {when} and {where}, and for a certificate {cert} (its name), {task} (the task's), {done} and {of} (the tasks done of those it needs) and {boats} (the boats it opens, as a sentence opens) are filled in.
+   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), for a gale warning {wind}, {when} and {where}, and for a certificate {cert} (its name), {task} (the task's), {done} and {of} (the tasks done of those it needs) and {boats} (the boats it opens, as a sentence opens), and for a race called off {next} (the next harbour race, as a sentence) are filled in.
    */
   text: string;
   /**
@@ -10164,4 +10165,4 @@ export interface PendantsArt {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'd62bca3881c1b72d';
+export const CATALOG_VERSION = 'f408be1c18d84706';

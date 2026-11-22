@@ -219,7 +219,11 @@ func TestHandbookLadder(t *testing.T) {
 			t.Errorf("the page lacks %q", head)
 		}
 		for j := range ct.Tasks {
-			if line := "\n- " + ct.Tasks[j].Name + ": " + howTo(&ct.Tasks[j]); !strings.Contains(page, line) {
+			mark := ""
+			if certs.UpwindTask(&ct.Tasks[j]) {
+				mark = upwindMark
+			}
+			if line := "\n- " + ct.Tasks[j].Name + mark + ": " + howTo(&ct.Tasks[j]); !strings.Contains(page, line) {
 				t.Errorf("the page lacks %q", line)
 			}
 		}
@@ -227,10 +231,11 @@ func TestHandbookLadder(t *testing.T) {
 	if strings.Contains(page, "{{") || strings.Contains(page, " are:") || strings.Contains(page, " is:") {
 		t.Errorf("the page: %s", page)
 	}
-	// About 1,745 by this estimate (5,229 bytes) with the five
-	// certificates' twenty-nine tasks: the handbook's longest page, read
-	// when an agent asks what a certificate needs.
-	if n := estimateTokens(page); n > 1900 {
+	// About 1,905 by this estimate with the five certificates'
+	// twenty-nine tasks, those with a beat in them marked upwind: the
+	// handbook's longest page, read when an agent asks what a certificate
+	// needs.
+	if n := estimateTokens(page); n > 1950 {
 		t.Errorf("the page with its ladder is about %d tokens", n)
 	}
 }

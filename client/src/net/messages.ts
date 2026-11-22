@@ -170,6 +170,10 @@ export interface RaceToldIn {
   expected: number;
   entrants: RaceEntrantIn[];
   gone: boolean;
+  /** A race of one boat as its boats were placed, sailed as a time trial: its clock from the line, a medal against par. */
+  alone?: boolean;
+  /** Its first leg lies up the wind today: an island course whose start could not be laid off it. */
+  upwind?: boolean;
 }
 
 /** A signal from a race's committee boat: what it signals, whether its gun fires, and a finish's boat and place. */
@@ -724,6 +728,8 @@ export type ToWorker =
   | { type: 'ashore'; who: number }
   /** Retires the boat from the race it sails in. */
   | { type: 'raceRetire' }
+  /** Tells the committee, which asked, that the boat still races. */
+  | { type: 'stillRacing' }
   /** Lifts the own boat home to the start off Port Royal; lifted answers it. */
   | { type: 'home' }
   /** Close the boat to knocks for this voyage, or open it again. */

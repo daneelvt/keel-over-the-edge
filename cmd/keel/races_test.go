@@ -40,7 +40,7 @@ func (noRaces) RaceByCode(context.Context, string) (store.Race, error) {
 func (noRaces) HarbourRaces(context.Context, [16]byte, int, time.Time, int) ([]store.Race, error) {
 	return nil, nil
 }
-func (noRaces) RacesOf(context.Context, [16]byte, int, store.AccountID) ([]store.Race, error) {
+func (noRaces) RacesOf(context.Context, [16]byte, int, store.AccountID, time.Time) ([]store.Race, error) {
 	return nil, nil
 }
 func (noRaces) RaceEntrants(context.Context, *store.Race) ([]store.RaceEntrant, error) {
@@ -82,8 +82,11 @@ func (noRaces) DueRaces(context.Context, [16]byte, int, time.Time, time.Time) ([
 func (noRaces) RaceIn(context.Context, [16]byte, int, [16]byte) (store.Race, error) {
 	return store.Race{}, store.ErrNotFound
 }
-func (noRaces) PendingRuns(context.Context, [16]byte) ([]store.PendingRun, error)     { return nil, nil }
-func (noRaces) StartRace(context.Context, int64, *store.RaceStart) error              { return nil }
+func (noRaces) PendingRuns(context.Context, [16]byte) ([]store.PendingRun, error) { return nil, nil }
+func (noRaces) StartRace(context.Context, int64, *store.RaceStart) error          { return nil }
+func (noRaces) CallOffRace(context.Context, int64, [16]byte, [16]byte, string, time.Time) error {
+	return nil
+}
 func (noRaces) EndRace(context.Context, int64, store.NewsRules, *store.RaceEnd) error { return nil }
 func (noRaces) HangSpoon(context.Context, store.AccountID, int, string, bool) error {
 	return store.ErrNotFound

@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'vitest';
 import type { RacesBoard, Summary } from './raceapi';
-import { dueNotices, HARBOUR_RACE, RACE_SOON } from './racenotices';
+import { dueNotices, HARBOUR_RACE, RACE_CALLED_OFF, RACE_SOON } from './racenotices';
 
 const MINUTE = 60_000;
 const START = Date.UTC(2026, 10, 14, 4, 0);
@@ -109,5 +109,39 @@ describe('the races entered', () => {
     const one = dueNotices(b, kinds, START - MINUTE + 1000, shown, 'en');
     expect(one).toHaveLength(1);
     expect(one[0]?.fill.left).toMatch(/1/);
+  });
+});
+
+describe('a race called off for a storm', () => {
+  const withOff = [...kinds, { on: RACE_CALLED_OFF }];
+  const off = race({
+    code: 'stormedaaa',
+    phase: 'cancelled',
+    calledOff: 'storm',
+    mine: { owner: false, entered: true },
+  });
+  const next = race({ code: 'harbourbbb', startsAt: START + 3 * 60 * MINUTE });
+
+  test('told once to its entrant, with the next harbour race', () => {
+    const shown = new Set<string>();
+    const b = board({ harbour: [next], mine: [off] });
+    const due = dueNotices(b, withOff, START - 2 * MINUTE, shown, 'en-US');
+    expect(due).toHaveLength(1);
+    expect(due[0]?.on).toBe(RACE_CALLED_OFF);
+    expect(due[0]?.fill.name).toBe('Midnight Run');
+    expect(due[0]?.fill.next).toMatch(/^The next harbour race is at /);
+    expect(dueNotices(b, withOff, START, shown, 'en-US')).toEqual([]);
+  });
+
+  test('not to one not entered, nor long after, nor a race cancelled by its owner', () => {
+    const b = (s: Summary) => board({ harbour: [next], mine: [s] });
+    expect(
+      dueNotices(b({ ...off, mine: { owner: true, entered: false } }), withOff, START, new Set()),
+    ).toEqual([]);
+    expect(dueNotices(b(off), withOff, START + 31 * MINUTE, new Set())).toEqual([]);
+    const { calledOff: _, ...cancelled } = off;
+    expect(dueNotices(b(cancelled), withOff, START, new Set())).toEqual([]);
+    // Without its kind in the catalog, nothing.
+    expect(dueNotices(b(off), kinds, START, new Set())).toEqual([]);
   });
 });

@@ -62,11 +62,9 @@ func (s *Service) Harbour(ctx context.Context, lease int64, now time.Time) (int,
 	usualBoat := usual(limits.Boats)
 	var races []store.NewRace
 	for _, sl := range slots {
+		// Every harbour race is a Dash: no race starts up the wind.
 		r := store.NewRace{World: w.ID, Kind: KindRace, CourseKind: CourseBuoy, Who: WhoEveryone, StartsAt: sl.At,
-			Harbour: sl.Hour, MadeAt: now, Shape: ShapeTriangle}
-		if (sl.Hour/max(limits.Every, 1))%2 == 1 {
-			r.Shape = ShapeWindwardLeeward
-		}
+			Harbour: sl.Hour, MadeAt: now, Shape: ShapeDash}
 		if h, ok := greenhorn[sl.Day.Format(time.DateOnly)]; ok && h == sl.Hour {
 			r.Who, r.Boat, r.Name = WhoNewcomers, usualBoat, Greenhorn
 		} else {

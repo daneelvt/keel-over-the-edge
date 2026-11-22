@@ -1287,9 +1287,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * pictures back; the tests take screenshots instead.) It waits for the
      * GPU to finish what it was given: on a software GPU the shaders a
      * scene first draws compile there for seconds after the page has
-     * moved on, and a screenshot would wait for them.
+     * moved on, and a screenshot would wait for them. And first for what
+     * is compiling ahead of its frame (a boat's shadow on a new rung): a
+     * frame drawn meanwhile leaves that out, the hull and the sea under
+     * her among it, and its picture and its count of draws are short.
      */
     async show(): Promise<void> {
+      await stage.compiled();
       const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
       await new Promise<void>((r) =>
         requestAnimationFrame(() => {

@@ -34,8 +34,9 @@ const (
 	// Penalty is what a foul or an early start adds.
 	Penalty = 10 * Second
 	// Window is the least the finishing window stays open after the first
-	// boat home; it stays open half the winner's time if that is longer.
-	Window = 300 * Second
+	// boat home; it stays open as long again as the winner took if that is
+	// longer, so that a slow boat is home too.
+	Window = 600 * Second
 	// TrackEvery is how often a boat's track is sampled.
 	TrackEvery = 2 * Second
 	// PhotoTicks is how near two boats finish for a photo finish.
@@ -44,9 +45,14 @@ const (
 	// short and long, in the race's boat's time.
 	ShortSeconds = 10 * 60
 	LongSeconds  = 20 * 60
-	// ReachSeconds is what a reach is sized to.
+	// ReachSeconds is what a reach is sized to, DashSeconds a Dash.
 	ReachSeconds = 5 * 60
+	DashSeconds  = 6 * 60
 )
+
+// StormWind is the mean wind of a storm, m/s 10 m up: the foot of Force 10.
+// A race whose place has it at its warning signal is called off.
+const StormWind = 24.5
 
 // The waits of a race, variables only so that a test may wait less: the
 // sequence before the start; how long a boat may make no progress before it is asked whether it still
@@ -83,13 +89,18 @@ type Area struct {
 
 // Course is an island course: its number, where it starts and finishes,
 // its rounding rays in the order its way crosses them, its way from the
-// start to the finish, m east and north, and the way's length, m.
+// start to the finish, m east and north, and the way's length, m. Home is
+// a course that starts off Port Royal, Loop one that finishes where it
+// starts; Moves are where a race's start may be moved to, onto its way,
+// and BackMoves onto its way back (Stage.MoveStarts).
 type Course struct {
-	Number        int32
-	Start, Finish Site
-	Rays          []Ray
-	Way           [][2]float64
-	Length        float64
+	Number           int32
+	Start, Finish    Site
+	Rays             []Ray
+	Way              [][2]float64
+	Length           float64
+	Home, Loop       bool
+	Moves, BackMoves []Move
 }
 
 // Site is a course's start or finish: its middle, and the room of clear

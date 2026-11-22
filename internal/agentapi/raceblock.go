@@ -195,6 +195,10 @@ func raceFactsOf(s *Sea, f *bus.Frame, ri, j int, k *knownRace, told bool) *race
 	}
 	tick := f.Tick
 	switch {
+	case r.CalledOff:
+		out.State = "called off"
+		out.Result = calledOffWords
+		return out
 	case r.Phase == bus.RaceEnded:
 		out.State = "over"
 		out.Result = resultWords(r, rc, out.Boats)
@@ -254,7 +258,7 @@ func raceNameOf(k *knownRace) string {
 // has run; a trial's run before its crossing, how long is left to cross.
 func clockWords(r *bus.Race, tick int64) string {
 	switch {
-	case r.Trial && r.Start == 0:
+	case committee.Timed(r) && r.Start == 0:
 		return "cross the start line to start your clock, within " + minSec(float64(r.Warning+committee.TrialWait-tick)/committee.Second)
 	case tick < r.Start:
 		left := float64(r.Start-tick) / committee.Second
@@ -303,7 +307,7 @@ func startLineWords(c *bus.RaceCourse, r *bus.Race, rc *bus.Racer, x, y float64,
 	up := three(degrees(c.From))
 	var w string
 	switch {
-	case side > 0 && rc.State == bus.RacerPlaced && !r.Trial && tick < r.Start:
+	case side > 0 && rc.State == bus.RacerPlaced && !committee.Timed(r) && tick < r.Start:
 		w = fmt.Sprintf("over the start line by %.0f m: be back below it by the gun, or 10 s are added", side)
 	case side > 0:
 		w = fmt.Sprintf("above the start line by %.0f m: sail back below it, then cross it", side)
@@ -317,14 +321,22 @@ func startLineWords(c *bus.RaceCourse, r *bus.Race, rc *bus.Racer, x, y float64,
 		w += fmt.Sprintf(", beyond its committee boat's end by %.0f m", (along-1)*l)
 	}
 	if c.Across && len(c.Way) > 1 {
-		// A reach's line lies along the wind: it is crossed across it,
-		// toward the mark.
+		// A reach's line, or a Dash's, lies along the wind: it is crossed
+		// across it, toward the mark.
 		out := three(degrees(physics.Atan2(c.Way[1][0]-c.Way[0][0], c.Way[1][1]-c.Way[0][1])))
-		return fmt.Sprintf("%s · the line %.0f m long, its middle %s · the committee boat (starboard end) %s · the pin (port end) %s · cross it across the wind, toward %s and the mark: your clock starts as you do",
-			w, l, whereWords(x, y, mx, my), whereWords(x, y, c.Committee[0], c.Committee[1]), whereWords(x, y, c.Pin[0], c.Pin[1]), out)
+		when := "your clock starts as you do"
+		if !committee.Timed(r) {
+			when = "after the gun (over it at the gun adds 10 s)"
+		}
+		return fmt.Sprintf("%s · the line %.0f m long, its middle %s · the committee boat (starboard end) %s · the pin (port end) %s · cross it across the wind, toward %s and the mark, %s",
+			w, l, whereWords(x, y, mx, my), whereWords(x, y, c.Committee[0], c.Committee[1]), whereWords(x, y, c.Pin[0], c.Pin[1]), out, when)
 	}
-	return fmt.Sprintf("%s · the line %.0f m long, its middle %s · the committee boat (starboard end) %s · the pin (port end) %s · cross it up the wind, toward %s, after the gun (over it at the gun, or within a fifth of its length beyond an end, adds 10 s)",
-		w, l, whereWords(x, y, mx, my), whereWords(x, y, c.Committee[0], c.Committee[1]), whereWords(x, y, c.Pin[0], c.Pin[1]), up)
+	when := "after the gun (over it at the gun, or within a fifth of its length beyond an end, adds 10 s)"
+	if committee.Timed(r) {
+		when = "when you are ready: your clock starts as you do"
+	}
+	return fmt.Sprintf("%s · the line %.0f m long, its middle %s · the committee boat (starboard end) %s · the pin (port end) %s · cross it up the wind, toward %s, %s",
+		w, l, whereWords(x, y, mx, my), whereWords(x, y, c.Committee[0], c.Committee[1]), whereWords(x, y, c.Pin[0], c.Pin[1]), up, when)
 }
 
 // sideWords is the side a ray check is left to: a mark to port, or to
@@ -347,7 +359,12 @@ func nextWords(s *Sea, c *bus.RaceCourse, k int, x, y float64) *markNext {
 	switch {
 	case k == last:
 		n.What = "the finish line"
-		if !c.Island {
+		switch {
+		case c.Dash:
+			n.What += ", its own two buoys up the wind of the start line, crossed across the wind coming home"
+		case c.Across:
+			n.What += ", the start line crossed coming back"
+		case !c.Island:
 			n.What += ", the start line crossed downwind"
 		}
 		px, py = (ch.X+ch.X2)/2, (ch.Y+ch.Y2)/2
@@ -405,6 +422,16 @@ func courseCardWords(s *Sea, c *bus.RaceCourse) string {
 	}
 	var parts []string
 	start := &c.Checks[0]
+	if c.Across && c.Dash && len(c.Marks) == 1 {
+		// A Dash: no beat in it, one mark, a finish of its own.
+		m := c.Marks[0]
+		fin := &c.Checks[len(c.Checks)-1]
+		return fmt.Sprintf("Start: the line from the pin (port end, %s) to the committee boat (starboard end, %s), along the wind from %s, crossed across the wind. "+
+			"Mark 1 to %s (%s), straight across the wind from the line: sail out to it on a beam reach, round it by turning up through the wind, a tack, and reach home. "+
+			"Finish: a line of its own between two buoys (%s and %s), up the wind of the start line, crossed coming home. %s in all; about %s for the race's boat in the wind it was laid to.",
+			chart.Format(start.X, start.Y), chart.Format(start.X2, start.Y2), three(degrees(c.From)), sideWords(m.Side), chart.Format(m.X, m.Y),
+			chart.Format(fin.X, fin.Y), chart.Format(fin.X2, fin.Y2), chart.DistanceText(c.Length), durationWords(minutesRound(c.Expected)))
+	}
 	if c.Across && len(c.Marks) == 1 {
 		// A reach: no beat in it, and one mark.
 		m := c.Marks[0]
@@ -412,6 +439,9 @@ func courseCardWords(s *Sea, c *bus.RaceCourse) string {
 			"Mark 1 to %s (%s), straight across the wind from the line: sail out to it on a beam reach, round it by turning up through the wind, a tack, and reach back. "+
 			"Finish: the start line, crossed coming back.",
 			chart.Format(start.X, start.Y), chart.Format(start.X2, start.Y2), three(degrees(c.From)), sideWords(m.Side), chart.Format(m.X, m.Y))
+	}
+	if c.Upwind {
+		parts = append(parts, "Upwind: it starts upwind today, its first leg against the wind in zigzags, the hardest sailing.")
 	}
 	parts = append(parts, fmt.Sprintf("Start: the line from the pin (port end, %s) to the committee boat (starboard end, %s), square to the wind from %s, crossed up the wind after the gun.",
 		chart.Format(start.X, start.Y), chart.Format(start.X2, start.Y2), three(degrees(c.From))))
@@ -539,6 +569,9 @@ func briefFleet(fleet []string, place int) []string {
 	return out
 }
 
+// calledOffWords tell a race called off at its warning signal.
+const calledOffWords = "a storm over Port Royal: the race is called off, and no boat was moved. It counts toward none of your limits; list shows the next harbour race"
+
 // resultWords are what a boat came to in a race over.
 func resultWords(r *bus.Race, rc *bus.Racer, boats int) string {
 	var w string
@@ -549,6 +582,9 @@ func resultWords(r *bus.Race, rc *bus.Racer, boats int) string {
 		return "retired"
 	case bus.RacerFinished:
 		w = fmt.Sprintf("%s of %d, home in %s", ordinal(int32(rc.Place)), boats, minSec(committee.Elapsed(r, rc)))
+		if r.Alone {
+			w = fmt.Sprintf("home in %s, sailed alone", minSec(committee.Elapsed(r, rc)))
+		}
 	default:
 		w = fmt.Sprintf("%s of %d, placed by progress with %s to go", ordinal(int32(rc.Place)), boats, chart.DistanceText(rc.ToGo))
 	}
@@ -676,6 +712,9 @@ func raceEventWords(f *bus.Frame, r *bus.Race, rc *bus.Racer, e *bus.RaceEvent) 
 		case r.Trial:
 			return evRacePlaced, fmt.Sprintf("your boat was put behind the start line for your run, its autopilot off: steer and trim, and cross the line within %s to start your clock",
 				minSec(float64(committee.TrialWait)/committee.Second)), false
+		case r.Alone:
+			return evRacePlaced, fmt.Sprintf("your boat was put behind the start line, the only boat in the race: it is sailed alone, as a time trial, for a medal against the course's expected time. Steer and trim, and cross the line within %s to start your clock",
+				minSec(float64(committee.TrialWait)/committee.Second)), false
 		}
 		return evRacePlaced, fmt.Sprintf("warning signal: your boat was put behind the start line, its autopilot off: steer and trim; the gun in %s",
 			minSec(float64(r.Start-e.Tick)/committee.Second)), false
@@ -710,7 +749,7 @@ func raceEventWords(f *bus.Frame, r *bus.Race, rc *bus.Racer, e *bus.RaceEvent) 
 		}
 	case bus.RaceFinished:
 		switch {
-		case me && r.Trial:
+		case me && committee.Timed(r):
 			return evRace, fmt.Sprintf("your boat finished its run in %s", minSec(committee.Elapsed(r, rc))), false
 		case me:
 			return evRace, fmt.Sprintf("your boat finished, %s home, in %s", ordinal(int32(e.Place)), minSec(committee.Elapsed(r, rc))), false
@@ -724,10 +763,13 @@ func raceEventWords(f *bus.Frame, r *bus.Race, rc *bus.Racer, e *bus.RaceEvent) 
 		}
 	case bus.RaceDrifting:
 		if me {
-			return evRaceAsked, fmt.Sprintf("the committee asks whether you still race: no way made toward the next mark for %s; gain on it within %s or you retire",
-				minSec(float64(committee.DriftAfter)/committee.Second), minSec(float64(committee.DriftAnswer)/committee.Second)), false
+			return evRaceAsked, fmt.Sprintf("the committee asks whether you still race: no way made toward the next mark for %s; within %s, sail %.0f m nearer it than you are now, or say so (race still), or you retire",
+				minSec(float64(committee.DriftAfter)/committee.Second), minSec(float64(committee.DriftAnswer)/committee.Second), committee.DriftGain), false
 		}
 	case bus.RaceOver:
+		if r.CalledOff {
+			return evRace, calledOffWords, false
+		}
 		boats := 0
 		for j := range f.Racers {
 			if o := &f.Racers[j]; o.Race == r.Key && o.State != bus.RacerDNS {
