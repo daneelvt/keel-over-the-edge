@@ -11,9 +11,10 @@
 # with an MX record of another's (its error 2008): the null MX this zone
 # had is removed by the apply that first makes this, in no order OpenTofu
 # keeps, so that one apply may need running twice (infra/MANUAL-STEPS.md).
+# No name: Cloudflare takes one for a subdomain alone, and refuses the
+# zone's own (its error 2007).
 resource "cloudflare_email_routing_dns" "zone" {
   zone_id = var.cloudflare_zone_id
-  name    = local.domain
 
   depends_on = [cloudflare_dns_record.spf]
 }
