@@ -1,14 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Dirty air on the water, drawn with the wind overlay: a faint wedge
+// Dirty air on the water, drawn with the wind overlay: a wedge of streaks
 // downwind of each boat near, along the wake its sail leaves as the physics
 // module lays it (along its apparent wind, turned toward its windward side,
 // as long as its rig is tall), out to where the wind it takes falls under a
 // share. Racers learn where dirty air lies; on real water it cannot be
 // seen. The wedge's outline is the shadow's own formula, in the source's
 // rig heights; each frame only places it.
+//
+// It is drawn as the wind's arrows are, pale and unlit, in broken, wavering
+// streaks along the wake, and the player's own carries a label: a dark,
+// even patch on the water was taken for the boat's shadow under the moon.
 
-import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh } from 'three';
+import {
+  BufferAttribute,
+  BufferGeometry,
+  type Camera,
+  DoubleSide,
+  Group,
+  Mesh,
+  Vector3,
+} from 'three';
 import type { DrawnBoat } from '../game/fleet';
 import { RECORDS } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
@@ -54,24 +66,78 @@ export function wedgeOutline(n: ShadowNumbers, least: number): { s: number[]; c:
   return { s, c };
 }
 
-/** The wedge as a flat mesh in its own frame: x across, −z along the wake, in rig heights. */
-function wedgeGeometry(o: { s: number[]; c: number[] }): BufferGeometry {
-  const pos = new Float32Array(o.s.length * 2 * 3);
-  for (let i = 0; i < o.s.length; i++) {
-    const s = o.s[i] ?? 0;
-    const c = o.c[i] ?? 0;
-    pos.set([-c, 0, -s, c, 0, -s], i * 6);
-  }
+/** The outline's half-width at s rig heights along the wake, between its stations. */
+function halfWidth(o: { s: number[]; c: number[] }, s: number): number {
+  const last = o.s.length - 1;
+  const at = Math.min(Math.max((s / (o.s[last] ?? 1)) * last, 0), last);
+  const i = Math.min(Math.floor(at), last - 1);
+  const t = at - i;
+  return (o.c[i] ?? 0) * (1 - t) + (o.c[i + 1] ?? 0) * t;
+}
+
+/**
+ * The streaks: how many lie side by side across the wedge, each one's
+ * width, how long a streak and the gap after it are, how far a streak
+ * wavers to either side and over what length, all in rig heights, and the
+ * steps a streak is drawn in.
+ */
+export const STREAKS = {
+  across: 7,
+  width: 0.022,
+  dash: 0.62,
+  gap: 0.3,
+  waver: 0.035,
+  wave: 0.9,
+  steps: 8,
+};
+
+/**
+ * The wedge as streaks, flat in its own frame: x across, −z along the
+ * wake, in rig heights. Each lies at its own share of the outline's width,
+ * so together they keep its shape; neighbours start at different places
+ * and waver apart, as disturbed air does; each tapers to a point at both
+ * ends.
+ */
+export function streaksGeometry(o: { s: number[]; c: number[] }): BufferGeometry {
+  const k = STREAKS;
+  const reach = o.s[o.s.length - 1] ?? 0;
+  const pos: number[] = [];
   const index: number[] = [];
-  for (let i = 0; i + 1 < o.s.length; i++) {
-    const a = 2 * i;
-    index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  for (let line = 0; line < k.across; line++) {
+    const share = k.across === 1 ? 0 : (2 * line) / (k.across - 1) - 1;
+    // Neighbours a golden share of a period apart, along and in their wavering.
+    const phase = (line * 0.618) % 1;
+    const x = (s: number): number =>
+      share * halfWidth(o, s) + k.waver * Math.sin(2 * Math.PI * (s / k.wave + phase));
+    const period = k.dash + k.gap;
+    for (let from = -phase * period; from < reach; from += period) {
+      const a = Math.max(from, 0);
+      const b = Math.min(from + k.dash, reach);
+      // Only where the wedge is wide enough to be one: not at its tip or its tail.
+      if (b - a < 0.5 * k.dash || halfWidth(o, 0.5 * (a + b)) <= 0) {
+        continue;
+      }
+      const first = pos.length / 3;
+      for (let i = 0; i <= k.steps; i++) {
+        const t = i / k.steps;
+        const s = a + (b - a) * t;
+        const half = 0.5 * k.width * Math.sin(Math.PI * t);
+        pos.push(x(s) - half, 0, -s, x(s) + half, 0, -s);
+      }
+      for (let i = 0; i < k.steps; i++) {
+        const v = first + 2 * i;
+        index.push(v, v + 1, v + 2, v + 1, v + 3, v + 2);
+      }
+    }
   }
   const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(pos, 3));
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
   g.setIndex(index);
   return g;
 }
+
+/** The label's place along the player's own wedge, in rig heights. */
+const LABEL_AT = 0.9;
 
 /** The most wedges drawn at once. */
 const WEDGES = 12;
@@ -92,11 +158,12 @@ export class DirtyAir {
   constructor(n: ShadowNumbers, least: number, range: number) {
     this.#range = range;
     this.group.name = 'dirty air';
-    const geometry = wedgeGeometry(wedgeOutline(n, least));
+    const geometry = streaksGeometry(wedgeOutline(n, least));
     const m = basicMaterial({
-      color: 0x0b2638,
+      // The true wind's arrow's white: the wind's, not a shadow's.
+      color: 0xf2f4f5,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.4,
       depthWrite: false,
       side: DoubleSide,
     });
@@ -117,7 +184,50 @@ export class DirtyAir {
         m.visible = false;
       }
       this.drawn = 0;
+      this.#own = null;
+      if (this.#label !== null) {
+        this.#label.hidden = true;
+      }
     }
+  }
+
+  /** The player's own wedge as last placed, or null while it has none. */
+  #own: Mesh | null = null;
+  #label: HTMLElement | null = null;
+  readonly #v = new Vector3();
+
+  /** Puts the label in a layer of the page over the scene; null takes it out. */
+  attachLabels(layer: HTMLElement | null): void {
+    if (this.#label === null) {
+      const el = document.createElement('span');
+      el.className = 'overlay-label dirty-air-label';
+      el.textContent = 'Disturbed wind';
+      el.hidden = true;
+      this.#label = el;
+    }
+    if (layer === null) {
+      this.#label.remove();
+    } else if (this.#label.parentElement !== layer) {
+      layer.append(this.#label);
+    }
+  }
+
+  /** Puts the label over the player's own wedge, a little way down it, on a page of this size. */
+  placeLabels(camera: Camera, width: number, height: number): void {
+    const el = this.#label;
+    if (el === null) {
+      return;
+    }
+    const m = this.group.visible ? this.#own : null;
+    el.hidden = m === null;
+    if (m === null) {
+      return;
+    }
+    m.updateMatrixWorld();
+    const v = m.localToWorld(this.#v.set(0, 0, -LABEL_AT)).project(camera);
+    const off = v.z > 1 || v.z < -1;
+    el.style.display = off ? 'none' : '';
+    el.style.transform = `translate(${((v.x + 1) / 2) * width}px, ${((1 - v.y) / 2) * height}px)`;
   }
 
   /**
@@ -138,9 +248,11 @@ export class DirtyAir {
       return;
     }
     let n = 0;
+    this.#own = null;
     if (physics !== null) {
       physics.windDrawAt(tick);
       n = this.#place(physics, n, -1, own, originX, originY);
+      this.#own = n > 0 ? (this.#meshes[0] as Mesh) : null;
       for (let i = 0; i < count && n < WEDGES; i++) {
         const b = drawn[i] as DrawnBoat;
         if (b.opacity < 0.5 || Math.hypot(b.east - own.east, b.north - own.north) > this.#range) {

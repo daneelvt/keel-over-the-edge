@@ -2268,6 +2268,7 @@ export class SeaScene {
     const ow = this.origin.world;
     this.dirtyAir.set(o.wind);
     this.dirtyAir.update(physics, this.ticks, own, drawn, count, ow.x, ow.y);
+    this.dirtyAir.placeLabels(camera, view.width, view.height);
     const row = this.rightOfWay;
     row.update(physics, now, this.ticks, own, drawn, count, ow.x, ow.y, camera);
     if (row.on) {
@@ -2361,6 +2362,7 @@ export class SeaScene {
   /** Puts the overlays' labels in a layer of the page over the scene. */
   attachLabels(layer: HTMLElement | null): void {
     this.overlays.attachLabels(layer);
+    this.dirtyAir.attachLabels(layer);
     this.rightOfWay.attachLabels(layer);
     this.#markTag?.remove();
     this.#markTag = null;

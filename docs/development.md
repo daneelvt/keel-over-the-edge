@@ -2116,9 +2116,12 @@ page follows each drawn boat's course in the wind at it, takes the
 clear: a ring with a bar ("Keep clear") over a boat the player must keep
 clear of, a diamond ("Right of way") over one that must keep clear of the
 player, each with its Article; and the player's tack beside the readout.
-The **wind** overlay lays a faint wedge of dirty air behind each boat
-within `overlay.wedges`, along its wake, out to where the loss falls under
-`overlay.wedgeDeficit`.
+The **wind** overlay lays a wedge of dirty air behind each boat within
+`overlay.wedges`, along its wake, out to where the loss falls under
+`overlay.wedgeDeficit`: pale, broken, wavering streaks, in the true wind's
+arrow's white, and the player's own labelled "Disturbed wind". (It was a
+dark, even patch until a player took it for the boat's shadow under the
+moon.)
 
 ### Trying it
 

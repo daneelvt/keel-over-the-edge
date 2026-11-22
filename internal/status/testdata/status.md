@@ -13,8 +13,8 @@ clockwise from north. Arrays are JSON arrays; `null` is a value not given.
 
 | Field | What |
 |---|---|
-| `atSea` | Boats in the water, a boat in its grace included |
-| `machinesAtSea` | Of them, machine sailors' |
+| `atSea` | Sailors at sea: every boat's skipper, a boat in its grace included, and everyone aboard another's boat |
+| `machinesAtSea` | Of them, machine sailors |
 | `queued` | Players waiting for a boat |
 | `world` | The world's number |
 | `endsAt` | When the world ends, RFC 3339 UTC; left out when not known |

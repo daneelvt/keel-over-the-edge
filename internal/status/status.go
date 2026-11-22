@@ -246,11 +246,18 @@ type frameCopy struct {
 func (b *Builder) build(ctx context.Context, now time.Time) *Status {
 	cfg := &b.cfg
 	f := cfg.Frames.Acquire()
-	fc := frameCopy{tick: f.Tick, atSea: len(f.Live), queue: len(f.Queue),
+	// Every sailor at sea: each boat's skipper and everyone aboard a boat
+	// not their own, who has none in the water.
+	fc := frameCopy{tick: f.Tick, atSea: len(f.Live) + len(f.Crew), queue: len(f.Queue),
 		spells: slices.Clone(f.SpellsInPlay()), coming: f.Coming, keys: f.Keys,
 		systems: slices.Clone(f.Systems), weathers: slices.Clone(f.Weathers)}
 	for _, s := range f.Live {
 		if f.Machine[s] {
+			fc.machines++
+		}
+	}
+	for i := range f.Crew {
+		if f.Crew[i].Machine {
 			fc.machines++
 		}
 	}

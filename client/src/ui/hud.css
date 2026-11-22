@@ -996,8 +996,12 @@
   right: calc(var(--edge-right) + 56px);
   left: auto;
   top: 50%;
-  translate: none;
-  transform: translateY(-50%);
+  /* Raised by translate alone, which replaces a centred window's own
+     translate (a window that takes this place centres itself by translate,
+     never transform, which this would not undo): a rule that sets
+     transform too loses its translate when the build minifies it, and the
+     window stands half off the screen. */
+  translate: 0 -50%;
   box-sizing: border-box;
   width: min(300px, calc(100vw - var(--edge-right) - var(--edge-left) - 56px));
   /* Within the screen however many switches it holds: it scrolls. */
@@ -1038,7 +1042,7 @@
     top: var(--edge-top);
     left: var(--edge-left);
     right: var(--edge-right);
-    transform: none;
+    translate: none;
     width: auto;
     max-height: min(62dvh, calc(100dvh - var(--edge-top) - var(--edge-bottom)));
   }

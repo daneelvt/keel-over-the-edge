@@ -39,6 +39,11 @@ export const WATCH_ME_DETAIL = 'Whoever opens your link can watch your boat.';
 export const SAIL_WITH_ME = 'Sail with me';
 export const SAIL_WITH_ME_DETAIL =
   'Whoever opens your link can ask to come aboard, and you choose who comes.';
+/** The menu's key for the link: gets a first one and copies it, copies the one out, or opens the page. */
+export const GET_SAIL_LINK = 'Get a Sail with me link';
+export const COPY_SAIL_LINK = 'Copy my Sail with me link';
+export const SAIL_LINK_COPIED = 'Sail with me link copied';
+export const SAIL_LINK = 'Sail with me link';
 export const SHARE = 'Share';
 export const COPY = 'Copy';
 export const COPIED = 'Copied';
