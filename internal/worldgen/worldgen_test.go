@@ -1396,6 +1396,58 @@ func TestFormat1Loads(t *testing.T) {
 	}
 }
 
+// TestOlderShelterLoads loads a world stored before a shelter's table held
+// the lee's fetch, with land to shelter it: with the digest it was stored
+// with, taken of two bytes a direction.
+func TestOlderShelterLoads(t *testing.T) {
+	_, whole := wholeWorld(t)
+	lee := false
+	for _, sh := range whole.Shelter.Chunks {
+		for i := 2; sh != nil && i < len(sh.Values); i += physics.ShelterStride {
+			lee = lee || sh.Values[i] != 0
+		}
+	}
+	if !lee {
+		t.Fatal("no lee in the whole world: the test tests nothing")
+	}
+	old := *whole
+	old.Format = 3
+	stored := old.digest()
+	if stored == whole.Digest {
+		t.Fatal("the format is not in the digest")
+	}
+	records, err := json.Marshal(old.Records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunks, err := old.Chunks([16]byte{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(records, nil, chunks, [16]byte{}, stored[:])
+	if err != nil || got.Format != 3 {
+		t.Fatalf("a world of format 3 loaded: %v", err)
+	}
+	// This format's digest is of the lee too.
+	now := *whole
+	for n, sh := range now.Shelter.Chunks {
+		if sh == nil {
+			continue
+		}
+		c := *sh
+		for i := 2; i < len(c.Values); i += physics.ShelterStride {
+			c.Values[i] = 0
+		}
+		shelter := *now.Shelter
+		shelter.Chunks[n] = &c
+		now.Shelter = &shelter
+		break
+	}
+	if now.digest() == whole.Digest {
+		t.Error("the lee is not in this format's digest")
+	}
+}
+
 func TestWithoutCirculation(t *testing.T) {
 	for in, want := range map[string]string{
 		`{"a":1,"circulation":-1,"b":[{"circulation":1}]}`: `{"a":1,"b":[{"circulation":1}]}`,

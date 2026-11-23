@@ -346,9 +346,18 @@ func (b *Bundle) digestOf(rec []byte) [32]byte {
 			}
 			h.Write(ch.Surface[:])
 		}
-		if sh := b.Shelter.Chunks[n]; sh == nil {
+		switch sh := b.Shelter.Chunks[n]; {
+		case sh == nil:
 			h.Write([]byte{0})
-		} else {
+		case b.Format < 4:
+			// A shelter's table held two bytes a direction before format
+			// 4, and the digest was taken of those: the lee's fetch, the
+			// third, is left out of an older bundle's.
+			h.Write([]byte{1})
+			for i := 0; i < len(sh.Values); i += physics.ShelterStride {
+				h.Write(sh.Values[i : i+2])
+			}
+		default:
 			h.Write([]byte{1})
 			h.Write(sh.Values[:])
 		}
