@@ -368,8 +368,11 @@ function useAside(screen: HTMLElement | null, aside: ((px: number) => void) | un
             left = Math.min(left, r.left);
           }
         }
-        // The parts on the left she must not go under.
-        for (const e of screen.querySelectorAll(':scope > .hud-top > *')) {
+        // The chat's strip, aboard with others: she must not go under it.
+        // Nothing else on the left counts: a notice or the instruments'
+        // case, whose height the page's fonts set, stands over her sail's
+        // head at most.
+        for (const e of screen.querySelectorAll(':scope > .hud-top .chat-strip')) {
           const r = e.getBoundingClientRect();
           if (r.width > 0 && r.left < innerWidth / 2 && r.bottom > innerHeight * HEAD_BELOW) {
             beside = Math.max(beside, r.right);
