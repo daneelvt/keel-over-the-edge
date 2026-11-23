@@ -16,6 +16,7 @@
 
 import { expect, test } from '@playwright/test';
 import { openScene } from './helpers';
+import { standInRaces } from './races';
 
 test('a race on the racer’s screen, from the warning to the results', async ({ page }) => {
   test.slow();
@@ -181,4 +182,50 @@ test('a race on the racer’s screen, from the warning to the results', async ({
   await expect(results).toContainText('The spoon hangs from your stern');
   await results.getByRole('button', { name: 'Close' }).click();
   await expect(results).toHaveCount(0);
+});
+
+test('one window at a time beside the boat: the menu over Make a race or the race’s window closes it, and a race’s window closes the menu', async ({
+  page,
+}) => {
+  await standInRaces(page, Date.now());
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1&races', true);
+  const side = page.locator('.hud-screen > :is(.menu, .at-side)');
+  const menu = page.locator('.menu:not(.menu-page)');
+  const make = page.locator('[data-panel=make-race]');
+  // Make a race, then the menu's button: Make a race goes, the menu stays.
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await menu.getByRole('button', { name: 'Races', exact: true }).click();
+  await page.locator('[data-page=races]').getByRole('button', { name: 'Make a race' }).click();
+  await expect(make).toBeVisible();
+  await expect(side).toHaveCount(1);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(menu).toBeVisible();
+  await expect(make).toHaveCount(0);
+  await expect(page.locator('[data-page=races]')).toHaveCount(0);
+  await expect(side).toHaveCount(1);
+  // The race's ⋯, then the menu: the same.
+  await page.getByRole('button', { name: 'Close the menu' }).click();
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.raceTell({ start: 1 }, [
+      { name: 'Mira', boat: 'Gull' },
+      { name: 'Pip', boat: 'Swift' },
+    ]);
+    k.racePicture([{ place: 1 }, { place: 2 }]);
+  });
+  await page.locator('.racer-line .rl-more').click();
+  await expect(page.locator('[data-panel=race-more]')).toBeVisible();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(menu).toBeVisible();
+  await expect(page.locator('[data-panel=race-more]')).toHaveCount(0);
+  await expect(side).toHaveCount(1);
+  // With the menu open the boat comes home: the finish's card, and no menu.
+  await page.evaluate(() =>
+    globalThis.keel.raceFinish({ number: 1, place: 1, elapsedMs: 570_000 }),
+  );
+  await expect(page.locator('[data-panel=race-finish]')).toBeVisible();
+  await expect(menu).toHaveCount(0);
+  await expect(side).toHaveCount(1);
 });

@@ -4578,6 +4578,116 @@ test('every race window at sea stands beside the boat, never over it, and the he
   expect(found).toEqual([]);
 });
 
+test('the menu and every page it opens stand beside the boat, never over it, on every screen; held sideways the boat is framed left of them, the sound’s sliders drag and the way home asks', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the windows are the same on either back end');
+  test.setTimeout(240_000);
+  await standInRaces(page, Date.now());
+  const first = SCREENS[5];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1&races', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  // The sail eased right out: the boat at her broadest.
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 1.6, boom: 1.5, surge: 0 });
+    k.setControls(0, 1);
+    k.advance(30);
+    k.camera('chase');
+    k.render();
+  });
+  const found: string[] = [];
+  let upright = false;
+  const check = async (where: string, sel: string) => {
+    await expect(page.locator(sel)).toBeVisible();
+    await page.evaluate(() => globalThis.keel.render());
+    for (const f of await overBoat(page, sel, upright)) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  const menu = page.locator('.menu:not(.menu-page)');
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    upright = s.upright;
+    await page.evaluate(() =>
+      globalThis.keel.homeScene({ asking: false, racing: false, shipmates: false }),
+    );
+    // The menu, and its sound's slider dragged.
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await check(`${s.name}, the menu`, '.menu');
+    const slider = menu.locator('.menu-range input[type=range]').first();
+    await slider.scrollIntoViewIfNeeded();
+    const before = await slider.inputValue();
+    const box = await slider.boundingBox();
+    if (box === null) {
+      found.push(`${s.name}: no sound slider`);
+    } else {
+      // From one end toward the other, whichever it is nearer.
+      const at = Number(before) / Number((await slider.getAttribute('max')) ?? '1');
+      const [from, to] = at > 0.5 ? [0.9, 0.15] : [0.1, 0.85];
+      const y = box.y + box.height / 2;
+      await page.mouse.move(box.x + box.width * from, y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * to, y, { steps: 4 });
+      await page.mouse.up();
+      if ((await slider.inputValue()) === before) {
+        found.push(`${s.name}: the sound’s slider took no drag`);
+      }
+      await check(`${s.name}, the menu scrolled`, '.menu');
+    }
+    // The Races page.
+    await menu.getByRole('button', { name: 'Races', exact: true }).click();
+    await check(`${s.name}, the Races page`, '[data-page=races]');
+    await page.getByRole('button', { name: 'Close this window' }).click();
+    // The way home, asked from the menu; Stay puts it away.
+    await expect(page.locator('[data-page=races]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    const home = menu.getByRole('button', { name: 'Back to Port Royal' });
+    await home.scrollIntoViewIfNeeded();
+    await home.click();
+    await check(`${s.name}, the way home’s question`, '.home-question');
+    await page.getByRole('button', { name: 'Stay', exact: true }).click();
+    await expect(page.locator('.home-question')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    const change = menu.getByRole('button', { name: 'Change boat' });
+    await change.scrollIntoViewIfNeeded();
+    await change.click();
+    await check(`${s.name}, Change boat’s question`, '.home-question');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.home-question')).toHaveCount(0);
+    // Invite friends, the shipmates and who is aboard.
+    for (const [scene, sel] of [
+      ['link', '.menu-page.invite'],
+      ['shipmates', '.shipmates-panel'],
+      ['list', '.deck-list'],
+    ] as const) {
+      await page.evaluate((name) => globalThis.keel.deckScene(name, 'Ann Bonny'), scene);
+      // Aboard with others, the chat's strip stands on the left past the
+      // sail's head: on the smallest screen held sideways no room is left
+      // between it and the list, and the boat keeps out from under the strip.
+      if (scene === 'list' && s === SCREENS[5]) {
+        await expect(page.locator(sel)).toBeVisible();
+      } else {
+        await check(`${s.name}, ${scene}`, sel);
+      }
+      await page.evaluate(() => globalThis.keel.deckScene(null));
+    }
+  }
+  await page.evaluate(() => globalThis.keel.homeScene(null));
+  expect(found).toEqual([]);
+});
+
 /** What is wrong with the race line: not 32 pixels tall, or a word cut short or run out of it. */
 async function raceLineFaults(page: Page): Promise<string[]> {
   return page.evaluate(() => {
