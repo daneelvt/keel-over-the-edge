@@ -2029,11 +2029,19 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       if (o === undefined || p === undefined) {
         throw new Error('the boat is sailed offline');
       }
+      const latest = p.weather.latest;
       return {
         status: o.status.value,
         notice: o.notice.value?.text ?? null,
         boat: o.boat,
         tick: p.tick,
+        // The latest spell of weather the boat is stepped in: the tick it
+        // begins at (−1 for none), and whether it is a developer's steady
+        // wind.
+        spell: {
+          begin: latest?.[RECORDS.spell.begin] ?? -1,
+          steady: latest?.[RECORDS.spell.steady] === 1,
+        },
         m: o.ahead.m,
         rtt: o.rtt.value,
         look: o.look.value,

@@ -1153,6 +1153,15 @@ async function start(): Promise<void> {
   races.replay = (code) => parts.replay.open(code);
   // A newcomer's hints on the race line, while the board says the green ribbon is theirs.
   racing.newcomer = () => races.board.value?.newcomer === true;
+  // The race the boat is on the line of or racing in: another's warning
+  // leaves it there, and it is told it sat that one out.
+  races.racingIn = () => {
+    const t = racing.told.peek();
+    const st = racing.mine()?.state;
+    return t !== null && racing.number() > 0 && (st === 'placed' || st === 'racing')
+      ? { code: t.code, name: t.name }
+      : null;
+  };
   // A race asked to be watched as it starts: Watch on its notice watches
   // the closest battle at the front, following the action.
   pollRaces(races, parts.notices, catalog.notices.kinds, (code) => {

@@ -49,7 +49,7 @@ import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
 import { Pilot } from './pilot';
-import { type RaceSource, raceShown, useRaceLine } from './racelinelazy';
+import { type RaceSource, raceShown, raceWaiting, useRaceLine } from './racelinelazy';
 import { type RacesView, racesShown, useRaces } from './raceslazy';
 import { cheeringText } from './racewatchwords';
 import { type CameraKeys, SeaKeys } from './seakeys';
@@ -150,7 +150,7 @@ function LazyStatements({ view, part }: { view: StatementsView; part: 'line' | '
 function LazyRaces({ races }: { races: RacesView }) {
   const shown = racesShown(races);
   const m = useRaces(shown);
-  return m === null || !shown ? null : <m.RacesWindows view={races} />;
+  return m === null || !shown ? null : <m.RacesWindows view={races} side />;
 }
 
 /**
@@ -398,7 +398,8 @@ function Screen(props: ScreenProps) {
     racing.racing.told.value !== null &&
     racing.racing.eye.value > 0 &&
     racing.racing.number() === 0;
-  const raced = racing !== null && racing.racing.told.value !== null && !barred;
+  const raced =
+    racing !== null && (racing.racing.told.value !== null || raceWaiting(racing)) && !barred;
   return (
     <div class={`hud-screen${cleared ? ' clear' : ''}${raced ? ' racing' : ''}`}>
       {cleared ? null : <div class="overlay-labels" ref={props.labels} aria-hidden="true" />}

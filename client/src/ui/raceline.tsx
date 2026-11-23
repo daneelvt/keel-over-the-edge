@@ -31,10 +31,12 @@ import {
   STILL_RACING,
   timed,
 } from './racelinewords';
+import { waitingRace } from './racenotices';
 import type { RacesView } from './raceslazy';
 import { entrantName, type Racing } from './racestate';
 import type { RaceWatch } from './racewatch';
 import { Window } from './racewindow';
+import { waitText } from './racewords';
 import { browserSharer, shareLink } from './sharelink';
 
 /** What the race's parts need of the game. */
@@ -211,6 +213,44 @@ function useSideways(el: { current: HTMLElement | null }) {
   }, []);
 }
 
+/**
+ * The race line before a race the player is in, from half an hour before
+ * its start to its warning signal: its name and the time to the start,
+ * the line and its ⋯ opening its card. The boat is sailed on meanwhile.
+ */
+function WaitingLine({ races }: { races: RacesView }) {
+  const el = useRef<HTMLDivElement | null>(null);
+  useSideways(el);
+  const [now, setNow] = useState(() => races.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(races.now()), 1000);
+    return () => clearInterval(t);
+  }, [races]);
+  const s = waitingRace(races.board.value, now);
+  if (s === null) {
+    return null;
+  }
+  const open = () => {
+    races.card.value = s.code;
+  };
+  return (
+    <div class="panel racer-line rl-waiting" ref={el} data-readout="race-line" data-state="waiting">
+      <button type="button" class="rl-words" aria-label={`${s.name}: its card`} onClick={open}>
+        <Flag kind="class" />
+        <span class="rl-name" data-readout="race-waiting-name">
+          {s.name}
+        </span>
+        <span class="rl-clock" data-readout="race-countdown">
+          {waitText(s.startsAt - now)}
+        </span>
+      </button>
+      <button type="button" class="rl-more" aria-label="The race’s card" onClick={open}>
+        ⋯
+      </button>
+    </div>
+  );
+}
+
 /** The race line, while the boat races: one line, its ⋯ at its end. */
 export function RaceLine({ src }: { src: RaceSource }) {
   const v = useLine(src);
@@ -224,6 +264,9 @@ export function RaceLine({ src }: { src: RaceSource }) {
   const said = live.current.read(v, call);
   // A boat watched has the race bar at the foot instead.
   const watching = src.racing.eye.value > 0 && src.racing.number() === 0;
+  if (v === null && !watching && src.races !== null) {
+    return <WaitingLine races={src.races} />;
+  }
   if (v === null || watching) {
     return null;
   }
@@ -411,7 +454,7 @@ function MoreWindow({ src }: { src: RaceSource }) {
   const racing = me !== null && r.number() > 0 && (me.state === 'placed' || me.state === 'racing');
   const fleet = fleetOf(r.picture.value?.racers ?? []);
   return (
-    <Window name="race-more" title={told.name === '' ? 'The race' : told.name} close={close}>
+    <Window name="race-more" title={told.name === '' ? 'The race' : told.name} close={close} side>
       <p class="rl-faint" data-readout="race-clock">
         {clock}
         {fleet > 0 && !timed(told) ? ` · ${fleet} boats` : ''}
@@ -526,7 +569,7 @@ function FinishCard({ src }: { src: RaceSource }) {
     ).then((res) => setSaid(res === 'copied' ? 'The link is copied.' : ''));
   };
   return (
-    <Window name="race-finish" title={words} close={close}>
+    <Window name="race-finish" title={words} close={close} side>
       <div class="rl-card-row">
         <Prize
           place={timed(told) ? 0 : f.place}
@@ -633,7 +676,12 @@ function ResultsWindow({ src }: { src: RaceSource }) {
     });
   };
   return (
-    <Window name="race-results" title={told.name === '' ? 'The results' : told.name} close={close}>
+    <Window
+      name="race-results"
+      title={told.name === '' ? 'The results' : told.name}
+      close={close}
+      side
+    >
       <p class="rl-faint">
         {told.alone === true
           ? 'Sailed alone · a medal against par'

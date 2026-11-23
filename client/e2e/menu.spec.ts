@@ -2,7 +2,7 @@
 
 // The menu's pages at sea, against keel: every page it opens (the account,
 // the machine sailors and how to connect one, Invite friends, the
-// shipmates, the sailors to watch) stands where the menu stood, never
+// shipmates, the sailors to watch, the Races) stands where the menu stood, never
 // over the middle of the screen where the boat is, with its name and its
 // close at the top and a margin round what it holds, and nothing in it
 // wider than it. Invite friends is where a link is shared: to watch the
@@ -173,6 +173,12 @@ test('every page of the menu stands in the menu’s place, its name and close at
     },
     { key: 'Shipmates', sel: '.shipmates-panel', title: 'Shipmates', ready: '.deck-switch, p' },
     { key: 'Watch a sailor', sel: '.watch-list', title: 'Watch a sailor', ready: '.watch-search' },
+    {
+      key: 'Races',
+      sel: '.menu-page.races-page',
+      title: 'Races',
+      ready: '[data-readout=races-mine]',
+    },
   ];
   const found: string[] = [];
   for (const s of SCREENS) {

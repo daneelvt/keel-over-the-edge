@@ -1036,6 +1036,9 @@
   padding-top: 12px;
 }
 
+/* Held upright it reaches down no further than the middle of the screen:
+   the boat's hull and deck, a little below it, stay in sight; only its
+   sail's head may stand behind it, as behind the case. */
 @media (orientation: portrait) {
   .menu,
   .hud :is(.panel, .deck-asks).at-side {
@@ -1044,7 +1047,7 @@
     right: var(--edge-right);
     translate: none;
     width: auto;
-    max-height: min(62dvh, calc(100dvh - var(--edge-top) - var(--edge-bottom)));
+    max-height: calc(50dvh - var(--edge-top));
   }
 }
 

@@ -51,6 +51,8 @@ export interface EnterTold {
   needs?: string;
   /** For a limit refused (ahead, daily, owned, made), the limit's number. */
   most?: number;
+  /** For a clash, the race the player is in, by name. */
+  race?: string;
 }
 
 /** An entrant on a card: a name, or null where the reader is not told it. */
@@ -156,12 +158,14 @@ export interface Refusal {
   needs?: string;
   /** For a limit refused, the limit's number. */
   most?: number;
+  /** For a clash, the race the player is in, by name. */
+  race?: string;
 }
 
 /** An answer: what was asked for, or why not. */
 export type Told<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
 
-/** What a race is made of: POST /api/race's body. */
+/** What a race is made of: POST /api/race's body; now, a race of one sailed at once. */
 export interface MakeBody {
   kind: 'race' | 'trial';
   course: string;
@@ -169,10 +173,19 @@ export interface MakeBody {
   at: number;
   who: Who;
   name: string;
+  now?: boolean;
 }
 
 /** The acts on a race, each answering its card. */
-export type RaceVerb = 'enter' | 'withdraw' | 'close' | 'cancel' | 'remove' | 'move' | 'again';
+export type RaceVerb =
+  | 'enter'
+  | 'withdraw'
+  | 'close'
+  | 'cancel'
+  | 'remove'
+  | 'move'
+  | 'start'
+  | 'again';
 
 const own: Fetch = (input, init) => fetch(input, init);
 
@@ -205,6 +218,7 @@ async function told<T>(res: Response, ok: number[]): Promise<Told<T>> {
     name?: unknown;
     needs?: unknown;
     most?: unknown;
+    race?: unknown;
   };
   const refusal: Refusal = {
     status: res.status,
@@ -221,6 +235,9 @@ async function told<T>(res: Response, ok: number[]): Promise<Told<T>> {
   }
   if (typeof b.most === 'number' && b.most > 0) {
     refusal.most = b.most;
+  }
+  if (typeof b.race === 'string' && b.race !== '') {
+    refusal.race = b.race;
   }
   return { ok: false, refusal };
 }

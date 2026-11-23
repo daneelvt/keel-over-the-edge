@@ -361,6 +361,33 @@ export async function sail(page: Page, base = ''): Promise<void> {
 const internal = 'http://127.0.0.1:19090';
 
 /**
+ * Waits until the page's boat sails in the steady wind a test set with
+ * POST /debug/wind, of knots from the degrees given. keel blows it from the
+ * second after next, and until then the boat sails in the weather set
+ * before, a test's before perhaps: its own steady wind from the same
+ * quarter, then the regime its end gave back, which blows after that. A
+ * wind from the right quarter is not enough: the latest spell the page
+ * holds must be a steady wind, begun, and blowing this one.
+ */
+export async function steadyWind(page: Page, knots: number, from: number): Promise<void> {
+  await page.waitForFunction(
+    ([speed, rad]) => {
+      const k = globalThis.keel;
+      const n = k.net();
+      const w = k.boat().wind;
+      return (
+        n.spell.steady &&
+        n.tick >= n.spell.begin &&
+        Math.abs(w.meanSpeed - speed) < 0.3 &&
+        Math.cos(w.meanFrom - rad) > 0.99
+      );
+    },
+    [(knots * 1852) / 3600, (from * Math.PI) / 180] as const,
+    { timeout: 10_000 },
+  );
+}
+
+/**
  * Puts the page's boat at rest in water of its own, and waits until the
  * page has it there and the move's corrections have stopped: on its heading, or off degrees off the mean wind
  * (positive with the wind over starboard), whichever way the world's wind

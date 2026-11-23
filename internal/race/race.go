@@ -91,9 +91,6 @@ const (
 	Warning = 2 * time.Minute
 	// Lead is the least time ahead a race may be made to start.
 	Lead = 5 * time.Minute
-	// Clash is how near another race's start a race may not be entered:
-	// a boat sails one race at a time.
-	Clash = 20 * time.Minute
 	// AreaApart is how far apart two buoy races' starts in one racing area
 	// must be.
 	AreaApart = 10 * time.Minute
@@ -177,19 +174,26 @@ const (
 	RefuseMoved       = "moved"
 	RefuseNotEntered  = "not-entered"
 	RefuseNotFinished = "not-finished"
+	// RefuseOthers: Start now, with another than the owner entered.
+	RefuseOthers = "others"
+	// RefuseOwner: a race's owner withdrawing from it, or removing their
+	// own boat: who makes a race races it.
+	RefuseOwner = "owner"
 )
 
 // Refusal is a race refused, and why: Until, if not zero, is when it
 // would not be (the next race may start then, the latest start allowed);
 // Name, for a name refused, the moderation's reason; Needs, for a boat
 // the sailor may not sail, the certificate that opens her; Most, for a
-// limit reached, the limit, so that its words say the number in force.
+// limit reached, the limit, so that its words say the number in force;
+// Race, for a clash, the name of the race the sailor is in.
 type Refusal struct {
 	Reason string
 	Until  time.Time
 	Name   string
 	Needs  string
 	Most   int
+	Race   string
 }
 
 func (r *Refusal) Error() string {

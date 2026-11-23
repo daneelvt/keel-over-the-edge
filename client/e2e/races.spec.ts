@@ -8,8 +8,8 @@
 // the race's card and enters; closing the card lands on their own Set
 // sail, the link done with. Then the first sailor has made as many races
 // as a day allows (the rest made and cancelled through the routes, to be
-// quick), sets sail, and Make a race in the menu says so kindly, with
-// when the next may be made. The pages draw nothing (?draw=off).
+// quick), sets sail, and Make a race on the Races page says so kindly,
+// with when the next may be made. The pages draw nothing (?draw=off).
 
 import { expect, test } from '@playwright/test';
 import { answerBorn, GAME, holdPasskeys, sailor, setSail, stamp } from './helpers';
@@ -94,7 +94,8 @@ test('a race made on a phone, entered by its link from a private window; the nin
         kind: 'race',
         course,
         boat,
-        at: now + (20 + 15 * i) * MINUTE,
+        // Clear of the first, which its maker races.
+        at: now + (60 + 15 * i) * MINUTE,
         who: 'everyone',
         name: '',
       },
@@ -113,7 +114,8 @@ test('a race made on a phone, entered by its link from a private window; the nin
   // At sea, Make a race in the menu says so, and when.
   await setSail(page);
   await page.getByRole('button', { name: 'Menu' }).click();
-  await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
+  await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+  await page.locator('[data-page=races]').getByRole('button', { name: 'Make a race' }).click();
   await expect(page.locator('[data-panel=make-race] [data-readout=race-refused]')).toContainText(
     /You’ve made (\w+ races today|as many races as a day allows)\. You can make the next after/,
     { timeout: 30_000 },

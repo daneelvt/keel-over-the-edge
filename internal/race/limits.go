@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -60,6 +61,9 @@ type entering struct {
 	limits store.RaceSettings
 	now    time.Time
 	latest time.Time
+	// minutes is how many minutes a race entered is expected to take its
+	// boat, 0 for not known.
+	minutes func(m *store.EntryStart) int
 }
 
 // refusedEntry is why an entry is refused, as the rows read in its
@@ -124,16 +128,56 @@ func (in *entering) counted(m store.EntryStart) bool {
 	return m.Started || m.State == store.RaceOpen || m.State == store.RaceClosed
 }
 
+// runs is how long after its start a race expected to take minutes may
+// still be sailed: the committee's time limit, times its expected time,
+// and the least finishing window after. A course not known is taken as a
+// long one.
+func runs(minutes int) time.Duration {
+	if minutes <= 0 {
+		minutes = LongMinutes
+	}
+	return time.Duration(float64(committee.RaceLimit*float64(minutes))*float64(time.Minute)) +
+		time.Duration(committee.Window/committee.Second)*time.Second
+}
+
+// minutesOf is how many minutes race m is expected to take its boat.
+func (in *entering) minutesOf(m *store.EntryStart) int {
+	if in.minutes == nil {
+		return 0
+	}
+	return in.minutes(m)
+}
+
+// clash is why the race starting at start overlaps another race the
+// sailor is in, or nil: a boat sails one race at a time, so a race whose
+// start comes before another could end, or that could still be running
+// when that one starts, is refused until that one could have ended.
+func (in *entering) clash(start time.Time, mine []store.EntryStart) error {
+	r := in.race
+	own := runs(in.minutesOf(&store.EntryStart{Kind: r.Kind, CourseKind: r.CourseKind, Course: r.Course, Shape: r.Shape,
+		Long: r.Long, Boat: r.Boat}))
+	for _, m := range mine {
+		if !in.counted(m) || m.State != store.RaceOpen && m.State != store.RaceClosed && m.State != store.RaceRacing {
+			continue
+		}
+		ends := m.At.Add(runs(in.minutesOf(&m)))
+		if !start.Before(m.At) && start.Before(ends) || start.Before(m.At) && start.Add(own).After(m.At) {
+			return &Refusal{Reason: RefuseClash, Until: ends, Race: m.Name}
+		}
+	}
+	return nil
+}
+
 // refusedByLimits is why entering a race starting at start is refused by
-// the limits on how often a sailor races, or nil.
+// the limits on how often a sailor races, or nil: a clash first.
 func (in *entering) refusedByLimits(start time.Time, mine []store.EntryStart) error {
+	if err := in.clash(start, mine); err != nil {
+		return err
+	}
 	var ahead, day []time.Time
 	for _, m := range mine {
 		if !in.counted(m) {
 			continue
-		}
-		if (m.State == store.RaceOpen || m.State == store.RaceClosed) && m.At.Sub(start).Abs() < Clash {
-			return refuseUntil(RefuseClash, m.At.Add(Clash))
 		}
 		if (m.State == store.RaceOpen || m.State == store.RaceClosed) && m.At.After(in.now) {
 			ahead = append(ahead, m.At)

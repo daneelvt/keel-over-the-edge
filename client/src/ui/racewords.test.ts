@@ -30,8 +30,12 @@ import {
   phaseLine,
   raceShareText,
   rowReasonText,
+  START_NOW_LINE,
+  satOutText,
   startOf,
   startsInText,
+  takeAwayAsk,
+  waitText,
   whenLine,
   whenText,
   zonedWhenText,
@@ -312,5 +316,36 @@ describe('a race called off for a storm', () => {
   test('its card and its row say so', () => {
     expect(phaseLine({ phase: 'cancelled', calledOff: 'storm' })).toBe(CALLED_OFF);
     expect(phaseLine({ phase: 'cancelled' })).toBe('This race was called off.');
+  });
+});
+
+describe('one race at a time, and races that flow', () => {
+  test('a clash names the race the player is in and when it could end', () => {
+    const at = { ...t(NOW + 2 * HOUR + 40 * 60_000), race: 'Monday Dash' };
+    expect(enterRefusalText('clash', at)).toBe('You’re in Monday Dash until about 11:40 AM.');
+    expect(enterRefusalText('clash', t())).toBe('You’re in another race then.');
+    // Making one: its maker races it, held to the same.
+    expect(makeRefusalText('clash', at)).toBe('You’re in Monday Dash until about 11:40 AM.');
+    expect(makeRefusalText('ahead', { ...t(), most: 2 })).toBe(
+      enterRefusalText('ahead', { ...t(), most: 2 }),
+    );
+  });
+
+  test('a race sat out, Start now, and taking a race away, in plain words', () => {
+    expect(satOutText('Monday Dash', 'Tuesday Reach')).toBe(
+      'You were still racing in Monday Dash, so you sat out Tuesday Reach.',
+    );
+    expect(START_NOW_LINE).toBe('Only you are in. Start in two minutes instead of waiting.');
+    expect(actRefusalText('others', t())).toBe(
+      'Someone else has joined, so the race keeps its time.',
+    );
+    expect(takeAwayAsk('Monday Dash', false)).toBe('Delete Monday Dash?');
+    expect(takeAwayAsk('Monday Dash', true)).toBe('Cancel Monday Dash? Everyone in it is told.');
+  });
+
+  test('the waiting line counts down in minutes and seconds', () => {
+    expect(waitText(8 * 60_000 + 29_000)).toBe('starts in 8:29');
+    expect(waitText(61_500)).toBe('starts in 1:02');
+    expect(waitText(-5)).toBe('starts in 0:00');
   });
 });

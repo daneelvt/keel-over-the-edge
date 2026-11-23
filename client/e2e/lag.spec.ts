@@ -9,7 +9,7 @@
 // correction and one knock, one shake and the verdict.
 
 import { expect, test } from '@playwright/test';
-import { alone, heldRegime, sail, sailor } from './helpers';
+import { alone, heldRegime, sail, sailor, steadyWind } from './helpers';
 
 // CI's netem job sends the page's traffic through the kernel's own delay
 // and loss instead, by the direct Vite.
@@ -118,9 +118,7 @@ test('a bump at 200 ms: one correction, one knock and shake, the verdict', {
   const internal = 'http://127.0.0.1:19090';
   expect((await request.post(`${internal}/debug/wind?knots=12&from=0`)).status()).toBe(204);
   try {
-    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
-      timeout: 10_000,
-    });
+    await steadyWind(page, 12, 0);
     // Out of the roads, where the boats of the tests before sail (one of
     // them could hit the staged boat first), at rest on a beam reach in
     // that breeze, the sail set: put at rest at any other angle, the boat

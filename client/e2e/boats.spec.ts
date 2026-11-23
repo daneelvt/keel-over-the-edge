@@ -20,7 +20,7 @@
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { alone, everyBoat, GAME, heldRegime, sailor, setSail } from './helpers';
+import { alone, everyBoat, GAME, heldRegime, sailor, setSail, steadyWind } from './helpers';
 
 type FleetBoat = {
   id: string;
@@ -300,9 +300,7 @@ test('the skiff chosen from the fleet: her crew sets the gennaker bearing away, 
   // this hour: the crew's angles are off the true wind.
   expect((await request.post(`${internal}/debug/wind?knots=10&from=0`)).status()).toBe(204);
   try {
-    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
-      timeout: 10_000,
-    });
+    await steadyWind(page, 10, 0);
     // In clean air, at rest on a beam reach with the wind over starboard;
     // the autopilot on at that angle, and way gathered.
     await alone(page, 90);
@@ -377,9 +375,7 @@ test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes
     expect((await request.post(`${internal}/debug/wind?knots=${knots}&from=0`)).status()).toBe(204);
   try {
     await wind(16);
-    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
-      timeout: 10_000,
-    });
+    await steadyWind(page, 16, 0);
     // At rest on a beam reach in clean air, the autopilot on there and the
     // sheet half out: way gathered, her windward hull clear of the water.
     await alone(page, 90);
@@ -477,9 +473,7 @@ test('the yacht chosen from the fleet: she beats in a breeze, tacks, reaches pas
     expect((await request.post(`${internal}/debug/wind?knots=${knots}&from=0`)).status()).toBe(204);
   try {
     await wind(14);
-    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
-      timeout: 10_000,
-    });
+    await steadyWind(page, 14, 0);
     // Way gathered on a close reach in clean air, the autopilot on there;
     // then close-hauled, the sheet in, making her way to windward.
     await alone(page, 70);
@@ -569,9 +563,7 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks through 
     expect((await request.post(`${internal}/debug/wind?knots=${knots}&from=0`)).status()).toBe(204);
   try {
     await wind(14);
-    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
-      timeout: 10_000,
-    });
+    await steadyWind(page, 14, 0);
     // Way gathered on a close reach in clean air, the autopilot on there;
     // then close-hauled, the sheet in, making her way to windward.
     await alone(page, 70);

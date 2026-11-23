@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The racer's screen's parts (raceline.tsx), loaded the first time the
-// boat is in a race: the game's first download holds none of them.
+// boat is in a race, or the player's next race is near: the game's first
+// download holds none of them.
 
 import { useEffect, useState } from 'preact/hooks';
 import { lazyFailed } from '../boot/updated';
 import type { RaceSource } from './raceline';
+import { waitingRace } from './racenotices';
 
 export type { RaceSource };
 
@@ -32,7 +34,18 @@ export function raceShown(src: RaceSource): boolean {
   return (
     r.told.value !== null ||
     (r.resultsOpen.value && r.ended.value !== null) ||
-    (r.finishOpen.value && r.finish.value !== null)
+    (r.finishOpen.value && r.finish.value !== null) ||
+    raceWaiting(src)
+  );
+}
+
+/** Whether the race line shows a race the player is in before its warning signal. */
+export function raceWaiting(src: RaceSource): boolean {
+  const races = src.races;
+  return (
+    src.racing.told.value === null &&
+    races !== null &&
+    waitingRace(races.board.value, races.now()) !== null
   );
 }
 

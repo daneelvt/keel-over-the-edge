@@ -111,7 +111,8 @@ test('the game’s page: a new sailor sets sail and opens the windows, nothing r
   await page.keyboard.press('Escape');
   await expect(page.locator('.chart-tabs')).toHaveCount(0);
   await page.getByRole('button', { name: 'Menu' }).click();
-  await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
+  await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+  await page.locator('[data-page=races]').getByRole('button', { name: 'Make a race' }).click();
   await expect(page.getByRole('button', { name: 'Make it' })).toBeVisible();
 
   // The service worker, registered at the reveal through the keel policy.

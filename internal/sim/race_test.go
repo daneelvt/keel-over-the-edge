@@ -132,6 +132,65 @@ func TestARaceIsPlaced(t *testing.T) {
 	}
 }
 
+// A boat sails one race at a time: at another race's warning, a boat still
+// in a race stays where it is, racing on, and did not start the other; a
+// time trial's run asked for meanwhile is not begun until it is over.
+func TestOneRaceAtATime(t *testing.T) {
+	w, cat := raceWorld(t)
+	keelboat := kindOf(t, cat, "keelboat")
+	var slots [2]int32
+	for i := range 2 {
+		slots[i] = do(t, w, bus.Command{Op: bus.Join, Account: acct(uint64(i + 1)), Conn: uint64(i + 1), BoatKind: keelboat}).Slot
+	}
+	for range 30 {
+		w.Tick()
+	}
+	a := &bus.RaceCall{ID: [16]byte{1}, Course: 1, Kind: keelboat, Start: w.Now() + committee.Warning,
+		Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}}}
+	if r := do(t, w, bus.Command{Op: bus.RacePlace, Race: a}); r.Result != bus.Done {
+		t.Fatalf("race A placed: %+v", r)
+	}
+	for range 10 {
+		w.Tick()
+	}
+	before := w.Latest().State[slots[0]]
+	b := &bus.RaceCall{ID: [16]byte{2}, Course: 1, Kind: keelboat, Start: w.Now() + committee.Warning,
+		Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}, {Account: acct(2), Number: 2}}}
+	if r := do(t, w, bus.Command{Op: bus.RacePlace, Race: b}); r.Result != bus.Done {
+		t.Fatalf("race B placed: %+v", r)
+	}
+	f := w.Latest()
+	if len(f.Races) != 2 {
+		t.Fatalf("%d races", len(f.Races))
+	}
+	ka, kb := f.Races[0].Key, f.Races[1].Key
+	for _, rc := range f.Racers {
+		switch {
+		case rc.Race == ka && rc.State != bus.RacerPlaced:
+			t.Errorf("the boat left race A: state %d", rc.State)
+		case rc.Race == kb && rc.Account == acct(1) && rc.State != bus.RacerDNS:
+			t.Errorf("the boat in race A started race B: state %d", rc.State)
+		case rc.Race == kb && rc.Account == acct(2) && rc.State != bus.RacerPlaced:
+			t.Errorf("the other boat did not start race B: state %d", rc.State)
+		}
+	}
+	if j := committee.RacerOf(f, acct(1)); j < 0 || f.Racers[j].Race != ka {
+		t.Errorf("the boat races in %d, want race A", j)
+	}
+	if st := f.State[slots[0]]; math.Abs(st.X-before.X) > 5 || math.Abs(st.Y-before.Y) > 5 {
+		t.Errorf("the boat in race A was moved from (%.1f, %.1f) to (%.1f, %.1f)", before.X, before.Y, st.X, st.Y)
+	}
+	// A trial's run asked for by the boat still racing waits.
+	run := &bus.RaceCall{ID: [16]byte{3}, Run: 1, Trial: true, Course: 1, Kind: keelboat,
+		Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}}}
+	if r := do(t, w, bus.Command{Op: bus.RacePlace, Race: run}); r.Result == bus.Done {
+		t.Errorf("a trial's run begun mid-race: %+v", r)
+	}
+	if f := w.Latest(); committee.Holds(f, run.ID, run.Run) {
+		t.Error("the world holds the trial's run")
+	}
+}
+
 // A world restored in the middle of a race's sequence runs it on as the
 // world it was taken from: the same signals, the same digests.
 func TestARaceRestores(t *testing.T) {

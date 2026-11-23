@@ -286,11 +286,15 @@
 
 .rl-card-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
 
+/* Beside the card while there is room; under it in a narrow window. */
 .rl-facts {
+  flex: 1 1 140px;
+  min-width: 0;
   margin: 0;
   padding: 0 0 0 16px;
   font-size: 0.875rem;
@@ -456,4 +460,19 @@
   padding: 8px 10px;
   border-radius: 8px;
   box-shadow: inset 0 0 0 1px var(--plate-line);
+}
+
+/* At sea in the menu's place, beside the boat and never over it: its own
+   margin, its head inside it. */
+.hud .panel.rl-window.at-side {
+  padding: 10px 14px 12px;
+}
+
+/* Before a race the player is in: its name, shortened if it must be, and
+   the time to its start. */
+.hud .rl-waiting .rl-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

@@ -2,10 +2,12 @@
 
 // Races ashore, as the screens see them: the board of the races ahead,
 // read when the game opens and at most once a minute while it is open;
-// the panel that makes a race, a race's card, and the share of a race
-// made, each open or not. Their parts (races.tsx) are loaded the first
-// time one opens: the game's first download holds none of them. The
-// notices of races are raised here, from the board, at their minutes.
+// the Races page, the panel that makes a race, a race's card, and the
+// share of a race made, each open or not. Their parts (races.tsx) are
+// loaded the first time one opens: the game's first download holds none
+// of them. The notices of races are raised here, from the board, at their
+// minutes; and a race sat out, its warning come while the boat raced in
+// another, is told.
 
 import { type Signal, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
@@ -26,14 +28,17 @@ import {
   dueWatches,
   RACE_SOON,
   type RaceNoticeKind,
+  satOut,
   type WatchedRace,
 } from './racenotices';
-import { ENTER, WATCH } from './racewords';
+import { ENTER, satOutText, WATCH } from './racewords';
 
 /** Races ashore as the screens see them, and what they ask of them. */
 export interface RacesView {
   /** The board, as last read; null before it is. */
   board: Signal<RacesBoard | null>;
+  /** Whether the Races page is open. */
+  page: Signal<boolean>;
   /** Whether the panel that makes a race is open. */
   make: Signal<boolean>;
   /** The race whose card is open, by its code; null for none. */
@@ -50,6 +55,8 @@ export interface RacesView {
   refresh: () => Promise<void>;
   /** Opens a race's replay by its code, its card closed; null where none may be. */
   replay: ((code: string) => void) | null;
+  /** The race the player's boat is placed or racing in now, by its code and name; null for none. */
+  racingIn: () => { code: string; name: string } | null;
 }
 
 /** Makes the view: nothing open, the board unread. */
@@ -64,6 +71,7 @@ export function racesOf({
 } = {}): RacesView {
   const view: RacesView = {
     board: signal(null),
+    page: signal(false),
     make: signal(false),
     card: signal(null),
     shared: signal(null),
@@ -71,6 +79,7 @@ export function racesOf({
     crew,
     fetch: f,
     replay: null,
+    racingIn: () => null,
     refresh: async () => {
       const a = await readBoard(f);
       if (a.ok) {
@@ -81,9 +90,9 @@ export function racesOf({
   return view;
 }
 
-/** Whether any of races' windows is open. */
+/** Whether any of races' windows is open, or the Races page. */
 export function racesShown(v: RacesView): boolean {
-  return v.make.value || v.card.value !== null || v.shared.value !== null;
+  return v.page.value || v.make.value || v.card.value !== null || v.shared.value !== null;
 }
 
 /** How often the board is read while the game is open, ms: at most once a minute. */
@@ -157,6 +166,11 @@ export function pollRaces(
           },
         });
       }
+    }
+    // A race whose warning came while the boat raced in another: it sat
+    // that one out, and is told so.
+    for (const s of satOut(board, view.racingIn(), now, shown)) {
+      notices.say(RACE_SOON, satOutText(view.racingIn()?.name ?? '', s.name), performance.now());
     }
     for (const d of dueNotices(board, kinds, now, shown)) {
       const code = d.race.code;

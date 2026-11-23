@@ -17,13 +17,12 @@
 // theirs, to watch it and to sail with it); under it, while their own
 // boat is in the water, a key that copies the link to sail with them, or
 // gets one first; a sailor to watch; Back to Port Royal and Change boat, while the
-// player sails their own boat, which ask first; under Races, the next
-// harbour race the player may enter, with Enter (or why not), Make a
-// race, and the player's races ahead, each a tap from its card. It stands over everything at
+// player sails their own boat, which ask first. Near the top, Races, the
+// key to the Races page, with the player's next race or the next harbour
+// race in a line under it. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
-import { useState } from 'preact/hooks';
 import type { FullScreen } from '../boot/fullscreen';
 import { type HomeScreen, homeScreen } from '../boot/homescreen';
 import type { ChartMode } from '../chart/chart';
@@ -38,18 +37,10 @@ import { INSTALL, INSTALL_CHROME, INSTALL_HOME_SCREEN } from './installwords';
 import { Modal } from './modal';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
-import { raceAct, type Summary } from './raceapi';
-import { RowReason } from './racerow';
+import type { RacesBoard, Summary } from './raceapi';
+import { nextRace } from './racenotices';
 import type { RacesView } from './raceslazy';
-import {
-  boatsText,
-  CALLED_OFF,
-  ENTER,
-  enteredLine,
-  enterRefusalText,
-  MAKE_A_RACE,
-  whenLine,
-} from './racewords';
+import { boatsText, RACES, whenLine } from './racewords';
 import type { SettingsSignal } from './settings';
 import { SHIPMATES } from './shipmatewords';
 import { percentText, SEA_AND_WIND, SOUND, SOUNDS, VOLUME } from './soundwords';
@@ -244,115 +235,48 @@ export function nextHarbourLine(s: Summary, now: number, locale?: string, zone?:
   return `Next harbour race: ${s.name} · ${when} · ${boatsText(s.boat.name)}`;
 }
 
-/** The next harbour race, with Enter where the player may, or why not; its card a tap on its words. */
-function NextHarbourRace({
-  races,
-  race,
-  close,
-}: {
-  races: RacesView;
-  race: Summary;
-  close: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [said, setSaid] = useState('');
-  const now = races.now();
-  const enter = () => {
-    setBusy(true);
-    setSaid('');
-    void raceAct(race.code, 'enter', { crew: false }, races.fetch).then((a) => {
-      setBusy(false);
-      setSaid(
-        a.ok
-          ? enteredLine(race.name)
-          : enterRefusalText(a.refusal.reason, {
-              until: a.refusal.until,
-              needs: a.refusal.needs,
-              most: a.refusal.most,
-              now: races.now(),
-            }),
-      );
-      void races.refresh();
-    });
-  };
-  return (
-    <>
-      <div class="menu-race-next race-row" data-race={race.code} data-readout="menu-next-race">
-        <button
-          type="button"
-          class="menu-race menu-race-mine menu-race-words"
-          onClick={() => {
-            races.card.value = race.code;
-            close();
-          }}
-        >
-          <span class="menu-race-name">{nextHarbourLine(race, now)}</span>
-        </button>
-        {race.mine.entered ? (
-          <span class="race-row-reason">Entered</span>
-        ) : race.enter.ok ? (
-          <button
-            type="button"
-            class="menu-race menu-race-enter"
-            disabled={busy}
-            aria-label={`${ENTER} ${race.name}`}
-            onClick={enter}
-          >
-            {ENTER}
-          </button>
-        ) : (
-          <RowReason enter={race.enter} />
-        )}
-      </div>
-      {said !== '' ? (
-        <p class="menu-note" role="status" data-readout="menu-race-said">
-          {said}
-        </p>
-      ) : null}
-    </>
-  );
+/**
+ * The menu's line under Races: the player's next race and its time, or the
+ * next harbour race; "" for none.
+ */
+export function racesLine(
+  board: RacesBoard | null,
+  now: number,
+  locale?: string,
+  zone?: string,
+): string {
+  if (board === null) {
+    return '';
+  }
+  const mine = nextRace(board);
+  if (mine !== null) {
+    return `${mine.name} · ${whenLine(mine.startsAt, now, locale, zone)}`;
+  }
+  const next = nextHarbourRace(board.harbour);
+  return next === null ? '' : nextHarbourLine(next, now, locale, zone);
 }
 
-/** Under Races: the next harbour race, Make a race, and the player's own races ahead under it, each opening its card. */
-function MenuRaces({ races, close }: { races: RacesView; close: () => void }) {
-  const board = races.board.value;
-  const mine = board?.mine ?? [];
-  const next = nextHarbourRace(board?.harbour ?? []);
-  const now = races.now();
+/** Races: the key to the Races page, and one small line under it. */
+function RacesKey({ races, close }: { races: RacesView; close: () => void }) {
+  const line = racesLine(races.board.value, races.now());
   return (
-    <fieldset class="menu-races" aria-label="Races">
-      <h3>Races</h3>
-      {next !== null ? <NextHarbourRace races={races} race={next} close={close} /> : null}
+    <div class="menu-races" data-readout="menu-races">
       <button
         type="button"
         class="menu-race"
         onClick={() => {
-          races.make.value = true;
+          races.page.value = true;
           close();
         }}
       >
-        {MAKE_A_RACE}
+        {RACES}
       </button>
-      {mine.slice(0, 3).map((r) => (
-        <button
-          type="button"
-          key={r.code}
-          class="menu-race menu-race-mine"
-          data-race={r.code}
-          onClick={() => {
-            races.card.value = r.code;
-            close();
-          }}
-        >
-          <span class="menu-race-name">{r.name}</span>
-          <span class="menu-race-when">
-            {r.phase === 'cancelled' && r.calledOff === 'storm'
-              ? CALLED_OFF
-              : whenLine(r.startsAt, now)}
-          </span>
-        </button>
-      ))}
-    </fieldset>
+      {line !== '' ? (
+        <p class="menu-note menu-races-line" data-readout="menu-races-line">
+          {line}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -439,6 +363,7 @@ export function Menu({
         </header>
         <div class="menu-body">
           <SailingAs sailor={sailor} />
+          {races !== null ? <RacesKey races={races} close={close} /> : null}
           {account !== null || machines !== null ? (
             <div class="menu-accounts">
               {account !== null ? (
@@ -541,7 +466,6 @@ export function Menu({
               </button>
             </div>
           ) : null}
-          {races !== null ? <MenuRaces races={races} close={close} /> : null}
           {connection !== null ? <RoundTrip view={connection} /> : null}
           {end !== null && end.when.value !== '' ? (
             <p class="menu-end" data-readout="ends">
