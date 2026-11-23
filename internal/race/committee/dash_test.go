@@ -25,7 +25,8 @@ func dashCall(id byte, kind uint16, n int) *bus.RaceCall {
 // Jolly boats in light to fresh wind); its one mark lies straight
 // across the wind, to port, on the side that makes the turn a tack; no
 // leg lies closer to the wind than 70°; and the boats placed face the
-// mark and cross the start line on their way to it.
+// mark and cross the start line on their way to it. The long Dash the
+// same, its mark further where the area holds it.
 func TestLayingADash(t *testing.T) {
 	s := stage(t)
 	f := bus.NewFrame(4)
@@ -36,10 +37,13 @@ func TestLayingADash(t *testing.T) {
 			continue
 		}
 		for _, n := range []int{1, 2, 8, 12} {
-			for w := range 8 {
-				from := wrap(float64(w) * math.Pi / 4)
+			for w := range 16 {
+				from := wrap(float64(w%8) * math.Pi / 4)
+				long := w >= 8
 				for _, knots := range []float64{4, 10, 22, 40} {
-					c := s.Lay(f, dashCall(1, uint16(kind), n), knots*physics.Knot, from, n)
+					call := dashCall(1, uint16(kind), n)
+					call.Long = long
+					c := s.Lay(f, call, knots*physics.Knot, from, n)
 					if c == nil || !c.Across || !c.Dash || c.Triangle || c.Island || c.Laps != 1 || len(c.Way) != 3 || len(c.Checks) != 3 {
 						t.Fatalf("kind %d, wind from %.2f: laid %+v", kind, from, c)
 					}
@@ -103,6 +107,20 @@ func TestLayingADash(t *testing.T) {
 	c := s.Lay(f, dashCall(1, 0, 6), 8*physics.Knot, 1, 6)
 	if math.Abs(c.Expected-DashSeconds) > 30 {
 		t.Errorf("a Dash the Jolly boat sails in %.0f s", c.Expected)
+	}
+	// And the long one, in a light wind: twelve minutes, its mark twice as
+	// far; in a breeze, as far as the area holds, still further than the
+	// Dash's.
+	long := dashCall(1, 0, 6)
+	long.Long = true
+	l := s.Lay(f, long, 4*physics.Knot, 1, 6)
+	d := s.Lay(f, dashCall(1, 0, 6), 4*physics.Knot, 1, 6)
+	leg := func(c *bus.RaceCourse) float64 { return hypot(c.Way[1][0]-c.Way[0][0], c.Way[1][1]-c.Way[0][1]) }
+	if math.Abs(l.Expected-LongDashSeconds) > 45 || math.Abs(leg(l)-2*leg(d)) > 0.05*leg(d) {
+		t.Errorf("a long Dash the Jolly boat sails in %.0f s, its leg %.0f m, the Dash's %.0f m", l.Expected, leg(l), leg(d))
+	}
+	if l, d := s.Lay(f, long, 10*physics.Knot, 1, 6), s.Lay(f, dashCall(1, 0, 6), 10*physics.Knot, 1, 6); !(l.Expected > d.Expected+60) {
+		t.Errorf("in 10 kn a long Dash of %.0f s, the Dash %.0f s", l.Expected, d.Expected)
 	}
 }
 

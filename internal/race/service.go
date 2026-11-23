@@ -123,6 +123,11 @@ type Config struct {
 	// start the committee tries being closer to the wind than a reach's:
 	// the course's upwind sign that day.
 	StartsUpwind func(course int, at time.Time) bool
+	// BuoyMinutes, if not nil, is how many minutes a buoy course of a
+	// shape and length would take a boat, by the catalog's id, laid now in
+	// a racing area in the wind there: what Make a race tells; false if
+	// it cannot say. Without it, each is the minutes it is sized to.
+	BuoyMinutes func(shape string, long bool, boat string) (int, bool)
 	// Origin is the play origin a race's link is made at.
 	Origin string
 	// Zone is the world's schedule's zone: the harbour races' hours and
@@ -221,7 +226,7 @@ func parseCourse(id string) (courseRef, bool) {
 		if _, ok := shapeNames[parts[1]]; !ok || parts[2] != "short" && parts[2] != "long" {
 			return courseRef{}, false
 		}
-		if (parts[1] == ShapeReach || parts[1] == ShapeDash) && parts[2] != "short" {
+		if parts[1] == ShapeReach && parts[2] != "short" {
 			return courseRef{}, false
 		}
 		return courseRef{kind: CourseBuoy, shape: parts[1], long: parts[2] == "long"}, true
@@ -277,6 +282,8 @@ func expectedMinutes(kind, shape string, long bool, course int, boat string, c *
 		switch {
 		case shape == ShapeReach:
 			return ReachMinutes
+		case shape == ShapeDash && long:
+			return LongDashMinutes
 		case shape == ShapeDash:
 			return DashMinutes
 		case long:
@@ -369,13 +376,12 @@ func (s *Service) making(by Sailor, m Making, now time.Time, limits store.RaceSe
 	var courseName string
 	switch ref.kind {
 	case CourseBuoy:
-		// The reach is the Harbourmaster's standing trial's alone; and no
-		// race starts up the wind: a course with a beat in it is sailed as
-		// a time trial, alone.
-		if !s.inAreas(b, &courses) || ref.shape == ShapeReach {
+		// No race with others starts up the wind: a course with a beat in
+		// it is sailed alone, as a time trial or a race of your own.
+		if !s.inAreas(b, &courses) {
 			return nil, refuse(RefuseCourse)
 		}
-		if m.Kind == KindRace && UpwindShape(ref.shape) {
+		if m.Kind == KindRace && !m.Now && UpwindShape(ref.shape) {
 			return nil, refuse(RefuseUpwind)
 		}
 		r.Shape, r.Long = ref.shape, ref.long

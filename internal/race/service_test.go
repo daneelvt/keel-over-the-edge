@@ -263,11 +263,9 @@ func TestMakingRefused(t *testing.T) {
 		{by, Making{Kind: KindRace, Course: "island:3", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "island:9", Boat: tall, Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: tall, Who: WhoEveryone}, RefuseCourse},
-		// The reach is the Harbourmaster's own: nobody makes a race on it,
-		// nor a trial, and it has no long form.
-		{by, Making{Kind: KindRace, Course: "buoy:reach:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone}, RefuseCourse},
-		{by, Making{Kind: KindTrial, Course: "buoy:reach:short", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
+		// The reach has no long form.
 		{by, Making{Kind: KindRace, Course: "buoy:reach:long", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone}, RefuseCourse},
+		{by, Making{Kind: KindRace, Course: "buoy:reach:long", Boat: s.jolly(), Now: true, Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:square:short", Boat: s.jolly(), Who: WhoEveryone}, RefuseCourse},
 		{by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: "no-boat", Who: WhoEveryone}, RefuseBoat},
 		{engine, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), Who: WhoHumans}, RefuseWho},
@@ -753,15 +751,24 @@ func TestHarbourJob(t *testing.T) {
 			t.Errorf("the newcomers' race named %q", h.Name)
 		}
 	}
-	// The Dash, the island course, then the four with a beat in them, for
-	// time trials only.
-	if len(b.Make.Courses) != 6 || !b.Make.Can.OK {
+	// The Dash, the long Dash, the reach, the island course, then the four
+	// with a beat in them, sailed alone only.
+	if len(b.Make.Courses) != 8 || !b.Make.Can.OK {
 		t.Errorf("make: %d courses, %+v", len(b.Make.Courses), b.Make.Can)
-	} else if c := b.Make.Courses; c[0].Shape != ShapeDash || c[0].TrialOnly || c[0].Upwind || c[1].Kind != CourseIsland || c[1].TrialOnly {
-		t.Errorf("make's first courses: %+v, %+v", c[0], c[1])
+	} else if c := b.Make.Courses; c[0].ID != "buoy:dash:short" || c[1].ID != "buoy:dash:long" || c[2].ID != "buoy:reach:short" ||
+		c[3].Kind != CourseIsland {
+		t.Errorf("make's first courses: %+v, %+v, %+v, %+v", c[0], c[1], c[2], c[3])
 	} else {
-		for _, x := range c[2:] {
-			if !x.TrialOnly || !x.Upwind || !UpwindShape(x.Shape) {
+		for _, x := range c[:4] {
+			if x.AloneOnly || x.Upwind {
+				t.Errorf("a course with no beat in it offered as %+v", x)
+			}
+		}
+		if c[1].Boats[s.jolly()] != LongDashMinutes || c[1].Name != "Long Dash" {
+			t.Errorf("the long Dash offered as %+v", c[1])
+		}
+		for _, x := range c[4:] {
+			if !x.AloneOnly || !x.Upwind || !UpwindShape(x.Shape) {
 				t.Errorf("a course with a beat in it offered as %+v", x)
 			}
 		}

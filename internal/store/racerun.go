@@ -287,6 +287,7 @@ type RaceRecord struct {
 const (
 	CourseReach        = "reach"         // the reach: across the wind to one mark and back
 	CourseDash         = "dash"          // the Dash: across the wind to one mark and home
+	CourseLongDash     = "long-dash"     // the long Dash: twice as far to its mark
 	CourseShort        = "short"         // the short windward–leeward
 	CourseLong         = "long"          // the long windward–leeward
 	CourseTriangle     = "triangle"      // the short triangle

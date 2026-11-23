@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// No race starts up the wind: Make a race offers a race only on courses
-// that are not a time trial's alone, keeping the server's order, the easy
-// first; every course for a trial. The upwind sign goes on a certificate's
+// No race with others starts up the wind: Make a race offers a race with
+// others only on courses not sailed alone only, keeping the server's
+// order, the easy first; every course on your own. The upwind sign goes on a certificate's
 // task only where every course it accepts is sailed partly up the wind,
 // and the catalog's ladder never needs one. The menu's next harbour race
 // is the first the player may enter, or the next with why not.
@@ -31,15 +31,18 @@ const make: MakeChoices = {
       name: 'Triangle, short',
       boats: { b: 10 },
       upwind: true,
-      trialOnly: true,
+      aloneOnly: true,
     },
   ],
 };
 
 describe('Make a race', () => {
-  test('a race on the Dash or an island course; a trial on any', () => {
-    expect(coursesFor(make, 'b', 'race').map((c) => c.id)).toEqual(['buoy:dash:short', 'island:1']);
-    expect(coursesFor(make, 'b', 'trial').map((c) => c.id)).toEqual([
+  test('with others on the Dash or an island course; on your own on any', () => {
+    expect(coursesFor(make, 'b', 'others').map((c) => c.id)).toEqual([
+      'buoy:dash:short',
+      'island:1',
+    ]);
+    expect(coursesFor(make, 'b', 'alone').map((c) => c.id)).toEqual([
       'buoy:dash:short',
       'island:1',
       'buoy:triangle:short',

@@ -40,7 +40,7 @@ var standingNames = map[string][2]string{
 	ShapeWindwardLeeward: {"the Harbourmaster's Short Course", "the Harbourmaster's Long Course"},
 	ShapeTriangle:        {"the Harbourmaster's Triangle", "the Harbourmaster's Long Triangle"},
 	ShapeReach:           {"the Harbourmaster's Reach", "the Harbourmaster's Reach"},
-	ShapeDash:            {"the Harbourmaster's Dash", "the Harbourmaster's Dash"},
+	ShapeDash:            {"the Harbourmaster's Dash", "the Harbourmaster's Long Dash"},
 }
 
 // StandingName is the name of the Harbourmaster's standing trial on a
@@ -118,9 +118,10 @@ var shapeNames = map[string]string{
 	ShapeDash:            "Dash",
 }
 
-// BuoyName is a buoy course's name: "Short triangle off Port Royal", and
-// the reach's and the Dash's, which have one length, "Reach off Port
-// Royal", "Dash off Port Royal"; port "" leaves the place off.
+// BuoyName is a buoy course's name: "Short triangle off Port Royal", the
+// reach's, which has one length, "Reach off Port Royal", and the Dash's,
+// "Dash off Port Royal" and "Long Dash off Port Royal"; port "" leaves
+// the place off.
 func BuoyName(shape string, long bool, port string) string {
 	length := "Short"
 	if long {
@@ -132,6 +133,9 @@ func BuoyName(shape string, long bool, port string) string {
 		name = "Reach"
 	case ShapeDash:
 		name = "Dash"
+		if long {
+			name = "Long Dash"
+		}
 	}
 	if port != "" {
 		name += " off " + port

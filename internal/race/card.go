@@ -196,12 +196,13 @@ type BoatChoice struct {
 }
 
 // CourseChoice is a course to race on, as CourseCard, with the boats it
-// is offered to and their expected minutes; TrialOnly, a course with a
-// beat in it, made as a time trial only.
+// is offered to and their expected minutes; AloneOnly, a course with a
+// beat in it or an island course starting up the wind today, sailed alone
+// only: a race of your own or a time trial, never a race with others.
 type CourseChoice struct {
 	CourseCard
 	Boats     map[string]int `json:"boats"`
-	TrialOnly bool           `json:"trialOnly,omitempty"`
+	AloneOnly bool           `json:"aloneOnly,omitempty"`
 }
 
 // wayOf is a course's way, m east and north in pairs, rounded.
@@ -493,7 +494,7 @@ func boolOrder(b bool) int {
 }
 
 // standingOrder is a standing trial's place on the board: the reach, the
-// Dash, the short windward–leeward, the short triangle, the long
+// Dash, the long Dash, the short windward–leeward, the short triangle, the long
 // windward–leeward, the long triangle, then the island courses by number;
 // the board puts those with the upwind sign last.
 func standingOrder(r *store.Race) int {
@@ -502,16 +503,41 @@ func standingOrder(r *store.Race) int {
 		return 0
 	case store.CourseDash:
 		return 1
-	case store.CourseShort:
+	case store.CourseLongDash:
 		return 2
-	case store.CourseTriangle:
+	case store.CourseShort:
 		return 3
-	case store.CourseLong:
+	case store.CourseTriangle:
 		return 4
-	case store.CourseLongTriangle:
+	case store.CourseLong:
 		return 5
+	case store.CourseLongTriangle:
+		return 6
 	}
-	return 6 + r.Course
+	return 7 + r.Course
+}
+
+// LongerBy is how many minutes longer than the Dash the long Dash must be
+// for a boat today for Make a race to offer it: in a breeze the area holds
+// a Dash no longer than the short one.
+const LongerBy = 2
+
+// buoyMinutes are how many minutes a buoy course of a shape and length
+// would take each of boats, by the catalog's ids, laid now: by the
+// committee's laying in the wind today where the service can say, else
+// what the course is sized to.
+func (s *Service) buoyMinutes(boats []string, shape string, long bool) map[string]int {
+	out := map[string]int{}
+	for _, id := range boats {
+		m := expectedMinutes(CourseBuoy, shape, long, 0, id, nil)
+		if s.cfg.BuoyMinutes != nil {
+			if laid, ok := s.cfg.BuoyMinutes(shape, long, id); ok {
+				m = max(laid, 1)
+			}
+		}
+		out[id] = m
+	}
+	return out
 }
 
 // sailorBoat is the catalog's id of the boat each sailor brings to the
@@ -540,15 +566,13 @@ func (s *Service) choices(ctx context.Context, by Sailor, now time.Time, limits 
 		}
 	}
 	courses := s.cfg.Courses()
-	buoys := map[string]int{}
-	long := map[string]int{}
-	dash := map[string]int{}
+	var buoys []string
 	for i := range s.cfg.Catalog.Boats {
 		b := &s.cfg.Catalog.Boats[i]
 		in := s.inAreas(b, &courses)
 		out.Boats = append(out.Boats, BoatChoice{ID: string(b.ID), Name: b.Name, Most: b.Racers, Buoys: in})
 		if in {
-			buoys[string(b.ID)], long[string(b.ID)], dash[string(b.ID)] = ShortMinutes, LongMinutes, DashMinutes
+			buoys = append(buoys, string(b.ID))
 		}
 	}
 	if s.cfg.BoatOf != nil {
@@ -557,15 +581,30 @@ func (s *Service) choices(ctx context.Context, by Sailor, now time.Time, limits 
 	if s.boat(out.Boat) == nil && len(out.Boats) > 0 {
 		out.Boat = out.Boats[0].ID
 	}
-	// Easy first: the Dash, then the island courses (those whose start is
-	// up the wind today last), then the courses with a beat in them, made
-	// as time trials only.
-	if len(buoys) > 0 {
+	// Easy first: the Dash, the long Dash and the reach, then the island
+	// courses, then the courses with a beat in them. Those with a beat,
+	// and the island courses whose start is up the wind today, are sailed
+	// alone only, and come after the others of their kind.
+	buoy := func(shape string, long bool, minutes map[string]int, alone bool) {
+		if len(minutes) == 0 {
+			return
+		}
 		out.Courses = append(out.Courses, CourseChoice{
-			CourseCard: CourseCard{ID: CourseID(CourseBuoy, ShapeDash, false, 0), Kind: CourseBuoy, Shape: ShapeDash,
-				Name: BuoyName(ShapeDash, false, "")},
-			Boats: dash})
+			CourseCard: CourseCard{ID: CourseID(CourseBuoy, shape, long, 0), Kind: CourseBuoy, Shape: shape, Long: long,
+				Name: BuoyName(shape, long, ""), Upwind: alone},
+			Boats: minutes, AloneOnly: alone})
 	}
+	dash := s.buoyMinutes(buoys, ShapeDash, false)
+	buoy(ShapeDash, false, dash, false)
+	// The long Dash, where the area holds it longer than the Dash today.
+	longDash := s.buoyMinutes(buoys, ShapeDash, true)
+	for id, m := range longDash {
+		if m < dash[id]+LongerBy {
+			delete(longDash, id)
+		}
+	}
+	buoy(ShapeDash, true, longDash, false)
+	buoy(ShapeReach, false, s.buoyMinutes(buoys, ShapeReach, false), false)
 	island := slices.Clone(courses.Island)
 	slices.SortStableFunc(island, func(a, b Course) int { return a.Number - b.Number })
 	var islands []CourseChoice
@@ -574,26 +613,17 @@ func (s *Service) choices(ctx context.Context, by Sailor, now time.Time, limits 
 		for id, e := range ic.Boats {
 			boats[id] = int(math.Round(e / 60))
 		}
+		upwind := s.cfg.StartsUpwind != nil && s.cfg.StartsUpwind(ic.Number, now)
 		islands = append(islands, CourseChoice{
 			CourseCard: CourseCard{ID: CourseID(CourseIsland, "", false, ic.Number), Kind: CourseIsland, Number: ic.Number,
-				Name: ic.Name, Length: math.Round(ic.Length), Way: wayOf(ic.Way),
-				Upwind: s.cfg.StartsUpwind != nil && s.cfg.StartsUpwind(ic.Number, now)},
-			Boats: boats})
+				Name: ic.Name, Length: math.Round(ic.Length), Way: wayOf(ic.Way), Upwind: upwind},
+			Boats: boats, AloneOnly: upwind})
 	}
 	slices.SortStableFunc(islands, func(a, b CourseChoice) int { return boolOrder(a.Upwind) - boolOrder(b.Upwind) })
 	out.Courses = append(out.Courses, islands...)
-	if len(buoys) > 0 {
-		for _, l := range []bool{false, true} {
-			for _, shape := range []string{ShapeWindwardLeeward, ShapeTriangle} {
-				minutes := buoys
-				if l {
-					minutes = long
-				}
-				out.Courses = append(out.Courses, CourseChoice{
-					CourseCard: CourseCard{ID: CourseID(CourseBuoy, shape, l, 0), Kind: CourseBuoy, Shape: shape, Long: l,
-						Name: BuoyName(shape, l, ""), Upwind: true},
-					Boats: minutes, TrialOnly: true})
-			}
+	for _, l := range []bool{false, true} {
+		for _, shape := range []string{ShapeWindwardLeeward, ShapeTriangle} {
+			buoy(shape, l, s.buoyMinutes(buoys, shape, l), true)
 		}
 	}
 	return out, nil

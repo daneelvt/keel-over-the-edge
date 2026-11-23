@@ -6,7 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -63,13 +66,13 @@ func (p *process) racesOf(h *worldHalf) *race.Service {
 	cfg.Standing = func(ctx context.Context, id store.AccountID) (certs.Standing, error) {
 		return p.ladder.Of(ctx, p.db.Exam(), id)
 	}
-	// An island course's upwind sign today: by the mean wind at its start
-	// now, as the committee would lay it.
+	// An island course's upwind sign today, and how long a buoy course
+	// would take: by the mean wind at its place now, as the committee would
+	// lay it.
 	if st := raceStage(p.cat, h.ready.bundle); st != nil && h.ready.timeline != nil {
-		cfg.StartsUpwind = func(course int, _ time.Time) bool {
-			x, y, ok := st.CourseStart(int32(course))
-			if !ok || h.bus == nil {
-				return false
+		windAt := func(x, y float64) (speed, from float64, ok bool) {
+			if h.bus == nil {
+				return 0, 0, false
 			}
 			w := physics.Weather{Prepared: h.ready.timeline.Prepared()}
 			f := h.bus.Frames.Acquire()
@@ -77,8 +80,47 @@ func (p *process) racesOf(h *worldHalf) *race.Service {
 			var wt physics.WeatherTick
 			physics.WeatherAt(&w, &wt, float64(f.Tick))
 			f.Release()
-			_, from := physics.MeanWindAt(&wt, x, y)
-			return st.StartsUpwind(int32(course), from)
+			speed, from = physics.MeanWindAt(&wt, x, y)
+			return speed, from, true
+		}
+		cfg.StartsUpwind = func(course int, _ time.Time) bool {
+			x, y, ok := st.CourseStart(int32(course))
+			if !ok {
+				return false
+			}
+			_, from, ok := windAt(x, y)
+			return ok && st.StartsUpwind(int32(course), from)
+		}
+		// The wind in the first racing area, read again once a second at
+		// most: Make a race asks for every course and boat at once.
+		var mu sync.Mutex
+		var read time.Time
+		var areaSpeed, areaFrom float64
+		var areaOK bool
+		cfg.BuoyMinutes = func(shape string, long bool, boat string) (int, bool) {
+			k := slices.Index(ids, boat)
+			if k < 0 || len(st.Areas) == 0 {
+				return 0, false
+			}
+			a := &st.Areas[0]
+			mu.Lock()
+			if now := time.Now(); now.Sub(read) > time.Second {
+				read = now
+				areaSpeed, areaFrom, areaOK = windAt(a.X, a.Y)
+			}
+			speed, from, ok := areaSpeed, areaFrom, areaOK
+			mu.Unlock()
+			if !ok {
+				return 0, false
+			}
+			call := &bus.RaceCall{Course: a.Number, Kind: uint16(k), Long: long, Triangle: shape == race.ShapeTriangle,
+				Across: shape == race.ShapeReach || shape == race.ShapeDash, Dash: shape == race.ShapeDash}
+			// A numbered area's course is laid without the frame's races.
+			c := st.Lay(&bus.Frame{}, call, speed, from, 1)
+			if c == nil || !(c.Expected > 0) {
+				return 0, false
+			}
+			return int(math.Round(c.Expected / 60)), true
 		}
 	}
 	cfg.BoatOf = func(id store.AccountID) string {

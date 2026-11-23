@@ -4223,7 +4223,7 @@ for (const text of TEXT_SIZES) {
       const make = page.locator('[data-panel=make-race]');
       await expect(make.locator('#race-name')).toHaveValue('Saturday Dash');
       await check(`${s.name}, Make a race`, '[data-panel=make-race]');
-      await make.getByRole('button', { name: 'Race others' }).click();
+      await make.getByRole('button', { name: 'With others' }).click();
       await check(`${s.name}, Make a race, racing others`, '[data-panel=make-race]');
       await make.getByRole('button', { name: 'Later' }).click();
       await make.locator('[data-course="island:3"]').click();
@@ -4511,7 +4511,7 @@ test('every race window at sea stands beside the boat, never over it, and the he
     const make = page.locator('[data-panel=make-race]');
     await expect(make.locator('#race-name')).toHaveValue('Saturday Dash');
     await check(`${s.name}, Make a race`, '[data-panel=make-race]');
-    await make.getByRole('button', { name: 'Race others' }).click();
+    await make.getByRole('button', { name: 'With others' }).click();
     state.make = 'ok';
     await make.getByRole('button', { name: 'Make it' }).click();
     const share = page.locator('[data-panel=race-share]');

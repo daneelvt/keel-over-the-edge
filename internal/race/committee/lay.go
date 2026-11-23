@@ -23,9 +23,10 @@ import (
 // leeward gate a little above the line. Every mark is left to port; the
 // finish is the start line, crossed coming down the wind.
 //
-// A reach is a beginner's course, sailed alone: its line lies along the
-// wind, the committee boat at its downwind end, and its one mark straight
-// across the wind from the line's middle, as far to one side of the
+// A reach is a beginner's course: its line lies along the wind, the
+// committee boat at its downwind end, its length for the boats entered as
+// a buoy course's is, and its one mark straight across the wind from the
+// line's middle, as far to one side of the
 // area's centre as the line is to the other. The way is out to the mark,
 // round it and back over the same line, so both legs are beam reaches
 // and nobody has to tack up a beat. It is sized by the boat's polar for
@@ -40,8 +41,8 @@ import (
 // lengths beyond its end, so that the boats coming home are clear of the
 // boats going out. No leg lies closer to the wind than dashOff: where the
 // legs are too short for the finish to lie so far up the wind, it lies
-// less far. It is sized by the boat's polar for six minutes, or to what
-// the area holds, and laid across the area's middle with room behind the
+// less far. It is sized by the boat's polar for six minutes, a long Dash
+// for twelve, twice as far to its mark, or to what the area holds, and laid across the area's middle with room behind the
 // line for the boats placed there; the committee boat stays at the start,
 // and fires each finisher's gun from there.
 //
@@ -90,9 +91,13 @@ func (s *Stage) Lay(f *bus.Frame, call *bus.RaceCall, speed, from float64, n int
 	}
 	switch {
 	case call.Across && call.Dash:
-		return layDash(a, k, speed, from, n)
+		target := float64(DashSeconds)
+		if call.Long {
+			target = LongDashSeconds
+		}
+		return layDash(a, k, target, speed, from, n)
 	case call.Across:
-		return layReach(a, k, speed, from)
+		return layReach(a, k, speed, from, n)
 	}
 	target := float64(ShortSeconds)
 	if call.Long {
@@ -176,9 +181,9 @@ func layBuoy(a *Area, k Kind, triangle bool, target, speed, from float64, n int)
 	return c
 }
 
-// layReach lays a reach in area a for a boat k, in a wind of speed from
-// from: a reach is sailed alone, so its line is the shortest.
-func layReach(a *Area, k Kind, speed, from float64) *bus.RaceCourse {
+// layReach lays a reach in area a for boats k, n of them, in a wind of
+// speed from from: a reach sailed alone has the shortest line.
+func layReach(a *Area, k Kind, speed, from float64, n int) *bus.RaceCourse {
 	us, uc := physics.SinCos(from)
 	// u is up the wind, r to starboard looking up it: out to the mark. A
 	// boat sailing out has the wind over her port side, and leaves the
@@ -188,12 +193,18 @@ func layReach(a *Area, k Kind, speed, from float64) *bus.RaceCourse {
 		return [2]float64{a.X + float64(along*ux) + float64(across*rx), a.Y + float64(along*uy) + float64(across*ry)}
 	}
 	l := k.Length
-	halfLine := float64(lineLength(l, 1) * 0.5)
+	halfLine := float64(lineLength(l, n) * 0.5)
 	// The leg the area holds: the line's ends inside it, with room behind
-	// the line for the boat placed there.
-	room := a.Radius - float64(areaBehind*l)
+	// the line for the boats placed there, a fleet's rows behind its ends
+	// too.
+	behind := float64(areaBehind * l)
+	room := a.Radius - behind
 	if ends := float64(a.Radius*a.Radius) - float64(halfLine*halfLine); ends > 0 {
-		room = min(room, math.Sqrt(ends))
+		e := math.Sqrt(ends)
+		if n > 1 {
+			e -= behind
+		}
+		room = min(room, e)
 	}
 	most := max(float64(2*room), float64(legLeast*l))
 	leg := float64(legLeast * l)
@@ -230,9 +241,9 @@ var DashApart = 8.0
 // island race's first leg.
 const dashOff = 70 * math.Pi / 180
 
-// layDash lays a Dash in area a for boats k, n of them, in a wind of speed
-// from from.
-func layDash(a *Area, k Kind, speed, from float64, n int) *bus.RaceCourse {
+// layDash lays a Dash in area a for boats k, n of them, sized to target s
+// in a wind of speed from from.
+func layDash(a *Area, k Kind, target, speed, from float64, n int) *bus.RaceCourse {
 	us, uc := physics.SinCos(from)
 	// u is up the wind, r to starboard looking up it: out to the mark, the
 	// wind over the boats' port side, the mark left to port by a tack.
@@ -268,7 +279,7 @@ func layDash(a *Area, k Kind, speed, from float64, n int) *bus.RaceCourse {
 	if k.Polar != nil {
 		// Out and home, each across the wind, near enough.
 		if perMetre := float64(2 * k.Polar.LegTime(speed, math.Pi/2, 1)); perMetre > 0 && !math.IsInf(perMetre, 0) {
-			leg = max(DashSeconds/perMetre, leg)
+			leg = max(target/perMetre, leg)
 		}
 	}
 	// Cut to what the area holds, a twentieth at a time.

@@ -483,6 +483,8 @@ func recordCourse(row *store.Race) string {
 		return store.CourseIsland
 	case row.Shape == ShapeReach:
 		return store.CourseReach
+	case row.Shape == ShapeDash && row.Long:
+		return store.CourseLongDash
 	case row.Shape == ShapeDash:
 		return store.CourseDash
 	case row.Shape == ShapeTriangle && row.Long:

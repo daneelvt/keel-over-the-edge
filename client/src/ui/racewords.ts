@@ -338,7 +338,7 @@ export function enterRefusalText(reason: string, t: RefusalTime): string {
 
 /** A race asked on a course that is sailed partly up the wind: a trial's course only. */
 const UPWIND_REFUSED =
-  'Races go across the wind, on the Dash or an island course. Sail this course as a time trial.';
+  'Races with others go across the wind: the Dash, the Reach or an island course. Sail this one on your own.';
 
 /**
  * Why a row cannot be entered, in a few words where its key would be:
@@ -544,12 +544,13 @@ export const START_NOW_LINE = 'Only you are in. Start in two minutes instead of 
 export const CLOSE = 'Close';
 
 /** Make a race's two choices, each with its line. */
-export const SAIL_IT_NOW = 'Sail it now';
-export const RACE_OTHERS = 'Race others';
-export const SAIL_IT_NOW_LINE =
-  'Just you, starting now. Your clock starts when you cross the line.';
-export const RACE_OTHERS_LINE = 'Others can join from the link until two minutes before the start.';
-export const TRIAL_OTHERS_LINE = 'A time trial is open all week for others to sail from the link.';
+export const ON_MY_OWN = 'On my own';
+export const WITH_OTHERS = 'With others';
+export const ON_MY_OWN_LINE =
+  'Your own race, just you, starting now. Your clock starts when you cross the line.';
+export const WITH_OTHERS_LINE = 'Others can join from the link until two minutes before the start.';
+/** Under the courses, while no island course is open in the world. */
+export const NO_ISLAND_COURSE = 'Island courses open as sailors chart the islands near Port Royal.';
 
 /** The owner's keys to take a race away: Delete while no one else is in, Cancel the race once others are. */
 export const DELETE = 'Delete';
