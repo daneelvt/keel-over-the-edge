@@ -14,7 +14,7 @@
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import type { LifeSeen } from '../src/net/messages';
-import { alone, GAME, heldRegime, linkCodes, sail, sailor, setSail } from './helpers';
+import { alone, GAME, heldRegime, linkCodes, sail, sailor, setSail, steadyWind } from './helpers';
 
 /** keel's internal listener, as tools/e2e serves it: its developer commands. */
 const internal = 'http://127.0.0.1:19090';
@@ -205,9 +205,7 @@ test('a pod rides one boat’s bow, at that bow on every page', { tag: '@world' 
     await a.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
       timeout: 60_000,
     });
-    await a.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
-      timeout: 10_000,
-    });
+    await steadyWind(a, 14, 0);
     // Out of the roads, on a beam reach, the sail set and the course held.
     const spot = await alone(a, 90);
     const heading = await a.evaluate(() => {
