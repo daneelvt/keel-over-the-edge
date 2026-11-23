@@ -373,7 +373,7 @@ export function raceDrawingOf(r: Racing): RaceDrawing | null {
 }
 
 /** The next mark the boat makes for, for its tag in the sea; null before the start, at a line, or out of the race. */
-export function nextMarkOf(r: Racing): { east: number; north: number; text: string } | null {
+export function nextMarkOf(r: Racing): { east: number; north: number; number: number } | null {
   const t = r.told.peek();
   const me = r.mine();
   if (t === null || me === null || me.state !== 'racing') {
@@ -384,5 +384,5 @@ export function nextMarkOf(r: Racing): { east: number; north: number; text: stri
     return null;
   }
   const m = t.marks.find((k) => k.number === leg.mark) ?? leg;
-  return { east: m.east, north: m.north, text: String(leg.mark) };
+  return { east: m.east, north: m.north, number: leg.mark };
 }
