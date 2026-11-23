@@ -22,11 +22,12 @@ UPDATE setting SET race_ahead = @race_ahead, race_daily = @race_daily, race_made
 SELECT pg_advisory_xact_lock(hashtextextended(@key::text, 7));
 
 -- name: InsertRace :one
--- A race made: its code comes from link_code().
-INSERT INTO race (world_id, owner_id, kind, course_kind, course, shape, long, boat, who, name, starts_at, harbour, again_of, made_at)
+-- A race made, open or closed to entry: its code comes from link_code().
+INSERT INTO race (world_id, owner_id, kind, course_kind, course, shape, long, boat, who, name, starts_at, harbour, again_of, made_at,
+  state)
 VALUES (@world_id, sqlc.narg(owner_id), @kind, @course_kind, @course, sqlc.narg(shape), @long, @boat, @who, @name, @starts_at,
-  sqlc.narg(harbour), sqlc.narg(again_of), @made_at)
-RETURNING code;
+  sqlc.narg(harbour), sqlc.narg(again_of), @made_at, @state)
+RETURNING id, code;
 
 -- name: InsertHarbourRace :execrows
 -- A harbour race made, once for its start.
@@ -63,10 +64,20 @@ WHERE world_id = @world_id AND id = @id AND state = ANY(@was::text[]);
 UPDATE race SET starts_at = @starts_at, moved = true
 WHERE world_id = @world_id AND id = @id AND NOT moved AND state IN ('open', 'closed');
 
+-- name: StartRaceNow :execrows
+-- A race's start brought sooner, at its owner's word, while no one but its
+-- owner is entered: a race of one need not wait the time it was set for.
+UPDATE race r SET starts_at = @starts_at
+WHERE r.world_id = @world_id AND r.id = @id AND r.state IN ('open', 'closed') AND r.starts_at > @starts_at
+  AND NOT EXISTS (SELECT 1 FROM race_entry e
+                  WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.run = 0
+                    AND e.withdrawn_at IS NULL AND NOT e.removed AND e.account_id <> r.owner_id);
+
 -- name: RacesBy :many
 -- The races an owner made in any world since a time, or has not finished
 -- in the world sailed (a race of a world ended is over); not those a storm
--- called off, which count toward no one's limits.
+-- called off, which count toward no one's limits. A time trial closed is
+-- over.
 SELECT r.made_at, (CASE WHEN w.state = 'active' THEN r.state ELSE 'finished' END)::text AS state, r.kind
 FROM race r
 JOIN world w ON w.id = r.world_id
@@ -122,8 +133,10 @@ RETURNING account_id;
 
 -- name: EntriesOf :many
 -- An account's races entered in force in any world that start after a
--- time: each race's start, state and kind, and whether it was entered.
-SELECT r.world_id, r.id, r.starts_at, r.state, r.kind, (e.started_at IS NOT NULL)::boolean AS started
+-- time: each race's start, state and kind, and whether it was entered;
+-- its name, course and boat, for how long it may run.
+SELECT r.world_id, r.id, r.starts_at, r.state, r.kind, (e.started_at IS NOT NULL)::boolean AS started,
+  r.name, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat
 FROM race_entry e
 JOIN race r ON r.world_id = e.world_id AND r.id = e.race_id
 WHERE e.account_id = @account_id AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed
@@ -153,11 +166,13 @@ ORDER BY starts_at
 LIMIT @most;
 
 -- name: RaceIDsOf :many
--- The races of a world an account owns or is entered in, not over, and
--- those a storm called off that were to start after a time.
+-- The races of a world an account owns or is entered in, not over (a time
+-- trial closed is), and those a storm called off that were to start after
+-- a time.
 SELECT r.id FROM race r
 WHERE r.world_id = @world_id
-  AND (r.state IN ('open', 'closed', 'racing') OR r.state = 'cancelled' AND r.called_off IS NOT NULL AND r.starts_at > @called_since)
+  AND (r.state IN ('open', 'racing') OR r.state = 'closed' AND r.kind = 'race'
+       OR r.state = 'cancelled' AND r.called_off IS NOT NULL AND r.starts_at > @called_since)
   AND (r.owner_id = @account_id OR EXISTS (
     SELECT 1 FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.account_id = @account_id
       AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed))

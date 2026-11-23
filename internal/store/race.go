@@ -125,16 +125,31 @@ type NewRace struct {
 	AgainOf    [16]byte
 	HasAgainOf bool
 	MadeAt     time.Time
+	// Closed: made closed to entry. Enter: its owner's boat entered as it
+	// is made, a machine sailor's if Machine, with those aboard if Crew.
+	Closed  bool
+	Enter   bool
+	Machine bool
+	Crew    bool
 }
 
 // RaceMaking is what making a race is decided by, counted from the rows
 // as it is made: when its owner made the races they made since the time
-// asked, how many they own that are not over, and the racing areas taken
-// by the buoy races starting within the times asked.
+// asked, how many they own that are not over, the racing areas taken by
+// the buoy races starting within the times asked, and for a race its
+// owner is entered in as it is made, their races entered that start
+// after an hour before the time asked.
 type RaceMaking struct {
 	Made  []time.Time
 	Owned int
 	Busy  []BuoyStart
+	Mine  []EntryStart
+}
+
+// ownedNow reports whether a race an owner made, in a state, of a kind,
+// is one they own not over: a time trial closed is over.
+func ownedNow(state, kind string) bool {
+	return state == RaceOpen || state == RaceRacing || state == RaceClosed && kind != "trial"
 }
 
 // BuoyStart is a buoy race's racing area and start.
@@ -158,7 +173,8 @@ func hourOf(h int) pgtype.Int2 { return pgtype.Int2{Int16: int16(h), Valid: h >=
 // owner's races made since since and not over, and of the racing areas
 // taken by buoy races starting between from and until; decide may change
 // r (its racing area) or refuse with an error, which MakeRace returns.
-// Its answer is the race's code.
+// A race made with Enter has its owner's boat entered, number 1. Its
+// answer is the race's code.
 func (s *Store) MakeRace(ctx context.Context, r *NewRace, since, from, until time.Time, decide func(RaceMaking, *NewRace) error) (string, error) {
 	var code string
 	err := s.inTx(ctx, func(q *db.Queries) error {
@@ -183,9 +199,21 @@ func (s *Store) MakeRace(ctx context.Context, r *NewRace, since, from, until tim
 				if row.MadeAt.After(since) {
 					m.Made = append(m.Made, row.MadeAt)
 				}
-				if row.State == RaceOpen || row.State == RaceClosed || row.State == RaceRacing {
+				if ownedNow(row.State, row.Kind) {
 					m.Owned++
 				}
+			}
+		}
+		if r.Enter {
+			if err := q.LockRacing(ctx, "entered:"+r.Owner.String()); err != nil {
+				return err
+			}
+			rows, err := q.EntriesOf(ctx, db.EntriesOfParams{AccountID: uuidOf(r.Owner), Since: since.Add(-time.Hour)})
+			if err != nil {
+				return err
+			}
+			for _, row := range rows {
+				m.Mine = append(m.Mine, entryStartOf(row))
 			}
 		}
 		busy, err := q.BuoyRacesNear(ctx, db.BuoyRacesNearParams{WorldID: world, Since: from, Until: until})
@@ -202,11 +230,24 @@ func (s *Store) MakeRace(ctx context.Context, r *NewRace, since, from, until tim
 		if r.HasAgainOf {
 			again = pgtype.UUID{Bytes: r.AgainOf, Valid: true}
 		}
-		code, err = q.InsertRace(ctx, db.InsertRaceParams{WorldID: world, OwnerID: ownerOf(r.Owner, r.HasOwner),
+		state := RaceOpen
+		if r.Closed {
+			state = RaceClosed
+		}
+		made, err := q.InsertRace(ctx, db.InsertRaceParams{WorldID: world, OwnerID: ownerOf(r.Owner, r.HasOwner),
 			Kind: r.Kind, CourseKind: r.CourseKind, Course: int32(r.Course), Shape: textOf(r.Shape), Long: r.Long,
 			Boat: r.Boat, Who: r.Who, Name: r.Name, StartsAt: r.StartsAt, Harbour: hourOf(r.Harbour), AgainOf: again,
-			MadeAt: r.MadeAt})
-		return err
+			MadeAt: r.MadeAt, State: state})
+		if err != nil {
+			return err
+		}
+		code = made.Code
+		if !r.Enter || !r.HasOwner {
+			return nil
+		}
+		// Its owner races it: boat number 1.
+		return q.EnterRace(ctx, db.EnterRaceParams{WorldID: world, RaceID: made.ID, AccountID: uuidOf(r.Owner), Number: 1,
+			Machine: r.Machine, WithCrew: r.Crew, At: r.MadeAt})
 	})
 	return code, err
 }
@@ -357,14 +398,29 @@ type RaceEntry struct {
 }
 
 // EntryStart is a race an account is entered in: its world and ID, its
-// start, state and kind, and whether the boat was placed on its line.
+// start, state and kind, and whether the boat was placed on its line; its
+// name, its course (kind, number, a buoy course's shape and length) and
+// its boat, by the catalog's id.
 type EntryStart struct {
-	World   [16]byte
-	Race    [16]byte
-	At      time.Time
-	State   string
-	Kind    string
-	Started bool
+	World      [16]byte
+	Race       [16]byte
+	At         time.Time
+	State      string
+	Kind       string
+	Started    bool
+	Name       string
+	CourseKind string
+	Course     int
+	Shape      string
+	Long       bool
+	Boat       string
+}
+
+// entryStartOf is a row of EntriesOf as an EntryStart.
+func entryStartOf(row db.EntriesOfRow) EntryStart {
+	return EntryStart{World: row.WorldID.Bytes, Race: row.ID.Bytes, At: row.StartsAt.UTC(), State: row.State, Kind: row.Kind,
+		Started: row.Started, Name: row.Name, CourseKind: row.CourseKind, Course: int(row.Course), Shape: row.Shape, Long: row.Long,
+		Boat: row.Boat}
 }
 
 // RaceEntering is what entering a race is decided by, read as it is
@@ -417,8 +473,7 @@ func (s *Store) EnterRace(ctx context.Context, r *Race, id AccountID, machine, c
 			return err
 		}
 		for _, row := range rows {
-			e.Mine = append(e.Mine, EntryStart{World: row.WorldID.Bytes, Race: row.ID.Bytes, At: row.StartsAt.UTC(),
-				State: row.State, Kind: row.Kind, Started: row.Started})
+			e.Mine = append(e.Mine, entryStartOf(row))
 		}
 		if err := decide(e); err != nil {
 			return err
@@ -458,8 +513,7 @@ func (s *Store) EntriesOf(ctx context.Context, id AccountID, since time.Time) ([
 	}
 	out := make([]EntryStart, len(rows))
 	for i, row := range rows {
-		out[i] = EntryStart{World: row.WorldID.Bytes, Race: row.ID.Bytes, At: row.StartsAt.UTC(), State: row.State,
-			Kind: row.Kind, Started: row.Started}
+		out[i] = entryStartOf(row)
 	}
 	return out, nil
 }
@@ -475,7 +529,7 @@ func (s *Store) RacesBy(ctx context.Context, owner AccountID, since time.Time) (
 		if row.MadeAt.After(since) {
 			made = append(made, row.MadeAt.UTC())
 		}
-		if row.State == RaceOpen || row.State == RaceClosed || row.State == RaceRacing {
+		if ownedNow(row.State, row.Kind) {
 			owned++
 		}
 	}
@@ -513,6 +567,15 @@ func (s *Store) SetRaceState(ctx context.Context, r *Race, state string, was []s
 // moved before, or is not open or closed.
 func (s *Store) MoveRace(ctx context.Context, r *Race, at time.Time) (bool, error) {
 	n, err := s.q.MoveRace(ctx, db.MoveRaceParams{StartsAt: at, WorldID: pgtype.UUID{Bytes: r.World, Valid: true},
+		ID: pgtype.UUID{Bytes: r.ID, Valid: true}})
+	return n > 0, err
+}
+
+// StartRaceNow brings a race's start sooner, to at, before it starts:
+// false if another than its owner is entered, it is not open or closed,
+// or it starts sooner already.
+func (s *Store) StartRaceNow(ctx context.Context, r *Race, at time.Time) (bool, error) {
+	n, err := s.q.StartRaceNow(ctx, db.StartRaceNowParams{StartsAt: at, WorldID: pgtype.UUID{Bytes: r.World, Valid: true},
 		ID: pgtype.UUID{Bytes: r.ID, Valid: true}})
 	return n > 0, err
 }

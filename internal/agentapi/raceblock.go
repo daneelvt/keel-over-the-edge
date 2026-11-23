@@ -85,22 +85,26 @@ func raceIndexOf(f *bus.Frame, key uint32) int {
 }
 
 // racerAt is the boat in slot sl as it races, or sails a race just over:
-// the indices of its race and of its racer, the newest; or account's,
-// whose boat did not start; −1 for none.
+// the indices of its race and of its racer, the newest; or, if it sails
+// none, account's, whose boat did not start; −1 for none. A boat still
+// racing as another race's boats were placed sat that one out: the race
+// it sails is its race.
 func racerAt(f *bus.Frame, sl int32, account bus.Account) (ri, j int) {
 	ri, j = -1, -1
 	boat := uint64(0)
 	if sl >= 0 && int(sl) < len(f.Occupied) && f.Occupied[sl] {
 		boat = f.Boat[sl]
 	}
+	sails := false
 	for k := range f.Racers {
 		rc := &f.Racers[k]
-		mine := boat != 0 && rc.Slot == sl && rc.Boat == boat || rc.Account == account && rc.State == bus.RacerDNS
-		if !mine || j >= 0 && f.Racers[j].Race > rc.Race {
+		afloat := boat != 0 && rc.Slot == sl && rc.Boat == boat
+		mine := afloat || rc.Account == account && rc.State == bus.RacerDNS
+		if !mine || sails && !afloat || j >= 0 && f.Racers[j].Race > rc.Race && sails == afloat {
 			continue
 		}
 		if i := raceIndexOf(f, rc.Race); i >= 0 {
-			ri, j = i, k
+			ri, j, sails = i, k, afloat
 		}
 	}
 	return ri, j

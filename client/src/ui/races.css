@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
-/* Races ashore's windows: over the sea, centred, within the screen held
-   either way, scrolling inside; in the plate's brass and lacquer, every
-   key the instruments' head keys' size (40 px, 14 px words, a touch 3 px
-   beyond the face), the main one gold. Before the sea they stand over the
-   start screen, in a layer of their own. */
+/* Races ashore's windows: at sea beside the boat in the menu's place
+   (.at-side, hud.css), never over it, and with no scrim, so the boat is
+   sailed on while one is open; within the screen held either way,
+   scrolling inside; in the plate's brass and lacquer, every key the
+   instruments' head keys' size (40 px, 14 px words, a touch 3 px beyond
+   the face), the main one gold. Before the sea they stand centred over
+   the start screen, in a layer of their own. */
 
 .race-host {
   z-index: 30;
@@ -40,6 +42,11 @@
   user-select: text;
   /* A screen for reading: its words follow the browser's text size. */
   --text: 0.0625rem;
+}
+
+/* In the menu's place it keeps its own margin, its head inside it. */
+.hud .panel.race-window.at-side {
+  padding: 10px 14px 0;
 }
 
 /* Held sideways: wider, so that less of it scrolls; the share's picture
@@ -328,14 +335,18 @@ fieldset.race-owner-row {
   font-size: 1.125rem;
 }
 
+/* The words beside the course while there is room; under it in a narrow
+   window. */
 .race-card-top {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
 
 .race-card-words {
   display: flex;
+  flex: 1 1 140px;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
@@ -445,4 +456,124 @@ fieldset.race-owner-row {
 
 .hud .race-window button.race-danger {
   color: #f3b3a6;
+}
+
+/* The owner's question before a race is taken away: its words, then Keep
+   it and the key that does it, in a row. */
+.race-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.hud .menu-race.race-danger {
+  color: #f3b3a6;
+}
+
+/* The Races page, in the menu's place: its parts one under another, each
+   row a quiet key of its words and, at its end, its own key. */
+.races-page .races-part {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+
+.races-page h3 {
+  margin: 4px 0 0;
+}
+
+.races-page p {
+  margin: 0;
+}
+
+.races-next-name {
+  font-size: 1.0625rem;
+  overflow-wrap: anywhere;
+}
+
+.races-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.races-row > .race-ask {
+  flex: 1 1 100%;
+}
+
+.races-row:has(> .race-ask) {
+  flex-wrap: wrap;
+}
+
+.hud .races-page .menu-race-words {
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  height: auto;
+  min-height: var(--key);
+  padding: 4px 10px;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.races-page .menu-race-words .menu-race-name {
+  max-width: 100%;
+}
+
+.races-page .menu-race-when {
+  font-size: 0.8125rem;
+}
+
+.hud .races-page .races-row > button:not(.menu-race-words),
+.hud .races-page .race-ask button {
+  flex: none;
+}
+
+.races-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hud .races-keys > .menu-race {
+  flex: 1 1 auto;
+}
+
+/* The menu's line under Races: the next race, quiet. */
+.menu-races-line {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.875rem;
+}
+
+/* A row's reason a key may cure, on the Races page: the head keys' size. */
+.hud .races-page .race-row-cure {
+  height: var(--key);
+  padding: 0 10px;
+  font:
+    500 0.875rem / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+/* A race's window at sea, held sideways: beside the boat, never over it.
+   The chase camera holds the boat in the middle, so on a narrow screen the
+   window is narrower than the menu, its left edge clear of the boat. */
+@media (orientation: landscape) {
+  .hud .panel:is(.race-window, .rl-window).at-side {
+    width: min(
+      300px,
+      calc(100vw - var(--edge-right) - var(--edge-left) - 56px),
+      calc(50vw - var(--edge-right) - 96px)
+    );
+  }
 }

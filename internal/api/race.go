@@ -29,6 +29,7 @@ type Races interface {
 	Cancel(ctx context.Context, by race.Sailor, code string) (race.Card, error)
 	Remove(ctx context.Context, by race.Sailor, code string, number int) (race.Card, error)
 	Move(ctx context.Context, by race.Sailor, code string, at time.Time) (race.Card, error)
+	StartNow(ctx context.Context, by race.Sailor, code string) (race.Card, error)
 	Again(ctx context.Context, by race.Sailor, code string) (race.Card, error)
 	Calendar(ctx context.Context, by race.Sailor, code string) ([]byte, string, error)
 	Spoon(ctx context.Context, by race.Sailor, code string, hang bool) error
@@ -59,6 +60,9 @@ func (a *api) registerRaces(mux *http.ServeMux, required func(http.HandlerFunc) 
 	mux.Handle("POST /api/race/{code}/cancel", required(a.raceAction(func(ctx context.Context, by race.Sailor, code string) (race.Card, error) {
 		return a.cfg.Races.Cancel(ctx, by, code)
 	})))
+	mux.Handle("POST /api/race/{code}/start", required(a.raceAction(func(ctx context.Context, by race.Sailor, code string) (race.Card, error) {
+		return a.cfg.Races.StartNow(ctx, by, code)
+	})))
 	mux.Handle("POST /api/race/{code}/remove", required(a.removeEntrant))
 	mux.Handle("POST /api/race/{code}/move", required(a.moveRace))
 	mux.Handle("POST /api/race/{code}/again", required(a.raceAgain))
@@ -74,13 +78,15 @@ func racer(w http.ResponseWriter, r *http.Request) (race.Sailor, bool) {
 }
 
 // raceRefusal is a refusal's answer: why, until when, a name's reason,
-// and for a boat the sailor may not sail the certificate that opens her.
+// for a boat the sailor may not sail the certificate that opens her, the
+// limit reached, and for a clash the race the sailor is in.
 type raceRefusal struct {
 	Error string `json:"error"`
 	Until int64  `json:"until,omitempty"`
 	Name  string `json:"name,omitempty"`
 	Needs string `json:"needs,omitempty"`
 	Most  int    `json:"most,omitempty"`
+	Race  string `json:"race,omitempty"`
 }
 
 // answerRace answers what asking of a race came to: its card with
@@ -97,7 +103,7 @@ func (a *api) answerRace(w http.ResponseWriter, r *http.Request, status int, c r
 // refusedRace answers an error of asking of a race.
 func (a *api) refusedRace(w http.ResponseWriter, r *http.Request, err error) {
 	if ref, ok := race.RefusalOf(err); ok {
-		out := raceRefusal{Error: ref.Reason, Name: ref.Name, Needs: ref.Needs, Most: ref.Most}
+		out := raceRefusal{Error: ref.Reason, Name: ref.Name, Needs: ref.Needs, Most: ref.Most, Race: ref.Race}
 		if !ref.Until.IsZero() {
 			out.Until = ref.Until.UnixMilli()
 		}
@@ -158,7 +164,7 @@ func (a *api) raceName(w http.ResponseWriter, r *http.Request) {
 
 // makeBody is POST /api/race's body: a race or a trial, its course's ID,
 // its boat, its start (ms), who may enter and its name ("" for the one
-// suggested).
+// suggested); or now, a race sailed alone at once.
 type makeBody struct {
 	Kind   string `json:"kind"`
 	Course string `json:"course"`
@@ -166,10 +172,11 @@ type makeBody struct {
 	At     int64  `json:"at"`
 	Who    string `json:"who"`
 	Name   string `json:"name"`
+	Now    bool   `json:"now"`
 }
 
 // makeRace answers POST /api/race, behind auth.Required: a race made,
-// the player its owner.
+// the player its owner, their boat entered.
 //
 //	201 race.Card
 //	409 {"error": reason, "until", "name"}
@@ -184,7 +191,7 @@ func (a *api) makeRace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m := race.Making{Kind: clip(body.Kind, maxCode), Course: clip(body.Course, maxCode), Boat: clip(body.Boat, maxCode),
-		Who: clip(body.Who, maxCode), Name: clip(body.Name, 4*maxName)}
+		Who: clip(body.Who, maxCode), Name: clip(body.Name, 4*maxName), Now: body.Now}
 	if body.At > 0 {
 		m.At = time.UnixMilli(body.At)
 	}
@@ -237,7 +244,8 @@ func (a *api) enterRace(w http.ResponseWriter, r *http.Request) {
 }
 
 // raceAction answers an action on a race that takes no body: withdraw,
-// close or cancel, behind auth.Required.
+// close, cancel (a race no one else is in deleted so) or start now,
+// behind auth.Required.
 //
 //	200 race.Card
 //	409 {"error": reason}

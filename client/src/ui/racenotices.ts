@@ -6,7 +6,10 @@
 // not; and each race the sailor has entered, at each of its kind's. Each
 // once, and only within the minute of its time, never late. A race the
 // sailor entered that a storm called off at its warning signal is told
-// once, within the half hour after its start, with the next harbour race.
+// once, within the half hour after its start, with the next harbour race;
+// one whose warning came while the boat raced in another, once, soon
+// after. And the player's next race, shown on the race line from half an
+// hour before its start.
 
 import { leftText } from './countdown';
 import type { RacesBoard, Summary } from './raceapi';
@@ -100,6 +103,81 @@ export function dueNotices(
           enter: false,
         });
       }
+    }
+  }
+  return out;
+}
+
+/** How long before its start a race's warning signal is, ms: its boats are placed then. */
+export const WARNING = 2 * MINUTE;
+
+/** How long before its start a race entered is shown on the race line, ms. */
+export const WAITING_SHOWN = 30 * MINUTE;
+
+/** The player's next race on the board: the soonest race (not a trial) they are in, not over; null for none. */
+export function nextRace(board: RacesBoard): Summary | null {
+  let out: Summary | null = null;
+  for (const s of board.mine) {
+    const live =
+      s.phase === 'open' || s.phase === 'closed' || s.phase === 'starting' || s.phase === 'racing';
+    if (
+      s.kind === 'race' &&
+      s.mine.entered &&
+      live &&
+      (out === null || s.startsAt < out.startsAt)
+    ) {
+      out = s;
+    }
+  }
+  return out;
+}
+
+/**
+ * The race the player is in that the race line shows before its warning
+ * signal, at now (ms of UTC): their next, starting within WAITING_SHOWN;
+ * null for none.
+ */
+export function waitingRace(board: RacesBoard | null, now: number): Summary | null {
+  const s = board === null ? null : nextRace(board);
+  if (s === null || (s.phase !== 'open' && s.phase !== 'closed')) {
+    return null;
+  }
+  const left = s.startsAt - now;
+  return left > WARNING && left <= WAITING_SHOWN ? s : null;
+}
+
+/** How long after a race's warning signal its sitting out is still told, ms. */
+const SAT_OUT_TOLD = MINUTE;
+
+/**
+ * The races the player is in whose warning signal came while they raced
+ * in another (by its code), each once (keys in shown, which this adds to):
+ * the boat sailed on in its race and sat these out.
+ */
+export function satOut(
+  board: RacesBoard,
+  racingIn: { code: string; name: string } | null,
+  now: number,
+  shown: Set<string>,
+): Summary[] {
+  if (racingIn === null || racingIn.code === '') {
+    return [];
+  }
+  const out: Summary[] = [];
+  for (const s of board.mine) {
+    const since = now - (s.startsAt - WARNING);
+    const key = `sat-out:${s.code}`;
+    if (
+      s.kind === 'race' &&
+      s.mine.entered &&
+      s.code !== racingIn.code &&
+      s.phase !== 'cancelled' &&
+      since >= 5_000 &&
+      since < SAT_OUT_TOLD &&
+      !shown.has(key)
+    ) {
+      shown.add(key);
+      out.push(s);
     }
   }
   return out;

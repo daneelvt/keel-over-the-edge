@@ -67,8 +67,9 @@ func (noRaces) RemoveEntry(context.Context, *store.Race, int) (store.AccountID, 
 func (noRaces) SetRaceState(context.Context, *store.Race, string, []string, time.Time) (bool, error) {
 	return false, nil
 }
-func (noRaces) MoveRace(context.Context, *store.Race, time.Time) (bool, error) { return false, nil }
-func (noRaces) RacesSailed(context.Context, store.AccountID) (int, error)      { return 0, nil }
+func (noRaces) MoveRace(context.Context, *store.Race, time.Time) (bool, error)     { return false, nil }
+func (noRaces) StartRaceNow(context.Context, *store.Race, time.Time) (bool, error) { return false, nil }
+func (noRaces) RacesSailed(context.Context, store.AccountID) (int, error)          { return 0, nil }
 func (noRaces) HarbourDays(context.Context, [16]byte) ([]store.HarbourDay, error) {
 	return nil, nil
 }

@@ -98,13 +98,15 @@ type Mine struct {
 
 // Can is whether the reader may do something now, and if not, why and
 // until when; for a boat the reader may not sail, the certificate that
-// opens her; for a limit reached, the limit.
+// opens her; for a limit reached, the limit; for a clash, the race they
+// are in.
 type Can struct {
 	OK     bool   `json:"ok"`
 	Reason string `json:"reason,omitempty"`
 	Until  int64  `json:"until,omitempty"`
 	Needs  string `json:"needs,omitempty"`
 	Most   int    `json:"most,omitempty"`
+	Race   string `json:"race,omitempty"`
 }
 
 // canOf is what an error refusing something says of it.
@@ -113,7 +115,7 @@ func canOf(err error) Can {
 		return Can{OK: true}
 	}
 	if r, ok := RefusalOf(err); ok {
-		c := Can{Reason: r.Reason, Needs: r.Needs, Most: r.Most}
+		c := Can{Reason: r.Reason, Needs: r.Needs, Most: r.Most, Race: r.Race}
 		if !r.Until.IsZero() {
 			c.Until = r.Until.UnixMilli()
 		}

@@ -187,8 +187,10 @@ func raceOfThree(t *testing.T, restart int) {
 	c.skipTo(start.Add(-Warning))
 	c.once()
 	c.tick(1, nil)
+	// Its owner, entered as they made it, is not at sea: they did not
+	// start.
 	f := c.w.Latest()
-	if len(f.Races) != 1 || len(f.Racers) != 3 {
+	if len(f.Races) != 1 || len(f.Racers) != 4 || f.Racers[0].State != bus.RacerDNS {
 		t.Fatalf("%d races of %d boats under way", len(f.Races), len(f.Racers))
 	}
 	c.once()
@@ -262,9 +264,11 @@ func raceOfThree(t *testing.T, restart int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 3 {
+	// The three placed, then the owner, who did not start.
+	if len(results) != 4 || results[3].Account != owner.ID || results[3].How != store.HowDNS {
 		t.Fatalf("%d results", len(results))
 	}
+	results = results[:3]
 	for i, x := range results {
 		if x.Account != sailors[i].ID || x.Place != i+1 || x.How != store.HowFinished || len(x.Track) < 100 || !(x.Elapsed > 60) {
 			t.Errorf("result %d: place %d, %s, %.1f s, a track of %d bytes", i, x.Place, x.How, x.Elapsed, len(x.Track))
@@ -398,15 +402,18 @@ func aTrialsRun(t *testing.T, reach bool) {
 		if card.Course.ID != "buoy:reach:short" || card.Course.Shape != ShapeReach || card.Course.Name != "Reach off Port Royal" || card.Minutes != ReachMinutes {
 			t.Errorf("the Reach's card: %+v, %d minutes", card.Course, card.Minutes)
 		}
-	} else if card, err = s.svc.Make(s.ctx, s.human(), Making{Kind: KindTrial, Course: "buoy:windward-leeward:short", Boat: s.jolly(), Who: WhoEveryone}); err != nil {
+	} else if card, err = s.svc.Make(s.ctx, sl, Making{Kind: KindTrial, Course: "buoy:windward-leeward:short", Boat: s.jolly(), Who: WhoEveryone}); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.w.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.Join, Account: bus.Account(sl.ID), Conn: 1}); err != nil {
 		t.Fatal(err)
 	}
 	c.tick(1, nil)
-	if _, err := s.svc.Enter(s.ctx, sl, card.Code, false); err != nil {
-		t.Fatal(err)
+	// Its maker is entered as they made it: their run is asked for.
+	if reach {
+		if _, err := s.svc.Enter(s.ctx, sl, card.Code, false); err != nil {
+			t.Fatal(err)
+		}
 	}
 	c.once()
 	c.tick(1, nil)
@@ -522,10 +529,11 @@ func checkReplay(t *testing.T, s *sea, code string, sailors []Sailor) {
 	}
 	run := rp.Runs[0]
 	if run.Course == nil || len(run.Course.Marks) == 0 || len(run.Course.Legs) < 3 || !(run.Warning < run.Start && run.Start < run.Ended) ||
-		!run.Prizes || len(run.Boats) != 3 {
+		!run.Prizes || len(run.Boats) != 4 || run.Boats[3].How != store.HowDNS {
 		t.Fatalf("the run: %+v", run)
 	}
-	for i, b := range run.Boats {
+	// The three home; the owner, not at sea, did not start.
+	for i, b := range run.Boats[:3] {
 		if b.Place != i+1 || b.How != store.HowFinished || b.Number < 1 || b.Me != (i == 0) || b.Track == nil || len(b.Track.P) < 200 ||
 			b.Track.Every != committee.TrackEvery || b.Elapsed < 60 {
 			t.Errorf("boat %d: %+v", i, b)

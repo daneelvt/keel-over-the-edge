@@ -142,7 +142,8 @@ func (q *Queries) EnterRace(ctx context.Context, arg EnterRaceParams) error {
 }
 
 const entriesOf = `-- name: EntriesOf :many
-SELECT r.world_id, r.id, r.starts_at, r.state, r.kind, (e.started_at IS NOT NULL)::boolean AS started
+SELECT r.world_id, r.id, r.starts_at, r.state, r.kind, (e.started_at IS NOT NULL)::boolean AS started,
+  r.name, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat
 FROM race_entry e
 JOIN race r ON r.world_id = e.world_id AND r.id = e.race_id
 WHERE e.account_id = $1 AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed
@@ -155,16 +156,23 @@ type EntriesOfParams struct {
 }
 
 type EntriesOfRow struct {
-	WorldID  pgtype.UUID
-	ID       pgtype.UUID
-	StartsAt time.Time
-	State    string
-	Kind     string
-	Started  bool
+	WorldID    pgtype.UUID
+	ID         pgtype.UUID
+	StartsAt   time.Time
+	State      string
+	Kind       string
+	Started    bool
+	Name       string
+	CourseKind string
+	Course     int32
+	Shape      string
+	Long       bool
+	Boat       string
 }
 
 // An account's races entered in force in any world that start after a
-// time: each race's start, state and kind, and whether it was entered.
+// time: each race's start, state and kind, and whether it was entered;
+// its name, course and boat, for how long it may run.
 func (q *Queries) EntriesOf(ctx context.Context, arg EntriesOfParams) ([]EntriesOfRow, error) {
 	rows, err := q.db.Query(ctx, entriesOf, arg.AccountID, arg.Since)
 	if err != nil {
@@ -181,6 +189,12 @@ func (q *Queries) EntriesOf(ctx context.Context, arg EntriesOfParams) ([]Entries
 			&i.State,
 			&i.Kind,
 			&i.Started,
+			&i.Name,
+			&i.CourseKind,
+			&i.Course,
+			&i.Shape,
+			&i.Long,
+			&i.Boat,
 		); err != nil {
 			return nil, err
 		}
@@ -355,10 +369,11 @@ func (q *Queries) InsertHarbourRace(ctx context.Context, arg InsertHarbourRacePa
 }
 
 const insertRace = `-- name: InsertRace :one
-INSERT INTO race (world_id, owner_id, kind, course_kind, course, shape, long, boat, who, name, starts_at, harbour, again_of, made_at)
+INSERT INTO race (world_id, owner_id, kind, course_kind, course, shape, long, boat, who, name, starts_at, harbour, again_of, made_at,
+  state)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-  $12, $13, $14)
-RETURNING code
+  $12, $13, $14, $15)
+RETURNING id, code
 `
 
 type InsertRaceParams struct {
@@ -376,10 +391,16 @@ type InsertRaceParams struct {
 	Harbour    pgtype.Int2
 	AgainOf    pgtype.UUID
 	MadeAt     time.Time
+	State      string
 }
 
-// A race made: its code comes from link_code().
-func (q *Queries) InsertRace(ctx context.Context, arg InsertRaceParams) (string, error) {
+type InsertRaceRow struct {
+	ID   pgtype.UUID
+	Code string
+}
+
+// A race made, open or closed to entry: its code comes from link_code().
+func (q *Queries) InsertRace(ctx context.Context, arg InsertRaceParams) (InsertRaceRow, error) {
 	row := q.db.QueryRow(ctx, insertRace,
 		arg.WorldID,
 		arg.OwnerID,
@@ -395,10 +416,11 @@ func (q *Queries) InsertRace(ctx context.Context, arg InsertRaceParams) (string,
 		arg.Harbour,
 		arg.AgainOf,
 		arg.MadeAt,
+		arg.State,
 	)
-	var code string
-	err := row.Scan(&code)
-	return code, err
+	var i InsertRaceRow
+	err := row.Scan(&i.ID, &i.Code)
+	return i, err
 }
 
 const insertRun = `-- name: InsertRun :exec
@@ -1047,7 +1069,8 @@ func (q *Queries) RaceForUpdate(ctx context.Context, arg RaceForUpdateParams) (R
 const raceIDsOf = `-- name: RaceIDsOf :many
 SELECT r.id FROM race r
 WHERE r.world_id = $1
-  AND (r.state IN ('open', 'closed', 'racing') OR r.state = 'cancelled' AND r.called_off IS NOT NULL AND r.starts_at > $2)
+  AND (r.state IN ('open', 'racing') OR r.state = 'closed' AND r.kind = 'race'
+       OR r.state = 'cancelled' AND r.called_off IS NOT NULL AND r.starts_at > $2)
   AND (r.owner_id = $3 OR EXISTS (
     SELECT 1 FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.account_id = $3
       AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed))
@@ -1061,8 +1084,9 @@ type RaceIDsOfParams struct {
 	AccountID   pgtype.UUID
 }
 
-// The races of a world an account owns or is entered in, not over, and
-// those a storm called off that were to start after a time.
+// The races of a world an account owns or is entered in, not over (a time
+// trial closed is), and those a storm called off that were to start after
+// a time.
 func (q *Queries) RaceIDsOf(ctx context.Context, arg RaceIDsOfParams) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, raceIDsOf, arg.WorldID, arg.CalledSince, arg.AccountID)
 	if err != nil {
@@ -1667,7 +1691,8 @@ type RacesByRow struct {
 
 // The races an owner made in any world since a time, or has not finished
 // in the world sailed (a race of a world ended is over); not those a storm
-// called off, which count toward no one's limits.
+// called off, which count toward no one's limits. A time trial closed is
+// over.
 func (q *Queries) RacesBy(ctx context.Context, arg RacesByParams) ([]RacesByRow, error) {
 	rows, err := q.db.Query(ctx, racesBy, arg.OwnerID, arg.Since)
 	if err != nil {
@@ -1868,6 +1893,30 @@ func (q *Queries) StartEntries(ctx context.Context, arg StartEntriesParams) erro
 		arg.Accounts,
 	)
 	return err
+}
+
+const startRaceNow = `-- name: StartRaceNow :execrows
+UPDATE race r SET starts_at = $1
+WHERE r.world_id = $2 AND r.id = $3 AND r.state IN ('open', 'closed') AND r.starts_at > $1
+  AND NOT EXISTS (SELECT 1 FROM race_entry e
+                  WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.run = 0
+                    AND e.withdrawn_at IS NULL AND NOT e.removed AND e.account_id <> r.owner_id)
+`
+
+type StartRaceNowParams struct {
+	StartsAt time.Time
+	WorldID  pgtype.UUID
+	ID       pgtype.UUID
+}
+
+// A race's start brought sooner, at its owner's word, while no one but its
+// owner is entered: a race of one need not wait the time it was set for.
+func (q *Queries) StartRaceNow(ctx context.Context, arg StartRaceNowParams) (int64, error) {
+	result, err := q.db.Exec(ctx, startRaceNow, arg.StartsAt, arg.WorldID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const withdrawEntry = `-- name: WithdrawEntry :execrows

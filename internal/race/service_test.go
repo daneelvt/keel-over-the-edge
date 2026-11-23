@@ -158,8 +158,10 @@ func refused(t *testing.T, err error, reason string) *Refusal {
 }
 
 // TestMakingLimits: three races owned not finished, eight made in a day,
-// cancelled ones counted toward the day but not toward those owned; the
-// same for a human and a machine sailor.
+// cancelled ones counted toward the day but not toward those owned, nor a
+// time trial closed; the same for a human and a machine sailor. Who makes
+// a race races it, so a race's owner's entries count too: here time
+// trials, whose runs are never counted, and a race.
 func TestMakingLimits(t *testing.T) {
 	s := newSea(t)
 	for _, who := range []string{"human", "machine"} {
@@ -168,20 +170,35 @@ func TestMakingLimits(t *testing.T) {
 			if who == "machine" {
 				by = s.machine()
 			}
-			first := s.now
-			var cards []Card
-			for i := range 3 {
-				cards = append(cards, s.make(by, time.Duration(10+15*i)*time.Minute, WhoEveryone))
+			trial := func() Card {
+				t.Helper()
+				c, err := s.svc.Make(s.ctx, by, Making{Kind: KindTrial, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoEveryone})
+				if err != nil {
+					t.Fatalf("making a trial: %v", err)
+				}
+				if !c.Mine.Entered || !c.Mine.Owner {
+					t.Errorf("its maker on the card: %+v", c.Mine)
+				}
+				return c
 			}
+			first := s.now
+			cards := []Card{s.make(by, 10*time.Minute, WhoEveryone), trial(), trial()}
 			_, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
 			refused(t, err, RefuseOwned)
-			// Cancelled, they make room among those owned but not in the day.
+			// Cancelled or a trial closed, they make room among those owned
+			// but not in the day.
 			for made := 3; made < 8; made++ {
-				if _, err := s.svc.Cancel(s.ctx, by, cards[0].Code); err != nil {
+				var err error
+				if made%2 == 1 {
+					_, err = s.svc.Cancel(s.ctx, by, cards[0].Code)
+				} else {
+					_, err = s.svc.Close(s.ctx, by, cards[0].Code)
+				}
+				if err != nil {
 					t.Fatal(err)
 				}
 				s.now = s.now.Add(time.Minute)
-				cards = append(cards[1:], s.make(by, 70*time.Minute+time.Duration(made)*11*time.Minute, WhoEveryone))
+				cards = append(cards[1:], trial())
 			}
 			if _, err := s.svc.Cancel(s.ctx, by, cards[0].Code); err != nil {
 				t.Fatal(err)
@@ -268,7 +285,7 @@ func TestMakingRefused(t *testing.T) {
 	s.make(other, time.Hour+time.Minute, WhoEveryone)
 	_, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
 	refused(t, err, RefuseAreas)
-	s.make(by, time.Hour+AreaApart, WhoEveryone)
+	s.make(s.human(), time.Hour+AreaApart, WhoEveryone)
 	// A trial's area is laid at each run: never busy.
 	if _, err := s.svc.Make(s.ctx, other, Making{Kind: KindTrial, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoEveryone}); err != nil {
 		t.Fatal(err)
@@ -289,7 +306,7 @@ func TestEnteringLimits(t *testing.T) {
 			base := s.now
 			var starts []time.Time
 			for i := range 10 {
-				starts = append(starts, base.Add(time.Duration(30+30*i)*time.Minute))
+				starts = append(starts, base.Add(time.Duration(60+60*i)*time.Minute))
 			}
 			codes := s.harbour(s.jolly(), starts...)
 			// Two ahead, the third waits for the sooner to start.
@@ -357,11 +374,12 @@ func TestEntryRefused(t *testing.T) {
 			tall, most = string(b.ID), b.Racers
 		}
 	}
-	full, err := s.svc.Make(s.ctx, owner, Making{Kind: KindRace, Course: "island:3", Boat: tall, At: s.now.Add(time.Hour), Who: WhoEveryone})
+	full, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindRace, Course: "island:3", Boat: tall, At: s.now.Add(time.Hour), Who: WhoEveryone})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for range most {
+	// Its maker is one.
+	for range most - 1 {
 		if _, err := s.svc.Enter(s.ctx, s.human(), full.Code, false); err != nil {
 			t.Fatal(err)
 		}
@@ -393,8 +411,8 @@ func TestEntryRefused(t *testing.T) {
 	refused(t, err, RefuseNewcomers)
 	if c, err := s.svc.Enter(s.ctx, fresh, greenhorns.Code, false); err != nil {
 		t.Fatal(err)
-	} else if !c.Entrants[0].Newcomer || !c.Entrants[0].Machine || c.Entrants[0].Name == nil {
-		t.Errorf("a machine newcomer on the card: %+v", c.Entrants[0])
+	} else if !c.Entrants[1].Newcomer || !c.Entrants[1].Machine || c.Entrants[1].Name == nil {
+		t.Errorf("a machine newcomer on the card: %+v", c.Entrants[1])
 	}
 
 	blocked := s.human()
@@ -411,15 +429,20 @@ func TestEntryRefused(t *testing.T) {
 	_, err = s.svc.Enter(s.ctx, sailor, near.Code, false)
 	refused(t, err, RefuseClash)
 
-	// The owner's hand: removed boats cannot come back; a start moved
+	// The owner's hand: removed boats cannot come back; the owner races
+	// the race they made, neither withdrawn nor removed; a start moved
 	// once; closed; cancelled; nothing once the warning signal is made.
-	if c, err := s.svc.Remove(s.ctx, owner, humans.Code, 1); err != nil {
+	if c, err := s.svc.Remove(s.ctx, owner, humans.Code, 2); err != nil {
 		t.Fatal(err)
-	} else if len(c.Entrants) != 0 {
+	} else if len(c.Entrants) != 1 || !c.Entrants[0].Me {
 		t.Errorf("entrants after the removal: %+v", c.Entrants)
 	}
 	_, err = s.svc.Enter(s.ctx, sailor, humans.Code, false)
 	refused(t, err, RefuseBlocked)
+	_, err = s.svc.Remove(s.ctx, owner, humans.Code, 1)
+	refused(t, err, RefuseOwner)
+	_, err = s.svc.Withdraw(s.ctx, owner, humans.Code)
+	refused(t, err, RefuseOwner)
 	if _, err := s.svc.Remove(s.ctx, s.human(), humans.Code, 1); err != ErrNotOwner {
 		t.Errorf("removed by another: %v", err)
 	}
@@ -458,6 +481,181 @@ func TestEntryRefused(t *testing.T) {
 	}
 }
 
+// TestStartNow: the owner of a race of one, entered as they made it,
+// brings its start to a warning signal's length away, and the move is
+// still theirs; not with another entered, nor a time trial, nor another's
+// race, nor into another race its owner is in.
+func TestStartNow(t *testing.T) {
+	s := newSea(t)
+	owner := s.human()
+	c := s.make(owner, time.Hour, WhoEveryone)
+	if !c.Mine.Entered || c.Mine.Number != 1 || len(c.Entrants) != 1 {
+		t.Errorf("its maker on the card: %+v, %+v", c.Mine, c.Entrants)
+	}
+	if _, err := s.svc.StartNow(s.ctx, s.human(), c.Code); err != ErrNotOwner {
+		t.Errorf("started by another: %v", err)
+	}
+	got, err := s.svc.StartNow(s.ctx, owner, c.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := s.now.Add(Warning).Truncate(time.Second).UnixMilli(); got.StartsAt != want || got.Mine.Moved {
+		t.Errorf("started now: at %d (want %d), moved %v", got.StartsAt, want, got.Mine.Moved)
+	}
+
+	others := s.make(owner, 2*time.Hour, WhoEveryone)
+	if _, err := s.svc.Enter(s.ctx, s.machine(), others.Code, false); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.svc.StartNow(s.ctx, owner, others.Code)
+	refused(t, err, RefuseOthers)
+	// Once its warning has come, nothing.
+	s.now = time.UnixMilli(got.StartsAt).Add(-Warning)
+	_, err = s.svc.StartNow(s.ctx, owner, c.Code)
+	refused(t, err, RefuseStarted)
+
+	trial, err := s.svc.Make(s.ctx, owner, Making{Kind: KindTrial, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoEveryone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.svc.StartNow(s.ctx, owner, trial.Code)
+	refused(t, err, RefuseKind)
+	// Not into another race its owner is in.
+	busy := s.human()
+	sooner := s.make(s.human(), 20*time.Minute, WhoEveryone)
+	if _, err := s.svc.Enter(s.ctx, busy, sooner.Code, false); err != nil {
+		t.Fatal(err)
+	}
+	ahead := s.make(busy, 3*time.Hour, WhoEveryone)
+	_, err = s.svc.StartNow(s.ctx, busy, ahead.Code)
+	refused(t, err, RefuseClash)
+}
+
+// TestOneRaceAtATime: a race whose start comes before a race the sailor
+// is in could end, or that could still run when that one starts, is
+// refused until that one could have ended (its start, four times its
+// expected time and the least finishing window), a race under way too;
+// a race the sailor did not start is not in the way. The same holds for
+// a race's maker.
+func TestOneRaceAtATime(t *testing.T) {
+	s := newSea(t)
+	sailor := s.human()
+	first := s.make(s.human(), time.Hour, WhoEveryone)
+	if _, err := s.svc.Enter(s.ctx, sailor, first.Code, false); err != nil {
+		t.Fatal(err)
+	}
+	start := time.UnixMilli(first.StartsAt)
+	ends := start.Add(4*DashMinutes*time.Minute + 10*time.Minute)
+	later := s.make(s.human(), time.Hour+30*time.Minute, WhoEveryone)
+	_, err := s.svc.Enter(s.ctx, sailor, later.Code, false)
+	if r := refused(t, err, RefuseClash); !r.Until.Equal(ends) || r.Race != first.Name {
+		t.Errorf("refused until %s in %q, want %s in %q", r.Until, r.Race, ends, first.Name)
+	}
+	card, err := s.svc.Card(s.ctx, sailor, later.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.Enter.Reason != RefuseClash || card.Enter.Until != ends.UnixMilli() || card.Enter.Race != first.Name {
+		t.Errorf("the card says %+v", card.Enter)
+	}
+	// Sooner, but still running when the first starts.
+	sooner := s.make(s.human(), 40*time.Minute, WhoEveryone)
+	_, err = s.svc.Enter(s.ctx, sailor, sooner.Code, false)
+	refused(t, err, RefuseClash)
+	// Once the first could have ended, another may be entered.
+	free := s.make(s.human(), ends.Sub(s.now), WhoEveryone)
+	if _, err := s.svc.Enter(s.ctx, sailor, free.Code, false); err != nil {
+		t.Errorf("a race starting as the first could end: %v", err)
+	}
+	// Under way, the first still counts: written racing, the boat placed.
+	pool := storetest.PoolOn(t, s.url)
+	if _, err := pool.Exec(s.ctx, `UPDATE race SET state = 'racing' WHERE code = $1`, first.Code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(s.ctx, `UPDATE race_entry SET started_at = now() WHERE account_id = $1`, sailor.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.now = start.Add(time.Minute)
+	_, err = s.svc.Enter(s.ctx, sailor, later.Code, false)
+	refused(t, err, RefuseClash)
+	// A maker is held to it too.
+	_, err = s.svc.Make(s.ctx, sailor, Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(20 * time.Minute), Who: WhoEveryone})
+	refused(t, err, RefuseClash)
+	// Not started in it, the first is not in the way.
+	if _, err := pool.Exec(s.ctx, `UPDATE race_entry SET started_at = NULL WHERE account_id = $1`, sailor.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.svc.Withdraw(s.ctx, sailor, free.Code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.svc.Enter(s.ctx, sailor, later.Code, false); err != nil {
+		t.Errorf("entering after a race not started: %v", err)
+	}
+}
+
+// TestSailItNow: a race sailed alone at once is made closed, its start a
+// warning signal's length away (its warning now), its maker entered; no
+// one else joins.
+// Race again enters its maker too.
+func TestSailItNow(t *testing.T) {
+	s := newSea(t)
+	by := s.human()
+	c, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Now: true, Course: "buoy:dash:short", Boat: s.jolly(), Who: WhoEveryone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := s.now.Add(Warning).Truncate(time.Second).UnixMilli(); c.StartsAt != want || c.Phase != PhaseStarting ||
+		!c.Mine.Entered || !c.Mine.Owner || len(c.Entrants) != 1 {
+		t.Errorf("sail it now: %+v", c)
+	}
+	_, err = s.svc.Enter(s.ctx, s.human(), c.Code, false)
+	refused(t, err, RefuseClosed)
+	_, err = s.svc.Make(s.ctx, by, Making{Kind: KindTrial, Now: true, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoEveryone})
+	refused(t, err, RefuseKind)
+	// Over, and made again: its maker entered.
+	pool := storetest.PoolOn(t, s.url)
+	if _, err := pool.Exec(s.ctx, `UPDATE race SET state = 'finished' WHERE code = $1`, c.Code); err != nil {
+		t.Fatal(err)
+	}
+	s.now = s.now.Add(time.Hour)
+	again, err := s.svc.Again(s.ctx, by, c.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !again.Mine.Entered || again.Phase != PhaseOpen || len(again.Entrants) != 1 {
+		t.Errorf("made again: %+v", again)
+	}
+}
+
+// TestDelete: a race no one but its owner is in, cancelled, goes from
+// every list at once; a time trial closed is over, gone from its owner's
+// list and no longer one of the races they own.
+func TestDelete(t *testing.T) {
+	s := newSea(t)
+	by := s.human()
+	c := s.make(by, time.Hour, WhoEveryone)
+	trial, err := s.svc.Make(s.ctx, by, Making{Kind: KindTrial, Course: "buoy:triangle:short", Boat: s.jolly(), Who: WhoEveryone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.svc.Board(s.ctx, by)
+	if err != nil || len(b.Mine) != 2 {
+		t.Fatalf("the board's races: %+v %v", b.Mine, err)
+	}
+	if _, err := s.svc.Cancel(s.ctx, by, c.Code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.svc.Close(s.ctx, by, trial.Code); err != nil {
+		t.Fatal(err)
+	}
+	if b, err = s.svc.Board(s.ctx, by); err != nil || len(b.Mine) != 0 {
+		t.Errorf("the board's races after: %+v %v", b.Mine, err)
+	}
+	if _, owned, err := s.db.RacesBy(s.ctx, by.ID, s.now.Add(-Day)); err != nil || owned != 0 {
+		t.Errorf("%d owned after, %v", owned, err)
+	}
+}
+
 // TestNamesOnTheCard: a machine sailor is named to everyone, with its
 // mark; a human to a reader of their band whose log they may read; a teen
 // to an adult is shown by boat and number instead.
@@ -475,9 +673,10 @@ func TestNamesOnTheCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(card.Entrants) != 3 || card.Entrants[0].Name == nil || card.Entrants[1].Name == nil || !card.Entrants[1].Machine ||
-		card.Entrants[2].Name != nil || card.Entrants[2].Number != 3 {
-		t.Errorf("the entrants as the owner reads them: %+v %+v %+v", card.Entrants[0], card.Entrants[1], card.Entrants[2])
+	// Its owner first, entered as they made it.
+	if len(card.Entrants) != 4 || !card.Entrants[0].Me || card.Entrants[1].Name == nil || card.Entrants[2].Name == nil ||
+		!card.Entrants[2].Machine || card.Entrants[3].Name != nil || card.Entrants[3].Number != 4 {
+		t.Errorf("the entrants as the owner reads them: %+v", card.Entrants)
 	}
 	if card.Owner == nil || card.Owner.Name == nil || !card.Mine.Owner {
 		t.Errorf("the owner: %+v", card.Owner)
@@ -489,7 +688,7 @@ func TestNamesOnTheCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !mine.Entrants[2].Me || mine.Entrants[2].Name == nil || mine.Entrants[0].Name != nil {
+	if !mine.Entrants[3].Me || mine.Entrants[3].Name == nil || mine.Entrants[1].Name != nil {
 		t.Errorf("the entrants as the teen reads them: %+v", mine.Entrants)
 	}
 	file, name, err := s.svc.Calendar(s.ctx, owner, c.Code)

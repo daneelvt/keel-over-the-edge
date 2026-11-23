@@ -38,6 +38,7 @@ type Store interface {
 	RemoveEntry(ctx context.Context, r *store.Race, number int) (store.AccountID, error)
 	SetRaceState(ctx context.Context, r *store.Race, state string, was []string, at time.Time) (bool, error)
 	MoveRace(ctx context.Context, r *store.Race, at time.Time) (bool, error)
+	StartRaceNow(ctx context.Context, r *store.Race, at time.Time) (bool, error)
 	RacesSailed(ctx context.Context, id store.AccountID) (int, error)
 	HarbourDays(ctx context.Context, world [16]byte) ([]store.HarbourDay, error)
 	SetHarbourDays(ctx context.Context, lease int64, world [16]byte, days []store.HarbourDay) error
@@ -265,28 +266,45 @@ func (c *Courses) island(n int) *Course {
 // minutesOf is how many minutes a race on its course is expected to take
 // its boat.
 func (s *Service) minutesOf(r *store.Race, c *Courses) int {
-	if r.CourseKind == CourseBuoy {
+	return expectedMinutes(r.CourseKind, r.Shape, r.Long, r.Course, r.Boat, c)
+}
+
+// expectedMinutes is how many minutes a race on a course (its kind, a buoy
+// course's shape and length, an island course's number) is expected to
+// take a boat, by the catalog's id: 0 for an island course not open.
+func expectedMinutes(kind, shape string, long bool, course int, boat string, c *Courses) int {
+	if kind == CourseBuoy {
 		switch {
-		case r.Shape == ShapeReach:
+		case shape == ShapeReach:
 			return ReachMinutes
-		case r.Shape == ShapeDash:
+		case shape == ShapeDash:
 			return DashMinutes
-		case r.Long:
+		case long:
 			return LongMinutes
 		}
 		return ShortMinutes
 	}
-	if ic := c.island(r.Course); ic != nil {
-		if e, ok := ic.Boats[r.Boat]; ok {
+	if ic := c.island(course); ic != nil {
+		if e, ok := ic.Boats[boat]; ok {
 			return int(math.Round(e / 60))
 		}
 	}
 	return 0
 }
 
+// minutesFor is what entering a race asks: how many minutes a race
+// entered is expected to take its boat, with the island courses open now.
+func (s *Service) minutesFor() func(m *store.EntryStart) int {
+	courses := s.cfg.Courses()
+	return func(m *store.EntryStart) int {
+		return expectedMinutes(m.CourseKind, m.Shape, m.Long, m.Course, m.Boat, &courses)
+	}
+}
+
 // Making is a race to make: a race or a trial, its course's ID, its boat
 // by the catalog's id, its start (a race's), who may enter and its name,
-// "" for the name suggested.
+// "" for the name suggested. Now is a race sailed alone at once: its start
+// a warning signal's length away, closed to entry as it is made.
 type Making struct {
 	Kind   string
 	Course string
@@ -294,6 +312,7 @@ type Making struct {
 	At     time.Time
 	Who    string
 	Name   string
+	Now    bool
 }
 
 // whoFor are the choices of who may enter a race a sailor makes: a
@@ -305,7 +324,9 @@ func whoFor(by Sailor) []string {
 	return []string{WhoEveryone, WhoHumans, WhoMachines, WhoNewcomers}
 }
 
-// Make makes a race and answers its card, or why not (a *Refusal).
+// Make makes a race and answers its card, or why not (a *Refusal). Who
+// makes a race races it: their boat is entered as it is made, whoever
+// else may enter, in a race the limits on how often a sailor races allow.
 func (s *Service) Make(ctx context.Context, by Sailor, m Making) (Card, error) {
 	now := s.cfg.Now()
 	limits, err := s.cfg.Store.RaceSettings(ctx)
@@ -328,7 +349,7 @@ func (s *Service) Make(ctx context.Context, by Sailor, m Making) (Card, error) {
 
 // making checks what is asked to be made and is the race to make.
 func (s *Service) making(by Sailor, m Making, now time.Time, limits store.RaceSettings) (*store.NewRace, error) {
-	if m.Kind != KindRace && m.Kind != KindTrial {
+	if m.Kind != KindRace && m.Kind != KindTrial || m.Now && m.Kind != KindRace {
 		return nil, refuse(RefuseKind)
 	}
 	b := s.boat(m.Boat)
@@ -344,7 +365,7 @@ func (s *Service) making(by Sailor, m Making, now time.Time, limits store.RaceSe
 	}
 	courses := s.cfg.Courses()
 	r := &store.NewRace{World: s.cfg.World.ID, Owner: by.ID, HasOwner: true, Kind: m.Kind, CourseKind: ref.kind,
-		Boat: m.Boat, Who: m.Who, Harbour: -1, MadeAt: now}
+		Boat: m.Boat, Who: m.Who, Harbour: -1, MadeAt: now, Enter: true, Machine: by.Machine, Crew: true}
 	var courseName string
 	switch ref.kind {
 	case CourseBuoy:
@@ -370,12 +391,20 @@ func (s *Service) making(by Sailor, m Making, now time.Time, limits store.RaceSe
 		r.Course, courseName = ref.number, ic.Name
 	}
 	latest := s.latest(limits)
-	if m.Kind == KindTrial {
+	switch {
+	case m.Kind == KindTrial:
 		r.StartsAt = now
 		if !latest.IsZero() && now.After(latest) {
 			return nil, refuse(RefuseLate)
 		}
-	} else {
+	case m.Now:
+		// Sailed alone, at once: the boat is placed on the line as it is
+		// made, and no one else joins.
+		r.StartsAt, r.Closed = now.Add(Warning).Truncate(time.Second), true
+		if !latest.IsZero() && r.StartsAt.After(latest) {
+			return nil, refuseUntil(RefuseLate, latest)
+		}
+	default:
 		r.StartsAt = m.At.Truncate(time.Second)
 		if r.StartsAt.Before(now.Add(Lead)) {
 			return nil, refuseUntil(RefuseSoon, now.Add(Lead))
@@ -425,13 +454,22 @@ func (s *Service) suggest(kind string, ref courseRef, courseName string, start t
 }
 
 // make makes race r, counting its owner's limits and finding its racing
-// area as it is made: its code.
+// area as it is made, its owner entered (with those aboard, if any are
+// when its boats are placed): its code. A race's owner's entry counts as
+// any other's toward how often they race; a trial's takes no one's place.
 func (s *Service) make(ctx context.Context, r *store.NewRace, limits store.RaceSettings, now time.Time) (string, error) {
 	courses := s.cfg.Courses()
 	return s.cfg.Store.MakeRace(ctx, r, now.Add(-Day), r.StartsAt.Add(-AreaApart), r.StartsAt.Add(AreaApart),
 		func(m store.RaceMaking, r *store.NewRace) error {
 			if err := refusedMaking(m, limits); err != nil {
 				return err
+			}
+			if r.Enter && r.Kind == KindRace {
+				in := &entering{race: &store.Race{Kind: r.Kind, CourseKind: r.CourseKind, Course: r.Course, Shape: r.Shape,
+					Long: r.Long, Boat: r.Boat}, limits: limits, now: now, minutes: s.minutesFor()}
+				if err := in.refusedByLimits(r.StartsAt, m.Mine); err != nil {
+					return err
+				}
 			}
 			if r.CourseKind != CourseBuoy {
 				return nil
@@ -527,7 +565,8 @@ func (s *Service) entering(ctx context.Context, r *store.Race, by Sailor) (*ente
 	if err != nil {
 		return nil, err
 	}
-	in := &entering{race: r, sailor: by, limits: limits, now: s.cfg.Now(), latest: s.latest(limits), newcomer: true}
+	in := &entering{race: r, sailor: by, limits: limits, now: s.cfg.Now(), latest: s.latest(limits), newcomer: true,
+		minutes: s.minutesFor()}
 	if b := s.boat(r.Boat); b != nil {
 		in.most = b.Racers
 	}
@@ -575,7 +614,7 @@ func (s *Service) canEnter(ctx context.Context, r *store.Race, by Sailor, mine [
 }
 
 // Withdraw withdraws the asking sailor's boat from a race before its
-// warning signal.
+// warning signal: not its owner's, who races the race they made.
 func (s *Service) Withdraw(ctx context.Context, by Sailor, code string) (Card, error) {
 	r, err := s.find(ctx, code)
 	if err != nil {
@@ -583,6 +622,10 @@ func (s *Service) Withdraw(ctx context.Context, by Sailor, code string) (Card, e
 	}
 	if err := s.beforeWarning(&r); err != nil {
 		return Card{}, err
+	}
+	if r.HasOwner && r.Owner == by.ID {
+		// Who makes a race races it: one they no longer want, they cancel.
+		return Card{}, refuse(RefuseOwner)
 	}
 	ok, err := s.cfg.Store.WithdrawEntry(ctx, &r, by.ID, s.cfg.Now())
 	if err != nil {
@@ -623,13 +666,16 @@ func (s *Service) owned(ctx context.Context, by Sailor, code string) (store.Race
 	return r, s.beforeWarning(&r)
 }
 
-// Close closes a race to entry, at its owner's word: a trial's runs end.
+// Close closes a race to entry, at its owner's word: a trial's runs end,
+// and a trial closed is over, gone from its owner's races and no longer
+// one of those they own.
 func (s *Service) Close(ctx context.Context, by Sailor, code string) (Card, error) {
 	return s.setState(ctx, by, code, store.RaceClosed, []string{store.RaceOpen})
 }
 
 // Cancel calls a race off, at its owner's word, before its warning
-// signal; its entrants find it so on its card.
+// signal; its entrants find it so on its card. One no one but its owner
+// is in is deleted so: it goes from every list at once.
 func (s *Service) Cancel(ctx context.Context, by Sailor, code string) (Card, error) {
 	return s.setState(ctx, by, code, store.RaceCancelled, []string{store.RaceOpen, store.RaceClosed})
 }
@@ -655,6 +701,11 @@ func (s *Service) Remove(ctx context.Context, by Sailor, code string, number int
 	r, err := s.owned(ctx, by, code)
 	if err != nil {
 		return Card{}, err
+	}
+	if e, has, err := s.cfg.Store.RaceEntryOf(ctx, &r, by.ID); err != nil {
+		return Card{}, err
+	} else if has && e.Number == number {
+		return Card{}, refuse(RefuseOwner)
 	}
 	if _, err := s.cfg.Store.RemoveEntry(ctx, &r, number); errors.Is(err, store.ErrNotFound) {
 		return Card{}, refuse(RefuseNotEntered)
@@ -699,8 +750,58 @@ func (s *Service) Move(ctx context.Context, by Sailor, code string, at time.Time
 	return s.Card(ctx, by, code)
 }
 
+// StartNow brings a race's start to a warning signal's length from now,
+// at its owner's word, before its warning signal, while no one but its
+// owner is entered: the warning comes at once, and their boat is taken to
+// the line. Another entered was promised the time set, and keeps it. It is
+// not the race's one move.
+func (s *Service) StartNow(ctx context.Context, by Sailor, code string) (Card, error) {
+	r, err := s.owned(ctx, by, code)
+	if err != nil {
+		return Card{}, err
+	}
+	if r.Kind == KindTrial {
+		return Card{}, refuse(RefuseKind)
+	}
+	entrants, err := s.cfg.Store.RaceEntrants(ctx, &r)
+	if err != nil {
+		return Card{}, err
+	}
+	mine := false
+	for _, e := range entrants {
+		if e.Account != by.ID {
+			return Card{}, refuse(RefuseOthers)
+		}
+		mine = true
+	}
+	if !mine {
+		return Card{}, refuse(RefuseNotEntered)
+	}
+	// Sooner, it must not run into another race its owner is in.
+	at := s.cfg.Now().Add(Warning).Truncate(time.Second)
+	in, err := s.entering(ctx, &r, by)
+	if err != nil {
+		return Card{}, err
+	}
+	entries, err := s.cfg.Store.EntriesOf(ctx, by.ID, in.now.Add(-Day-time.Hour))
+	if err != nil {
+		return Card{}, err
+	}
+	if err := in.clash(at, entries); err != nil {
+		return Card{}, err
+	}
+	ok, err := s.cfg.Store.StartRaceNow(ctx, &r, at)
+	if err != nil {
+		return Card{}, err
+	}
+	if !ok {
+		return Card{}, refuse(RefuseOthers)
+	}
+	return s.Card(ctx, by, code)
+}
+
 // Again makes a finished race again at its owner's word: the same
-// course, boat and who may enter, starting in Lead.
+// course, boat and who may enter, starting in Lead, its owner entered.
 func (s *Service) Again(ctx context.Context, by Sailor, code string) (Card, error) {
 	r, err := s.find(ctx, code)
 	if err != nil {

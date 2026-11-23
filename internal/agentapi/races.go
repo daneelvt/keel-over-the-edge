@@ -437,7 +437,14 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 	case race.RefuseEntered:
 		return "You are already entered in that race."
 	case race.RefuseClash:
-		return "Another race you entered starts within 20 minutes of this one, and a boat sails one race at a time. Withdraw from it first (retire with its code), or choose another."
+		in := "another race"
+		if r.Race != "" {
+			in = playerText(r.Race)
+		}
+		if until != "" {
+			return fmt.Sprintf("You are in %s until%s, and a boat sails one race at a time: choose a race that starts after it, or withdraw from it first (retire with its code).", in, spaced(until))
+		}
+		return fmt.Sprintf("You are in %s, and a boat sails one race at a time: choose a race that starts after it, or withdraw from it first (retire with its code).", in)
 	case race.RefuseLate:
 		if until != "" {
 			return "Too late in the world for a race then: the latest start is" + spaced(until) + ". Give a smaller in."
@@ -477,6 +484,8 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 		return "That race's boat needs a certificate you do not hold yet: race a kind you may sail. news with log shows what is left toward your next certificate."
 	case race.RefuseNotEntered:
 		return "You are not entered in that race."
+	case race.RefuseOwner:
+		return "You made that race, and who makes a race races it."
 	case race.RefuseMoved, race.RefuseNotFinished:
 		return "Not now: that race cannot be changed so."
 	}
@@ -773,9 +782,9 @@ func madeWords(c *race.Card, now time.Time) string {
 	}
 	fmt.Fprintf(&w, ", for %s. Its link: %s (code %s): give it to your owner to pass on. ", whoWords(c.Who), c.Link, c.Code)
 	if c.Kind == race.KindTrial {
-		w.WriteString("You have not sailed a run: race enter with its code puts you on its line.")
+		w.WriteString("You are entered: your boat is put on its line for a run as soon as it is not racing. race enter with its code sails it again.")
 	} else {
-		w.WriteString("You are not entered: race enter with its code enters you.")
+		w.WriteString("You are entered, as who makes a race races it: at its warning signal, two minutes before the gun, your boat is put on its line.")
 	}
 	return w.String()
 }

@@ -45,6 +45,9 @@ func (f *fakeRaces) Make(_ context.Context, by race.Sailor, m race.Making) (race
 	if m.Name == "x" {
 		return race.Card{}, &race.Refusal{Reason: race.RefuseName, Name: "short"}
 	}
+	if m.Name == "clash" {
+		return race.Card{}, &race.Refusal{Reason: race.RefuseClash, Until: raceUntil, Race: "Monday Dash"}
+	}
 	return f.card(by, "abcdefghij")
 }
 func (f *fakeRaces) SuggestName(string, string, time.Time) (string, error) {
@@ -69,6 +72,9 @@ func (f *fakeRaces) Remove(_ context.Context, by race.Sailor, code string, n int
 	return f.card(by, code)
 }
 func (f *fakeRaces) Move(_ context.Context, by race.Sailor, code string, at time.Time) (race.Card, error) {
+	return f.card(by, code)
+}
+func (f *fakeRaces) StartNow(_ context.Context, by race.Sailor, code string) (race.Card, error) {
 	return f.card(by, code)
 }
 func (f *fakeRaces) Again(_ context.Context, by race.Sailor, code string) (race.Card, error) {
@@ -112,7 +118,7 @@ func TestRacesBehindSession(t *testing.T) {
 	for _, r := range []struct{ method, path string }{
 		{"GET", "/api/races"}, {"GET", "/api/race/abcdefghij"}, {"GET", "/api/race/abcdefghij/calendar.ics"},
 		{"GET", "/api/race/name?course=island:3"}, {"POST", "/api/race"}, {"POST", "/api/race/abcdefghij/enter"},
-		{"POST", "/api/race/abcdefghij/withdraw"}, {"POST", "/api/race/abcdefghij/cancel"},
+		{"POST", "/api/race/abcdefghij/withdraw"}, {"POST", "/api/race/abcdefghij/cancel"}, {"POST", "/api/race/abcdefghij/start"},
 		{"POST", "/api/race/abcdefghij/spoon"}, {"GET", "/api/race/abcdefghij/replay"},
 	} {
 		req, _ := http.NewRequest(r.method, srv.URL+r.path, nil)
@@ -155,6 +161,19 @@ func TestRacesBehindSession(t *testing.T) {
 	}
 	if status, _ := ann.do("POST", "/api/race", `{"kind":"race","course":"buoy:triangle:short","boat":"b","at":1,"who":"everyone"}`); status != 201 {
 		t.Errorf("made: %d", status)
+	}
+	// Sailed at once, alone; and a clash, naming the race the sailor is in.
+	if status, _ := ann.do("POST", "/api/race", `{"kind":"race","course":"buoy:dash:short","boat":"b","who":"everyone","now":true}`); status != 201 ||
+		!f.made[len(f.made)-1].Now {
+		t.Errorf("made to sail now: %d %+v", status, f.made[len(f.made)-1])
+	}
+	want = `{"error":"clash","until":` + strconv.FormatInt(raceUntil.UnixMilli(), 10) + `,"race":"Monday Dash"}`
+	if status, body := ann.do("POST", "/api/race", `{"kind":"race","course":"buoy:dash:short","boat":"b","at":1,"who":"everyone","name":"clash"}`); status != 409 ||
+		strings.TrimSpace(body) != want {
+		t.Errorf("a clash: %d %s", status, body)
+	}
+	if status, body := ann.do("POST", "/api/race/abcdefghij/start", ""); status != 200 || !strings.Contains(body, `"code":"abcdefghij"`) {
+		t.Errorf("started now: %d %s", status, body)
 	}
 	if status, _ := ann.do("POST", "/api/race/abcdefghij/again", ""); status != 409 {
 		t.Errorf("again: %d", status)

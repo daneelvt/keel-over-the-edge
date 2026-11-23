@@ -1,23 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Races ashore's windows over the sea: Make a race, one panel with every
-// choice filled in so that Make it works at once (a race or a time trial,
-// the course on a small chart of its own, the boat, when, who may enter,
-// and a name suggested with character); the share of a race made, its
-// link with a picture of the course drawn on the phone; and a race's
-// card, which its link opens: the name, the course drawn small, the boat,
-// the start in the reader's own time and the time to it, its owner, the
-// entrants (machine sailors marked, newcomers' green ribbons, one not
-// named to the reader by their boat and number), and Enter, Watch when it
-// starts and Add to calendar; the owner's rarer acts behind ⋯. A refusal
+// Races ashore's windows: at sea beside the boat in the menu's place, the
+// boat sailed on while one is open; before the sea centred over the start
+// screen. Make a race, one panel with every choice filled in so that Make
+// it works at once: at sea first Sail it now, just the maker, at once, or
+// Race others (a race or a time trial, its start, who may enter); the
+// course on a small chart of its own, the boat, and a name suggested with
+// character. Who makes a race races it: its maker is entered as it is
+// made. The share of a race made, its link with a picture of the course
+// drawn on the phone; and a race's card, which its link opens: the name,
+// the course drawn small, the boat, the start in the reader's own time and
+// the time to it, its owner, the entrants (machine sailors marked,
+// newcomers' green ribbons, one not named to the reader by their boat and
+// number), and Enter, Watch when it starts and Add to calendar; for its
+// owner Start now while no one else is in, and Delete (Cancel the race
+// once others are), each asked once, the rarer acts behind ⋯. A refusal
 // says why, kindly, and when it lifts; the reader can still watch. Every
 // key is the instruments' head keys' size. Loaded the first time one
 // opens: none of it is in the game's first download.
 
 import './races.css';
 import { batch, effect } from '@preact/signals';
-import { render } from 'preact';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { createContext, render } from 'preact';
+import { useContext, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useModal } from './modal';
 import { MachineMark, PlayerText } from './player';
 import {
@@ -39,6 +44,7 @@ import { courseShape, pathData, shapeText } from './racecourse';
 import { drawPicture, pictureWords, shareRace } from './racepicture';
 import { UpwindSign } from './racerow';
 import { type RacesView, racesShown } from './raceslazy';
+import { RacesPage, TakeAway } from './racespage';
 import {
   ADD_TO_CALENDAR,
   actRefusalText,
@@ -62,13 +68,20 @@ import {
   NEWCOMERS_DETAIL,
   ownerText,
   phaseLine,
+  RACE_OTHERS,
+  RACE_OTHERS_LINE,
   REPLAY,
   REPLAY_RUNS,
+  SAIL_IT_NOW,
+  SAIL_IT_NOW_LINE,
+  START_NOW,
+  START_NOW_LINE,
   STARTS,
   startChoiceText,
   startOf,
   startsInText,
   TRIAL_LINE,
+  TRIAL_OTHERS_LINE,
   UPWIND_LINE,
   WATCH_LATER,
   WATCH_WHEN_STARTS,
@@ -221,6 +234,19 @@ export function coursesFor(
   );
 }
 
+/**
+ * Whether races' windows are drawn at sea. There each stands beside the
+ * boat, in the menu's place, with no scrim: the boat is still sailed while
+ * one is open. Before the sea they stand centred over a scrim.
+ */
+const AtSea = createContext(false);
+
+/** A race's window's class and whether it holds the page, by where it is drawn. */
+function useFrame(cls: string): { class: string; 'aria-modal': boolean } {
+  const sea = useContext(AtSea);
+  return { class: `panel race-window ${cls}${sea ? ' at-side' : ''}`, 'aria-modal': !sea };
+}
+
 /** Make a race: one panel, everything filled in. */
 export function MakeRace({ view, close }: { view: RacesView; close: () => void }) {
   const board = view.board.value;
@@ -228,11 +254,11 @@ export function MakeRace({ view, close }: { view: RacesView; close: () => void }
     void view.refresh();
   }, [view]);
   const win = useModal(close);
+  const frame = useFrame('race-make');
   return (
     <section
-      class="panel race-window race-make"
+      {...frame}
       role="dialog"
-      aria-modal="true"
       aria-labelledby="race-make-title"
       tabIndex={-1}
       ref={win}
@@ -281,7 +307,13 @@ function MakeForm({
   make: MakeChoices;
   close: () => void;
 }) {
-  const [kind, setKind] = useState<'race' | 'trial'>('race');
+  // At sea, Sail it now, just the maker at once; or a race others join,
+  // the only choice before the sea, where no boat waits to be placed.
+  const sea = useContext(AtSea);
+  const [chosenMode, setMode] = useState<'now' | 'others'>('now');
+  const mode = sea ? chosenMode : 'others';
+  const [chosenKind, setKind] = useState<'race' | 'trial'>('race');
+  const kind = mode === 'now' ? 'race' : chosenKind;
   const [boat, setBoat] = useState(() =>
     make.boats.some((b) => b.id === make.boat) ? make.boat : (make.boats[0]?.id ?? ''),
   );
@@ -302,13 +334,13 @@ function MakeForm({
   const chosen = offered.find((c) => c.id === course) ?? offered[0];
   const courseId = chosen?.id ?? '';
   // The name suggested afresh as the choices change, until the player writes their own.
-  const suggestAt = kind === 'trial' ? 0 : when > 0 ? when : later;
+  const suggestAt = kind === 'trial' || mode === 'now' ? 0 : when > 0 ? when : later;
   useEffect(() => {
     if (edited || courseId === '' || boat === '') {
       return;
     }
     let live = true;
-    const at = kind === 'trial' ? view.now() : startOf(when, later, view.now());
+    const at = kind === 'trial' || mode === 'now' ? view.now() : startOf(when, later, view.now());
     void suggestName({ kind, course: courseId, boat, at }, view.fetch).then((n) => {
       if (live && n !== '') {
         setName(n);
@@ -317,7 +349,7 @@ function MakeForm({
     return () => {
       live = false;
     };
-  }, [kind, courseId, boat, suggestAt, edited]);
+  }, [kind, mode, courseId, boat, suggestAt, edited]);
 
   const submit = async () => {
     if (busy || courseId === '') {
@@ -325,12 +357,27 @@ function MakeForm({
     }
     setBusy(true);
     setRefusal(null);
-    const at = kind === 'trial' ? view.now() : startOf(when, later, view.now());
+    const now = mode === 'now';
+    const at = kind === 'trial' || now ? view.now() : startOf(when, later, view.now());
     const a = await makeRace(
-      { kind, course: courseId, boat, at: Number.isFinite(at) ? at : 0, who, name: name.trim() },
+      {
+        kind,
+        course: courseId,
+        boat,
+        at: Number.isFinite(at) ? at : 0,
+        who: now ? 'everyone' : who,
+        name: name.trim(),
+        ...(now ? { now } : {}),
+      },
       view.fetch,
     );
     setBusy(false);
+    if (a.ok && now) {
+      // Just the maker, at once: the boat goes to the line, nothing to share.
+      view.make.value = false;
+      void view.refresh();
+      return;
+    }
     if (a.ok) {
       // One change: the window passes from the panel to the share, never closed.
       batch(() => {
@@ -349,7 +396,13 @@ function MakeForm({
       ? ''
       : makeRefusalText(
           refusal.reason,
-          { until: refusal.until, needs: refusal.needs, most: refusal.most, now: view.now() },
+          {
+            until: refusal.until,
+            needs: refusal.needs,
+            most: refusal.most,
+            race: refusal.race,
+            now: view.now(),
+          },
           refusal.name,
         );
   return (
@@ -361,14 +414,30 @@ function MakeForm({
         void submit();
       }}
     >
-      <Choice
-        label="Race or time trial"
-        name="kind"
-        options={['race', 'trial'] as const}
-        chosen={kind}
-        choose={setKind}
-        text={kindText}
-      />
+      {sea ? (
+        <Choice
+          label="Sail it now or race others"
+          name="mode"
+          options={['now', 'others'] as const}
+          chosen={mode}
+          choose={setMode}
+          text={(m) => (m === 'now' ? SAIL_IT_NOW : RACE_OTHERS)}
+        />
+      ) : null}
+      {mode === 'now' ? (
+        <p class="race-faint" data-readout="race-mode-line">
+          {SAIL_IT_NOW_LINE}
+        </p>
+      ) : (
+        <Choice
+          label="Race or time trial"
+          name="kind"
+          options={['race', 'trial'] as const}
+          chosen={kind}
+          choose={setKind}
+          text={kindText}
+        />
+      )}
       <label class="race-label" for="race-boat">
         Boat
       </label>
@@ -417,8 +486,11 @@ function MakeForm({
             .join(' · ')}
         </p>
       ) : null}
-      {kind === 'race' ? (
+      {mode === 'now' ? null : kind === 'race' ? (
         <>
+          <p class="race-faint" data-readout="race-mode-line">
+            {RACE_OTHERS_LINE}
+          </p>
           <p class="race-label" id="race-when-label">
             Start
           </p>
@@ -448,24 +520,30 @@ function MakeForm({
           </p>
         </>
       ) : (
-        <p class="race-faint">A time trial is open at once, for the rest of the week.</p>
+        <p class="race-faint" data-readout="race-mode-line">
+          {TRIAL_OTHERS_LINE}
+        </p>
       )}
-      <label class="race-label" for="race-who">
-        Who may enter
-      </label>
-      <select
-        id="race-who"
-        name="who"
-        value={who}
-        onChange={(e) => setWho(e.currentTarget.value as Who)}
-      >
-        {make.who.map((w) => (
-          <option key={w} value={w}>
-            {whoText(w)}
-          </option>
-        ))}
-      </select>
-      {who === 'newcomers' ? <p class="race-faint">{NEWCOMERS_DETAIL}</p> : null}
+      {mode === 'now' ? null : (
+        <>
+          <label class="race-label" for="race-who">
+            Who may enter
+          </label>
+          <select
+            id="race-who"
+            name="who"
+            value={who}
+            onChange={(e) => setWho(e.currentTarget.value as Who)}
+          >
+            {make.who.map((w) => (
+              <option key={w} value={w}>
+                {whoText(w)}
+              </option>
+            ))}
+          </select>
+          {who === 'newcomers' ? <p class="race-faint">{NEWCOMERS_DETAIL}</p> : null}
+        </>
+      )}
       <label class="race-label" for="race-name">
         Name
       </label>
@@ -533,11 +611,11 @@ export function RaceShare({
       .catch(() => {});
   }, [card, words]);
   const win = useModal(close);
+  const frame = useFrame('race-share');
   return (
     <section
-      class="panel race-window race-share"
+      {...frame}
       role="dialog"
-      aria-modal="true"
       aria-labelledby="race-share-title"
       tabIndex={-1}
       ref={win}
@@ -618,7 +696,7 @@ function beforeStart(card: RaceCard): boolean {
   return card.phase === 'open' || card.phase === 'closed';
 }
 
-/** The owner's rarer acts, behind ⋯: close entry, change the start once, remove an entrant, cancel. */
+/** The owner's rarer acts, behind ⋯: close entry, change the start once, remove an entrant. */
 function OwnerActs({
   card,
   act,
@@ -630,7 +708,6 @@ function OwnerActs({
   busy: boolean;
   now: number;
 }) {
-  const [cancelling, setCancelling] = useState(false);
   const [number, setNumber] = useState('');
   const [at, setAt] = useState(() => localInput(card.startsAt));
   const others = card.entrants.filter((e) => e.me !== true);
@@ -684,21 +761,6 @@ function OwnerActs({
           </button>
         </div>
       ) : null}
-      {cancelling ? (
-        <fieldset class="race-owner-row" aria-label="Cancel the race">
-          <p class="race-faint">Cancel the race? Its entrants are told.</p>
-          <button type="button" onClick={() => setCancelling(false)}>
-            Keep it
-          </button>
-          <button type="button" class="race-danger" disabled={busy} onClick={() => act('cancel')}>
-            Cancel the race
-          </button>
-        </fieldset>
-      ) : (
-        <button type="button" disabled={busy} onClick={() => setCancelling(true)}>
-          Cancel the race…
-        </button>
-      )}
     </div>
   );
 }
@@ -747,6 +809,7 @@ export function RaceCardPanel({
     };
   }, [code, view]);
   const win = useModal(close);
+  const frame = useFrame('race-card');
 
   const act = (verb: RaceVerb, body?: unknown) => {
     if (busy) {
@@ -756,6 +819,12 @@ export function RaceCardPanel({
     setSaid('');
     void raceAct(code, verb, body, view.fetch).then((a) => {
       setBusy(false);
+      if (a.ok && verb === 'cancel') {
+        // Gone from every list: the card closes with it.
+        void view.refresh();
+        close();
+        return;
+      }
       if (a.ok) {
         setCard(a.value);
         setMore(false);
@@ -766,12 +835,13 @@ export function RaceCardPanel({
         until: a.refusal.until,
         needs: a.refusal.needs,
         most: a.refusal.most,
+        race: a.refusal.race,
         now: view.now(),
       };
       setSaid(
         verb === 'enter'
           ? enterRefusalText(a.refusal.reason, t)
-          : verb === 'withdraw' && a.refusal.reason === 'not-entered'
+          : (verb === 'withdraw' || verb === 'start') && a.refusal.reason === 'not-entered'
             ? enterRefusalText(a.refusal.reason, t)
             : actRefusalText(a.refusal.reason, t),
       );
@@ -784,9 +854,8 @@ export function RaceCardPanel({
   if (card === null) {
     return (
       <section
-        class="panel race-window race-card"
+        {...frame}
         role="dialog"
-        aria-modal="true"
         aria-labelledby="race-card-title"
         tabIndex={-1}
         ref={win}
@@ -815,15 +884,18 @@ export function RaceCardPanel({
           until: enter.until,
           needs: enter.needs,
           most: enter.most,
+          race: enter.race,
           now,
         })
       : '';
   const upwind = card.course.upwind === true;
+  // No one but its owner in: they need not wait its time.
+  const alone = card.entrants.every((e) => e.me === true);
+  const startNow = card.kind === 'race' && before && mine.owner && mine.entered && alone;
   return (
     <section
-      class="panel race-window race-card"
+      {...frame}
       role="dialog"
-      aria-modal="true"
       aria-labelledby="race-card-title"
       tabIndex={-1}
       ref={win}
@@ -915,6 +987,18 @@ export function RaceCardPanel({
           {said}
         </p>
       ) : null}
+      {startNow ? (
+        <>
+          <p class="race-faint" data-readout="race-start-now">
+            {START_NOW_LINE}
+          </p>
+          <div class="race-keys">
+            <button type="button" class="key-main" disabled={busy} onClick={() => act('start')}>
+              {START_NOW}
+            </button>
+          </div>
+        </>
+      ) : null}
       {before ? (
         <>
           {!mine.entered && enter.ok ? (
@@ -944,14 +1028,19 @@ export function RaceCardPanel({
             </>
           ) : null}
           <div class="race-keys">
-            <WatchLater code={card.code} />
+            {mine.entered ? null : <WatchLater code={card.code} />}
             {card.kind === 'race' ? <Calendar view={view} code={card.code} /> : null}
-            {mine.entered ? (
+            {mine.entered && !mine.owner ? (
               <button type="button" disabled={busy} onClick={() => act('withdraw')}>
                 {WITHDRAW}
               </button>
             ) : null}
           </div>
+          {mine.owner ? (
+            <div class="race-keys">
+              <TakeAway name={card.name} others={!alone} busy={busy} take={() => act('cancel')} />
+            </div>
+          ) : null}
         </>
       ) : null}
       {view.replay !== null && (card.phase === 'finished' || card.kind === 'trial') ? (
@@ -1032,8 +1121,13 @@ function Calendar({ view, code }: { view: RacesView; code: string }) {
   );
 }
 
-/** Whichever of races' windows is open, over a scrim a tap on which closes it. */
-export function RacesWindows({ view }: { view: RacesView }) {
+/**
+ * Whichever of races' windows is open: at sea (side) beside the boat, the
+ * boat sailed on, a tap on the sea not closing it; before the sea over a
+ * scrim a tap on which closes it. The Races page, a page of the menu's,
+ * opens at sea only.
+ */
+export function RacesWindows({ view, side = false }: { view: RacesView; side?: boolean }) {
   const shared = view.shared.value;
   const code = view.card.value;
   const close = () => {
@@ -1047,11 +1141,11 @@ export function RacesWindows({ view }: { view: RacesView }) {
   };
   const open = shared !== null ? 'share' : view.make.value ? 'make' : code !== null ? 'card' : '';
   if (open === '') {
-    return null;
+    return side && view.page.value ? <RacesPage view={view} /> : null;
   }
   return (
-    <>
-      <div class="race-scrim" aria-hidden="true" onClick={close} />
+    <AtSea.Provider value={side}>
+      {side ? null : <div class="race-scrim" aria-hidden="true" onClick={close} />}
       {shared !== null ? (
         <RaceShare view={view} card={shared} close={close} />
       ) : view.make.value ? (
@@ -1059,7 +1153,7 @@ export function RacesWindows({ view }: { view: RacesView }) {
       ) : code !== null ? (
         <RaceCardPanel key={code} view={view} code={code} close={close} />
       ) : null}
-    </>
+    </AtSea.Provider>
   );
 }
 

@@ -29,7 +29,10 @@ import (
 // as the owner's tools' moves are: a race's placing is no cheat, and the
 // log keeps the voyage; its odometer adds nothing for the move, and its
 // pairs begin afresh. An entrant whose boat is not at sea (ashore, waiting
-// for a boat, or aboard another's) did not start.
+// for a boat, or aboard another's) did not start; nor did one still placed
+// or racing in another race: a boat sails one race at a time, and it sails
+// on in the race it is in. A trial's run for a sailor still racing is not
+// begun: it waits, handed again, until that race is over.
 //
 // A race (not a trial's run) whose place has a storm's mean wind as it is
 // handed over is called off: its course laid but no boat placed, and it
@@ -63,11 +66,19 @@ func (w *World) racePlace(c *bus.Command) bus.Reply {
 		r.Result = bus.Done
 		return r
 	}
+	if call.Trial && len(call.Entrants) == 1 && committee.RacerOf(f, call.Entrants[0].Account) >= 0 {
+		// Still racing: the run waits.
+		return r
+	}
 	length := 2 * physics.Radius(&w.kinds[call.Kind])
 	spots := committee.Spots(course, length)
 	placed := make([]committee.Placing, len(call.Entrants))
 	for _, i := range committee.Lot(call) {
 		e := &call.Entrants[i]
+		if committee.RacerOf(f, e.Account) >= 0 {
+			// Still in another race: it sails on there, and sits this one out.
+			continue
+		}
 		s := w.raceBoat(f, e, call.Kind)
 		if s < 0 {
 			continue

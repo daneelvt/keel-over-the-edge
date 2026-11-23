@@ -111,12 +111,15 @@
 // every screen; its keys a 40 px touch; the standings, the results and a
 // gone world's results alone fit, Close within reach.
 //
-// Races ashore's windows over the sea, Make a race (filled, a later start
-// and an island course, refused), the share of a race made, a race's card
-// (its owner's ⋯ open, another's, one refused) and the harbour race's
-// notice with Enter, on every screen, the server's answers stood in for:
-// each within the screen, its foot's keys in view, every key 40 pixels
-// tall with 14-pixel words.
+// Races ashore's windows at sea, the Races page, Make a race (filled,
+// racing others, a later start and an island course, refused), the share
+// of a race made, a race's card (its owner's ⋯ open, another's, one
+// refused) and the harbour race's notice with Enter, on every screen, the
+// server's answers stood in for: each within the screen, its foot's keys
+// in view, every key 40 pixels tall with 14-pixel words. Every race
+// window at sea, those of races ashore and the race line's (its ⋯, the
+// finish's card, the results), stands beside the boat, never over it, and
+// the helm and the sheet still take a drag while it is open.
 //
 // The screens for reading follow the browser's text size: the start
 // screen, the menu, the windows, the questions and the notices. Their
@@ -4157,7 +4160,10 @@ async function raceFaults(page: Page, sel: string): Promise<string[]> {
     const hud = document.querySelector('.hud');
     const key =
       hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
-    for (const b of el.querySelectorAll<HTMLElement>('button:not(.race-course, .notice-dismiss)')) {
+    for (const b of el.querySelectorAll<HTMLElement>(
+      // A row's words, a quiet key as tall as they are, and a page's close aside.
+      'button:not(.race-course, .notice-dismiss, .menu-x, .menu-race-words)',
+    )) {
       const k = b.getBoundingClientRect();
       const size = getComputedStyle(b).fontSize;
       if (Math.abs(k.height - key) > 0.5 || size !== `${14 * scale}px`) {
@@ -4209,10 +4215,16 @@ for (const text of TEXT_SIZES) {
         await check(`${s.name}, the notice`, '.notice.with-act');
       }
       await page.getByRole('button', { name: 'Menu' }).click();
-      await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
+      await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+      const races = page.locator('[data-page=races]');
+      await expect(races.locator('[data-readout=races-mine]')).toBeVisible();
+      await check(`${s.name}, the Races page`, '[data-page=races]');
+      await races.getByRole('button', { name: 'Make a race' }).click();
       const make = page.locator('[data-panel=make-race]');
       await expect(make.locator('#race-name')).toHaveValue('Saturday Dash');
       await check(`${s.name}, Make a race`, '[data-panel=make-race]');
+      await make.getByRole('button', { name: 'Race others' }).click();
+      await check(`${s.name}, Make a race, racing others`, '[data-panel=make-race]');
       await make.getByRole('button', { name: 'Later' }).click();
       await make.locator('[data-course="island:3"]').click();
       await check(`${s.name}, a later start on an island course`, '[data-panel=make-race]');
@@ -4235,7 +4247,8 @@ for (const text of TEXT_SIZES) {
       // Harbourmaster's Reach: its line upright, its mark across the wind.
       for (const code of [OTHERS, REFUSED, REACH]) {
         await page.getByRole('button', { name: 'Menu' }).click();
-        await page.locator(`.menu-race[data-race=${code}]`).click();
+        await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+        await page.locator(`.races-row[data-race=${code}] .menu-race-words`).click();
         await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
         if (code === REACH) {
           await expect(
@@ -4251,7 +4264,7 @@ for (const text of TEXT_SIZES) {
   });
 }
 
-test('Port Royal’s board stands its races above the weather, each row saying why it cannot be entered; the menu’s Races: the next harbour race with Enter, on a phone', async ({
+test('Port Royal’s board stands its races above the weather, each row saying why it cannot be entered; the menu’s Races and its page: the next harbour race with Enter, on a phone', async ({
   page,
 }) => {
   test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
@@ -4328,22 +4341,28 @@ test('Port Royal’s board stands its races above the weather, each row saying w
     'Two minutes before the start your boat is taken to the start line',
   );
   await board.getByRole('button', { name: 'Close', exact: true }).click();
-  // The menu: Races, the next harbour race first with Enter, then Make a race.
+  // The menu: Races near its top, the next race in a line under it; the
+  // Races page: the next harbour race with Enter, under Sail now.
   await page.getByRole('button', { name: 'Menu' }).click();
   const menu = page.locator('.menu');
-  const next = menu.locator('[data-readout=menu-next-race]');
+  await expect(menu.locator('[data-readout=menu-races-line]')).toContainText(
+    'Next harbour race: the Teatime Trophy',
+  );
+  await menu.getByRole('button', { name: 'Races', exact: true }).click();
+  const racesPage = page.locator('[data-page=races]');
+  const next = racesPage.locator('[data-readout=races-now] .races-row[data-race=harbourone]');
   await expect(next).toContainText('Next harbour race: the Teatime Trophy');
   const fit = await page.evaluate(() => {
-    const m = document.querySelector('.menu')?.getBoundingClientRect();
-    const n = document.querySelector('[data-readout=menu-next-race]');
+    const m = document.querySelector('[data-page=races]')?.getBoundingClientRect();
+    const n = document.querySelector('[data-readout=races-now] .races-row');
     const out: string[] = [];
     if (m === undefined || n === null) {
-      return ['no menu or no next race'];
+      return ['no Races page or no next race'];
     }
     for (const b of n.querySelectorAll<HTMLElement>('button')) {
       const r = b.getBoundingClientRect();
       if (r.left < m.left - 0.5 || r.right > m.right + 0.5) {
-        out.push(`“${b.textContent}” runs out of the menu`);
+        out.push(`“${b.textContent}” runs out of the page`);
       }
     }
     const hud = document.querySelector('.hud');
@@ -4357,9 +4376,206 @@ test('Port Royal’s board stands its races above the weather, each row saying w
     return out;
   });
   expect(fit).toEqual([]);
-  await expect(menu.locator('.menu-races h3')).toHaveText('Races');
   await next.getByRole('button', { name: /^Enter/ }).click();
-  await expect(menu.locator('[data-readout=menu-race-said]')).toContainText('You’re entered in');
+  await expect(racesPage.locator('[data-readout=races-said]')).toContainText('You’re entered in');
+});
+
+/**
+ * What is wrong with the window at sel open at sea: over the boat. Held
+ * sideways it stands clear of every part of the boat, the room about it
+ * kept; held upright, across the top, it leaves the hull and the deck in
+ * sight (the boat's parts in the lower half of its height: all but the
+ * mast and the sail), only the sail's head behind it, as behind the case.
+ */
+async function overBoat(page: Page, sel: string, upright: boolean): Promise<string[]> {
+  const seen = await parts(page);
+  const win = await page.evaluate((sel) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r === undefined ? null : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  }, sel);
+  if (win === null) {
+    return [`no ${sel}`];
+  }
+  if (seen.boat === null) {
+    return ['no boat drawn'];
+  }
+  const w = { name: sel, ...win };
+  if (!upright) {
+    return seen.drawn.some((d) => overlap(w, d))
+      ? [`${sel} covers the boat (${edges(w)} and ${edges(seen.boat)})`]
+      : [];
+  }
+  const middle = (seen.boat.top + seen.boat.bottom) / 2;
+  const deck = Math.min(...seen.drawn.filter((d) => d.top >= middle).map((d) => d.top));
+  return w.bottom > deck + 0.5
+    ? [
+        `${sel} reaches down to ${Math.round(w.bottom)}, over the hull and deck from ${Math.round(deck)}`,
+      ]
+    : [];
+}
+
+/** What is wrong with the helm and the sheet while a window is open: one that takes no drag. */
+async function stillSailed(page: Page): Promise<string[]> {
+  const out: string[] = [];
+  const box = async (sel: string) => {
+    const b = await page.locator(sel).boundingBox();
+    return b === null ? null : { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  };
+  const helm = await box('[data-control=helm]');
+  const sheet = await box('[data-control=sheet]');
+  if (helm === null || sheet === null) {
+    return ['no helm or no sheet'];
+  }
+  const before = await page.evaluate(() => globalThis.keel.boat());
+  // The helm a little to starboard, held: its target moves while held;
+  // then back where it was, and let go.
+  await page.mouse.move(helm.x, helm.y);
+  await page.mouse.down();
+  await page.mouse.move(helm.x + 30, helm.y, { steps: 4 });
+  const held = await page.evaluate(() => globalThis.keel.boat().helm);
+  await page.mouse.move(helm.x, helm.y, { steps: 4 });
+  await page.mouse.up();
+  if (Math.abs(held - before.helm) < 1e-6) {
+    out.push('the helm took no drag');
+  }
+  // The sheet eased a little, and left there.
+  await page.mouse.move(sheet.x, sheet.y);
+  await page.mouse.down();
+  await page.mouse.move(sheet.x, sheet.y + 30, { steps: 4 });
+  await page.mouse.up();
+  const after = await page.evaluate(() => globalThis.keel.boat().sheet);
+  if (Math.abs(after - before.sheet) < 1e-6) {
+    out.push('the sheet took no drag');
+  }
+  // Back as it was, for the next window.
+  await page.mouse.move(sheet.x, sheet.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(sheet.x, sheet.y, { steps: 4 });
+  await page.mouse.up();
+  return out;
+}
+
+test('every race window at sea stands beside the boat, never over it, and the helm and the sheet take a drag while it is open, on every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the windows are the same on either back end');
+  test.setTimeout(240_000);
+  const state = await standInRaces(page, Date.now());
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1&races', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.3, boom: 0, surge: 0 });
+    k.setControls(0, 0.3);
+    k.advance(30);
+    k.camera('chase');
+    k.render();
+  });
+  const found: string[] = [];
+  let upright = SCREENS[1].upright as boolean;
+  const check = async (where: string, sel: string) => {
+    await page.evaluate(() => globalThis.keel.render());
+    for (const f of await overBoat(page, sel, upright)) {
+      found.push(`${where}: ${f}`);
+    }
+    for (const f of await stillSailed(page)) {
+      found.push(`${where}: ${f}`);
+    }
+    // The sea's taps go to the boat's controls, not to the window: it stays.
+    if ((await page.locator(sel).count()) === 0) {
+      found.push(`${where}: ${sel} closed as the boat was sailed`);
+    }
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    upright = s.upright;
+    // From the Races page (a page of the menu's, in its place): Make a
+    // race, the share of one made, and its card.
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+    const races = page.locator('[data-page=races]');
+    await expect(races.locator('[data-readout=races-mine]')).toBeVisible();
+    await races.getByRole('button', { name: 'Make a race' }).click();
+    const make = page.locator('[data-panel=make-race]');
+    await expect(make.locator('#race-name')).toHaveValue('Saturday Dash');
+    await check(`${s.name}, Make a race`, '[data-panel=make-race]');
+    await make.getByRole('button', { name: 'Race others' }).click();
+    state.make = 'ok';
+    await make.getByRole('button', { name: 'Make it' }).click();
+    const share = page.locator('[data-panel=race-share]');
+    await expect(share).toBeVisible();
+    await check(`${s.name}, the share`, '[data-panel=race-share]');
+    await share.getByRole('button', { name: 'See the race' }).click();
+    const card = page.locator('[data-panel=race-card]');
+    await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+    await check(`${s.name}, the card`, '[data-panel=race-card]');
+    await card.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(card).toHaveCount(0);
+    // The race line's: its ⋯, the finish's card, the results.
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.raceGone(1, true);
+      k.raceTell({ start: 1 }, [
+        { name: 'Mira', boat: 'Gull' },
+        { name: 'Pip', boat: 'Swift' },
+      ]);
+      k.racePicture([{ place: 1 }, { place: 2 }]);
+    });
+    await expect(page.locator('.racer-line')).toBeVisible({ timeout: 15_000 });
+    await page.locator('.racer-line .rl-more').click();
+    await check(`${s.name}, the race’s window`, '[data-panel=race-more]');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() =>
+      globalThis.keel.raceFinish({ number: 1, place: 1, elapsedMs: 570_000 }),
+    );
+    await expect(page.locator('[data-panel=race-finish]')).toBeVisible();
+    await check(`${s.name}, the finish’s card`, '[data-panel=race-finish]');
+    await page.evaluate(() =>
+      globalThis.keel.raceResults({
+        results: [
+          {
+            number: 1,
+            place: 1,
+            how: 'finished',
+            elapsedMs: 570_000,
+            added: 0,
+            marks: 1,
+            toGo: 0,
+            medal: '',
+            awards: [],
+          },
+          {
+            number: 2,
+            place: 2,
+            how: 'finished',
+            elapsedMs: 600_000,
+            added: 0,
+            marks: 1,
+            toGo: 0,
+            medal: '',
+            awards: ['spoon'],
+          },
+        ],
+      }),
+    );
+    await expect(page.locator('[data-panel=race-results]')).toBeVisible();
+    await check(`${s.name}, the results`, '[data-panel=race-results]');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => globalThis.keel.raceGone(1, true));
+  }
+  expect(found).toEqual([]);
 });
 
 /** What is wrong with the race line: not 32 pixels tall, or a word cut short or run out of it. */

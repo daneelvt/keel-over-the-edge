@@ -7,7 +7,17 @@
 
 import { describe, expect, test } from 'vitest';
 import type { RacesBoard, Summary } from './raceapi';
-import { dueNotices, HARBOUR_RACE, RACE_CALLED_OFF, RACE_SOON } from './racenotices';
+import {
+  dueNotices,
+  HARBOUR_RACE,
+  nextRace,
+  RACE_CALLED_OFF,
+  RACE_SOON,
+  satOut,
+  WAITING_SHOWN,
+  WARNING,
+  waitingRace,
+} from './racenotices';
 
 const MINUTE = 60_000;
 const START = Date.UTC(2026, 10, 14, 4, 0);
@@ -143,5 +153,56 @@ describe('a race called off for a storm', () => {
     expect(dueNotices(b(cancelled), withOff, START, new Set())).toEqual([]);
     // Without its kind in the catalog, nothing.
     expect(dueNotices(b(off), kinds, START, new Set())).toEqual([]);
+  });
+});
+
+describe('the player’s next race, waiting and sat out', () => {
+  const mine = (o: Partial<Summary> = {}) =>
+    race({
+      code: 'mineaaaaaa',
+      name: 'Monday Dash',
+      harbour: false,
+      mine: { owner: true, entered: true },
+      entered: 1,
+      ...o,
+    });
+
+  test('the next is the soonest race the player is in, not a trial nor one over', () => {
+    const b = board({
+      mine: [
+        mine({ code: 'trialaaaaa', kind: 'trial', startsAt: START - 60 * MINUTE }),
+        mine({ code: 'overaaaaaa', phase: 'finished', startsAt: START - 30 * MINUTE }),
+        mine({ code: 'lateraaaaa', startsAt: START + 60 * MINUTE }),
+        mine({ startsAt: START }),
+        mine({
+          code: 'notinaaaaa',
+          mine: { owner: true, entered: false },
+          startsAt: START - MINUTE,
+        }),
+      ],
+    });
+    expect(nextRace(b)?.code).toBe('mineaaaaaa');
+    expect(nextRace(board())).toBeNull();
+  });
+
+  test('the race line shows it from half an hour before its start to its warning signal', () => {
+    const b = board({ mine: [mine()] });
+    expect(waitingRace(b, START - WAITING_SHOWN - 1000)).toBeNull();
+    expect(waitingRace(b, START - WAITING_SHOWN)?.code).toBe('mineaaaaaa');
+    expect(waitingRace(b, START - WARNING - 1000)?.code).toBe('mineaaaaaa');
+    expect(waitingRace(b, START - WARNING)).toBeNull();
+    expect(waitingRace(null, START - 10 * MINUTE)).toBeNull();
+  });
+
+  test('a race whose warning came while the boat raced another is told once, soon after', () => {
+    const b = board({ mine: [mine(), mine({ code: 'otheraaaaa', name: 'Sunday Sprint' })] });
+    const shown = new Set<string>();
+    const racing = { code: 'otheraaaaa', name: 'Sunday Sprint' };
+    const warned = START - WARNING;
+    expect(satOut(b, racing, warned + 1000, shown)).toEqual([]);
+    expect(satOut(b, racing, warned + 6000, shown).map((s) => s.code)).toEqual(['mineaaaaaa']);
+    expect(satOut(b, racing, warned + 7000, shown)).toEqual([]);
+    expect(satOut(b, null, warned + 6000, new Set())).toEqual([]);
+    expect(satOut(b, racing, warned + 2 * MINUTE, new Set())).toEqual([]);
   });
 });

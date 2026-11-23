@@ -208,7 +208,12 @@ export function BarMore({ src }: { src: RaceSource }) {
   };
   const on = w.follow.value;
   return (
-    <Window name="race-bar-more" title={told.name !== '' ? told.name : 'The race'} close={close}>
+    <Window
+      name="race-bar-more"
+      title={told.name !== '' ? told.name : 'The race'}
+      close={close}
+      side
+    >
       <label class="rb-switch">
         <input
           type="checkbox"

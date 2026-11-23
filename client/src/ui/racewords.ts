@@ -247,6 +247,8 @@ export interface RefusalTime {
   needs?: string | undefined;
   /** For a limit refused, the limit's number, from the settings. */
   most?: number | undefined;
+  /** For a clash, the race the player is in, by name. */
+  race?: string | undefined;
   now: number;
   locale?: string;
   zone?: string;
@@ -320,7 +322,7 @@ export function enterRefusalText(reason: string, t: RefusalTime): string {
     case 'entered':
       return 'You’re entered already.';
     case 'clash':
-      return 'You’re entered in another race that starts within 20 minutes of this one.';
+      return clashText(t);
     case 'late':
       return 'The world ends too soon to sail this trial now.';
     case 'not-entered':
@@ -384,6 +386,22 @@ export function rowReasonText(e: Pick<EnterTold, 'ok' | 'reason' | 'needs' | 'mo
   }
 }
 
+/**
+ * A race that would overlap one the player is in, as a boat sails one race
+ * at a time: "You’re in Monday Dash until about 11:40 PM."
+ */
+export function clashText(t: RefusalTime): string {
+  const race = t.race === undefined || t.race === '' ? 'another race' : t.race;
+  return t.until === undefined || t.until <= 0
+    ? `You’re in ${race} then.`
+    : `You’re in ${race} until about ${whenText(t.until, t.now, t.locale, t.zone)}.`;
+}
+
+/** After a race's start, to a boat still racing in another: it sat this one out. */
+export function satOutText(racing: string, missed: string): string {
+  return `You were still racing in ${racing}, so you sat out ${missed}.`;
+}
+
 /** Why a race in a boat the player may not sail yet is refused. */
 function certificateText(t: RefusalTime): string {
   const needs = t.needs ?? '';
@@ -395,6 +413,11 @@ function certificateText(t: RefusalTime): string {
 /** Why a race cannot be made, kindly, with when it may be. */
 export function makeRefusalText(reason: string, t: RefusalTime, name?: string): string {
   switch (reason) {
+    case 'ahead':
+    case 'daily':
+    case 'clash':
+      // Its maker races it: the limits on racing hold.
+      return enterRefusalText(reason, t);
     case 'made': {
       const a = after(t);
       const head =
@@ -463,6 +486,10 @@ export function actRefusalText(reason: string, t: RefusalTime): string {
       return 'There is no entrant with that number.';
     case 'not-finished':
       return 'The race can be sailed again once it is over.';
+    case 'others':
+      return 'Someone else has joined, so the race keeps its time.';
+    case 'owner':
+      return 'That can’t be done in your own race.';
     case 'soon':
     case 'late':
       return makeRefusalText(reason, t);
@@ -511,7 +538,52 @@ export const WATCH_WHEN_STARTS = 'Watch when it starts';
 export const WATCH = 'Watch';
 export const ADD_TO_CALENDAR = 'Add to calendar';
 export const WITHDRAW = 'Withdraw';
+/** The owner's key on a race of one: the start two minutes from now. */
+export const START_NOW = 'Start now';
+export const START_NOW_LINE = 'Only you are in. Start in two minutes instead of waiting.';
 export const CLOSE = 'Close';
+
+/** Make a race's two choices, each with its line. */
+export const SAIL_IT_NOW = 'Sail it now';
+export const RACE_OTHERS = 'Race others';
+export const SAIL_IT_NOW_LINE =
+  'Just you, starting now. Your clock starts when you cross the line.';
+export const RACE_OTHERS_LINE = 'Others can join from the link until two minutes before the start.';
+export const TRIAL_OTHERS_LINE = 'A time trial is open all week for others to sail from the link.';
+
+/** The owner's keys to take a race away: Delete while no one else is in, Cancel the race once others are. */
+export const DELETE = 'Delete';
+export const CANCEL_RACE = 'Cancel the race';
+export const KEEP_IT = 'Keep it';
+
+/** The question before a race is deleted, or cancelled with others in. */
+export function takeAwayAsk(name: string, others: boolean): string {
+  return others ? `Cancel ${name}? Everyone in it is told.` : `Delete ${name}?`;
+}
+
+/** The menu's key to the Races page, and the page's name. */
+export const RACES = 'Races';
+
+/** Your races' rows: which are yours, and how many are in. */
+export const YOU_MADE_IT = 'You made it';
+export const ENTERED = 'Entered';
+export function inText(n: number): string {
+  return `${n} in`;
+}
+
+/** The Races page's parts. */
+export const YOUR_NEXT_RACE = 'Your next race';
+export const YOUR_RACES = 'Your races';
+export const SAIL_NOW = 'Sail now';
+export const SEE = 'See';
+export const SAIL = 'Sail';
+export const NO_RACES_YET = 'None yet. Enter one below, or make your own.';
+
+/** The waiting line's countdown: "starts in 8:29". */
+export function waitText(ms: number): string {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `starts in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 /** The text a race's link is shared with, the link last. */
 export function raceShareText(
