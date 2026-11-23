@@ -18,6 +18,8 @@ export interface CameraKeys {
   resting: ReadonlySignal<boolean>;
   /** Eases it back behind the boat, at its resting view and distance. */
   behind(): void;
+  /** Moves the picture left by px CSS pixels, 0 for none: the boat clear of a window beside her. */
+  aside?: (px: number) => void;
 }
 
 export const BACK_TO_THE_BOAT = 'Back to the boat';

@@ -233,7 +233,11 @@ async function start(): Promise<void> {
   effect(() => {
     world.camera.seaMoves = settings.value.value.seaMotion;
   });
-  const camera = { resting: world.resting, behind: () => world.camera.behind() };
+  const camera = {
+    resting: world.resting,
+    behind: () => world.camera.behind(),
+    aside: (px: number) => world.stage.aside(px),
+  };
   const clear = clearView(world);
 
   const view = CAMERA_PRESETS[query.get('view') ?? ''];

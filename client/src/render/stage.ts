@@ -91,6 +91,9 @@ export class Stage {
   #compileTarget: RenderTarget | null = null;
   #last = 0;
   #frozen = false;
+  /** How far the picture is moved left, CSS px, and whether the camera's frame is that. */
+  #aside = 0;
+  #asideSet = false;
   /** The compile running, or the last to: compiles run one at a time. */
   #compiling: Promise<void> = Promise.resolve();
   /** Those waiting for a copy of the next frame drawn. */
@@ -306,11 +309,40 @@ export class Stage {
     return this.scale ?? this.ratio(window.devicePixelRatio || 1);
   }
 
+  /**
+   * Moves the picture left by px CSS pixels, 0 for none: the boat drawn
+   * left of the middle, clear of a window beside it. The camera stays where
+   * it is; only the picture's frame moves.
+   */
+  aside(px: number): void {
+    if (px === this.#aside) {
+      return;
+    }
+    this.#aside = px;
+    this.#frameCamera();
+  }
+
+  /** The camera's projection for the stage's size and the picture's frame. */
+  #frameCamera(): void {
+    const { width: w, height: h } = this.size();
+    if (this.#aside > 0) {
+      this.camera.setViewOffset(w, h, this.#aside, 0, w, h);
+      this.#asideSet = true;
+      return;
+    }
+    // Another's frame (the harbour's look, close to the sailor) is left be.
+    if (this.#asideSet) {
+      this.camera.clearViewOffset();
+      this.#asideSet = false;
+    }
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
   resize(): void {
     const g = this.gfx;
     const { width: w, height: h } = this.size();
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.#frameCamera();
     if (g !== null) {
       g.renderer.setPixelRatio(this.pixelRatio());
       g.renderer.setSize(w, h);
