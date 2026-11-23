@@ -824,8 +824,11 @@ func (s *Service) Again(ctx context.Context, by Sailor, code string) (Card, erro
 	if err != nil {
 		return Card{}, err
 	}
+	// A race on a course with a beat in it was its owner's own: sailed
+	// alone again, at once.
 	m := Making{Kind: r.Kind, Course: CourseID(r.CourseKind, r.Shape, r.Long, r.Course), Boat: r.Boat,
-		At: now.Add(Lead), Who: r.Who, Name: r.Name}
+		At: now.Add(Lead), Who: r.Who, Name: r.Name,
+		Now: r.Kind == KindRace && r.CourseKind == CourseBuoy && UpwindShape(r.Shape)}
 	nr, err := s.making(by, m, now, limits)
 	if err != nil {
 		return Card{}, err

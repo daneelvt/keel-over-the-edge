@@ -24,7 +24,8 @@ import (
 // kind unless a human's alone, look unless the first and kind of boat unless the first,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
 // ticks, as little-endian bits; and, once the world has had a race, its
-// races as its snapshot holds them. Two worlds with the
+// races as its snapshot holds them, and the homes its boats keep from
+// races, once one does. Two worlds with the
 // same digest at a tick are, all but certainly, the same world; a replay
 // compares them to find the first tick at which it went wrong.
 func Digest(f *bus.Frame) uint64 {
@@ -155,6 +156,11 @@ func Digest(f *bus.Frame) uint64 {
 		for _, b := range committee.AppendSnapshot(nil, f) {
 			h.byte(b)
 		}
+	}
+	// The homes kept from races once one is, so a world that keeps none
+	// hashes as before.
+	for _, b := range appendHomes(nil, f) {
+		h.byte(b)
 	}
 	return uint64(h)
 }

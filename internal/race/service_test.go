@@ -623,6 +623,24 @@ func TestSailItNow(t *testing.T) {
 	if !again.Mine.Entered || again.Phase != PhaseOpen || len(again.Entrants) != 1 {
 		t.Errorf("made again: %+v", again)
 	}
+	// One's own race on a course with a beat in it, made again: one's own
+	// again, at once.
+	s.now = s.now.Add(time.Hour)
+	own, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Now: true, Course: "buoy:triangle:long", Boat: s.jolly(), Who: WhoEveryone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(s.ctx, `UPDATE race SET state = 'finished' WHERE code = $1`, own.Code); err != nil {
+		t.Fatal(err)
+	}
+	s.now = s.now.Add(time.Hour)
+	again, err = s.svc.Again(s.ctx, by, own.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := s.now.Add(Warning).Truncate(time.Second).UnixMilli(); again.StartsAt != want || again.Course.ID != "buoy:triangle:long" {
+		t.Errorf("one's own made again: %+v", again)
+	}
 }
 
 // TestDelete: a race no one but its owner is in, cancelled, goes from

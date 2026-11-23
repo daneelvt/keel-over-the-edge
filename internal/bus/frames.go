@@ -131,6 +131,9 @@ type Frame struct {
 	Racers     []Racer
 	NextRace   uint32
 	RaceEvents []RaceEvent
+	// RaceHomes are where the boats racing, or just done, were before
+	// their races took them to the line, by when each was placed.
+	RaceHomes []RaceHome
 
 	// Ended says this tick was the world's last: the falls took every boat
 	// afloat (their EdgeTaken events are in Edges), and no tick follows.

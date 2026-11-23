@@ -2,6 +2,8 @@
 
 package bus
 
+import "github.com/daneelvt/keel-over-the-edge/internal/physics"
+
 // Races in the world: the committee (internal/race/committee) runs each race
 // under way inside the tick. A race is handed to it by the server at its
 // warning signal (RacePlace), with its entrants; the committee lays its
@@ -261,6 +263,27 @@ type Racer struct {
 	Sampled        int64
 	SX, SY, SH, SV int32
 }
+
+// RaceHome is where a boat was just before a race or a trial's run took
+// it to its line: its skipper's, its slot and boat, its kind, look and
+// name, its place and heading. Once the race is over for it, it goes
+// back there, HomeAfter later.
+type RaceHome struct {
+	Account  Account
+	Slot     int32
+	Boat     uint64
+	Kind     uint16
+	BoatLook uint32
+	BoatName string
+	X, Y     float64
+	Heading  float64
+	// At is the tick it goes home, 0 while it still races.
+	At int64
+}
+
+// HomeAfter is how many ticks after its race is over for it a boat goes
+// back to where it was: a few seconds, to see itself across the line.
+const HomeAfter = 5 * physics.StepsPerSecond
 
 // The kinds of RaceEvent.
 const (
