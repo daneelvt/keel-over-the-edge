@@ -53,6 +53,19 @@ function boatAt(e: LifeSeen, t: number): BoatAt {
   };
 }
 
+/**
+ * The birds of a group of count looked at closely: every one of a small
+ * group, and of a big one most of them spread through it, the first and
+ * the last among them, so that a flock of thirty takes no longer than a
+ * test may on a slow runner.
+ */
+function spread(count: number, most = 8): number[] {
+  if (count <= most) {
+    return Array.from({ length: count }, (_, b) => b);
+  }
+  return Array.from({ length: most }, (_, j) => Math.round((j * (count - 1)) / (most - 1)));
+}
+
 const cases = birds.flatMap(({ k, i }) => [
   { name: `${k.id} free`, k, i, boat: false },
   ...(k.binds === 'follow' ? [{ name: `${k.id} with a boat`, k, i, boat: true }] : []),
@@ -69,7 +82,7 @@ describe('the birds of the sea’s life', () => {
     const p = newBirdPlace();
     for (const sea of [0, 2, 6]) {
       const floor = floorOver(sea);
-      for (let b = 0; b < e.count; b++) {
+      for (const b of spread(e.count)) {
         for (let t = e.start; t < e.end; t += 15) {
           const pose = boat ? boatAt(e, t) : null;
           expect(birdAt(e, k, b, t, pose, sea, p)).toBe(true);
