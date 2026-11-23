@@ -360,6 +360,10 @@ test.describe('with script', () => {
       'href',
       vscodeLink(),
     );
+    await expect(page.getByRole('link', { name: 'YouTube' })).toHaveAttribute(
+      'href',
+      'https://www.youtube.com/@Keelovertheedge',
+    );
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
       'content',
       'https://keelovertheedge.com/share.png',
