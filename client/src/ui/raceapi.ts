@@ -378,7 +378,9 @@ export function makeRace(body: MakeBody, f: Fetch = own): Promise<Told<RaceCard>
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      // The start is whole milliseconds: the world's clock reads in
+      // fractions, and the server refuses a start that is not a whole number.
+      body: JSON.stringify({ ...body, at: Math.round(body.at) }),
     },
     [201],
   );
