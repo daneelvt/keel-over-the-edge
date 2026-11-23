@@ -200,7 +200,7 @@ describe('refusals, told kindly', () => {
     );
     // The numbers are the settings', never the words'.
     expect(makeRefusalText('owned', { ...t(), most: 5 })).toMatch(/^Five of your races/);
-    expect(makeRefusalText('upwind', t())).toMatch(/time trial/);
+    expect(makeRefusalText('upwind', t())).toMatch(/on your own/);
   });
 
   test('a name refused says why', () => {

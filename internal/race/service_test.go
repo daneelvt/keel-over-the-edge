@@ -591,11 +591,11 @@ func TestOneRaceAtATime(t *testing.T) {
 	}
 }
 
-// TestSailItNow: a race sailed alone at once is made closed, its start a
-// warning signal's length away (its warning now), its maker entered; no
-// one else joins.
-// Race again enters its maker too.
-func TestSailItNow(t *testing.T) {
+// TestOnMyOwn: a race of one's own, sailed alone at once, is made closed,
+// its start a warning signal's length away (its warning now), its maker
+// entered; no one else joins. Race again enters its maker too, and one's
+// own on a course with a beat in it is one's own again.
+func TestOnMyOwn(t *testing.T) {
 	s := newSea(t)
 	by := s.human()
 	c, err := s.svc.Make(s.ctx, by, Making{Kind: KindRace, Now: true, Course: "buoy:dash:short", Boat: s.jolly(), Who: WhoEveryone})
@@ -604,7 +604,7 @@ func TestSailItNow(t *testing.T) {
 	}
 	if want := s.now.Add(Warning).Truncate(time.Second).UnixMilli(); c.StartsAt != want || c.Phase != PhaseStarting ||
 		!c.Mine.Entered || !c.Mine.Owner || len(c.Entrants) != 1 {
-		t.Errorf("sail it now: %+v", c)
+		t.Errorf("one's own race: %+v", c)
 	}
 	_, err = s.svc.Enter(s.ctx, s.human(), c.Code, false)
 	refused(t, err, RefuseClosed)
