@@ -88,6 +88,15 @@ describe('the routes', () => {
     expect(down.ok ? null : down.refusal.reason).toBe('offline');
   });
 
+  test('a race’s start goes as whole milliseconds, though the clock reads in fractions', async () => {
+    const f = server(201, { code: 'abcdefghij' });
+    await makeRace(
+      { kind: 'trial', course: 'c', boat: 'b', at: 1763879000123.25, who: 'everyone', name: '' },
+      f,
+    );
+    expect(JSON.parse(String(f.asked[0]?.init?.body)).at).toBe(1763879000123);
+  });
+
   test('an act’s body goes as JSON; one without goes bare', async () => {
     const f = server(200, {});
     await raceAct('abcdefghij', 'remove', { number: 3 }, f);
