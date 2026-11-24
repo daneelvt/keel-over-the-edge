@@ -401,7 +401,11 @@ test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes
     expect(Math.abs((await state()).heel)).toBeLessThan(0.5);
     // A broad reach in a breeze, the sheet at its best; a gust and borne
     // away, the sheet held: her bows bury and her sailor goes over them.
+    // In a 30-knot gust she may surf on in the sea with her bows up; in 35
+    // she goes over within the next group of big waves, half a minute at
+    // most (TestBeachCatPitchpolesInASea).
     await wind(20);
+    await steadyWind(page, 20, 0);
     // At rest on it in clean air, with the wind over starboard again
     // (righted, she may have come up on the other tack), the autopilot on
     // afresh there.
@@ -417,7 +421,7 @@ test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes
     await page.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 4, null, {
       timeout: 40_000,
     });
-    await wind(30);
+    await wind(35);
     await pilotTo(page, 155);
     await page.waitForFunction(
       () => {

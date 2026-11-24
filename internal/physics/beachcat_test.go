@@ -233,6 +233,63 @@ func TestBeachCatPitchpoles(t *testing.T) {
 	}
 }
 
+// pitchpoleInASea sails her from rest at 135° in 20 knots and the sea of
+// 20 knots, under the autopilot, with the sheet at sheet; once past 4 m/s
+// the autopilot is set to bear away to angle off the wind, and lag
+// seconds later a gust of knots comes, with its own sea. It returns how
+// many seconds after the gust her sailor is thrown off over the bow, or
+// +Inf if not within a minute.
+func pitchpoleInASea(t *testing.T, b *Prepared, s20, sGust *ocean, tick, sheet, angle, gust, lag float64) float64 {
+	t.Helper()
+	m := newSimOf(t, b, 20*knot, -135, sheet)
+	m.in(s20)
+	m.tick += tick
+	m.s.Surge = 0
+	m.steer = false
+	m.c.Pilot, m.c.Target = PilotWind, pilotTarget(135)
+	for n := 0; m.speed() < 4 && n < 30*StepsPerSecond; n++ {
+		m.step()
+	}
+	m.c.Target = pilotTarget(angle)
+	m.run(lag, nil)
+	m.e.WindSpeed, m.sea = gust*knot, sGust
+	for n := 1; n <= 60*StepsPerSecond; n++ {
+		m.step()
+		if m.s.SailorMode != Sailing && math.Abs(m.s.Heel) < b.fallOutHeel {
+			return float64(n) / StepsPerSecond
+		}
+	}
+	return math.Inf(1)
+}
+
+// Pitchpoling in a sea, as the browser's test sails her: from rest on a
+// broad reach in 20 knots, borne away to 155° under the autopilot with the
+// sheet at 0.7, a gust and its sea. In a 35-knot gust her sailor goes over
+// the bow within 32 s whenever the gust comes and whatever the waves are
+// doing, the slowest waiting for the next group of big waves; in a
+// 30-knot gust she may surf on with her bows up and never go over.
+func TestBeachCatPitchpolesInASea(t *testing.T) {
+	b := beachCat(t)
+	fetch := testWaves(t).FetchCap() / nauticalMile
+	s20 := openSea(t, 20, 0, fetch)
+	for _, c := range []struct {
+		gust   float64
+		within bool
+	}{{35, true}, {30, false}} {
+		sea := openSea(t, c.gust, 0, fetch)
+		slowest := 0.0
+		for _, lag := range []float64{0.5, 1.5, 2.5} {
+			for k := range 40 {
+				slowest = max(slowest, pitchpoleInASea(t, b, s20, sea, float64(k)*7.3*StepsPerSecond+lag*1000, 0.7, 155, c.gust, lag))
+			}
+		}
+		t.Logf("a %g-knot gust: thrown off over the bow at the latest %.1f s after it", c.gust, slowest)
+		if (slowest <= 32) != c.within {
+			t.Errorf("a %g-knot gust: thrown off at the latest %.1f s after it, want within 32 s: %v", c.gust, slowest, c.within)
+		}
+	}
+}
+
 // Her sailor stands further aft as the wind rises on a broad reach, and
 // not at all in a light air; no other boat's sailor moves aft.
 func TestBeachCatSailorStepsAft(t *testing.T) {
