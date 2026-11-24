@@ -184,6 +184,9 @@ export function shapeText(course: CourseTold): string {
   if (course.shape === 'reach') {
     return 'Reach: across the wind to one mark and back';
   }
+  if (course.shape === 'dash' && course.long === true) {
+    return 'Long Dash: across the wind to a mark further out, and home';
+  }
   if (course.shape === 'dash') {
     return 'Dash: across the wind to a mark and home';
   }

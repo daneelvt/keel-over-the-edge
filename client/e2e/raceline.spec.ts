@@ -16,6 +16,7 @@
 
 import { expect, test } from '@playwright/test';
 import { openScene } from './helpers';
+import { raceBoard, standInRaces } from './races';
 
 test('a race on the racer’s screen, from the warning to the results', async ({ page }) => {
   test.slow();
@@ -181,4 +182,144 @@ test('a race on the racer’s screen, from the warning to the results', async ({
   await expect(results).toContainText('The spoon hangs from your stern');
   await results.getByRole('button', { name: 'Close' }).click();
   await expect(results).toHaveCount(0);
+});
+
+test('one window at a time beside the boat: the menu over Make a race or the race’s window closes it, and a race’s window closes the menu', async ({
+  page,
+}) => {
+  await standInRaces(page, Date.now());
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1&races', true);
+  const side = page.locator('.hud-screen > :is(.menu, .at-side)');
+  const menu = page.locator('.menu:not(.menu-page)');
+  const make = page.locator('[data-panel=make-race]');
+  // Make a race, then the menu's button: Make a race goes, the menu stays.
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await menu.getByRole('button', { name: 'Races', exact: true }).click();
+  await page.locator('[data-page=races]').getByRole('button', { name: 'Make a race' }).click();
+  await expect(make).toBeVisible();
+  await expect(side).toHaveCount(1);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(menu).toBeVisible();
+  await expect(make).toHaveCount(0);
+  await expect(page.locator('[data-page=races]')).toHaveCount(0);
+  await expect(side).toHaveCount(1);
+  // The race's ⋯, then the menu: the same.
+  await page.getByRole('button', { name: 'Close the menu' }).click();
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.raceTell({ start: 1 }, [
+      { name: 'Mira', boat: 'Gull' },
+      { name: 'Pip', boat: 'Swift' },
+    ]);
+    k.racePicture([{ place: 1 }, { place: 2 }]);
+  });
+  await page.locator('.racer-line .rl-more').click();
+  await expect(page.locator('[data-panel=race-more]')).toBeVisible();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(menu).toBeVisible();
+  await expect(page.locator('[data-panel=race-more]')).toHaveCount(0);
+  await expect(side).toHaveCount(1);
+  // With the menu open the boat comes home: the finish's card, and no menu.
+  await page.evaluate(() =>
+    globalThis.keel.raceFinish({ number: 1, place: 1, elapsedMs: 570_000 }),
+  );
+  await expect(page.locator('[data-panel=race-finish]')).toBeVisible();
+  await expect(menu).toHaveCount(0);
+  await expect(side).toHaveCount(1);
+});
+
+test('Make a race: on my own on any course, the upwind ones signed, at once; with others a start time always, no course starting upwind, and no island course says why', async ({
+  page,
+}) => {
+  const now = Date.now();
+  const state = await standInRaces(page, now);
+  await page.setViewportSize({ width: 360, height: 640 });
+  await openScene(page, 'world=1&races', true);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+  await page.locator('[data-page=races]').getByRole('button', { name: 'Make a race' }).click();
+  const make = page.locator('[data-panel=make-race]');
+  const mode = make.locator('[data-choice=mode] button');
+  await expect(mode).toHaveText(['On my own', 'With others']);
+  await expect(make.getByRole('button', { name: 'On my own' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(make.locator('[data-readout=race-mode-line]')).toHaveText(
+    'Your own race, just you, starting now. Your clock starts when you cross the line.',
+  );
+  // On my own: every course, the Dash, the long Dash and the Reach first,
+  // the ones with a beat signed; no start time, no time trial.
+  const courses = make.locator('[data-course]');
+  const all = [
+    'buoy:dash:short',
+    'buoy:dash:long',
+    'buoy:reach:short',
+    'island:3',
+    'island:5',
+    'buoy:triangle:short',
+    'buoy:triangle:long',
+    'buoy:windward-leeward:short',
+    'buoy:windward-leeward:long',
+  ];
+  await expect(courses).toHaveCount(all.length);
+  expect(await courses.evaluateAll((cs) => cs.map((c) => c.getAttribute('data-course')))).toEqual(
+    all,
+  );
+  await expect(make.locator('[data-course="buoy:triangle:short"]')).toContainText('Upwind');
+  await expect(make.locator('[data-course="island:5"]')).toContainText('Starts upwind today');
+  await expect(make.locator('[data-choice=when]')).toHaveCount(0);
+  await expect(make.locator('[data-choice=kind]')).toHaveCount(0);
+  await expect(make.locator('[data-readout=race-no-islands]')).toHaveCount(0);
+  await make.locator('[data-course="buoy:windward-leeward:long"]').click();
+  await make.getByRole('button', { name: 'Make it' }).click();
+  await expect(make).toHaveCount(0);
+  expect(state.asked).toMatchObject({
+    kind: 'race',
+    course: 'buoy:windward-leeward:long',
+    now: true,
+  });
+
+  // With others: a start time, always, and no course that starts upwind.
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+  await page.locator('[data-page=races]').getByRole('button', { name: 'Make a race' }).click();
+  await make.getByRole('button', { name: 'With others' }).click();
+  await expect(make.locator('[data-readout=race-mode-line]')).toHaveText(
+    'Others can join from the link until two minutes before the start.',
+  );
+  await expect(make.locator('[data-choice=when] button')).toHaveText([
+    'In 10 min',
+    'In 30 min',
+    'In 1 hour',
+    'Later',
+  ]);
+  expect(await courses.evaluateAll((cs) => cs.map((c) => c.getAttribute('data-course')))).toEqual(
+    all.slice(0, 4),
+  );
+  await make.locator('[data-course="buoy:reach:short"]').click();
+  await make.getByRole('button', { name: 'Make it' }).click();
+  await expect(page.locator('[data-panel=race-share]')).toBeVisible();
+  expect(state.asked).toMatchObject({ kind: 'race', course: 'buoy:reach:short' });
+  expect(state.asked?.now).toBeUndefined();
+  await page
+    .locator('[data-panel=race-share]')
+    .getByRole('button', { name: 'Close', exact: true })
+    .click();
+
+  // A world with no island course open yet says so, in one line.
+  const board = raceBoard(now);
+  board.make.courses = board.make.courses.filter((c) => c.kind !== 'island');
+  await page.route(
+    (url) => url.pathname === '/api/races',
+    (r) => r.fulfill({ json: board }),
+  );
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.locator('.menu').getByRole('button', { name: 'Races', exact: true }).click();
+  await page.locator('[data-page=races]').getByRole('button', { name: 'Make a race' }).click();
+  await expect(make.locator('[data-readout=race-no-islands]')).toHaveText(
+    'Island courses open as sailors chart the islands near Port Royal.',
+  );
 });

@@ -16,12 +16,13 @@ func offWind(from float64, a, b [2]float64) float64 {
 	return math.Abs(wrap(from - bearing(b[0]-a[0], b[1]-a[1])))
 }
 
-// TestLayingAReach: in each of eight winds and for every kind of boat the
-// area takes, the reach lies inside the racing area, its line along the
-// wind with the committee boat at its downwind end, its one mark straight
-// across the wind, to port and on the side that makes the turn a tack; no
-// leg lies closer to the wind than 80°; and the boat placed faces the
-// mark.
+// TestLayingAReach: in each of eight winds, for every kind of boat the
+// area takes and a trial's one boat or a race's fleets, the reach lies
+// inside the racing area with the rows of boats placed behind its line,
+// its line along the wind with the committee boat at its downwind end and
+// as long as the fleet's, its one mark straight across the wind, to port
+// and on the side that makes the turn a tack; no leg lies closer to the
+// wind than 80°; and the boats placed face the mark.
 func TestLayingAReach(t *testing.T) {
 	s := stage(t)
 	f := bus.NewFrame(4)
@@ -31,43 +32,56 @@ func TestLayingAReach(t *testing.T) {
 		if k.Length > 15 {
 			continue
 		}
-		for w := range 8 {
-			from := wrap(float64(w) * math.Pi / 4)
-			for _, knots := range []float64{4, 10, 22} {
-				c := s.Lay(f, &bus.RaceCall{Trial: true, Across: true, Kind: uint16(kind), Entrants: entrants(1)}, knots*physics.Knot, from, 1)
-				if c == nil || !c.Across || c.Triangle || c.Island || c.Laps != 1 {
-					t.Fatalf("kind %d, wind from %.2f: laid %+v", kind, from, c)
-				}
-				for _, p := range append(append([][2]float64{}, c.Way...), c.Committee, c.Pin, c.FinishA, c.FinishB, [2]float64{c.Marks[0].X, c.Marks[0].Y}) {
-					if hypot(p[0]-a.X, p[1]-a.Y) > a.Radius+1e-6 {
-						t.Errorf("kind %d, wind from %.2f at %.0f kn: %v outside the area", kind, from, knots, p)
+		for _, n := range []int{1, 2, 8, 12} {
+			for w := range 8 {
+				from := wrap(float64(w) * math.Pi / 4)
+				for _, knots := range []float64{4, 10, 22, 40} {
+					call := &bus.RaceCall{Trial: n == 1, Course: 1, Across: true, Kind: uint16(kind), Entrants: entrants(n)}
+					c := s.Lay(f, call, knots*physics.Knot, from, n)
+					if c == nil || !c.Across || c.Dash || c.Triangle || c.Island || c.Laps != 1 {
+						t.Fatalf("kind %d, wind from %.2f: laid %+v", kind, from, c)
 					}
-				}
-				for i := 1; i < len(c.Way); i++ {
-					if off := offWind(from, c.Way[i-1], c.Way[i]); off < 80*math.Pi/180 {
-						t.Errorf("kind %d, wind from %.2f: leg %d lies %.0f° off the wind", kind, from, i, off*180/math.Pi)
+					if line := hypot(c.Committee[0]-c.Pin[0], c.Committee[1]-c.Pin[1]); math.Abs(line-lineLength(k.Length, n)) > 1e-6 {
+						t.Errorf("kind %d, %d boats: a line of %.0f m", kind, n, line)
 					}
-				}
-				// The line along the wind: the pin up it, the committee boat down it.
-				if off := offWind(from, c.Committee, c.Pin); off > 1e-6 {
-					t.Errorf("kind %d, wind from %.2f: the line lies %.2f rad off the wind", kind, from, off)
-				}
-				if len(c.Marks) != 1 || c.Marks[0].Side != bus.MarkPort || c.Marks[0].Number != 1 || len(c.Checks) != 3 {
-					t.Fatalf("kind %d: marks %+v, %d checks", kind, c.Marks, len(c.Checks))
-				}
-				// Sailing out, the wind is over the port side: turning to
-				// port round the mark is turning up, through the wind.
-				out := bearing(c.Way[1][0]-c.Way[0][0], c.Way[1][1]-c.Way[0][1])
-				if side := wrap(from - out); !(side < 0) {
-					t.Errorf("kind %d, wind from %.2f: the wind %.2f rad off the way out, not over the port side", kind, from, side)
-				}
-				spots := Spots(c, k.Length)
-				if d := math.Abs(wrap(spots[0].Heading - out)); d > 1e-9 {
-					t.Errorf("kind %d: the boat placed faces %.2f, the mark bears %.2f", kind, spots[0].Heading, out)
-				}
-				// Behind the line: the start is ahead of the boat placed.
-				if ch := &c.Checks[0]; lineCross(ch, spots[0].X, spots[0].Y, c.Way[1][0], c.Way[1][1]) != ch.Want {
-					t.Errorf("kind %d, wind from %.2f: the boat placed at %v does not cross the line on her way to the mark", kind, from, spots[0])
+					spots := Spots(c, k.Length)
+					perRow := max(int(hypot(c.Committee[0]-c.Pin[0], c.Committee[1]-c.Pin[1])/(rowBack*k.Length)+0.01), 1)
+					points := append(append([][2]float64{}, c.Way...), c.Committee, c.Pin, c.FinishA, c.FinishB, [2]float64{c.Marks[0].X, c.Marks[0].Y})
+					for _, sp := range spots[:min((n+perRow-1)/perRow*perRow, len(spots))] {
+						points = append(points, [2]float64{sp.X, sp.Y})
+					}
+					for _, p := range points {
+						if hypot(p[0]-a.X, p[1]-a.Y) > a.Radius+1e-6 {
+							t.Errorf("kind %d, %d boats, wind from %.2f at %.0f kn: %v outside the area", kind, n, from, knots, p)
+						}
+					}
+					for i := 1; i < len(c.Way); i++ {
+						if off := offWind(from, c.Way[i-1], c.Way[i]); off < 80*math.Pi/180 {
+							t.Errorf("kind %d, wind from %.2f: leg %d lies %.0f° off the wind", kind, from, i, off*180/math.Pi)
+						}
+					}
+					// The line along the wind: the pin up it, the committee boat down it.
+					if off := offWind(from, c.Committee, c.Pin); off > 1e-6 {
+						t.Errorf("kind %d, wind from %.2f: the line lies %.2f rad off the wind", kind, from, off)
+					}
+					if len(c.Marks) != 1 || c.Marks[0].Side != bus.MarkPort || c.Marks[0].Number != 1 || len(c.Checks) != 3 {
+						t.Fatalf("kind %d: marks %+v, %d checks", kind, c.Marks, len(c.Checks))
+					}
+					// Sailing out, the wind is over the port side: turning to
+					// port round the mark is turning up, through the wind.
+					out := bearing(c.Way[1][0]-c.Way[0][0], c.Way[1][1]-c.Way[0][1])
+					if side := wrap(from - out); !(side < 0) {
+						t.Errorf("kind %d, wind from %.2f: the wind %.2f rad off the way out, not over the port side", kind, from, side)
+					}
+					// Behind the line: the start is ahead of each boat placed.
+					for _, sp := range spots[:min(n, len(spots))] {
+						if d := math.Abs(wrap(sp.Heading - out)); d > 1e-9 {
+							t.Errorf("kind %d: a boat placed faces %.2f, the mark bears %.2f", kind, sp.Heading, out)
+						}
+						if ch := &c.Checks[0]; lineCross(ch, sp.X, sp.Y, c.Way[1][0], c.Way[1][1]) != ch.Want {
+							t.Errorf("kind %d, wind from %.2f: a boat placed at %v does not cross the line on her way to the mark", kind, from, sp)
+						}
+					}
 				}
 			}
 		}

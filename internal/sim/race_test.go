@@ -397,3 +397,131 @@ func TestARaceInAStormIsCalledOff(t *testing.T) {
 		t.Errorf("a trial's run in a storm: %+v", f.Races)
 	}
 }
+
+// homeAt is where the boat in slot s of the latest frame of w is.
+func homeAt(w *World, s int32) physics.State { return w.Latest().State[s] }
+
+// nearly reports whether a boat at st is at (x, y) heading h, or within a
+// few metres and degrees: put there, at rest, a second or two ago.
+func nearly(st physics.State, x, y, h float64) bool {
+	return math.Abs(st.X-x) < 3 && math.Abs(st.Y-y) < 3 && math.Abs(math.Remainder(st.Heading-h, 2*math.Pi)) < 0.1
+}
+
+// A boat placed for a race goes back to where it was once the race is over
+// for it, HomeAfter later: finished, in its own kind again, those aboard
+// with it; retired, the same; one still racing stays on the course. A
+// world restored meanwhile sends it home the same. A trial's run whose
+// boat never crosses ends, and its boat goes home too.
+func TestABoatGoesHomeAfterItsRace(t *testing.T) {
+	defer func(a int64) { committee.TrialWait = a }(committee.TrialWait)
+	committee.TrialWait = 20 * committee.Second
+	w, cat := raceWorld(t)
+	keelboat := kindOf(t, cat, "keelboat")
+	var slots [3]int32
+	for i := range 3 {
+		kind := keelboat
+		if i == 1 {
+			kind = 0
+		}
+		slots[i] = do(t, w, bus.Command{Op: bus.Join, Account: acct(uint64(i + 1)), Conn: uint64(i + 1), BoatKind: kind}).Slot
+	}
+	if r := do(t, w, bus.Command{Op: bus.Board, Account: acct(10), Conn: 10, Boat: w.Latest().Boat[slots[0]]}); r.Result != bus.Crewed {
+		t.Fatalf("boarding: %+v", r)
+	}
+	for range 30 {
+		w.Tick()
+	}
+	var homes [3]physics.State
+	for i, s := range slots {
+		homes[i] = homeAt(w, s)
+	}
+	call := &bus.RaceCall{ID: [16]byte{7}, Course: 1, Kind: keelboat, Start: w.Now() + committee.Warning, Entrants: []bus.RaceEntrant{
+		{Account: acct(1), Number: 1, Crew: true}, {Account: acct(2), Number: 2}, {Account: acct(3), Number: 3}}}
+	if r := do(t, w, bus.Command{Op: bus.RacePlace, Race: call}); r.Result != bus.Done {
+		t.Fatalf("the race placed: %+v", r)
+	}
+	f := w.Latest()
+	if len(f.RaceHomes) != 3 || f.Kind[slots[1]] != keelboat {
+		t.Fatalf("%d homes kept, the Jolly boat's skipper in kind %d", len(f.RaceHomes), f.Kind[slots[1]])
+	}
+	for i, s := range slots {
+		if st := f.State[s]; nearly(st, homes[i].X, homes[i].Y, homes[i].Heading) {
+			t.Fatalf("boat %d not placed", i+1)
+		}
+	}
+	// Boat 1 home over the line, boat 2 retired; boat 3 races on.
+	for range 5 {
+		w.Tick()
+	}
+	cur := w.Latest()
+	for j := range cur.Racers {
+		if cur.Racers[j].Account == acct(1) {
+			cur.Racers[j].State, cur.Racers[j].Home = bus.RacerFinished, cur.Tick
+		}
+	}
+	if r := do(t, w, bus.Command{Op: bus.RaceRetire, Account: acct(2)}); r.Result != bus.Done {
+		t.Fatalf("retired: %+v", r)
+	}
+	placed := homeAt(w, slots[0])
+	for range bus.HomeAfter - 2 {
+		w.Tick()
+	}
+	// A restart between: the restored world sends them home the same.
+	w2, _ := raceWorld(t)
+	if err := w2.Load(AppendSnapshot(nil, w.Latest())); err != nil {
+		t.Fatal(err)
+	}
+	if Digest(w2.Latest()) != Digest(w.Latest()) || len(w2.Latest().RaceHomes) != 3 {
+		t.Fatalf("the restored world differs: %d homes", len(w2.Latest().RaceHomes))
+	}
+	if st := homeAt(w, slots[0]); math.Abs(st.X-placed.X) > 20 || math.Abs(st.Y-placed.Y) > 20 {
+		t.Errorf("boat 1 went home before it saw itself across the line")
+	}
+	for range 4 {
+		w.Tick()
+		w2.Tick()
+	}
+	if Digest(w2.Latest()) != Digest(w.Latest()) {
+		t.Fatal("the worlds part as their boats go home")
+	}
+	for _, x := range []*World{w, w2} {
+		f := x.Latest()
+		for i := range 2 {
+			if st := f.State[slots[i]]; !nearly(st, homes[i].X, homes[i].Y, homes[i].Heading) {
+				t.Errorf("boat %d at (%.1f, %.1f) heading %.2f, home (%.1f, %.1f) heading %.2f", i+1, st.X, st.Y, st.Heading,
+					homes[i].X, homes[i].Y, homes[i].Heading)
+			}
+		}
+		if f.Kind[slots[1]] != 0 {
+			t.Errorf("the Jolly boat's skipper home in kind %d", f.Kind[slots[1]])
+		}
+		if i := f.Aboard(acct(10)); i < 0 || f.Crew[i].Slot != slots[0] {
+			t.Error("the crew did not come home with their boat")
+		}
+		if st := f.State[slots[2]]; nearly(st, homes[2].X, homes[2].Y, homes[2].Heading) {
+			t.Error("the boat still racing went home")
+		}
+		if len(f.RaceHomes) != 1 || f.RaceHomes[0].Account != acct(3) || f.RaceHomes[0].At != 0 {
+			t.Errorf("homes kept: %+v", f.RaceHomes)
+		}
+	}
+
+	// A trial's run never crossed ends, and its boat goes home.
+	w, _ = raceWorld(t)
+	s := do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1}).Slot
+	for range 30 {
+		w.Tick()
+	}
+	home := homeAt(w, s)
+	run := &bus.RaceCall{ID: [16]byte{8}, Run: 1, Trial: true, Course: 1, Entrants: []bus.RaceEntrant{{Account: acct(1), Number: 1}}}
+	if r := do(t, w, bus.Command{Op: bus.RacePlace, Race: run}); r.Result != bus.Done {
+		t.Fatalf("the run placed: %+v", r)
+	}
+	for range committee.TrialWait + bus.HomeAfter + committee.Second {
+		w.Tick()
+	}
+	if f := w.Latest(); !nearly(f.State[s], home.X, home.Y, home.Heading) || len(f.RaceHomes) != 0 {
+		t.Errorf("after a run never crossed the boat is at (%.1f, %.1f), home (%.1f, %.1f); %d homes", f.State[s].X, f.State[s].Y,
+			home.X, home.Y, len(f.RaceHomes))
+	}
+}

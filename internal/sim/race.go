@@ -34,6 +34,16 @@ import (
 // on in the race it is in. A trial's run for a sailor still racing is not
 // begun: it waits, handed again, until that race is over.
 //
+// Where each boat was just before it was placed, its kind, look and name,
+// its place and heading, is kept in the frame (bus.RaceHome), the first
+// place only while it races on. When the race is over for it (it
+// finished, retired, or the race ended) it goes back there,
+// bus.HomeAfter later, so its sailor sees it across the line first: in its
+// own kind again, those aboard with it, at rest, ready to sail as a
+// placed boat is, a little astern of its place if another boat lies
+// there. A boat gone from the sea meanwhile, or over the lip, has no home
+// to go to.
+//
 // A race (not a trial's run) whose place has a storm's mean wind as it is
 // handed over is called off: its course laid but no boat placed, and it
 // ends as it begins, for the server to tell its entrants.
@@ -79,10 +89,12 @@ func (w *World) racePlace(c *bus.Command) bus.Reply {
 			// Still in another race: it sails on there, and sits this one out.
 			continue
 		}
+		home := homeOf(f, e.Account)
 		s := w.raceBoat(f, e, call.Kind)
 		if s < 0 {
 			continue
 		}
+		w.keepHome(f, home)
 		w.raceSpot(f, s, spots, course.Across, speed, from)
 		placed[i] = committee.Placing{Slot: s, Boat: f.Boat[s], Placed: true}
 	}
@@ -106,14 +118,7 @@ func (w *World) raceBoat(f *bus.Frame, e *bus.RaceEntrant, kind uint16) int32 {
 		// Its voyage ended as it went over: a new one begins on the line.
 		f.Voyage[s] = newVoyage(f.Tick)
 	}
-	if f.Kind[s] != kind {
-		w.voyageEnds(f, s, bus.EndReturned)
-		f.Voyage[s] = newVoyage(f.Tick)
-		f.Kind[s], f.BoatLook[s], f.BoatName[s] = kind, e.BoatLook, e.BoatName
-		if f.Holder[s] != (bus.Account{}) {
-			w.handTo(f, s, bus.Account{})
-		}
-	}
+	w.changeKind(f, s, kind, e.BoatLook, e.BoatName)
 	room := w.capacityOf(kind)
 	lo, hi := f.CrewOf(s)
 	for i := hi - 1; i >= lo; i-- {
@@ -123,6 +128,117 @@ func (w *World) raceBoat(f *bus.Frame, e *bus.RaceEntrant, kind uint16) int32 {
 	}
 	f.Stay[s], f.Unseen[s] = false, false
 	return s
+}
+
+// changeKind makes the boat in slot s of f one of kind, look and name, if
+// it is another: its voyage in the old boat ends and one in the new
+// begins, and nobody holds its controls but its skipper.
+func (w *World) changeKind(f *bus.Frame, s int32, kind uint16, look uint32, name string) {
+	if f.Kind[s] == kind {
+		return
+	}
+	w.voyageEnds(f, s, bus.EndReturned)
+	f.Voyage[s] = newVoyage(f.Tick)
+	f.Kind[s], f.BoatLook[s], f.BoatName[s] = kind, look, name
+	if f.Holder[s] != (bus.Account{}) {
+		w.handTo(f, s, bus.Account{})
+	}
+}
+
+// homeOf is where the account's boat at sea in f is now, as a home to go
+// back to; its slot −1 if it has none afloat.
+func homeOf(f *bus.Frame, account bus.Account) bus.RaceHome {
+	s := afloatIn(f, account)
+	if s < 0 || f.Voyage[s].Falling() {
+		return bus.RaceHome{Slot: -1}
+	}
+	st := &f.State[s]
+	return bus.RaceHome{Account: account, Slot: s, Boat: f.Boat[s], Kind: f.Kind[s], BoatLook: f.BoatLook[s], BoatName: f.BoatName[s],
+		X: st.X, Y: st.Y, Heading: st.Heading}
+}
+
+// keepHome keeps home h of a boat just placed, unless its boat has one
+// kept already: the place it left for its first race, which it has not
+// gone back to yet.
+func (w *World) keepHome(f *bus.Frame, h bus.RaceHome) {
+	if h.Slot < 0 {
+		return
+	}
+	for i := range f.RaceHomes {
+		if g := &f.RaceHomes[i]; g.Account == h.Account && g.Boat == h.Boat {
+			g.At = 0
+			return
+		}
+	}
+	f.RaceHomes = append(f.RaceHomes, h)
+}
+
+// raceHomes sends home each boat whose race is over for it, HomeAfter
+// after: the tick it saw it over counts on from there. A home whose boat
+// is gone from the sea, or over the lip, is let go.
+func (w *World) raceHomes() {
+	f := w.next
+	if len(f.RaceHomes) == 0 {
+		return
+	}
+	kept := f.RaceHomes[:0]
+	for _, h := range f.RaceHomes {
+		s := h.Slot
+		switch {
+		case s < 0 || int(s) >= len(f.Occupied) || !f.Occupied[s] || f.Boat[s] != h.Boat || f.Owner[s] != h.Account ||
+			f.Voyage[s].Falling():
+			continue
+		case committee.RacerOf(f, h.Account) >= 0:
+			h.At = 0
+		case h.At == 0:
+			h.At = f.Tick + bus.HomeAfter
+		case f.Tick >= h.At:
+			w.raceHome(f, &h)
+			continue
+		}
+		kept = append(kept, h)
+	}
+	clear(f.RaceHomes[len(kept):])
+	f.RaceHomes = kept
+}
+
+// homeTries are how many places a boat going home tries, each homeBack
+// of its lengths astern of the last, before it goes to its own place
+// whatever lies there.
+const (
+	homeTries = 6
+	homeBack  = 2.0
+)
+
+// raceHome puts the boat of home h back where it was: in its own kind,
+// those aboard who have room staying, at rest, ready to sail.
+func (w *World) raceHome(f *bus.Frame, h *bus.RaceHome) {
+	s := h.Slot
+	if int(h.Kind) < len(w.kinds) && f.Kind[s] != h.Kind {
+		w.changeKind(f, s, h.Kind, h.BoatLook, h.BoatName)
+		room := w.capacityOf(h.Kind)
+		lo, hi := f.CrewOf(s)
+		for i := hi - 1; i >= lo; i-- {
+			if int(f.Crew[i].Seat) >= room {
+				w.landed = append(w.landed, landing{a: w.leaveCrew(f, i, bus.EndLanded), why: bus.AshoreLeft})
+			}
+		}
+	}
+	st := physics.State{X: h.X, Y: h.Y, Heading: h.Heading}
+	if int(f.Kind[s]) < len(w.kinds) {
+		back := float64(homeBack * 2 * physics.Radius(&w.kinds[f.Kind[s]]))
+		sin, cos := physics.SinCos(h.Heading)
+		for i := range homeTries {
+			p := physics.State{X: h.X - float64(float64(float64(i)*back)*sin), Y: h.Y - float64(float64(float64(i)*back)*cos), Heading: h.Heading}
+			if w.clear(f, s, f.Kind[s], &p) {
+				st = p
+				break
+			}
+		}
+	}
+	speed, from := physics.MeanWindAt(&w.wind, st.X, st.Y)
+	off := math.Abs(math.Remainder(st.Heading-from, 2*math.Pi)) * 180 / math.Pi
+	w.putAtRest(f, s, st, off, speed, from)
 }
 
 // raceSpot puts the boat in slot s of f at the first of spots where it
@@ -140,16 +256,24 @@ func (w *World) raceSpot(f *bus.Frame, s int32, spots []physics.State, across bo
 			break
 		}
 	}
+	off := startOffWind * 180 / math.Pi
+	if across {
+		off = 90
+	}
+	w.putAtRest(f, s, st, off, speed, from)
+}
+
+// putAtRest puts the boat in slot s of f at st, at rest, its course
+// cleared, its controls ready to sail off degrees off a mean wind of
+// speed from from, its sail set as if trimmed so: placed by the
+// committee, its pairs begin afresh.
+func (w *World) putAtRest(f *bus.Frame, s int32, st physics.State, off, speed, from float64) {
 	f.State[s] = st
 	f.Course[s] = physics.Course{}
 	f.Voyage[s].Over = 0
 	if lg := &f.Voyage[s].Log; lg.Read {
 		// The odometer adds nothing for the move.
 		lg.X, lg.Y = st.X, st.Y
-	}
-	off := startOffWind * 180 / math.Pi
-	if across {
-		off = 90
 	}
 	if len(w.start) > 0 {
 		sheet := placedSheet(w.startSheetOff(f, s, off), speed)
@@ -202,6 +326,7 @@ func raceCopy(next, cur *bus.Frame) {
 	next.NextRace = cur.NextRace
 	next.Races = append(next.Races[:0], cur.Races...)
 	next.Racers = append(next.Racers[:0], cur.Racers...)
+	next.RaceHomes = append(next.RaceHomes[:0], cur.RaceHomes...)
 	next.RaceEvents = next.RaceEvents[:0]
 	for _, e := range cur.RaceEvents {
 		if e.Tick > next.Tick-bus.BumpTicks {

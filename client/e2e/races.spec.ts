@@ -84,8 +84,8 @@ test('a race made on a phone, entered by its link from a private window; the nin
   const boat: string = board.make.boat;
   const course: string =
     (
-      board.make.courses as { id: string; boats: Record<string, number>; trialOnly?: boolean }[]
-    ).find((c) => c.boats[boat] !== undefined && c.trialOnly !== true)?.id ?? '';
+      board.make.courses as { id: string; boats: Record<string, number>; aloneOnly?: boolean }[]
+    ).find((c) => c.boats[boat] !== undefined && c.aloneOnly !== true)?.id ?? '';
   expect(course).not.toBe('');
   const now = Date.now();
   for (let i = 1; ; i++) {

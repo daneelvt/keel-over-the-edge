@@ -74,6 +74,14 @@ import (
 // as a float, the wind's state as a uvarint, and, met, where the gale was
 // met and where the landfall in fog was, two floats each.
 //
+// Then, only if a boat keeps one, the homes the races took boats from
+// (bus.RaceHome): a 0 byte, a uvarint n, then n × the home below, by when
+// each was kept. A home is its skipper's 16 bytes, its slot and boat as
+// uvarints, its kind as a uvarint with its look and name as a boat's, its
+// place and heading as three floats in 8 bytes each, and the tick it goes
+// home as a varint (0 while it races). A snapshot without them is the
+// same bytes as before they were.
+//
 // Then, only if a boat has any, the owner's tools' marks: a uvarint n, then
 // n × the slot and a uvarint of flags (1: it stays, 2: it is unseen, 4: its
 // voyage is placed), slots ascending. A snapshot without them is the same
@@ -260,7 +268,57 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendVarint(dst, p.Since)
 		dst = binary.AppendVarint(dst, p.Touched)
 	}
-	return committee.AppendSnapshot(dst, f)
+	dst = committee.AppendSnapshot(dst, f)
+	return appendHomes(dst, f)
+}
+
+// appendHomes appends f's homes kept from races, if it has any.
+func appendHomes(dst []byte, f *bus.Frame) []byte {
+	if len(f.RaceHomes) == 0 {
+		return dst
+	}
+	dst = append(dst, 0)
+	dst = binary.AppendUvarint(dst, uint64(len(f.RaceHomes)))
+	for i := range f.RaceHomes {
+		h := &f.RaceHomes[i]
+		dst = append(dst, h.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(h.Slot))
+		dst = binary.AppendUvarint(dst, h.Boat)
+		dst = binary.AppendUvarint(dst, uint64(h.Kind))
+		dst = appendBoatLook(dst, h.BoatLook, h.BoatName)
+		dst = appendF64(dst, h.X)
+		dst = appendF64(dst, h.Y)
+		dst = appendF64(dst, h.Heading)
+		dst = binary.AppendVarint(dst, h.At)
+	}
+	return dst
+}
+
+// homes reads the homes kept from races, which follow the races only when
+// a boat keeps one, after their 0 byte.
+func (r *reader) homes(f *bus.Frame) error {
+	r.b = r.b[1:]
+	n := r.count(uint64(f.Capacity()))
+	if r.err == nil && n == 0 {
+		return errors.New("sim: snapshot: no homes after their mark")
+	}
+	for range n {
+		var h bus.RaceHome
+		r.bytes(h.Account[:])
+		slot, boat, kind := r.uvarint(), r.uvarint(), r.uvarint()
+		h.BoatLook, h.BoatName = r.boatLook()
+		h.X, h.Y, h.Heading = r.f64(), r.f64(), r.f64()
+		h.At = r.varint()
+		if r.err != nil {
+			return r.err
+		}
+		if slot >= uint64(f.Capacity()) || kind > math.MaxUint16 || h.At < 0 {
+			return fmt.Errorf("sim: snapshot: a home of slot %d", slot)
+		}
+		h.Slot, h.Boat, h.Kind = int32(slot), boat, uint16(kind)
+		f.RaceHomes = append(f.RaceHomes, h)
+	}
+	return r.err
 }
 
 // The flags of a voyage in a snapshot.
@@ -595,6 +653,12 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		return err
 	}
 	r.b = rest
+	f.RaceHomes = f.RaceHomes[:0]
+	if len(r.b) > 0 && r.b[0] == 0 {
+		if err := r.homes(f); err != nil {
+			return err
+		}
+	}
 	if len(r.b) > 0 {
 		return r.marks(f)
 	}

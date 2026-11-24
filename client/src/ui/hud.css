@@ -1658,7 +1658,7 @@
   overflow: hidden;
 }
 
-/* A race's next mark's number, over its spar while in sight. */
+/* The course's name and distance, over its point while in sight. */
 .mark-tag {
   position: absolute;
   left: 0;

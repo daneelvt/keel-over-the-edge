@@ -649,13 +649,16 @@ function caskMark(): NodeDef {
   const top = committee.mark;
   const parts: MeshBuilder[] = [...cask(0.42, 1.05, MADDER), spar(-0.6, top, 0.07)];
   // The board for the number: a white box about the spar, a face to each
-  // side, its edges blacked.
+  // side, its edges blacked. The white stands between the black bands, so
+  // that no white face lies in a black one's plane: the box's top and
+  // bottom are the bands', black, and never flicker between the two.
   const board = new MeshBuilder('paint');
   const by = 2.3;
   const b = BOARD / 2;
-  board.box([-b, by - b, -b], [b, by + b, b], WHITE);
-  for (const y of [by - b, by + b - 0.05]) {
-    board.box([-b - 0.01, y, -b - 0.01], [b + 0.01, y + 0.05, b + 0.01], BLACK);
+  const band = 0.05;
+  board.box([-b, by - b + band, -b], [b, by + b - band, b], WHITE);
+  for (const y of [by - b, by + b - band]) {
+    board.box([-b - 0.01, y, -b - 0.01], [b + 0.01, y + band, b + 0.01], BLACK);
   }
   for (const [x, z] of [
     [-1, -1],

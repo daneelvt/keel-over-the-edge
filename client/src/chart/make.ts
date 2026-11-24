@@ -187,9 +187,10 @@ export function makeChart(
     return { course: a === null ? null : { east: a.east, north: a.north, name: a.name }, pin };
   };
   view.course.onTap = () => openCourseBox(chart);
-  // In a race, the next mark's number over its spar in the sea; otherwise
-  // the course's name and distance over its point, within sight.
-  world.markTagOf = () => nextMarkOf(racing) ?? chart.seaTag(world.pose.east, world.pose.north);
+  // In a race, the next mark's number over its spar, drawn in the sea;
+  // otherwise the course's name and distance over its point, within sight.
+  world.nextMarkOf = () => nextMarkOf(racing);
+  world.markTagOf = () => chart.seaTag(world.pose.east, world.pose.north);
   const motion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   if (motion !== undefined) {
     view.reducedMotion = motion.matches;

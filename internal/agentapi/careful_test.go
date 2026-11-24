@@ -531,21 +531,27 @@ func TestCarefulDash(t *testing.T) {
 	}
 	var table strings.Builder
 	only := strings.Split(os.Getenv("KEEL_CAREFUL_ONLY"), ",")
-	for _, boat := range []string{"Jolly boat", "Skiff", "Keelboat"} {
-		for _, knots := range carefulWinds {
-			if len(only) == 2 && (only[0] != boat || only[1] != fmt.Sprint(knots)) {
-				continue
-			}
-			synctest.Test(t, func(t *testing.T) {
-				h, _ := carefulWorld(t, cat, knots, 0)
-				run := carefulTrial(t, h, cat, boat, knots, 0, bus.RaceCall{Across: true, Dash: true})
-				if !run.finished {
-					fmt.Fprintf(&table, "the Dash  %-10s %2.0f kn  not finished, %d capsizes\n", boat, knots, run.capsizes)
-					return
+	for _, long := range []bool{false, true} {
+		name := "the Dash     "
+		if long {
+			name = "the Long Dash"
+		}
+		for _, boat := range []string{"Jolly boat", "Skiff", "Keelboat"} {
+			for _, knots := range carefulWinds {
+				if len(only) == 2 && (only[0] != boat || only[1] != fmt.Sprint(knots)) {
+					continue
 				}
-				fmt.Fprintf(&table, "the Dash  %-10s %2.0f kn  %5.0f s of %5.0f  ×%.2f  %s, %d capsizes\n",
-					boat, knots, run.elapsed, run.expected, run.multiple(), medalWord(run.medal), run.capsizes)
-			})
+				synctest.Test(t, func(t *testing.T) {
+					h, _ := carefulWorld(t, cat, knots, 0)
+					run := carefulTrial(t, h, cat, boat, knots, 0, bus.RaceCall{Across: true, Dash: true, Long: long})
+					if !run.finished {
+						fmt.Fprintf(&table, "%s  %-10s %2.0f kn  not finished, %d capsizes\n", name, boat, knots, run.capsizes)
+						return
+					}
+					fmt.Fprintf(&table, "%s  %-10s %2.0f kn  %5.0f s of %5.0f  ×%.2f  %s, %d capsizes\n",
+						name, boat, knots, run.elapsed, run.expected, run.multiple(), medalWord(run.medal), run.capsizes)
+				})
+			}
 		}
 	}
 	t.Logf("careful runs of the Dash:\n%s", table.String())

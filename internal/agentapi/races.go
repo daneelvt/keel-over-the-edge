@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"slices"
 	"strconv"
@@ -153,7 +154,7 @@ func (c *Core) makeRace(ctx context.Context, s *Sea, by race.Sailor, a *raceArgs
 		// courses are laid. A time trial may be on any course; a race on
 		// none with a beat in it.
 		for _, cc := range b.Make.Courses {
-			if _, ok := cc.Boats[boat]; ok && (a.Trial || !cc.TrialOnly) {
+			if _, ok := cc.Boats[boat]; ok && (a.Trial || !cc.AloneOnly) {
 				course = cc.ID
 				break
 			}
@@ -354,6 +355,8 @@ func courseChoice(courses []race.CourseChoice, named string) string {
 		shape = race.ShapeWindwardLeeward
 	case strings.Contains(want, "dash"):
 		shape = race.ShapeDash
+	case strings.Contains(want, "reach"):
+		shape = race.ShapeReach
 	}
 	n, numbered := strconv.Atoi(strings.TrimPrefix(want, "island "))
 	for _, cc := range courses {
@@ -461,7 +464,7 @@ func raceRefusalWords(r *race.Refusal, now time.Time) string {
 		}
 		return "You own as many races not yet finished as a sailor may. Make another once one of them is over."
 	case race.RefuseUpwind:
-		return "No race starts up the wind: a race is made on the Dash (buoy:dash:short) or an island course. A course with a beat in it, the triangle or the upwind and back, is sailed as a time trial (trial true)."
+		return "No race starts up the wind: a race is made on the Dash (buoy:dash:short), the Long Dash (buoy:dash:long), the Reach (buoy:reach:short) or an island course. A course with a beat in it, the triangle or the upwind and back, is sailed as a time trial (trial true)."
 	case race.RefuseSoon:
 		return fmt.Sprintf("Too soon: a race starts at least %d minutes after it is made. Give in %d or more.",
 			int(race.Lead/time.Minute), int(race.Lead/time.Minute))
@@ -690,10 +693,10 @@ func coursesWords(m *race.MakeChoices) string {
 		switch {
 		case cc.Kind != race.CourseBuoy:
 			island = append(island, cc)
-		case cc.TrialOnly:
-			buoys = append(buoys, fmt.Sprintf("%s (%d min, Upwind, a time trial only)", cc.ID, minutesOf(cc.Boats)))
+		case cc.AloneOnly:
+			buoys = append(buoys, fmt.Sprintf("%s (%s min, Upwind, a time trial only)", cc.ID, minutesOf(cc.Boats)))
 		default:
-			buoys = append(buoys, fmt.Sprintf("%s (%d min)", cc.ID, minutesOf(cc.Boats)))
+			buoys = append(buoys, fmt.Sprintf("%s (%s min)", cc.ID, minutesOf(cc.Boats)))
 		}
 	}
 	if len(buoys) > 0 {
@@ -728,12 +731,20 @@ func coursesWords(m *race.MakeChoices) string {
 	return w.String()
 }
 
-// minutesOf is a buoy course's minutes, the same for every boat.
-func minutesOf(boats map[string]int) int {
+// minutesOf is a buoy course's minutes for the boats it is offered to,
+// laid in the wind today: "6", or "4–6" where the boats differ.
+func minutesOf(boats map[string]int) string {
+	least, most := math.MaxInt, 0
 	for _, m := range boats {
-		return m
+		least, most = min(least, m), max(most, m)
 	}
-	return 0
+	switch {
+	case most == 0:
+		return "0"
+	case least == most:
+		return strconv.Itoa(most)
+	}
+	return fmt.Sprintf("%d–%d", least, most)
 }
 
 // courseWords are a card's course: its name, its length.

@@ -245,6 +245,9 @@ test('Invite friends is where a link is shared, to watch me and to sail with me;
   // with me. No other share or link key in the menu.
   const invite = menu.getByRole('button', { name: 'Invite friends', exact: true });
   await expect(invite).toBeVisible();
+  // The key that copies the link comes with its own part of the game, a
+  // moment after the menu opens.
+  await expect(menu.locator('[data-key=sail-link]')).toBeVisible();
   const order = await menu.evaluate((e) => {
     const top = (sel: string) =>
       [...e.querySelectorAll<HTMLElement>(sel)].map((x) => x.getBoundingClientRect().top);

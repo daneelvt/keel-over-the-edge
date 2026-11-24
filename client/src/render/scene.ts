@@ -52,7 +52,7 @@ import { SkyWeather } from '../sky/weather';
 import { Birds } from './birds';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
-import { type RaceFrame, RaceMarks } from './committee';
+import { type NextMark, type RaceFrame, RaceMarks, TAG_HEIGHT } from './committee';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { glowDark } from './daylight';
 import { DirtyAir } from './dirtyair';
@@ -121,8 +121,8 @@ const END_LOOK = catalog.world.edge.end;
 const MIST_VEIL = 0.6;
 /** A tick of world time, µs. */
 const TICK_US = 1e6 / STEPS_PER_SECOND;
-/** How high over the sea a mark's tag stands, m: over its spar's flag. */
-const MARK_TAG_HEIGHT = 8;
+/** How high over the sea the course's tag stands, m: as a race mark's does, over its spar's flag. */
+const MARK_TAG_HEIGHT = TAG_HEIGHT;
 
 /**
  * For this long after the scene first draws, the windows adaptive quality
@@ -319,13 +319,14 @@ export class SeaScene {
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
   /**
-   * A tag over a point of the sea while there is one: a race's next mark's
-   * number, or the course's name and distance; placed each frame where the
-   * camera sees it, and with sight, only while the point is within the
-   * camera's sight over the sea's curve.
+   * A tag over a point of the sea while there is one: the course's name and
+   * distance; placed each frame where the camera sees it, and with sight,
+   * only while the point is within the camera's sight over the sea's curve.
    */
   markTagOf: (() => { east: number; north: number; text: string; sight?: boolean } | null) | null =
     null;
+  /** The mark a race's boat makes for next, its number drawn over its spar in the sea; null out of a race. */
+  nextMarkOf: (() => NextMark | null) | null = null;
   #markTag: HTMLElement | null = null;
   readonly #tagAt = new Vector3();
   /** Called after each frame is drawn, with the main thread's work on it, ms. */
@@ -1781,7 +1782,7 @@ export class SeaScene {
   };
 
   /** The race committee's things near the camera: boats, buoys, marks, beacons, flags and smoke. */
-  #drawRace(camera: Vector3, now: number, night: number): void {
+  #drawRace(camera: Vector3, now: number, night: number, height: number): void {
     const o = this.origin.world;
     const f = this.#raceFrame;
     this.#raceNow = now;
@@ -1792,6 +1793,8 @@ export class SeaScene {
     f.lit = night;
     f.light = 0.25 + 0.75 * (1 - night);
     f.surface = this.ocean.source === null ? null : this.#surface;
+    f.next = this.nextMarkOf?.() ?? null;
+    f.perPixel = (2 * Math.tan((this.stage.camera.fov * Math.PI) / 360)) / Math.max(height, 1);
     this.race.frame(f);
   }
 
@@ -2217,7 +2220,7 @@ export class SeaScene {
     this.#drawTowns(camera.position, now);
     this.#drawLife(camera.position, night > 0.5);
     this.birds.end();
-    this.#drawRace(camera.position, now, night);
+    this.#drawRace(camera.position, now, night, view.height);
     this.#drawLanterns(view.height, camera.position);
     this.#drawLights(view.height, camera.position, now);
     this.wrecks.frame(this.origin);
@@ -2314,7 +2317,7 @@ export class SeaScene {
   readonly #placeOwn = (p: Vector3, out: Vector3): Vector3 =>
     this.boat === null ? out.copy(p) : this.boat.model.localToWorld(out.copy(p));
 
-  /** The next mark's tag, over its spar, when the camera sees it; nothing when not. */
+  /** The sea's tag, over its point, when the camera sees it; nothing when not. */
   #placeMarkTag(camera: Camera, width: number, height: number): void {
     const el = this.#markTag;
     if (el === null) {

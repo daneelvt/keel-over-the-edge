@@ -13,10 +13,12 @@ import (
 )
 
 // TestNoRaceStartsUpwind: every harbour race the timetable makes is a
-// Dash; a sailor may make a race on the Dash and the island courses and
-// on no course with a beat in it, which stays a time trial's; Make a race
-// offers those only for trials; and every buoy race the timetable or the
-// service makes, laid in eight winds, has no leg within 70° of the wind.
+// Dash; a sailor may make a race with others on the Dash, the long Dash,
+// the reach and the island courses and on no course with a beat in it,
+// which is sailed alone, as a time trial or a race of one's own; Make a
+// race offers those only to be sailed alone; and every buoy race the
+// timetable or the service makes, laid in eight winds, has no leg within
+// 70° of the wind.
 func TestNoRaceStartsUpwind(t *testing.T) {
 	s := newSea(t)
 	if _, _, err := s.svc.Harbour(s.ctx, s.lease, s.now); err != nil {
@@ -45,26 +47,37 @@ func TestNoRaceStartsUpwind(t *testing.T) {
 		if _, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindTrial, Course: id, Boat: s.jolly(), Who: WhoEveryone}); err != nil {
 			t.Errorf("a time trial on %s: %v", id, err)
 		}
+		// Each in a racing area of its own, the areas a start AreaApart.
+		s.now = s.now.Add(AreaApart)
+		if card, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindRace, Course: id, Boat: s.jolly(), Now: true, Who: WhoEveryone}); err != nil {
+			t.Errorf("a race of one's own on %s: %v", id, err)
+		} else if !card.Course.Upwind {
+			t.Errorf("a race of one's own on %s without the upwind sign", id)
+		}
 	}
-	_, err = s.svc.Make(s.ctx, by, Making{Kind: KindRace, Course: "buoy:reach:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
-	refused(t, err, RefuseCourse)
-	card, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindRace, Course: "buoy:dash:short", Boat: s.jolly(), At: s.now.Add(time.Hour), Who: WhoEveryone})
-	if err != nil || card.Course.Shape != ShapeDash || card.Course.Upwind || card.Minutes != DashMinutes {
-		t.Fatalf("a race on the Dash: %+v, %v", card.Course, err)
+	for i, c := range []struct {
+		id      string
+		minutes int
+	}{{"buoy:dash:short", DashMinutes}, {"buoy:dash:long", LongDashMinutes}, {"buoy:reach:short", ReachMinutes}} {
+		at := s.now.Add(time.Hour + time.Duration(i)*AreaApart)
+		card, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindRace, Course: c.id, Boat: s.jolly(), At: at, Who: WhoEveryone})
+		if err != nil || card.Course.ID != c.id || card.Course.Upwind || card.Minutes != c.minutes {
+			t.Fatalf("a race on %s: %+v, %d minutes, %v", c.id, card.Course, card.Minutes, err)
+		}
+		row, err := s.db.RaceByCode(s.ctx, card.Code)
+		if err != nil {
+			t.Fatal(err)
+		}
+		call, _ := clerk.callOf(&row, 0)
+		laid = append(laid, call)
 	}
-	row, err := s.db.RaceByCode(s.ctx, card.Code)
-	if err != nil {
-		t.Fatal(err)
-	}
-	call, _ := clerk.callOf(&row, 0)
-	laid = append(laid, call)
 	b, err := s.svc.Board(s.ctx, by)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, cc := range b.Make.Courses {
-		if cc.Kind == CourseBuoy && !cc.TrialOnly && cc.Shape != ShapeDash {
-			t.Errorf("Make a race offers the %s for a race", cc.Shape)
+		if cc.Kind == CourseBuoy && !cc.AloneOnly && UpwindShape(cc.Shape) {
+			t.Errorf("Make a race offers the %s for a race with others", cc.Shape)
 		}
 	}
 	// Laid as the committee lays them, in eight winds.
@@ -79,7 +92,7 @@ func TestNoRaceStartsUpwind(t *testing.T) {
 		for w := range 8 {
 			from := float64(w) * math.Pi / 4
 			c := st.Lay(bus.NewFrame(4), call, 12*physics.Knot, from, 8)
-			if c == nil || !c.Dash {
+			if c == nil || !c.Across {
 				t.Fatalf("laid %+v", c)
 			}
 			for i := 1; i < len(c.Way); i++ {
@@ -121,5 +134,48 @@ func TestTheBoardSaysWhatANewcomerNeeds(t *testing.T) {
 	}
 	if c, err := s.svc.Card(s.ctx, by, codes[limits.Ahead]); err != nil || c.Enter.Reason != RefuseAhead || c.Enter.Most != limits.Ahead {
 		t.Errorf("the card's Enter: %+v, %v", c.Enter, err)
+	}
+}
+
+// TestMakeARaceTellsTodaysMinutes: Make a race tells each buoy course's
+// minutes as laid in the wind today, where the service can say; and
+// offers the long Dash to a boat only where it is LongerBy longer than
+// the Dash.
+func TestMakeARaceTellsTodaysMinutes(t *testing.T) {
+	s := newSea(t)
+	jolly := s.jolly()
+	long := 7
+	s.svc.cfg.BuoyMinutes = func(shape string, l bool, boat string) (int, bool) {
+		switch {
+		case boat != jolly:
+			return 0, false
+		case shape == ShapeDash && l:
+			return long, true
+		case shape == ShapeDash:
+			return 6, true
+		}
+		return 3, true
+	}
+	offered := func() map[string]CourseChoice {
+		b, err := s.svc.Board(s.ctx, s.human())
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]CourseChoice{}
+		for _, cc := range b.Make.Courses {
+			out[cc.ID] = cc
+		}
+		return out
+	}
+	c := offered()
+	if _, ok := c["buoy:dash:long"].Boats[jolly]; ok {
+		t.Errorf("a long Dash a minute longer than the Dash offered: %+v", c["buoy:dash:long"])
+	}
+	if c["buoy:dash:short"].Boats[jolly] != 6 || c["buoy:reach:short"].Boats[jolly] != 3 || c["buoy:triangle:long"].Boats[jolly] != 3 {
+		t.Errorf("today's minutes: %+v", c)
+	}
+	long = 11
+	if c := offered(); c["buoy:dash:long"].Boats[jolly] != 11 {
+		t.Errorf("a long Dash of 11 minutes offered as %+v", c["buoy:dash:long"])
 	}
 }

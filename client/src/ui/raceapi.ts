@@ -37,8 +37,11 @@ export interface CourseTold {
    * the wind today.
    */
   upwind?: boolean;
-  /** On Make a race's choices: offered for a time trial only, never a race. */
-  trialOnly?: boolean;
+  /**
+   * On Make a race's choices: sailed alone only, on your own or as a time
+   * trial, never a race with others (no race with others starts up the wind).
+   */
+  aloneOnly?: boolean;
 }
 
 /** Whether the player may enter, and why not. */

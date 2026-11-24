@@ -120,6 +120,22 @@ export function raceBoard(now: number) {
           boats: offered,
         },
         {
+          id: 'buoy:dash:long',
+          kind: 'buoy',
+          shape: 'dash',
+          long: true,
+          name: 'Long Dash',
+          boats: Object.fromEntries(boats.map((b) => [b.id, 12])),
+        },
+        {
+          id: 'buoy:reach:short',
+          kind: 'buoy',
+          shape: 'reach',
+          long: false,
+          name: 'Reach',
+          boats: Object.fromEntries(boats.map((b) => [b.id, 5])),
+        },
+        {
           id: 'island:3',
           kind: 'island',
           number: 3,
@@ -127,6 +143,17 @@ export function raceBoard(now: number) {
           length: 4400,
           way: WAY,
           boats: offered,
+        },
+        {
+          id: 'island:5',
+          kind: 'island',
+          number: 5,
+          name: 'Round Mast Island',
+          length: 4700,
+          way: WAY,
+          boats: offered,
+          upwind: true,
+          aloneOnly: true,
         },
         ...['triangle', 'windward-leeward'].flatMap((shape) =>
           [false, true].map((long) => ({
@@ -137,7 +164,7 @@ export function raceBoard(now: number) {
             name: `${shape === 'triangle' ? 'Triangle' : 'Upwind and back'}, ${long ? 'long' : 'short'}`,
             boats: offered,
             upwind: true,
-            trialOnly: true,
+            aloneOnly: true,
           })),
         ),
       ],
@@ -180,9 +207,10 @@ export function raceCard(now: number, o: object = {}) {
   };
 }
 
-/** How a race made is answered: made, or refused as one too many today. */
+/** How a race made is answered: made, or refused as one too many today; and what was last asked. */
 export interface RaceStandIns {
   make: 'ok' | 'made';
+  asked?: Record<string, unknown>;
 }
 
 /** Stands in for races ashore's routes on page; the state says how a race made is answered. */
@@ -251,6 +279,7 @@ export async function standInRaces(page: Page, now: number): Promise<RaceStandIn
         return r.fulfill({ json: { name: 'Saturday Dash' } });
       }
       if (path === '/api/race') {
+        state.asked = r.request().postDataJSON() as Record<string, unknown>;
         return state.make === 'ok'
           ? r.fulfill({ status: 201, json: cards[MADE] })
           : r.fulfill({ status: 409, json: { error: 'made', until: now + 190 * MINUTE, most: 8 } });

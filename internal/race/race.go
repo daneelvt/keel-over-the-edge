@@ -56,14 +56,14 @@ const (
 const (
 	ShapeWindwardLeeward = "windward-leeward" // up to a windward mark and down to a leeward gate
 	ShapeTriangle        = "triangle"         // windward, wing and leeward marks
-	// ShapeReach is across the wind to one mark and back: the
-	// Harbourmaster's own, a standing trial's course only. Nobody makes a
-	// race or a trial on it.
+	// ShapeReach is across the wind to one mark and back over the same
+	// line: the Harbourmaster's standing trial's, and a race's.
 	ShapeReach = "reach"
 	// ShapeDash is across the wind to one mark and home to a finish line of
-	// its own: the race's buoy course, every harbour race's and every buoy
-	// race a sailor makes. No race starts up the wind: the triangle and the
-	// windward–leeward are sailed as time trials only.
+	// its own, short or long (twice as far to its mark): every harbour
+	// race's course. No race with others starts up the wind: the triangle
+	// and the windward–leeward are sailed alone, as time trials or a race
+	// of your own.
 	ShapeDash = "dash"
 )
 
@@ -113,9 +113,11 @@ const (
 const (
 	ShortMinutes = committee.ShortSeconds / 60
 	LongMinutes  = committee.LongSeconds / 60
-	// ReachMinutes are the reach's, DashMinutes the Dash's.
-	ReachMinutes = committee.ReachSeconds / 60
-	DashMinutes  = committee.DashSeconds / 60
+	// ReachMinutes are the reach's, DashMinutes the Dash's and
+	// LongDashMinutes the long Dash's.
+	ReachMinutes    = committee.ReachSeconds / 60
+	DashMinutes     = committee.DashSeconds / 60
+	LongDashMinutes = committee.LongDashSeconds / 60
 )
 
 // Sailor is who asks: an account, a machine sailor's or a human's, and a

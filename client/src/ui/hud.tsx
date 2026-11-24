@@ -16,6 +16,10 @@
 // controls, it is the same, a plate of sailing together in the watch
 // plate's place; the knocks on the own boat stand under the case.
 //
+// The menu's place, beside the boat, holds one window at a time: as one
+// opens there, whichever stood there closes. Held sideways, while one
+// stands there the boat is framed left of the middle, clear of it.
+//
 // The clear view hides every part but Back to the boat and its own key,
 // which stay in their places, and shows each notice alone at the top as it
 // comes. B brings the camera back to the boat; H clears the screen and
@@ -23,9 +27,9 @@
 
 import { ConnectionLine, type ConnectionView } from './connection';
 import './hud.css';
-import type { ReadonlySignal } from '@preact/signals';
+import { batch, type ReadonlySignal } from '@preact/signals';
 import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { AccountPanel, MachinesPanel } from '../account/account';
 import type { FullScreen } from '../boot/fullscreen';
 import { updated } from '../boot/updated';
@@ -54,6 +58,7 @@ import { type RacesView, racesShown, useRaces } from './raceslazy';
 import { cheeringText } from './racewatchwords';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
+import { asideOf, crowded, HEAD_BELOW, openNames, type SideWindow } from './sideplace';
 import { type StatementsView, statementsShown, useStatements } from './statementlazy';
 import { UpdateLine } from './updateline';
 import { sailsOwn, useWatch, type WatchView } from './watchlazy';
@@ -186,6 +191,208 @@ function LazyRaceLine({
         </>
       );
   }
+}
+
+/** The windows that stand in the menu's place at sea, each open or not, and how each closes. */
+function sideWindows({
+  menu,
+  account,
+  races,
+  racing,
+  watch,
+  deck,
+  home,
+}: {
+  menu: [boolean, (open: boolean) => void];
+  account: [boolean, () => void];
+  races: RacesView | null;
+  racing: RaceSource | null;
+  watch: WatchView | null;
+  deck: DeckView | null;
+  home: HomeView | null;
+}): SideWindow[] {
+  const out: SideWindow[] = [
+    { name: 'menu', open: menu[0], close: () => menu[1](false) },
+    { name: 'page', open: account[0], close: account[1] },
+  ];
+  if (races !== null) {
+    out.push({
+      name: 'races',
+      open: racesShown(races),
+      close: () => {
+        batch(() => {
+          races.page.value = false;
+          races.make.value = false;
+          races.card.value = null;
+          races.shared.value = null;
+        });
+      },
+    });
+  }
+  if (racing !== null) {
+    const r = racing.racing;
+    out.push({
+      name: 'race',
+      open:
+        (r.more.value && r.told.value !== null) ||
+        (r.finishOpen.value && r.finish.value !== null) ||
+        (r.resultsOpen.value && r.ended.value !== null),
+      close: () => {
+        batch(() => {
+          r.more.value = false;
+          r.finishOpen.value = false;
+          r.resultsOpen.value = false;
+        });
+      },
+    });
+    const w = racing.watch ?? null;
+    if (w !== null) {
+      out.push({
+        name: 'race-bar',
+        open: r.told.value !== null && (w.more.value || w.standings.value),
+        close: () => {
+          batch(() => {
+            w.more.value = false;
+            w.standings.value = false;
+          });
+        },
+      });
+    }
+  }
+  if (watch !== null) {
+    out.push({ name: 'watch', open: watch.list.value, close: () => (watch.list.value = false) });
+  }
+  if (deck !== null) {
+    out.push(
+      { name: 'deck-list', open: deck.list.value, close: () => (deck.list.value = false) },
+      { name: 'deck-link', open: deck.link.value, close: () => (deck.link.value = false) },
+    );
+    const ships = deck.shipmates;
+    if (ships !== null) {
+      out.push({
+        name: 'shipmates',
+        open: ships.panel.value,
+        close: () => (ships.panel.value = false),
+      });
+    }
+  }
+  if (home !== null) {
+    out.push(
+      { name: 'home', open: home.asking.value, close: () => (home.asking.value = false) },
+      { name: 'change', open: home.changing.value, close: () => (home.changing.value = false) },
+    );
+  }
+  return out;
+}
+
+/**
+ * One window at a time in the menu's place: as one opens, every other one
+ * open there closes, the menu too.
+ */
+function useOneAtSide(windows: readonly SideWindow[]): void {
+  const before = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const closing = crowded(windows, before.current);
+    before.current = openNames(windows.filter((w) => !closing.includes(w)));
+    batch(() => {
+      for (const w of closing) {
+        w.close();
+      }
+    });
+  });
+}
+
+/** How long the picture takes to move aside, ms. */
+const ASIDE_MS = 250;
+
+/** How long the picture waits before it moves back to the middle, ms. */
+const ASIDE_BACK_MS = 400;
+
+/**
+ * Held sideways, the boat framed left of the middle while a window stands
+ * in the menu's place, clear of it; back in the middle once none does. The
+ * picture eases there, or goes at once where motion is reduced. The
+ * windows are the screen's own children: as they come and go, and as the
+ * screen turns, where the window's left edge is is measured again.
+ */
+function useAside(screen: HTMLElement | null, aside: ((px: number) => void) | undefined): void {
+  // Before the screen is painted: no frame shows the boat under the window.
+  useLayoutEffect(() => {
+    if (screen === null || aside === undefined) {
+      return;
+    }
+    const sideways = matchMedia('(orientation: landscape)');
+    const still = matchMedia('(prefers-reduced-motion: reduce)');
+    let at = 0;
+    let raf = 0;
+    let back = 0;
+    const go = (to: number) => {
+      cancelAnimationFrame(raf);
+      clearTimeout(back);
+      if (to === at) {
+        return;
+      }
+      if (to === 0 && !still.matches) {
+        // Back to the middle a moment later: one window giving way to
+        // another, still loading, leaves the boat where she is.
+        back = window.setTimeout(() => ease(0), ASIDE_BACK_MS);
+        return;
+      }
+      ease(to);
+    };
+    const ease = (to: number) => {
+      if (still.matches) {
+        at = to;
+        aside(at);
+        return;
+      }
+      const from = at;
+      const start = performance.now();
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / ASIDE_MS);
+        at = Math.round(from + (to - from) * (1 - (1 - t) ** 3));
+        aside(at);
+        if (t < 1) {
+          raf = requestAnimationFrame(step);
+        }
+      };
+      raf = requestAnimationFrame(step);
+    };
+    const measure = () => {
+      let left = Number.POSITIVE_INFINITY;
+      let beside = 0;
+      if (sideways.matches) {
+        for (const e of screen.querySelectorAll(':scope > .menu, :scope > .at-side')) {
+          const r = e.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            left = Math.min(left, r.left);
+          }
+        }
+        // The chat's strip, aboard with others: she must not go under it.
+        // Nothing else on the left counts: a notice or the instruments'
+        // case, whose height the page's fonts set, stands over her sail's
+        // head at most.
+        for (const e of screen.querySelectorAll(':scope > .hud-top .chat-strip')) {
+          const r = e.getBoundingClientRect();
+          if (r.width > 0 && r.left < innerWidth / 2 && r.bottom > innerHeight * HEAD_BELOW) {
+            beside = Math.max(beside, r.right);
+          }
+        }
+      }
+      go(Number.isFinite(left) ? asideOf(innerWidth, innerHeight, left, beside) : 0);
+    };
+    const seen = new MutationObserver(measure);
+    seen.observe(screen, { childList: true });
+    addEventListener('resize', measure);
+    measure();
+    return () => {
+      seen.disconnect();
+      removeEventListener('resize', measure);
+      cancelAnimationFrame(raf);
+      clearTimeout(back);
+      aside(0);
+    };
+  }, [screen, aside]);
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -335,6 +542,19 @@ function Screen(props: ScreenProps) {
   const cleared = clear?.on.value === true;
   const flying = fly?.flying.value === true;
   const charted = sea?.chart.open.value === true;
+  const [screenEl, setScreenEl] = useState<HTMLElement | null>(null);
+  useAside(screenEl, props.camera?.aside);
+  useOneAtSide(
+    sideWindows({
+      menu: [menu, setMenu],
+      account: [account !== '', () => setAccount('')],
+      races: props.races ?? null,
+      racing: props.racing ?? null,
+      watch,
+      deck,
+      home: props.home ?? null,
+    }),
+  );
   // B: back to the boat; H: the clear view, and back.
   useEffect(() => {
     if (flying || charted) {
@@ -401,7 +621,7 @@ function Screen(props: ScreenProps) {
   const raced =
     racing !== null && (racing.racing.told.value !== null || raceWaiting(racing)) && !barred;
   return (
-    <div class={`hud-screen${cleared ? ' clear' : ''}${raced ? ' racing' : ''}`}>
+    <div class={`hud-screen${cleared ? ' clear' : ''}${raced ? ' racing' : ''}`} ref={setScreenEl}>
       {cleared ? null : <div class="overlay-labels" ref={props.labels} aria-hidden="true" />}
       <div class="hud-top">
         {racing !== null ? <LazyRaceLine src={racing} part="line" /> : null}
@@ -449,17 +669,6 @@ function Screen(props: ScreenProps) {
             press: () => {
               if (!menu) {
                 full?.menuOpened();
-                // The menu takes its place back from a window it opened.
-                if (deck !== null) {
-                  deck.list.value = false;
-                  deck.link.value = false;
-                  if (deck.shipmates !== null) {
-                    deck.shipmates.panel.value = false;
-                  }
-                }
-                if (watch !== null) {
-                  watch.list.value = false;
-                }
               }
               setMenu(!menu);
             },

@@ -45,9 +45,11 @@ const (
 	// short and long, in the race's boat's time.
 	ShortSeconds = 10 * 60
 	LongSeconds  = 20 * 60
-	// ReachSeconds is what a reach is sized to, DashSeconds a Dash.
-	ReachSeconds = 5 * 60
-	DashSeconds  = 6 * 60
+	// ReachSeconds is what a reach is sized to, DashSeconds a Dash and
+	// LongDashSeconds a long one, twice as far to its mark.
+	ReachSeconds    = 5 * 60
+	DashSeconds     = 6 * 60
+	LongDashSeconds = 12 * 60
 )
 
 // StormWind is the mean wind of a storm, m/s 10 m up: the foot of Force 10.

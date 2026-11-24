@@ -3,9 +3,10 @@
 // Races ashore's windows: at sea beside the boat in the menu's place, the
 // boat sailed on while one is open; before the sea centred over the start
 // screen. Make a race, one panel with every choice filled in so that Make
-// it works at once: at sea first Sail it now, just the maker, at once, or
-// Race others (a race or a time trial, its start, who may enter); the
-// course on a small chart of its own, the boat, and a name suggested with
+// it works at once: at sea first On my own, just the maker, at once, on
+// any course, or With others, a race with a start time and who may enter,
+// on a course that does not start up the wind; the course on a small
+// chart of its own, the boat, and a name suggested with
 // character. Who makes a race races it: its maker is entered as it is
 // made. The share of a race made, its link with a picture of the course
 // drawn on the phone; and a race's card, which its link opens: the name,
@@ -66,14 +67,13 @@ import {
   makeRefusalText,
   minutesText,
   NEWCOMERS_DETAIL,
+  NO_ISLAND_COURSE,
+  ON_MY_OWN,
+  ON_MY_OWN_LINE,
   ownerText,
   phaseLine,
-  RACE_OTHERS,
-  RACE_OTHERS_LINE,
   REPLAY,
   REPLAY_RUNS,
-  SAIL_IT_NOW,
-  SAIL_IT_NOW_LINE,
   START_NOW,
   START_NOW_LINE,
   STARTS,
@@ -81,10 +81,11 @@ import {
   startOf,
   startsInText,
   TRIAL_LINE,
-  TRIAL_OTHERS_LINE,
   UPWIND_LINE,
   WATCH_LATER,
   WATCH_WHEN_STARTS,
+  WITH_OTHERS,
+  WITH_OTHERS_LINE,
   WITHDRAW,
   whenLine,
   whoText,
@@ -217,20 +218,21 @@ function Choice<T extends string | number>({
 }
 
 /**
- * The courses offered to a boat, in the server's order, the easy first; for
- * a race, none that is a time trial's only (no race starts up the wind).
+ * The courses offered to a boat, in the server's order, the easy first:
+ * sailed on your own, every one; with others, none sailed alone only (no
+ * race with others starts up the wind).
  */
 export function coursesFor(
   make: MakeChoices,
   boat: string,
-  kind: 'race' | 'trial' = 'trial',
+  mode: 'alone' | 'others' = 'alone',
 ): CourseTold[] {
   const b = make.boats.find((x) => x.id === boat);
   return make.courses.filter(
     (c) =>
       c.boats?.[boat] !== undefined &&
       (c.kind === 'island' || b?.buoys !== false) &&
-      (kind === 'trial' || c.trialOnly !== true),
+      (mode === 'alone' || c.aloneOnly !== true),
   );
 }
 
@@ -307,17 +309,18 @@ function MakeForm({
   make: MakeChoices;
   close: () => void;
 }) {
-  // At sea, Sail it now, just the maker at once; or a race others join,
-  // the only choice before the sea, where no boat waits to be placed.
+  // At sea, On my own, just the maker at once; or With others, a race with
+  // a start time others join, the only choice before the sea, where no
+  // boat waits to be placed.
   const sea = useContext(AtSea);
-  const [chosenMode, setMode] = useState<'now' | 'others'>('now');
+  const [chosenMode, setMode] = useState<'alone' | 'others'>('alone');
   const mode = sea ? chosenMode : 'others';
-  const [chosenKind, setKind] = useState<'race' | 'trial'>('race');
-  const kind = mode === 'now' ? 'race' : chosenKind;
+  const now = mode === 'alone';
   const [boat, setBoat] = useState(() =>
     make.boats.some((b) => b.id === make.boat) ? make.boat : (make.boats[0]?.id ?? ''),
   );
-  const offered = useMemo(() => coursesFor(make, boat, kind), [make, boat, kind]);
+  const offered = useMemo(() => coursesFor(make, boat, mode), [make, boat, mode]);
+  const noIslands = !make.courses.some((c) => c.kind === 'island');
   const [course, setCourse] = useState(() => offered[0]?.id ?? '');
   const [when, setWhen] = useState<number>(10);
   const [later, setLater] = useState(() =>
@@ -334,14 +337,14 @@ function MakeForm({
   const chosen = offered.find((c) => c.id === course) ?? offered[0];
   const courseId = chosen?.id ?? '';
   // The name suggested afresh as the choices change, until the player writes their own.
-  const suggestAt = kind === 'trial' || mode === 'now' ? 0 : when > 0 ? when : later;
+  const suggestAt = now ? 0 : when > 0 ? when : later;
   useEffect(() => {
     if (edited || courseId === '' || boat === '') {
       return;
     }
     let live = true;
-    const at = kind === 'trial' || mode === 'now' ? view.now() : startOf(when, later, view.now());
-    void suggestName({ kind, course: courseId, boat, at }, view.fetch).then((n) => {
+    const at = now ? view.now() : startOf(when, later, view.now());
+    void suggestName({ kind: 'race', course: courseId, boat, at }, view.fetch).then((n) => {
       if (live && n !== '') {
         setName(n);
       }
@@ -349,7 +352,7 @@ function MakeForm({
     return () => {
       live = false;
     };
-  }, [kind, mode, courseId, boat, suggestAt, edited]);
+  }, [now, courseId, boat, suggestAt, edited]);
 
   const submit = async () => {
     if (busy || courseId === '') {
@@ -357,11 +360,10 @@ function MakeForm({
     }
     setBusy(true);
     setRefusal(null);
-    const now = mode === 'now';
-    const at = kind === 'trial' || now ? view.now() : startOf(when, later, view.now());
+    const at = now ? view.now() : startOf(when, later, view.now());
     const a = await makeRace(
       {
-        kind,
+        kind: 'race',
         course: courseId,
         boat,
         at: Number.isFinite(at) ? at : 0,
@@ -416,28 +418,17 @@ function MakeForm({
     >
       {sea ? (
         <Choice
-          label="Sail it now or race others"
+          label="On my own or with others"
           name="mode"
-          options={['now', 'others'] as const}
+          options={['alone', 'others'] as const}
           chosen={mode}
           choose={setMode}
-          text={(m) => (m === 'now' ? SAIL_IT_NOW : RACE_OTHERS)}
+          text={(m) => (m === 'alone' ? ON_MY_OWN : WITH_OTHERS)}
         />
       ) : null}
-      {mode === 'now' ? (
-        <p class="race-faint" data-readout="race-mode-line">
-          {SAIL_IT_NOW_LINE}
-        </p>
-      ) : (
-        <Choice
-          label="Race or time trial"
-          name="kind"
-          options={['race', 'trial'] as const}
-          chosen={kind}
-          choose={setKind}
-          text={kindText}
-        />
-      )}
+      <p class="race-faint" data-readout="race-mode-line">
+        {now ? ON_MY_OWN_LINE : WITH_OTHERS_LINE}
+      </p>
       <label class="race-label" for="race-boat">
         Boat
       </label>
@@ -476,6 +467,11 @@ function MakeForm({
           ))}
         </fieldset>
       )}
+      {noIslands ? (
+        <p class="race-faint" data-readout="race-no-islands">
+          {NO_ISLAND_COURSE}
+        </p>
+      ) : null}
       {chosen !== undefined ? (
         <p class="race-faint race-course-about">
           {[
@@ -486,11 +482,8 @@ function MakeForm({
             .join(' · ')}
         </p>
       ) : null}
-      {mode === 'now' ? null : kind === 'race' ? (
+      {now ? null : (
         <>
-          <p class="race-faint" data-readout="race-mode-line">
-            {RACE_OTHERS_LINE}
-          </p>
           <p class="race-label" id="race-when-label">
             Start
           </p>
@@ -519,12 +512,8 @@ function MakeForm({
               : 'Choose a day and a time.'}
           </p>
         </>
-      ) : (
-        <p class="race-faint" data-readout="race-mode-line">
-          {TRIAL_OTHERS_LINE}
-        </p>
       )}
-      {mode === 'now' ? null : (
+      {now ? null : (
         <>
           <label class="race-label" for="race-who">
             Who may enter

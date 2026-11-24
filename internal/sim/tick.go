@@ -59,8 +59,9 @@ func (w *World) phaseDone(p Phase) {
 // whose grace has ended are given up; then the boats whose fall over the
 // lip has ended start again at the start; then the control words of the
 // boats sailing are applied, each pair once its tick has come (bus.Due), then
-// the commands, in the order they came; last, while there is room, those
-// waiting in the queue get their boats, the longest waiting first.
+// the commands, in the order they came; then, while there is room, those
+// waiting in the queue get their boats, the longest waiting first; last,
+// the boats whose races are over go back to where they were.
 func (w *World) inputs() {
 	cur, next := w.cur, w.next
 	next.Tick = cur.Tick + 1 + w.skip
@@ -128,6 +129,7 @@ func (w *World) inputs() {
 			w.apply(&in.Commands[i])
 		}
 		w.admit()
+		w.raceHomes()
 		w.spells(next)
 		return
 	}
@@ -154,6 +156,7 @@ func (w *World) inputs() {
 		w.apply(&c)
 	}
 	w.admit()
+	w.raceHomes()
 	w.spells(next)
 }
 

@@ -25,6 +25,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  CanvasTexture,
   DoubleSide,
   Euler,
   FrontSide,
@@ -37,22 +38,28 @@ import {
   type Object3D,
   Quaternion,
   type Side,
+  SRGBColorSpace,
   Vector3,
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {
   attribute,
+  cameraProjectionMatrix,
+  cameraViewMatrix,
   float,
   floor,
   mix,
+  modelWorldMatrix,
   select,
   step,
   texture,
+  uniform,
   uv,
   varying,
   vec2,
   vec3,
+  vec4,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { Committee, SignalFlag, TownFlags, TownSmoke } from '../catalog/types.gen';
@@ -62,7 +69,7 @@ import { digits } from './boatlook';
 import { BUNTING_LIFE, type BuntingBurst, buntingFlags, strandsOf } from './bunting';
 import { HOIST_GAP, SignalFlags, type SignalSeen } from './flags';
 import { type Burst, burstPuff, puffsOf } from './gunsmoke';
-import { litMaterial } from './materials';
+import { basicMaterial, bendScene, litMaterial } from './materials';
 import { Puffs } from './smoke';
 
 /** A point in the sea, m east and north of the world's centre. */
@@ -110,6 +117,15 @@ export interface RaceFrame {
   windAt: (east: number, north: number) => { speed: number; from: number };
   /** The sea's surface's height at points (east and north of each in turn), or null for a flat sea. */
   surface: ((points: Float64Array, count: number, out: Float64Array) => void) | null;
+  /** The mark the boat races for next, its number shown over it; none out of a race. */
+  next?: NextMark | null;
+  /** How many metres a CSS pixel spans one metre from the camera: the tag's size on the screen. */
+  perPixel?: number;
+}
+
+/** The next mark of a race, as its tag shows it: its place and number. */
+export interface NextMark extends SeaPoint {
+  number: number;
 }
 
 /** What the tests and the panel read. */
@@ -128,6 +144,8 @@ export interface RaceMarksStats {
   fired: number;
   /** Bursts of the crowd's bunting thrown. */
   bunting: number;
+  /** The number on the next mark's tag, 0 for none shown. */
+  tag: number;
   draws: number;
   triangles: number;
 }
@@ -356,6 +374,11 @@ function numberBoards(face: number): { mesh: InstancedMesh; numbers: InstancedBu
   const ink = texture(digits(), vec2(d.add(x.sub(k)).div(10), y), float(0)).r.mul(inside);
   const m = litMaterial({ roughness: 0.6, metalness: 0, side: FrontSide });
   m.colorNode = mix(vec3(0.82, 0.8, 0.74), vec3(0.03, 0.03, 0.03), ink) as unknown as Node<'vec3'>;
+  // A hair before the board's white faces, and held before them in the
+  // depth however far: never fighting them.
+  m.polygonOffset = true;
+  m.polygonOffsetFactor = -1;
+  m.polygonOffsetUnits = -4;
   m.name = 'mark numbers';
   const mesh = new InstancedMesh(g, m, NUMBER_CAPACITY);
   mesh.name = 'mark numbers';
@@ -369,6 +392,126 @@ function numberBoards(face: number): { mesh: InstancedMesh; numbers: InstancedBu
 function unit(i: number): number {
   const x = Math.sin(i * 12.9898 + 4.1414) * 43758.5453;
   return x - Math.floor(x);
+}
+
+/** The next mark's tag: its foot this high over the sea, m, over the spar's flag; and how tall it stands on the screen, CSS pixels, however far. */
+export const TAG_HEIGHT = 8;
+const TAG_PIXELS = 20;
+/** The tag's picture, px: a pill with the number, its gold on a dark ground as the screen's tags are. */
+const TAG_W = 160;
+const TAG_H = 64;
+const GOLD = '#e8b450';
+
+/**
+ * The next mark's number, a tag in the scene over its spar: a square that
+ * faces the camera, as tall on the screen however far, behind whatever
+ * stands before it (the sail, the boat, the land), as the mark is. Made
+ * the first time it is shown.
+ */
+class MarkTag {
+  readonly perPixel = uniform(0.001);
+  mesh: Mesh | null = null;
+  #canvas: HTMLCanvasElement | null = null;
+  #texture: CanvasTexture | null = null;
+  #number = 0;
+
+  /** Shows number n with its foot at (x, y, z) in the scene; false where no page draws it (the unit tests). */
+  show(n: number, x: number, y: number, z: number, perPixel: number): boolean {
+    const mesh = this.mesh ?? this.#make();
+    if (mesh === null) {
+      return false;
+    }
+    if (n !== this.#number) {
+      this.#number = n;
+      this.#draw();
+    }
+    mesh.position.set(x, y, z);
+    mesh.visible = true;
+    this.perPixel.value = perPixel;
+    return true;
+  }
+
+  hide(): void {
+    if (this.mesh !== null) {
+      this.mesh.visible = false;
+    }
+  }
+
+  #make(): Mesh | null {
+    if (typeof document === 'undefined') {
+      return null;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = TAG_W;
+    canvas.height = TAG_H;
+    this.#canvas = canvas;
+    const t = new CanvasTexture(canvas);
+    t.colorSpace = SRGBColorSpace;
+    this.#texture = t;
+    const g = new BufferGeometry();
+    g.setAttribute('corner', new BufferAttribute(new Float32Array([-1, 0, 1, 0, 1, 1, -1, 1]), 2));
+    // three.js reads a geometry's size from its positions.
+    g.setAttribute('position', new BufferAttribute(new Float32Array(12), 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    const corner = attribute('corner', 'vec2') as unknown as Node<'vec2'>;
+    // Unlit and taking no fog, as the screen's tags are; read through the
+    // depth so that what stands before it hides it, but writing none.
+    const m = basicMaterial({ fog: false, transparent: true, depthWrite: false });
+    m.name = 'mark tag';
+    const foot = bendScene(modelWorldMatrix.mul(vec4(0, 0, 0, 1)).xyz);
+    const view = cameraViewMatrix.mul(vec4(foot, 1)).toVar();
+    const tall = view.z.negate().max(0.5).mul(this.perPixel).mul(TAG_PIXELS);
+    const wide = tall.mul(TAG_W / TAG_H / 2);
+    m.vertexNode = cameraProjectionMatrix.mul(
+      vec4(view.x.add(corner.x.mul(wide)), view.y.add(corner.y.mul(tall)), view.z, 1),
+    );
+    const at = varying(vec2(corner.x.mul(0.5).add(0.5), corner.y));
+    const c = texture(t, at);
+    m.colorNode = c.rgb as unknown as Node<'vec3'>;
+    m.opacityNode = c.a as unknown as Node<'float'>;
+    const mesh = new Mesh(g, m);
+    mesh.name = 'mark tag';
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    this.mesh = mesh;
+    // Drawn again once the screen's font is in.
+    void document.fonts?.ready.then(() => this.#draw());
+    return mesh;
+  }
+
+  /** The pill and the number on the canvas. */
+  #draw(): void {
+    const canvas = this.#canvas;
+    const g = canvas?.getContext('2d') ?? null;
+    if (canvas === null || g === null || this.#texture === null) {
+      return;
+    }
+    const text = String(this.#number);
+    g.clearRect(0, 0, TAG_W, TAG_H);
+    const h = TAG_H - 4;
+    g.font = `500 ${Math.round(h * 0.7)}px "Alegreya Sans", system-ui, sans-serif`;
+    const w = Math.min(Math.max(g.measureText(text).width + h * 0.6, h * 1.3), TAG_W - 4);
+    const x = (TAG_W - w) / 2;
+    const y = 2;
+    const r = h / 2;
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+    g.fillStyle = 'rgb(26 36 44 / 85%)';
+    g.fill();
+    g.lineWidth = 3.5;
+    g.strokeStyle = GOLD;
+    g.stroke();
+    g.fillStyle = GOLD;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, TAG_W / 2, y + h * 0.54);
+    this.#texture.needsUpdate = true;
+  }
 }
 
 export class RaceMarks {
@@ -390,6 +533,7 @@ export class RaceMarks {
     bursts: 0,
     fired: 0,
     bunting: 0,
+    tag: 0,
     draws: 0,
     triangles: 0,
   };
@@ -411,6 +555,7 @@ export class RaceMarks {
   #loading: 'no' | 'loading' | 'done' | 'failed' = 'no';
   readonly #drawn = new Map<Kind, Drawn>();
   #boards: { mesh: InstancedMesh; numbers: InstancedBufferAttribute } | null = null;
+  readonly #tag = new MarkTag();
   /** Each flag that signals a mark and the pin. */
   readonly #markFlag: number;
   readonly #pinFlag: number;
@@ -672,6 +817,10 @@ export class RaceMarks {
         triangles += 8 * numbers;
       }
     }
+    st.tag = this.#nextTag(f) ? (f.next?.number ?? 0) : 0;
+    if (st.tag > 0) {
+      draws++;
+    }
     this.#drawBunting(f);
     this.flags.frame(this.#seen, f.origin, f.time);
     if (this.flags.count > 0) {
@@ -692,6 +841,27 @@ export class RaceMarks {
     st.bursts = this.#bursts.length;
     st.draws = draws;
     st.triangles = triangles;
+  }
+
+  /** The next mark's tag over its spar, wherever the mark is; whether it is shown. */
+  #nextTag(f: RaceFrame): boolean {
+    const n = f.next ?? null;
+    if (n === null || n.number <= 0) {
+      this.#tag.hide();
+      return false;
+    }
+    const made = this.#tag.mesh !== null;
+    const shown = this.#tag.show(
+      n.number,
+      n.east - f.origin.x,
+      TAG_HEIGHT,
+      -(n.north - f.origin.y),
+      f.perPixel ?? 0.001,
+    );
+    if (!made && this.#tag.mesh !== null) {
+      this.root.add(this.#tag.mesh);
+    }
+    return shown;
   }
 
   /** The sea's height at n points written to #points, or zeros on a flat sea. */
