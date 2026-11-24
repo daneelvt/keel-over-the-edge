@@ -63,6 +63,11 @@ type toldRace struct {
 	// names are its boats' names as read for the connection, by number;
 	// nil until read.
 	names map[int16]string
+	// named is what was read of its names, told again with it; nil until read.
+	named *RaceNames
+	// start is the start as last told: a trial's run, or a race sailed
+	// alone, starts as its boat crosses the line, and is told again then.
+	start int64
 }
 
 // namedRace is a race's names read for a connection, to be told.
@@ -95,7 +100,7 @@ func (c *conn) races(f *bus.Frame, s int32, boat uint64, x, y float64) bool {
 	for _, n := range named {
 		if i := raceIndex(f, n.key); i >= 0 && cr.told[n.key] != nil {
 			t := cr.told[n.key]
-			t.names = map[int16]string{}
+			t.names, t.named, t.start = map[int16]string{}, &n.RaceNames, f.Races[i].Start
 			k := 0
 			for j := range f.Racers {
 				if rc := &f.Racers[j]; rc.Race == n.key {
@@ -112,14 +117,24 @@ func (c *conn) races(f *bus.Frame, s int32, boat uint64, x, y float64) bool {
 	}
 	for i := range f.Races {
 		r := &f.Races[i]
-		if cr.told[r.Key] != nil || r.Phase == bus.RaceEnded {
+		if t := cr.told[r.Key]; t != nil {
+			// A timed race's start, come as its boat crossed: its clock.
+			if t.start != r.Start && r.Phase != bus.RaceEnded {
+				t.start = r.Start
+				if !c.send(raceTold(f, i, c.account, t.named), outRaceTold) {
+					return false
+				}
+			}
+			continue
+		}
+		if r.Phase == bus.RaceEnded {
 			continue
 		}
 		cs := r.Course
 		if r.Key != mine && math.Hypot(x-cs.X, y-cs.Y) > cs.Reach+raceSight {
 			continue
 		}
-		cr.told[r.Key] = &toldRace{}
+		cr.told[r.Key] = &toldRace{start: r.Start}
 		if !c.send(raceTold(f, i, c.account, nil), outRaceTold) {
 			return false
 		}
