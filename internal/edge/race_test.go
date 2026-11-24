@@ -108,3 +108,42 @@ func TestClosestBattle(t *testing.T) {
 		t.Error("a boat retired watchable as a racer, or one racing not")
 	}
 }
+
+// TestRaceToldAgainAtItsStart: a race sailed alone has no start until its
+// boat crosses the line; the start is told then, once, or the racer's
+// line would wait for a crossing already made.
+func TestRaceToldAgainAtItsStart(t *testing.T) {
+	f := raceFrame(t)
+	start := f.Races[0].Start
+	f.Races[0].Start = 0
+	c := lifeConn()
+	c.account = bus.Account{1}
+	told := func() []int64 {
+		t.Helper()
+		if !c.races(f, 0, 1, f.State[0].X, f.State[0].Y) {
+			t.Fatal("closed")
+		}
+		var starts []int64
+		for _, m := range sent(t, c) {
+			if r := m.GetRaceTold(); r != nil && !r.Gone {
+				starts = append(starts, r.Start)
+			}
+		}
+		return starts
+	}
+	if got := told(); len(got) != 1 || got[0] != 0 {
+		t.Fatalf("placed: told %v, want one without its start", got)
+	}
+	if got := told(); len(got) != 0 {
+		t.Fatalf("waiting: told %v, want nothing", got)
+	}
+	f.Tick++
+	f.Races[0].Start = start
+	if got := told(); len(got) != 1 || got[0] != start {
+		t.Fatalf("crossed: told %v, want the start %d", got, start)
+	}
+	f.Tick++
+	if got := told(); len(got) != 0 {
+		t.Fatalf("racing: told %v, want nothing", got)
+	}
+}
