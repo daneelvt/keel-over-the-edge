@@ -44,26 +44,26 @@ var releases = []release{
 	{"tinygo-org/tinygo", "linux-amd64", "v0.44.0", "ed0f45543a49ff2a99120a5a1b8814a0750e1fda1a66f8e2a0a172576134aaf9"},
 	{"tinygo-org/tinygo", "linux-arm64", "v0.44.0", "48cece9e1e886a176caad0918182d90f8348ad3084774e6239f42e5e11e40990"},
 
-	{"sigstore/cosign", "darwin-amd64", "v3.1.4", "9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f"},
-	{"sigstore/cosign", "darwin-arm64", "v3.1.4", "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"},
-	{"sigstore/cosign", "linux-amd64", "v3.1.4", "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"},
-	{"sigstore/cosign", "linux-arm64", "v3.1.4", "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"},
+	{"sigstore/cosign", "darwin-amd64", "v3.1.5", "8b6133ebdaf1e5c50df1eb4602d242a0581b63bbcf5fff3883148781cba71403"},
+	{"sigstore/cosign", "darwin-arm64", "v3.1.5", "35cfceffe68448019f75bcbb2c470045ee2f4264cf5ad6d564f08f327f97d13f"},
+	{"sigstore/cosign", "linux-amd64", "v3.1.5", "912502def4baf810eaf36b210a4f51e1da214f9f6d664e2a9a2154cfc67ee0d6"},
+	{"sigstore/cosign", "linux-arm64", "v3.1.5", "516893301e9ec0f2594edfcf8f943ec3b3ba96f3aad2b507eff2b71e644e5fca"},
 
-	{"fluxcd/flux2", "darwin-amd64", "v2.10.0", "23fc019f5b682c1ff6841a2ce06798b3c8e17452998cb9c2dd57a6440e6340ff"},
-	{"fluxcd/flux2", "darwin-arm64", "v2.10.0", "339c5dba218e2b0a04a0841d1dace6c00d65736dc3286038463fa86754ff6c53"},
-	{"fluxcd/flux2", "linux-amd64", "v2.10.0", "208dd7012c04fedeed5b2d0b6e63df3b15b1c34a381527811685c098bc9f8659"},
-	{"fluxcd/flux2", "linux-arm64", "v2.10.0", "c3c435052e5e18156858bc73f26bcadb62821a6e30951b4b302beb4e65a532c2"},
+	{"fluxcd/flux2", "darwin-amd64", "v2.10.1", "0e083b1a53887ffee1624c67de74eea3ed9d7fd0215efb4b4090c8cc97abb824"},
+	{"fluxcd/flux2", "darwin-arm64", "v2.10.1", "c0a8dc285c568905ae38e25074985f3181c82a3c8d66316959561f27a626909d"},
+	{"fluxcd/flux2", "linux-amd64", "v2.10.1", "967365ff84aabc97871827ff33713ef0c09f62dd83c18759e3a5e39adcea9285"},
+	{"fluxcd/flux2", "linux-arm64", "v2.10.1", "da18ddb25c9614405d9e2f13ad014fd660bfcbe7218674cabf9325db73f811e2"},
 
 	{"aquasecurity/kube-bench", "linux-amd64", "v0.16.0", "82dbc7e598740dc9344d41f8ad0b8210d57c4c00bdb2c5f1d8a69a2b98baddcf"},
 	{"aquasecurity/kube-bench", "linux-arm64", "v0.16.0", "64500561f5fcaa3f86fe951ed26bbfc28f7bbf3d2eac13843abfd2924955d10b"},
 
-	{"opentofu/opentofu", "darwin-arm64", "v1.13.9", "496f4c3064b5c3bff79174b3dae4faaf65a66774eb8e2bf074f895412c5f124f"},
-	{"opentofu/opentofu", "linux-amd64", "v1.13.9", "b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857"},
-	{"opentofu/opentofu", "linux-arm64", "v1.13.9", "5dc196dde75b667e4806d358310ec96742774cd0993c54c1237efee5644b69b8"},
+	{"opentofu/opentofu", "darwin-arm64", "v1.13.10", "72d39c8492f04bb0fb1642615ad29fdfe35e6a344bd2ad425c5bc8559e7e2b61"},
+	{"opentofu/opentofu", "linux-amd64", "v1.13.10", "f606b6117ee03177374806d56d580bde7b512aff69f86d2b9f3148dced4ca375"},
+	{"opentofu/opentofu", "linux-arm64", "v1.13.10", "9dcdabf93c5209feaa35a7bb6d41f4d71b0880c4c4dfaf275d612f5b6facc28a"},
 
-	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.156.0", "b3d27efed825007a72b49faf6e87e9edad60750f34638e4c12218241d4253b6a"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.156.0", "d71f7f00e07782531000620ec6c2a9d7ec83324f364dd1f36095ab378b5fb43b"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.156.0", "1a8e4ed55df2a59d5cd03056213f50d293d4fab029e38dd960597362d92cf176"},
+	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.157.0", "7659c865b7c24693c2da80d9ce8fd1252eb47b2d4e9cc574b6116c1d473142a2"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.157.0", "f797ecaa5045a8f8095a813a3b3e2ef697e4086affcc174547cf559768044862"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.157.0", "7043d79387fef738c687d811553c4eb3bd3251e52b912141855265de2dcd27d8"},
 
 	{"zeux/meshoptimizer", "darwin-arm64", "v1.3", "1002fe6a437aa005eca541502c27b8d2b184f91f4ad0c6d282e3614a1e35e75a"},
 }

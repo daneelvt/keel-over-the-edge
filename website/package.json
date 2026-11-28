@@ -28,15 +28,15 @@
   },
   "devDependencies": {
     "@cf-wasm/resvg": "0.4.0",
-    "@cloudflare/vitest-plugin": "1.8.5",
+    "@cloudflare/vitest-plugin": "1.9.2",
     "@playwright/test": "1.65.1",
-    "@types/node": "26.6.6",
+    "@types/node": "26.6.10",
     "harfbuzzjs": "1.6.4",
     "sharp": "0.35.5",
     "subset-font": "2.9.0",
     "typescript": "7.0.2",
     "vite": "8.3.8",
-    "vitest": "5.1.1",
-    "wrangler": "4.165.0"
+    "vitest": "5.1.2",
+    "wrangler": "4.168.0"
   }
 }
