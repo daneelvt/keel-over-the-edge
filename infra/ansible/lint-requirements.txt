@@ -15,9 +15,9 @@ ansible-core==2.22.0 \
     #   -r lint-requirements.in
     #   ansible-compat
     #   ansible-lint
-ansible-lint==26.11.0 \
-    --hash=sha256:74813203aa5450d720c3d86b9d0d4ddc51d30e36ac69e1f0d9f7650f5a3b5dd3 \
-    --hash=sha256:b778ea87fa873384b373e8c3fe53a06b3acc7b72ac283e2d2070f76fdf9f8358
+ansible-lint==26.11.1 \
+    --hash=sha256:4264fcad6c1e9eb4f1d8ee369302d0d908e9397338f3fb20814071cae5ad2d4f \
+    --hash=sha256:c1d2c1cec0448ffae4df0d8960114936c403343fe988dccd9e609726fe851ffa
     # via -r lint-requirements.in
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \

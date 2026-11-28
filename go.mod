@@ -19,14 +19,14 @@ tool (
 
 require (
 	code.dny.dev/ssrf v0.3.0
-	github.com/bmatcuk/doublestar/v4 v4.10.4
+	github.com/bmatcuk/doublestar/v4 v4.10.7
 	github.com/coder/websocket v1.8.15
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/mdp/qrterminal/v4 v4.0.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/nyaruka/phonenumbers/v2 v2.0.17
+	github.com/nyaruka/phonenumbers/v2 v2.1.0
 	github.com/pressly/goose/v3 v3.30.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3

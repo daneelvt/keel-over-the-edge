@@ -24,14 +24,14 @@
     "fsevents": false
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.14.0",
-    "@biomejs/biome": "2.6.8",
+    "@axe-core/playwright": "4.14.1",
+    "@biomejs/biome": "2.6.9",
     "@bufbuild/buf": "1.75.0",
     "@bufbuild/protobuf": "2.17.0",
     "@bufbuild/protoc-gen-es": "2.17.0",
     "@playwright/test": "1.65.1",
     "@preact/signals": "2.11.4",
-    "@types/node": "26.6.6",
+    "@types/node": "26.6.10",
     "@types/three": "0.187.0",
     "binaryen": "132.0.0",
     "gltfpack": "1.3.0",
@@ -41,7 +41,7 @@
     "three": "0.187.0",
     "typescript": "7.0.2",
     "vite": "8.3.8",
-    "vitest": "5.1.1"
+    "vitest": "5.1.2"
   },
   "overrides": {
     "playwright-core": "$@playwright/test"

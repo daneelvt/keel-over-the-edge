@@ -12,7 +12,7 @@ terraform {
     }
     infisical = {
       source  = "registry.opentofu.org/infisical/infisical"
-      version = "0.20.17"
+      version = "0.20.21"
     }
     random = {
       source  = "registry.opentofu.org/hashicorp/random"

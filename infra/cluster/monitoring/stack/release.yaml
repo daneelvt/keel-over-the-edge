@@ -50,7 +50,7 @@ spec:
       spec:
         image:
           # renovate: image=victoriametrics/victoria-metrics
-          tag: v1.156.0@sha256:da8a90ac0912f16589be2b96a6441a2fca4bca415c83783d972d92e3b5b66970
+          tag: v1.157.0@sha256:322a7a92fdcc269280e9c38af94c83bc76827a31b792acbc60e44394e7f29c20
         useStrictSecurity: true
         retentionPeriod: 90d
         extraArgs:
@@ -76,7 +76,7 @@ spec:
       spec:
         image:
           # renovate: image=victoriametrics/vmagent
-          tag: v1.156.0@sha256:d3229ab469c54ae5266e86246932266bad29b06668b5371acbd6d3de1b3035e7
+          tag: v1.157.0@sha256:cd0b125ac86821cbd6a020fc048908b2fc138d2ac121485c621a40ee63c93070
         useStrictSecurity: true
         scrapeInterval: 30s
         resources:
@@ -92,7 +92,7 @@ spec:
       spec:
         image:
           # renovate: image=victoriametrics/vmalert
-          tag: v1.156.0@sha256:4fea7d1a888d4db4ff18804434ef0f3ca8eb6482e289c50d32001c2db218287c
+          tag: v1.157.0@sha256:c550cfc345a1f3e130a3c78b3f5a910122448c66b3008d9a29eaa0559e9a23dd
         useStrictSecurity: true
         evaluationInterval: 30s
         resources:
@@ -109,7 +109,7 @@ spec:
       spec:
         image:
           # renovate: image=prom/alertmanager
-          tag: v0.35.0@sha256:e638797febd034838eca8b98cdbd46f951e9bf7f178777aa8669167406a9946c
+          tag: v0.35.1@sha256:4e3d029e69c7f61dd53a2b31a3dc427a2b81736cffca185c0854075e07969e36
         useStrictSecurity: true
         resources:
           requests:
@@ -172,7 +172,7 @@ spec:
       fullnameOverride: grafana
       image:
         # renovate: image=grafana/grafana versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-distroless$
-        tag: 13.3.1-distroless@sha256:54e297ac67e2b72572f926892f4e06074dc4f79f2a56ed9a9ca9a88a46f28733
+        tag: 13.3.2-distroless@sha256:d9425e704fa9dff189966b827fbc9b63befc5b443999c7b82193f1b1a73c74f7
       # No state: every dashboard and data source is in the repository, and
       # a restart loses nothing.
       persistence:
